@@ -31,6 +31,17 @@
     <div id="update-banner" class="notice" hidden>Ny versjon er klar. <button type="button" class="link" id="btn-update">Oppdater nå</button></div>
     <button type="button" class="btn primary big" id="btn-go-precheck">Start kjøretur</button>
     <button type="button" class="btn secondary" id="btn-demo">Se en demotur</button>
+    <div id="install-hint" class="card install-hint" hidden></div>
+    <section class="card" id="howto" hidden>
+      <h2>Slik fungerer det</h2>
+      <ol class="howto">
+        <li><strong>Fest telefonen</strong> i en holder med skjermen mot ledsageren.</li>
+        <li><strong>Ledsageren trykker «Start»</strong> når sjekkene er grønne. Føreren rører ikke telefonen.</li>
+        <li><strong>Hold «Stopp» inne</strong> i ett sekund når turen er over. Rapporten kommer med én gang.</li>
+      </ol>
+      <p class="muted small">Ingen poeng, lyder eller tilbakemelding underveis. Alt lagres bare på telefonen.</p>
+    </section>
+    <section class="tiles" id="summary" hidden></section>
     <section class="card" id="trend"></section>
     <section class="card">
       <h2>Tidligere turer</h2>
@@ -53,6 +64,7 @@
     </ul>
     <p id="precheck-error" class="notice" aria-live="polite"></p>
     <button type="button" class="btn primary big" id="btn-start-record" disabled>Start</button>
+    <button type="button" class="btn secondary" id="btn-start-anyway" hidden>Start likevel</button>
     <p class="muted small">Ingen lyder, poeng eller tilbakemelding vises mens du kjører. Rapporten kommer når ledsageren trykker «Stopp».</p>
   </section>
 
@@ -65,6 +77,7 @@
       <p class="rec-elapsed" id="rec-elapsed" aria-label="Tid">0:00</p>
       <p class="rec-dist" id="rec-dist">0,0 km</p>
       <p class="rec-gps" id="rec-gps" data-state="wait">GPS: venter …</p>
+      <p class="rec-saved muted small" id="rec-saved"></p>
     </div>
     <div id="rec-warn" aria-live="polite"></div>
     <button type="button" class="stop" id="btn-stop" aria-label="Stopp (hold inne i ett sekund)">
@@ -98,14 +111,24 @@
       </div>
     </section>
     <section class="card">
-      <h2>Eksporter en tur</h2>
-      <p class="muted small">Rådata som JSON-fil, for eksempel til trafikklæreren eller til å analysere på nytt senere.</p>
+      <h2>Utseende</h2>
+      <div class="segment" role="radiogroup" aria-label="Utseende">
+        <label><input type="radio" name="theme" value="auto"><span>Automatisk</span></label>
+        <label><input type="radio" name="theme" value="light"><span>Lys</span></label>
+        <label><input type="radio" name="theme" value="dark"><span>Mørk</span></label>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Eksporter og importer</h2>
+      <p class="muted small">Rådata som JSON-fil, for eksempel til trafikklæreren, eller for å åpne en tur fra en annen telefon.</p>
       <select id="export-select" aria-label="Velg tur"></select>
       <button type="button" class="btn secondary" id="btn-export">Eksporter som JSON</button>
+      <label class="btn secondary file-btn">Importer JSON-fil<input type="file" id="import-file" accept="application/json,.json"></label>
     </section>
     <section class="card">
       <h2>Data</h2>
       <p class="muted small">Alt lagres bare på denne telefonen. Appen sender ingenting noe sted.</p>
+      <button type="button" class="btn secondary" id="btn-reanalyze">Analyser alle turer på nytt</button>
       <button type="button" class="btn danger" id="btn-delete-all">Slett alle turer</button>
     </section>
     <section class="card" id="dev-section" hidden>
@@ -114,7 +137,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.1.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.2.0</p>
   </section>
 
 </main>
