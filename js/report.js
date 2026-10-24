@@ -1,6 +1,6 @@
 /* Rapportvisning – ren SVG/HTML, ingen nettverk. */
 import { CATS, rating } from './analysis.js';
-import { esc, km, kmh, gee, mss, duration, n0 } from './format.js';
+import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
 const LABEL = {
@@ -8,15 +8,48 @@ const LABEL = {
   accel: { brisk: 'Rask akselerasjon', harsh: 'Kraftig akselerasjon' },
   turn:  { brisk: 'Skarp sving', harsh: 'Svært skarp sving' }
 };
+const POSITIVE = {
+  brake: 'Myk og kontrollert bremsing.',
+  accel: 'Rolig og gradvis på gassen.',
+  turn: 'Fine, jevne svinger uten mye sidekraft.',
+  smooth: 'Jevn fart gjennom hele turen.'
+};
 const LIMITS = [30, 50, 60, 70, 80, 90, 110];
 
 export function eventLabel(e) { return LABEL[e.kind][e.level]; }
 
+export function eventsPer10km(r) {
+  return r.stats.km > 0.2 ? r.events.length / r.stats.km * 10 : 0;
+}
+
+/* Tekstoppsummering til deling (meldinger, e-post, AirDrop). */
+export function buildSummary(r, ctx = {}) {
+  const lines = [];
+  lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}`);
+  lines.push(`Poeng: ${r.overall} – ${rating(r.overall)}`);
+  lines.push(`Distanse ${km(r.stats.km)} · Tid ${duration(r.stats.duration)} · Snittfart ${kmh(r.stats.avgKmh)} · Toppfart ${kmh(r.stats.maxKmh)}`);
+  lines.push(`Bremsing ${r.scores.brake} · Akselerasjon ${r.scores.accel} · Svinger ${r.scores.turn} · Jevn fart ${r.scores.smooth}`);
+  if (r.events.length) {
+    lines.push(`Hendelser (${r.events.length}):`);
+    for (const e of r.events) lines.push(`${e.n}. ${eventLabel(e)} – ${mss(e.t)}, ${kmh(e.speedKmh)}, ${gee(e.g)}`);
+  } else lines.push('Ingen brå hendelser.');
+  lines.push('Tips:');
+  for (const t of r.tips) lines.push(`– ${t.text}`);
+  if (ctx.note) lines.push(`Notat: ${ctx.note}`);
+  lines.push('Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.');
+  return lines.join('\n');
+}
+
 export function renderReport(root, r, ctx = {}) {
-  const { prevScore = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false } = ctx;
+  const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false,
+    note = null, onNoteChange = null, onDelete = null, onShare = null } = ctx;
+  const positives = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] >= 90);
   root.innerHTML = `
     <header class="report-head">
-      <h1>${esc(title)}</h1>
+      <div class="report-title">
+        <h1>${esc(title)}</h1>
+        ${onShare ? '<button type="button" class="btn small-btn secondary" id="btn-share">Del</button>' : ''}
+      </div>
       ${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ''}
     </header>
     ${interrupted ? `<p class="notice">Opptaket ble avbrutt før «Stopp» ble trykket. Rapporten gjelder den delen som ble lagret.</p>` : ''}
@@ -30,10 +63,18 @@ export function renderReport(root, r, ctx = {}) {
           <div><dt>Tid</dt><dd>${duration(r.stats.duration)}</dd></div>
           <div><dt>Snittfart</dt><dd>${kmh(r.stats.avgKmh)}</dd></div>
           <div><dt>Toppfart</dt><dd>${kmh(r.stats.maxKmh)}</dd></div>
+          <div><dt>Stopp</dt><dd>${r.stats.stops}</dd></div>
+          <div><dt>Hendelser per 10 km</dt><dd>${n1(eventsPer10km(r))}</dd></div>
         </dl>
-        ${prevScore !== null ? `<p class="compare">Forrige tur: ${n0(prevScore)} poeng. Denne turen: ${n0(r.overall)}.</p>` : ''}
+        ${prevScore !== null ? `<p class="compare">Forrige tur: ${n0(prevScore)} poeng. Denne turen: ${n0(r.overall)}. ${delta(r.overall, prevScore, true)}</p>` : ''}
       </div>
     </section>
+
+    ${onNoteChange ? `<section class="card note-card">
+      <label for="drive-note"><h2>Notat</h2></label>
+      <textarea id="drive-note" rows="2" placeholder="Hva øvde dere på? F.eks. «rundkjøringer og feltskifte»">${esc(note || '')}</textarea>
+      <p class="muted small" id="note-status">Lagres automatisk.</p>
+    </section>` : ''}
 
     <section class="card" id="map-section">
       <h2>Ruten</h2>
@@ -45,12 +86,19 @@ export function renderReport(root, r, ctx = {}) {
         <li><span class="dot" style="background:var(--accel)"></span>Akselerasjon</li>
         <li><span class="dot" style="background:var(--turn)"></span>Sving</li>
       </ul>
+      <p class="muted small">Trykk på et nummer i kartet eller i listen over hendelser for å koble dem sammen.</p>
     </section>
 
     <section class="card">
       <h2>Slik gikk det</h2>
-      <div class="bars">${['brake', 'accel', 'turn', 'smooth'].map(k => scoreBar(k, r.scores[k])).join('')}</div>
+      ${prev ? '<p class="muted small">Pilene viser endring fra forrige tur.</p>' : ''}
+      <div class="bars">${['brake', 'accel', 'turn', 'smooth'].map(k => scoreBar(k, r.scores[k], prev ? prev.scores[k] : null)).join('')}</div>
     </section>
+
+    ${positives.length ? `<section class="card">
+      <h2>Dette gikk bra</h2>
+      <ul class="positives">${positives.map(k => `<li><strong>${CATS[k]}:</strong> ${POSITIVE[k]}</li>`).join('')}</ul>
+    </section>` : ''}
 
     <section class="card">
       <h2>Dette kan du jobbe med</h2>
@@ -62,7 +110,7 @@ export function renderReport(root, r, ctx = {}) {
       ${speedChart(r, gaps)}
     </section>
 
-    <section class="card">
+    <section class="card" id="events-section">
       <h2>Hendelser</h2>
       ${r.events.length ? `<ol class="events">${r.events.map(e => `
         <li><button type="button" class="event" data-n="${e.n}" style="--c:${KIND_COLOR[e.kind]}">
@@ -82,24 +130,53 @@ export function renderReport(root, r, ctx = {}) {
             ? 'Rotasjonen kom fra gyroskopet, projisert på tyngdekraften, så det spiller ingen rolle hvordan telefonen står i holderen.'
             : 'Gyroskopdata manglet på denne turen, så rotasjonen ble beregnet fra GPS-retningen i stedet. Det er grovere og kan gå glipp av korte svinger.'}</p>
           <p><strong>Jevn fart</strong> ser på hvor mye farten varierer mens bilen er i bevegelse.</p>
+          <p><strong>Hendelser per 10 km</strong> gjør det lettere å sammenligne korte og lange turer.</p>
           <p>Hendelser som ligger mindre enn to sekunder fra hverandre slås sammen til én. Poengsummen trekker mest for kraftige hendelser, og samlet poengsum vekter bremsing 30 %, svinger 25 %, jevn fart 25 % og akselerasjon 20 %.</p>
           <p>Følsomhet: ${esc(ctx.sensitivityLabel || 'Normal')}.</p>
         </div>
       </details>
     </section>
 
+    ${onDelete ? '<button type="button" class="btn danger" id="btn-delete-drive">Slett denne turen</button>' : ''}
     <footer class="report-foot">Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</footer>
   `;
 
-  // Trykk på hendelse → marker på kartet og rull dit
-  root.querySelectorAll('.event').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const n = btn.dataset.n;
-      root.querySelectorAll('.marker').forEach(m => m.classList.toggle('active', m.dataset.n === n));
-      root.querySelectorAll('.event').forEach(b => b.classList.toggle('active', b === btn));
-      root.querySelector('#map-section').scrollIntoView({ behavior: prefersReduced() ? 'auto' : 'smooth', block: 'start' });
+  const smooth = prefersReduced() ? 'auto' : 'smooth';
+  const select = n => {
+    root.querySelectorAll('.marker').forEach(m => m.classList.toggle('active', m.dataset.n === n));
+    root.querySelectorAll('.event').forEach(b => b.classList.toggle('active', b.dataset.n === n));
+  };
+  // Hendelse i listen → marker på kartet
+  root.querySelectorAll('.event').forEach(btn => btn.addEventListener('click', () => {
+    select(btn.dataset.n);
+    root.querySelector('#map-section').scrollIntoView({ behavior: smooth, block: 'start' });
+  }));
+  // Marker på kartet → hendelse i listen
+  root.querySelectorAll('.marker').forEach(m => m.addEventListener('click', () => {
+    select(m.dataset.n);
+    const row = root.querySelector(`.event[data-n="${m.dataset.n}"]`);
+    if (row) row.scrollIntoView({ behavior: smooth, block: 'center' });
+  }));
+
+  if (onNoteChange) {
+    const ta = root.querySelector('#drive-note'), status = root.querySelector('#note-status');
+    let timer = null;
+    ta.addEventListener('input', () => {
+      status.textContent = 'Lagrer …';
+      clearTimeout(timer);
+      timer = setTimeout(async () => { await onNoteChange(ta.value.trim()); status.textContent = 'Lagret.'; }, 600);
     });
-  });
+  }
+  if (onDelete) root.querySelector('#btn-delete-drive').addEventListener('click', onDelete);
+  if (onShare) root.querySelector('#btn-share').addEventListener('click', () => onShare(buildSummary(r, { subtitle, note })));
+}
+
+function delta(now, before, words = false) {
+  const d = Math.round(now - before);
+  if (d === 0) return words ? 'Likt som sist.' : '<span class="delta same">=</span>';
+  const up = d > 0;
+  if (words) return up ? `${d} poeng bedre.` : `${-d} poeng svakere.`;
+  return `<span class="delta ${up ? 'up' : 'down'}" aria-label="${up ? 'opp' : 'ned'} ${Math.abs(d)}">${up ? '▲' : '▼'} ${Math.abs(d)}</span>`;
 }
 
 function prefersReduced() {
@@ -122,26 +199,39 @@ function routeMap(r) {
   const cos = Math.cos(meanLat * Math.PI / 180);
   const xs = pts.map(p => p.lon * cos), ys = pts.map(p => -p.lat);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-  const W = 600, pad = 36;
+  const W = 600, pad = 40;
   const spanX = Math.max(maxX - minX, 1e-6), spanY = Math.max(maxY - minY, 1e-6);
   const scale = (W - 2 * pad) / spanX;
   let H = Math.round(spanY * scale + 2 * pad);
   let s = scale;
   if (H > 600) { s = (600 - 2 * pad) / spanY; H = 600; }
-  if (H < 220) H = 220;
+  if (H < 240) H = 240;
   const offX = (W - spanX * s) / 2, offY = (H - spanY * s) / 2;
   const X = x => offX + (x - minX) * s, Y = y => offY + (y - minY) * s;
   const d = pts.map((p, i) => `${i ? 'L' : 'M'}${X(xs[i]).toFixed(1)} ${Y(ys[i]).toFixed(1)}`).join('');
-  const start = pts[0], end = pts[pts.length - 1];
   const sx = X(xs[0]), sy = Y(ys[0]), ex = X(xs[xs.length - 1]), ey = Y(ys[ys.length - 1]);
   const markers = r.events.map(e => {
     const mx = X(e.lon * cos), my = Y(-e.lat);
-    return `<g class="marker" data-n="${e.n}" transform="translate(${mx.toFixed(1)} ${my.toFixed(1)})">
+    return `<g class="marker" data-n="${e.n}" transform="translate(${mx.toFixed(1)} ${my.toFixed(1)})" role="button" tabindex="0" aria-label="Hendelse ${e.n}">
       <circle r="22" class="halo"/>
       <circle r="17" fill="${KIND_COLOR[e.kind]}" stroke="#fff" stroke-width="3"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="17" font-weight="800" fill="#fff">${e.n}</text>
     </g>`;
   }).join('');
+  // Målestokk: 1 enhet i x = 1 grad ≈ 111 320 m
+  const mPerUnit = 111320 / s;
+  const nice = [50, 100, 200, 500, 1000, 2000, 5000].find(v => v / mPerUnit >= 70) || 5000;
+  const barLen = nice / mPerUnit;
+  const scaleBar = `<g class="scalebar" transform="translate(16 ${H - 18})">
+    <line x1="0" x2="${barLen.toFixed(1)}" y1="0" y2="0" stroke="var(--ink)" stroke-width="3"/>
+    <line x1="0" x2="0" y1="-6" y2="0" stroke="var(--ink)" stroke-width="3"/>
+    <line x1="${barLen.toFixed(1)}" x2="${barLen.toFixed(1)}" y1="-6" y2="0" stroke="var(--ink)" stroke-width="3"/>
+    <text x="${(barLen / 2).toFixed(1)}" y="-9" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">${nice >= 1000 ? nice / 1000 + ' km' : nice + ' m'}</text>
+  </g>`;
+  const north = `<g class="north" transform="translate(${W - 30} 34)">
+    <path d="M0 -18 L8 10 L0 4 L-8 10 Z" fill="var(--ink)"/>
+    <text y="26" text-anchor="middle" font-size="14" font-weight="800" fill="var(--ink)">N</text>
+  </g>`;
   return `<svg class="map" viewBox="0 0 ${W} ${H}" role="img" aria-label="Kart over ruten med ${r.events.length} hendelser">
     <path d="${d}" fill="none" stroke="var(--road-edge)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="${d}" fill="none" stroke="var(--asphalt)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
@@ -153,6 +243,8 @@ function routeMap(r) {
       ${label(ex, ey, 'Slutt', W)}
     </g>
     ${markers}
+    ${north}
+    ${scaleBar}
   </svg>`;
 }
 
@@ -161,12 +253,12 @@ function label(x, y, text, W) {
   return `<text x="${(left ? x - 20 : x + 20).toFixed(1)}" y="${(y + 6).toFixed(1)}" text-anchor="${left ? 'end' : 'start'}" class="map-label" font-size="18" font-weight="700" stroke="var(--surface)" stroke-width="4" paint-order="stroke" fill="var(--ink)">${text}</text>`;
 }
 
-function scoreBar(k, v) {
+function scoreBar(k, v, prevV) {
   const cls = v >= 90 ? 'good' : v >= 75 ? 'mid' : 'bad';
   return `<div class="bar-row">
     <span class="bar-label">${CATS[k]}</span>
     <span class="bar"><span class="bar-fill ${cls}" style="width:${v}%"></span></span>
-    <span class="bar-val">${v}</span>
+    <span class="bar-val">${v}${prevV !== null && prevV !== undefined ? delta(v, prevV) : ''}</span>
   </div>`;
 }
 
@@ -221,7 +313,7 @@ function nearest(pts, t) {
 /* Liten trendgraf på hjemskjermen */
 export function trendChart(scores) {
   if (scores.length < 2) return '';
-  const W = 600, H = 170, pl = 40, pr = 16, pt = 14, pb = 28;
+  const W = 600, H = 230, pl = 40, pr = 16, pt = 16, pb = 30;
   const X = i => pl + (i / (scores.length - 1)) * (W - pl - pr);
   const Y = v => pt + (1 - v / 100) * (H - pt - pb);
   const line = scores.map((s, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(s).toFixed(1)}`).join('');

@@ -76,6 +76,7 @@ export class Recorder {
     this.wakeLock = null;
     this.wakeLockFailed = false;
     this.running = false;
+    this.lastCheckpoint = null;
   }
 
   /* Sekunder siden start. I avspillingsmodus går klokka raskere, så tidsstemplene blir som på en ekte tur. */
@@ -217,6 +218,7 @@ export class Recorder {
     try {
       await putChunk(this.drive.id, this.seq++, b);
       await putDrive(this.drive);
+      this.lastCheckpoint = this.now();
     } catch (err) {
       console.error('Sjekkpunkt feilet', err);
     }
@@ -252,6 +254,7 @@ export class Recorder {
       motionCount: this.motionCount,
       locCount: this.locCount,
       wakeLockFailed: this.wakeLockFailed,
+      lastCheckpoint: this.lastCheckpoint,
       returnedFromGap: this.returnedFromGap || null
     });
     this.returnedFromGap = null;
