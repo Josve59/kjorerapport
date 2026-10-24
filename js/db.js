@@ -83,6 +83,43 @@ export async function getRaw(driveId) {
   return raw;
 }
 
+export async function updateDrive(id, patch) {
+  const d = await getDrive(id);
+  if (!d) return null;
+  Object.assign(d, patch);
+  await putDrive(d);
+  return d;
+}
+
+/* Importerer en eksportert JSON-fil (eller rå {loc,gyro,grav}) som en ny tur. */
+export async function importDrive(payload) {
+  const input = payload && payload.input ? payload.input : payload;
+  if (!input || !Array.isArray(input.loc) || input.loc.length < 2) throw new Error('Fant ingen GPS-data i filen.');
+  const raw = {
+    loc: input.loc.map(p => ({ t: num(p.t), lat: num(p.lat), lon: num(p.lon), speed: num(p.speed), bearing: num(p.bearing), acc: num(p.acc) })),
+    gyro: (input.gyro || []).map(g => ({ t: num(g.t), x: num(g.x), y: num(g.y), z: num(g.z) })),
+    grav: (input.grav || []).map(g => ({ t: num(g.t), x: num(g.x), y: num(g.y), z: num(g.z) }))
+  };
+  const meta = payload && payload.drive ? payload.drive : {};
+  const drive = {
+    id: newId(),
+    startedAt: typeof meta.startedAt === 'string' && !isNaN(Date.parse(meta.startedAt)) ? meta.startedAt : new Date().toISOString(),
+    endedAt: meta.endedAt || null,
+    status: 'done',
+    imported: true,
+    demo: !!meta.demo,
+    interrupted: !!meta.interrupted,
+    note: typeof meta.note === 'string' ? meta.note : '',
+    gaps: Array.isArray(meta.gaps) ? meta.gaps : [],
+    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length },
+    appVersion: 2
+  };
+  await putDrive(drive);
+  await putChunk(drive.id, 0, raw);
+  return drive;
+}
+const num = v => (v === null || v === undefined || v === '' ? NaN : Number(v));
+
 export async function deleteDrive(id) {
   const db = await open();
   await tx(db, ['drives', 'chunks'], 'readwrite', t => {
@@ -105,9 +142,10 @@ export async function deleteAll() {
 
 /* Innstillinger er små og ufarlige, så de ligger i localStorage. */
 const SETTINGS_KEY = 'kjorerapport.settings';
+const DEFAULTS = { sensitivity: 'normal', theme: 'auto', hideInstallHint: false };
 export function getSettings() {
-  try { return { sensitivity: 'normal', ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
-  catch { return { sensitivity: 'normal' }; }
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch { return { ...DEFAULTS }; }
 }
 export function saveSettings(s) {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* privat modus o.l. */ }
