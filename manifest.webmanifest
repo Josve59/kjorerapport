@@ -1,0 +1,17 @@
+{
+  "name": "Kjørerapport",
+  "short_name": "Kjørerapport",
+  "description": "Tar opp en kjøretur med telefonens sensorer og gir føreren en tilbakemeldingsrapport.",
+  "lang": "nb",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e9ecea",
+  "theme_color": "#e9ecea",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
