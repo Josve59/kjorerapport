@@ -52,6 +52,7 @@ export class Recorder {
   constructor(opts = {}) {
     this.onStatus = opts.onStatus || (() => {});
     this.sensitivity = opts.sensitivity || 'normal';
+    this.appVersion = opts.appVersion || null;
     this.replay = opts.replay || null;        // { data, speed } – utvikleralternativ: spill av demotur
     this.reset();
   }
@@ -76,6 +77,11 @@ export class Recorder {
     this.wakeLockFailed = false;
     this.running = false;
     this.lastCheckpoint = null;
+    this.diag = {
+      motionEvents: 0, hasLinearAcc: false, hasIncGravity: false, hasGyro: false,
+      gpsFixes: 0, gpsAccuracies: [], wakeLock: 'ukjent', standalone: isStandalone(),
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '', replay: !!this.replay
+    };
   }
 
   /* Sekunder siden start. I avspillingsmodus går klokka raskere, så tidsstemplene blir som på en ekte tur. */
@@ -122,14 +128,16 @@ export class Recorder {
   }
 
   async acquireWakeLock() {
-    if (!('wakeLock' in navigator)) { this.wakeLockFailed = true; this.emit(); return; }
+    if (!('wakeLock' in navigator)) { this.wakeLockFailed = true; this.diag.wakeLock = 'ikke støttet'; this.emit(); return; }
     try {
       this.wakeLock = await navigator.wakeLock.request('screen');
       this.wakeLockFailed = false;
+      this.diag.wakeLock = 'ok';
       this.wakeLock.addEventListener('release', () => { this.wakeLock = null; });
-    } catch {
+    } catch (err) {
       this.wakeLock = null;
       this.wakeLockFailed = true;
+      this.diag.wakeLock = 'feilet: ' + (err && err.name ? err.name : 'ukjent');
     }
     this.emit();
   }
@@ -167,6 +175,8 @@ export class Recorder {
     };
     this.buf.loc.push(sample);
     this.locCount++;
+    this.diag.gpsFixes++;
+    if (Number.isFinite(c.accuracy) && this.diag.gpsAccuracies.length < 2000) this.diag.gpsAccuracies.push(Math.round(c.accuracy));
     this.acc = c.accuracy;
     this.gpsError = null;
     if (this.lastFix && Number.isFinite(c.accuracy) && c.accuracy <= 50) {
@@ -183,6 +193,11 @@ export class Recorder {
     const { grav, state } = deriveGravity(e.accelerationIncludingGravity, e.acceleration, this.grav);
     this.grav = state;
     this.motionCount++;
+    const d = this.diag;
+    d.motionEvents++;
+    if (!d.hasLinearAcc && e.acceleration && Number.isFinite(e.acceleration.x)) d.hasLinearAcc = true;
+    if (!d.hasIncGravity && e.accelerationIncludingGravity && Number.isFinite(e.accelerationIncludingGravity.x)) d.hasIncGravity = true;
+    if (!d.hasGyro && e.rotationRate && Number.isFinite(e.rotationRate.alpha)) d.hasGyro = true;
     if (!shouldStore(t, this.lastMotionT)) return;   // nedsampling til ca. 20 Hz
     this.lastMotionT = t;
     const g = gyroFromRotationRate(e.rotationRate);
@@ -215,6 +230,7 @@ export class Recorder {
     this.drive.distanceM = this.distance;
     this.drive.duration = this.now();
     this.drive.gaps = this.gaps;
+    this.drive.diag = this.diagSummary();
     try {
       await putChunk(this.drive.id, this.seq++, b);
       await putDrive(this.drive);
@@ -239,8 +255,26 @@ export class Recorder {
     this.drive.endedAt = new Date().toISOString();
     this.drive.duration = this.now();
     this.drive.distanceM = this.distance;
+    this.drive.diag = this.diagSummary();
     await putDrive(this.drive);
     return this.drive;
+  }
+
+  /* Kort oppsummering av hva telefonen leverte – lagres på turen og blir med i eksport. */
+  diagSummary() {
+    const d = this.diag;
+    const sec = Math.max(1, this.replay ? this.now() : (performance.now() - this.t0) / 1000);
+    const acc = d.gpsAccuracies.slice().sort((a, b) => a - b);
+    return {
+      motionHz: Math.round(d.motionEvents / sec * 10) / 10,
+      motionEvents: d.motionEvents,
+      hasLinearAcc: d.hasLinearAcc, hasIncGravity: d.hasIncGravity, hasGyro: d.hasGyro,
+      gpsFixes: d.gpsFixes, gpsHz: Math.round(d.gpsFixes / sec * 100) / 100,
+      gpsMedianAcc: acc.length ? acc[Math.floor(acc.length / 2)] : null,
+      wakeLock: d.wakeLock, standalone: d.standalone, replay: d.replay,
+      gaps: this.gaps.length, marks: this.marks.length,
+      userAgent: d.userAgent, appVersion: this.appVersion || null
+    };
   }
 
   emit() {
@@ -294,4 +328,9 @@ export class Recorder {
       }
     }, 20);
   }
+}
+
+function isStandalone() {
+  try { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  catch { return false; }
 }

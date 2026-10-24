@@ -115,6 +115,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     gaps: Array.isArray(meta.gaps) ? meta.gaps : [],
     marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '' })) : [],
     counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length },
+    diag: meta.diag && typeof meta.diag === 'object' ? meta.diag : null,
     appVersion: 3
   };
   await putDrive(drive);
@@ -128,7 +129,8 @@ export async function exportPayload(drive) {
   const raw = await getRaw(drive.id);
   return {
     drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
-      marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '' },
+      marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '',
+      diag: drive.diag || null, counts: drive.counts || null },
     input: raw
   };
 }

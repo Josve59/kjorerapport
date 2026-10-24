@@ -81,7 +81,7 @@ export function buildSummary(r, ctx = {}) {
 export function renderReport(root, r, ctx = {}) {
   const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false,
     note = null, onNoteChange = null, onDelete = null, onShare = null, marks: rawMarks = [], onMarkNote = null,
-    enrich = null, enrichStatus = null, canFetch = false, onFetch = null } = ctx;
+    enrich = null, enrichStatus = null, canFetch = false, onFetch = null, diag = null } = ctx;
   const positives = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] >= 90);
   const marks = markRows(rawMarks, r);
   const short = r.stats.km < 1;
@@ -217,6 +217,15 @@ export function renderReport(root, r, ctx = {}) {
           <p>Hendelser som ligger mindre enn to sekunder fra hverandre slås sammen til én. Poengsummen trekker mest for kraftige hendelser, og samlet poengsum vekter bremsing 30 %, svinger 25 %, jevn fart 25 % og akselerasjon 20 %.</p>
           ${sp ? `<p><strong>Fartsgrenser</strong> hentes fra Statens vegvesen etter turen. Hvert GPS-punkt kobles til nærmeste fartsgrensestrekning innen 25 m, så i kryss og ved avkjøringer kan grensen bomme et sekund eller to. Poeng: 100 minus 1,5 per sekund over grensen, minus 10 per episode med 10 km/t eller mer over.</p>` : ''}
           <p>Følsomhet: ${esc(ctx.sensitivityLabel || 'Normal')}.</p>
+          ${diag ? `<h3>Telefonen leverte</h3>
+          <ul class="diag">
+            <li>Bevegelsesdata: ${diag.motionEvents ? `${n1(diag.motionHz)} per sekund` : 'ingen'}${diag.hasGyro ? ', med gyroskop' : ', <strong>uten gyroskop</strong>'}${diag.hasLinearAcc ? ', med lineær akselerasjon' : ', <strong>uten lineær akselerasjon</strong> (v3-motoren får ikke data)'}${diag.hasIncGravity ? '' : ', <strong>uten tyngdekraft</strong>'}</li>
+            <li>GPS: ${diag.gpsFixes} posisjoner (${n1(diag.gpsHz)} per sekund)${Number.isFinite(diag.gpsMedianAcc) ? `, typisk nøyaktighet ${diag.gpsMedianAcc} m` : ''}</li>
+            <li>Skjermlås (Wake Lock): ${esc(diag.wakeLock)}</li>
+            <li>Kjørt fra Hjem-skjermen: ${diag.standalone ? 'ja' : 'nei'}${diag.replay ? ' · avspilt demo' : ''}${diag.gaps ? ` · ${diag.gaps} hull` : ''}</li>
+            ${diag.appVersion ? `<li>Appversjon ved opptak: ${esc(diag.appVersion)}</li>` : ''}
+            <li class="muted small">${esc(diag.userAgent || '')}</li>
+          </ul>` : ''}
         </div>
       </details>
     </section>

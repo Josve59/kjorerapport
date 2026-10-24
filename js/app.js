@@ -6,7 +6,7 @@ import { renderReport, trendChart, eventsPer10km } from './report.js';
 import { enrichDrive } from './enrich.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
 
-export const APP_VERSION = '0.3.1';
+export const APP_VERSION = '0.3.2';
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
@@ -74,12 +74,13 @@ async function renderHome() {
   const drives = await listDrives();
   for (const d of drives) if (d.status === 'recording') { d.status = 'done'; d.interrupted = true; await putDrive(d); }
   const items = [];
-  const results = [];
+  const results = [];     // bare ekte opptak – demo og importerte turer holdes utenfor oppsummering og trend
   let best = null;
+  const isReal = d => !d.demo && !d.imported;
   for (const d of drives) {
     let res = null;
     try { res = await analyzeDrive(d); } catch { /* for lite data */ }
-    if (res) { results.push(res); if (!best || res.overall > best.overall) best = { ...res, id: d.id }; }
+    if (res && isReal(d)) { results.push(res); if (!best || res.overall > best.overall) best = { ...res, id: d.id }; }
     const tags = [d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : ''].filter(Boolean);
     items.push(`<li>
       <button type="button" class="drive" data-id="${d.id}">
@@ -109,7 +110,7 @@ async function renderHome() {
   } else sum.hidden = true;
 
   const scores = results.map(r => r.overall).reverse();
-  $('#trend').innerHTML = scores.length >= 2 ? `<h2>Utvikling</h2>${trendChart(scores)}` : '';
+  $('#trend').innerHTML = scores.length >= 2 ? `<h2>Utvikling</h2><p class="muted small">Bare ekte opptak telles med her.</p>${trendChart(scores)}` : '';
   $('#howto').hidden = drives.length > 0;
   $('#update-banner').hidden = !swUpdateReady;
   renderInstallHint();
@@ -196,6 +197,7 @@ async function startRecording(replay = null) {
   let gapMsg = '';
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
+    appVersion: APP_VERSION,
     replay,
     onStatus: st => {
       if (st.replayDone) { finishRecording(); return; }
@@ -280,7 +282,10 @@ async function renderDriveReport(id) {
   const drives = await listDrives();
   const idx = drives.findIndex(d => d.id === id);
   let prev = null;
-  for (let i = idx + 1; i < drives.length; i++) if (drives[i].result) { prev = drives[i].result; break; }
+  // Sammenlign bare med forrige ekte opptak, og bare hvis denne turen selv er ekte.
+  if (!drive.demo && !drive.imported) {
+    for (let i = idx + 1; i < drives.length; i++) if (drives[i].result && !drives[i].demo && !drives[i].imported) { prev = drives[i].result; break; }
+  }
   const sens = currentSensitivity();
   const tags = [drive.demo ? 'demotur via opptakeren' : '', drive.imported ? 'importert' : ''].filter(Boolean);
   try {
@@ -295,6 +300,7 @@ async function renderDriveReport(id) {
       note: drive.note || '',
       marks: drive.marks || [],
       enrich: drive.enrich || null,
+      diag: drive.diag || null,
       enrichStatus: status || null,
       canFetch: (wants.limits || wants.names) && missing && navigator.onLine,
       onFetch: () => runEnrich(true),
@@ -340,11 +346,10 @@ async function renderDemoReport() {
   show('report');
   const root = $('#report-root');
   const sens = currentSensitivity();
-  const drives = await listDrives();
-  const prevDrive = drives.find(d => d.result);
-  const r = analyze(makeDemo(), { factor: sens.factor });
+  const opts = analysisOptions();
+  const r = analyze(makeDemo(), opts);
   renderReport(root, r, {
-    prevScore: prevDrive ? prevDrive.result.overall : null, prev: prevDrive ? prevDrive.result : null,
+    prevScore: null, prev: null,
     title: 'Demotur', subtitle: 'Simulert tur i Trondheim sentrum. Ikke lagret.',
     factor: sens.factor, sensitivityLabel: sens.label, onShare: shareText
   });
