@@ -1,6 +1,7 @@
 /* Rapportvisning – ren SVG/HTML, ingen nettverk. */
 import { CATS, rating } from './analysis.js';
 import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
+import { analyzeSpeeding } from './enrich.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
 const LABEL = {
@@ -25,6 +26,14 @@ export function gWord(g) {
   return 'kraftig';
 }
 
+/* Fartsovertredelser fra lagrede fartsgrenser (null hvis ikke hentet). */
+export function speedingFor(r, enrich) {
+  if (!enrich || !Array.isArray(enrich.limits) || enrich.limits.length !== r.points.length) return null;
+  const limits = enrich.limits.map(v => (v === null ? NaN : v));
+  if (!limits.some(Number.isFinite)) return null;
+  return { ...analyzeSpeeding(r.points, limits), limits };
+}
+
 const MARK_LETTER = i => String.fromCharCode(65 + (i % 26));
 
 /* Ledsagerens merker med fart og tid relativt til rapporten. */
@@ -47,16 +56,22 @@ export function buildSummary(r, ctx = {}) {
   lines.push(`Poeng: ${r.overall} – ${rating(r.overall)}`);
   lines.push(`Distanse ${km(r.stats.km)} · Tid ${duration(r.stats.duration)} · Snittfart ${kmh(r.stats.avgKmh)} · Toppfart ${kmh(r.stats.maxKmh)}`);
   lines.push(`Bremsing ${r.scores.brake} · Akselerasjon ${r.scores.accel} · Svinger ${r.scores.turn} · Jevn fart ${r.scores.smooth}`);
+  const names = ctx.enrich && ctx.enrich.names ? ctx.enrich.names : { events: {}, marks: {} };
   if (r.events.length) {
     lines.push(`Hendelser (${r.events.length}):`);
-    for (const e of r.events) lines.push(`${e.n}. ${eventLabel(e)} – ${mss(e.t)}, ${kmh(e.speedKmh)}, ${gee(e.g)}`);
+    for (const e of r.events) lines.push(`${e.n}. ${eventLabel(e)} – ${mss(e.t)}, ${kmh(e.speedKmh)}, ${gee(e.g)}${names.events[e.n] ? ' – ' + names.events[e.n] : ''}`);
   } else lines.push('Ingen brå hendelser.');
+  const sp = speedingFor(r, ctx.enrich);
+  if (sp) {
+    lines.push(`Fartsgrenser: ${sp.score} poeng, ${n0(sp.secondsOver)} s over grensen${sp.episodes.length ? ':' : '.'}`);
+    for (const e of sp.episodes) lines.push(`– ${mss(e.tFrom)}–${mss(e.tTo)}: ${kmh(e.maxKmh)} i ${e.limit}-sone`);
+  }
   lines.push('Tips:');
   for (const t of r.tips) lines.push(`– ${t.text}`);
   const marks = markRows(ctx.marks, r);
   if (marks.length) {
     lines.push(`Ledsagerens merker (${marks.length}):`);
-    for (const m of marks) lines.push(`${m.letter}. ${mss(m.t)}${Number.isFinite(m.kmh) ? ', ' + kmh(m.kmh) : ''}${m.note ? ' – ' + m.note : ''}`);
+    for (const m of marks) lines.push(`${m.letter}. ${mss(m.t)}${Number.isFinite(m.kmh) ? ', ' + kmh(m.kmh) : ''}${names.marks[m.i] ? ', ' + names.marks[m.i] : ''}${m.note ? ' – ' + m.note : ''}`);
   }
   if (ctx.note) lines.push(`Notat: ${ctx.note}`);
   lines.push('Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.');
@@ -65,10 +80,13 @@ export function buildSummary(r, ctx = {}) {
 
 export function renderReport(root, r, ctx = {}) {
   const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false,
-    note = null, onNoteChange = null, onDelete = null, onShare = null, marks: rawMarks = [], onMarkNote = null } = ctx;
+    note = null, onNoteChange = null, onDelete = null, onShare = null, marks: rawMarks = [], onMarkNote = null,
+    enrich = null, enrichStatus = null, canFetch = false, onFetch = null } = ctx;
   const positives = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] >= 90);
   const marks = markRows(rawMarks, r);
   const short = r.stats.km < 1;
+  const names = enrich && enrich.names ? enrich.names : { events: {}, marks: {} };
+  const sp = speedingFor(r, enrich);
   root.innerHTML = `
     <header class="report-head">
       <div class="report-title">
@@ -76,9 +94,11 @@ export function renderReport(root, r, ctx = {}) {
         ${onShare ? '<button type="button" class="btn small-btn secondary" id="btn-share">Del rapport</button>' : ''}
       </div>
       ${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ''}
+      ${enrichStatus ? `<p class="enrich-status ${enrichStatus.error ? 'error' : ''}" id="enrich-status" aria-live="polite">${esc(enrichStatus.text)}${enrichStatus.error && onFetch ? ' <button type="button" class="link" id="btn-fetch">Prøv igjen</button>' : ''}</p>`
+        : (enrich && enrich.error && canFetch && onFetch ? `<p class="enrich-status error">Forrige henting feilet: ${esc(enrich.error)} <button type="button" class="link" id="btn-fetch">Prøv igjen</button></p>` : '')}
     </header>
     <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a><a href="#speed-section">Fart</a><a href="#events-section">Hendelser</a>${marks.length ? '<a href="#marks-section">Merker</a>' : ''}
+      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser</a>${marks.length ? '<a href="#marks-section">Merker</a>' : ''}
     </nav>
     ${short ? `<p class="notice">Kort tur (${km(r.stats.km)}). Grunnlaget er tynt, så poengene bør ikke vektlegges. Kjør minst noen kilometer for en rapport som betyr noe.</p>` : ''}
     ${interrupted ? `<p class="notice">Opptaket ble avbrutt før «Stopp» ble trykket. Rapporten gjelder den delen som ble lagret.</p>` : ''}
@@ -126,6 +146,21 @@ export function renderReport(root, r, ctx = {}) {
       <div class="bars">${['brake', 'accel', 'turn', 'smooth'].map(k => scoreBar(k, r.scores[k], prev ? prev.scores[k] : null)).join('')}</div>
     </section>
 
+    ${sp ? `<section class="card" id="limits-section">
+      <h2>Fartsgrenser</h2>
+      <p class="muted small">Fra Statens vegvesen (NVDB). Teller når farten er minst 4 km/t over grensen i minst 3 sekunder. Inngår ikke i samlet poengsum.</p>
+      <div class="bars">${scoreBar('limits', sp.score, null)}</div>
+      <dl class="stats limits-stats">
+        <div><dt>Over grensen</dt><dd>${n0(sp.secondsOver)} s</dd></div>
+        <div><dt>Mest over</dt><dd>${sp.maxOver >= 4 ? '+' + n0(sp.maxOver) + ' km/t' : '–'}</dd></div>
+        <div><dt>Ruten dekket</dt><dd>${n0(sp.coverage * 100)} %</dd></div>
+      </dl>
+      ${sp.episodes.length ? `<ol class="episodes">${sp.episodes.map(e => `
+        <li><span class="limit-pill">${e.limit}</span>
+          <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t</span></span></li>`).join('')}</ol>`
+        : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
+    </section>` : ''}
+
     ${positives.length ? `<section class="card">
       <h2>Dette gikk bra</h2>
       <ul class="positives">${positives.map(k => `<li><strong>${CATS[k]}:</strong> ${POSITIVE[k]}</li>`).join('')}</ul>
@@ -138,7 +173,8 @@ export function renderReport(root, r, ctx = {}) {
 
     <section class="card" id="speed-section">
       <h2>Fart underveis</h2>
-      ${speedChart(r, gaps, marks)}
+      ${speedChart(r, gaps, marks, sp)}
+      ${sp ? '<p class="muted small">Rød stiplet linje er fartsgrensen. Rødt felt er tid over grensen.</p>' : ''}
     </section>
 
     <section class="card" id="events-section">
@@ -146,7 +182,7 @@ export function renderReport(root, r, ctx = {}) {
       ${r.events.length ? `<ol class="events">${r.events.map(e => `
         <li><button type="button" class="event" data-n="${e.n}" style="--c:${KIND_COLOR[e.kind]}">
           <span class="num">${e.n}</span>
-          <span class="ev-text"><strong>${esc(eventLabel(e))}</strong><span class="muted">${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}</span></span>
+          <span class="ev-text"><strong>${esc(eventLabel(e))}</strong><span class="muted">${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}</span>${names.events[e.n] ? `<span class="ev-place">${esc(names.events[e.n])}</span>` : ''}</span>
           <span class="ev-g">${gee(e.g)}<span class="g-word muted">${gWord(e.g)}</span></span>
         </button></li>`).join('')}</ol>` : '<p class="muted">Ingen brå hendelser registrert på denne turen.</p>'}
     </section>
@@ -157,7 +193,7 @@ export function renderReport(root, r, ctx = {}) {
       <ol class="marks">${marks.map(m => `
         <li class="mark-row" data-i="${m.i}">
           <span class="num mark-num">${m.letter}</span>
-          <span class="ev-text"><strong>${mss(m.t)} inn i turen${Number.isFinite(m.kmh) ? ', ' + kmh(m.kmh) : ''}</strong>
+          <span class="ev-text"><strong>${mss(m.t)} inn i turen${Number.isFinite(m.kmh) ? ', ' + kmh(m.kmh) : ''}</strong>${names.marks[m.i] ? `<span class="ev-place">${esc(names.marks[m.i])}</span>` : ''}
             ${onMarkNote ? `<textarea class="mark-note" rows="1" placeholder="Hva skjedde? F.eks. «glemte speil før feltskifte»" aria-label="Kommentar til merke ${m.letter}">${esc(m.note)}</textarea>`
               : (m.note ? `<span>${esc(m.note)}</span>` : '<span class="muted">Ingen kommentar</span>')}
           </span>
@@ -179,6 +215,7 @@ export function renderReport(root, r, ctx = {}) {
             ? `v3 – bremsing og gass ble målt med akselerometeret (100 ganger i sekundet) og kalibrert mot GPS (samsvar ${Math.round((r.accFit ? r.accFit.r2 : 0) * 100)} %). Det fanger korte, harde bremser som GPS glatter bort.`
             : (r.engine === 'v3' ? 'v3 var valgt, men akselerometerdata manglet eller passet dårlig med GPS (løs holder?), så GPS-fart ble brukt.' : 'v1 – bremsing og gass fra GPS-fart.')}</p>
           <p>Hendelser som ligger mindre enn to sekunder fra hverandre slås sammen til én. Poengsummen trekker mest for kraftige hendelser, og samlet poengsum vekter bremsing 30 %, svinger 25 %, jevn fart 25 % og akselerasjon 20 %.</p>
+          ${sp ? `<p><strong>Fartsgrenser</strong> hentes fra Statens vegvesen etter turen. Hvert GPS-punkt kobles til nærmeste fartsgrensestrekning innen 25 m, så i kryss og ved avkjøringer kan grensen bomme et sekund eller to. Poeng: 100 minus 1,5 per sekund over grensen, minus 10 per episode med 10 km/t eller mer over.</p>` : ''}
           <p>Følsomhet: ${esc(ctx.sensitivityLabel || 'Normal')}.</p>
         </div>
       </details>
@@ -226,7 +263,9 @@ export function renderReport(root, r, ctx = {}) {
   }));
   countUp(root.querySelector('.sign text'), r.overall);
   if (onDelete) root.querySelector('#btn-delete-drive').addEventListener('click', onDelete);
-  if (onShare) root.querySelector('#btn-share').addEventListener('click', () => onShare(buildSummary(r, { subtitle, note })));
+  const fetchBtn = root.querySelector('#btn-fetch');
+  if (fetchBtn && onFetch) fetchBtn.addEventListener('click', onFetch);
+  if (onShare) root.querySelector('#btn-share').addEventListener('click', () => onShare(buildSummary(r, { subtitle, note, marks: rawMarks, enrich })));
 }
 
 function delta(now, before, words = false) {
@@ -335,18 +374,18 @@ function label(x, y, text, W) {
 function scoreBar(k, v, prevV) {
   const cls = v >= 90 ? 'good' : v >= 75 ? 'mid' : 'bad';
   return `<div class="bar-row">
-    <span class="bar-label">${CATS[k]}</span>
+    <span class="bar-label">${k === 'limits' ? 'Fartsgrense' : CATS[k]}</span>
     <span class="bar"><span class="bar-fill ${cls}" style="width:${v}%"></span></span>
     <span class="bar-val">${v}${prevV !== null && prevV !== undefined ? delta(v, prevV) : ''}</span>
   </div>`;
 }
 
-function speedChart(r, gaps, marks = []) {
+function speedChart(r, gaps, marks = [], sp = null) {
   const pts = r.points;
   if (pts.length < 2) return '';
   const W = 600, H = 260, pl = 46, pr = 14, pt = 16, pb = 36;
   const tMax = pts[pts.length - 1].t || 1;
-  const vMax = Math.max(...pts.map(p => p.kmh), 10);
+  const vMax = Math.max(...pts.map(p => p.kmh), 10, ...(sp ? sp.limits.filter(Number.isFinite) : [0]));
   const yMax = Math.max(Math.ceil((vMax + 8) / 10) * 10, 40);
   const X = t => pl + (t / tMax) * (W - pl - pr);
   const Y = v => pt + (1 - v / yMax) * (H - pt - pb);
@@ -371,6 +410,19 @@ function speedChart(r, gaps, marks = []) {
     return `<circle cx="${X(e.t).toFixed(1)}" cy="${Y(p.kmh).toFixed(1)}" r="7" fill="${KIND_COLOR[e.kind]}" stroke="#fff" stroke-width="2"/>
       <text x="${X(e.t).toFixed(1)}" y="${(Y(p.kmh) - 11).toFixed(1)}" text-anchor="middle" class="axis" font-weight="700">${e.n}</text>`;
   }).join('');
+  let limitPath = '', overRects = '';
+  if (sp) {
+    const parts = [];
+    for (let i = 0; i < pts.length; i++) {
+      const L = sp.limits[i];
+      if (!Number.isFinite(L)) { continue; }
+      const x0 = i > 0 ? X((pts[i - 1].t + pts[i].t) / 2) : X(pts[i].t);
+      const x1 = i < pts.length - 1 ? X((pts[i].t + pts[i + 1].t) / 2) : X(pts[i].t);
+      parts.push(`M${x0.toFixed(1)} ${Y(L).toFixed(1)}L${x1.toFixed(1)} ${Y(L).toFixed(1)}`);
+      if (pts[i].kmh - L >= 4) overRects += `<rect x="${x0.toFixed(1)}" y="${Y(pts[i].kmh).toFixed(1)}" width="${Math.max(1, x1 - x0).toFixed(1)}" height="${Math.max(0, Y(L) - Y(pts[i].kmh)).toFixed(1)}" class="over-area"/>`;
+    }
+    limitPath = `<path d="${parts.join('')}" class="limit-line"/>`;
+  }
   const markLines = marks.map(m => `<line x1="${X(m.t).toFixed(1)}" x2="${X(m.t).toFixed(1)}" y1="${pt}" y2="${(H - pb).toFixed(1)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 4"/>
     <text x="${X(m.t).toFixed(1)}" y="${pt + 12}" text-anchor="middle" class="axis" font-weight="800">${m.letter}</text>`).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Fart over tid">
@@ -378,7 +430,9 @@ function speedChart(r, gaps, marks = []) {
     ${gapRects}
     ${markLines}
     <path d="${area}" fill="var(--accel)" opacity="0.12"/>
+    ${overRects}
     <path d="${line}" fill="none" stroke="var(--accel)" stroke-width="2.5" stroke-linejoin="round"/>
+    ${limitPath}
     <line x1="${pl}" x2="${W - pr}" y1="${Y(0)}" y2="${Y(0)}" class="axis-line"/>
     ${ticks.join('')}
     <text x="${W - pr}" y="${pt + 4}" text-anchor="end" class="axis">km/t</text>
