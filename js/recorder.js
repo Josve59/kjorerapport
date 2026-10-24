@@ -2,11 +2,9 @@
    Alle tidsstempler er sekunder siden opptaket startet (performance.now()). */
 
 import { newId, putDrive, putChunk } from './db.js';
+import { RAD, deriveGravity, shouldStore, gyroFromRotationRate, linearFromEvent, gapFromHidden, haversine } from './sensors.js';
 
-const RAD = Math.PI / 180;
-const MOTION_INTERVAL = 1 / 20;      // ca. 20 Hz lagring
 const CHECKPOINT_MS = 10000;
-const LP_ALPHA = 0.05;               // lavpass for tyngdekraft når acceleration mangler
 
 /* iOS krever at dette kalles fra et trykk. Returnerer 'granted' | 'denied' | 'unsupported'. */
 export async function requestMotionPermission() {
@@ -61,11 +59,12 @@ export class Recorder {
   reset() {
     this.drive = null;
     this.t0 = 0;
-    this.buf = { loc: [], gyro: [], grav: [] };
+    this.buf = { loc: [], gyro: [], grav: [], acc: [] };
     this.seq = 0;
     this.lastMotionT = -1;
     this.grav = null;
     this.gaps = [];
+    this.marks = [];
     this.hiddenAt = null;
     this.distance = 0;
     this.lastFix = null;
@@ -96,8 +95,9 @@ export class Recorder {
       sensitivity: this.sensitivity,
       demo: !!this.replay,
       gaps: [],
-      counts: { loc: 0, gyro: 0, grav: 0 },
-      appVersion: 1
+      marks: [],
+      counts: { loc: 0, gyro: 0, grav: 0, acc: 0 },
+      appVersion: 3
     };
     await putDrive(this.drive);
 
@@ -140,9 +140,9 @@ export class Recorder {
       this.hiddenAt = this.now();
     } else {
       if (this.hiddenAt !== null) {
-        const gap = { from: this.hiddenAt, to: this.now() };
+        const gap = gapFromHidden(this.hiddenAt, this.now());
         this.hiddenAt = null;
-        if (gap.to - gap.from > 1) {
+        if (gap) {
           this.gaps.push(gap);
           this.drive.gaps = this.gaps;
           this.returnedFromGap = gap;
@@ -176,42 +176,42 @@ export class Recorder {
     this.lastFixWall = performance.now();
   }
 
-  /* Bevegelse: rotationRate i grader/s → rad/s. Tyngdekraft = inkl. − uten, eller lavpass. */
+  /* Bevegelse: rotationRate i grader/s → rad/s. Tyngdekraft = inkl. − uten, eller lavpass.
+     Lineær akselerasjon (uten tyngdekraft) lagres også – brukes av v3-motoren. */
   handleMotion(e, tOverride) {
     const t = Number.isFinite(tOverride) ? tOverride : this.now();
-    const inc = e.accelerationIncludingGravity;
-    const acc = e.acceleration;
-    let g = null;
-    if (inc && acc && inc.x !== null && acc.x !== null) {
-      g = { x: inc.x - acc.x, y: inc.y - acc.y, z: inc.z - acc.z };
-      this.grav = g;
-    } else if (inc && inc.x !== null) {
-      if (!this.grav) this.grav = { x: inc.x, y: inc.y, z: inc.z };
-      else this.grav = {
-        x: this.grav.x + LP_ALPHA * (inc.x - this.grav.x),
-        y: this.grav.y + LP_ALPHA * (inc.y - this.grav.y),
-        z: this.grav.z + LP_ALPHA * (inc.z - this.grav.z)
-      };
-      g = this.grav;
-    }
+    const { grav, state } = deriveGravity(e.accelerationIncludingGravity, e.acceleration, this.grav);
+    this.grav = state;
     this.motionCount++;
-    if (t - this.lastMotionT < MOTION_INTERVAL) return;   // nedsampling til ca. 20 Hz
+    if (!shouldStore(t, this.lastMotionT)) return;   // nedsampling til ca. 20 Hz
     this.lastMotionT = t;
-    const r = e.rotationRate;
-    if (r && r.alpha !== null && r.alpha !== undefined) {
-      this.buf.gyro.push({ t, x: r.beta * RAD, y: r.gamma * RAD, z: r.alpha * RAD });
-    }
-    if (g) this.buf.grav.push({ t, x: g.x, y: g.y, z: g.z });
+    const g = gyroFromRotationRate(e.rotationRate);
+    if (g) this.buf.gyro.push({ t, x: g.x, y: g.y, z: g.z });
+    if (grav) this.buf.grav.push({ t, x: grav.x, y: grav.y, z: grav.z });
+    const lin = linearFromEvent(e.acceleration);
+    if (lin) this.buf.acc.push({ t, x: lin.x, y: lin.y, z: lin.z });
+  }
+
+  /* Ledsagerens merke: et tidspunkt å kommentere etterpå. Ingen tilbakemelding til føreren. */
+  mark() {
+    if (!this.running) return null;
+    const m = { t: this.now(), note: '' };
+    this.marks.push(m);
+    this.drive.marks = this.marks;
+    this.emit();
+    return m;
   }
 
   async checkpoint() {
     if (!this.drive) return;
     const b = this.buf;
-    if (!b.loc.length && !b.gyro.length && !b.grav.length) return;
-    this.buf = { loc: [], gyro: [], grav: [] };
+    if (!b.loc.length && !b.gyro.length && !b.grav.length && !b.acc.length) return;
+    this.buf = { loc: [], gyro: [], grav: [], acc: [] };
     this.drive.counts.loc += b.loc.length;
     this.drive.counts.gyro += b.gyro.length;
     this.drive.counts.grav += b.grav.length;
+    this.drive.counts.acc += b.acc.length;
+    this.drive.marks = this.marks;
     this.drive.distanceM = this.distance;
     this.drive.duration = this.now();
     this.drive.gaps = this.gaps;
@@ -255,6 +255,7 @@ export class Recorder {
       locCount: this.locCount,
       wakeLockFailed: this.wakeLockFailed,
       lastCheckpoint: this.lastCheckpoint,
+      marks: this.marks.length,
       returnedFromGap: this.returnedFromGap || null
     });
     this.returnedFromGap = null;
@@ -266,6 +267,7 @@ export class Recorder {
     const loc = data.loc.slice().sort((a, b) => a.t - b.t);
     const gyro = data.gyro.slice().sort((a, b) => a.t - b.t);
     const grav = data.grav.slice().sort((a, b) => a.t - b.t);
+    const acc = (data.acc || []).slice().sort((a, b) => a.t - b.t);
     let li = 0, gi = 0;
     this.replayDone = false;
     this.replayTimer = setInterval(() => {
@@ -276,13 +278,13 @@ export class Recorder {
           heading: Number.isFinite(p.bearing) ? p.bearing : null, accuracy: p.acc } }, p.t);
       }
       while (gi < gyro.length && gyro[gi].t <= simT) {
-        const g = gyro[gi], q = grav[Math.min(gi, grav.length - 1)];
+        const g = gyro[gi], q = grav[Math.min(gi, grav.length - 1)], a = acc.length ? acc[Math.min(gi, acc.length - 1)] : null;
         gi++;
         // Opptakeren forventer grader/s (som nettleseren gir), så vi konverterer tilbake.
         this.handleMotion({
           rotationRate: { alpha: g.z / RAD, beta: g.x / RAD, gamma: g.y / RAD },
-          acceleration: { x: 0, y: 0, z: 0 },
-          accelerationIncludingGravity: { x: q.x, y: q.y, z: q.z }
+          acceleration: a ? { x: a.x, y: a.y, z: a.z } : { x: 0, y: 0, z: 0 },
+          accelerationIncludingGravity: a ? { x: q.x + a.x, y: q.y + a.y, z: q.z + a.z } : { x: q.x, y: q.y, z: q.z }
         }, g.t);
       }
       if (li >= loc.length && gi >= gyro.length) {
@@ -292,11 +294,4 @@ export class Recorder {
       }
     }, 20);
   }
-}
-
-function haversine(a, b) {
-  const R = 6371000, k = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * k, dLon = (b.lon - a.lon) * k;
-  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * k) * Math.cos(b.lat * k) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(s));
 }
