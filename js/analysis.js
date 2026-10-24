@@ -90,6 +90,63 @@ function yawSeries(input, L, vs) {
   return { source: 'gps', yaw: smoothBy(L.map(p => p.t), raw, 1) };
 }
 
+/* v3: langsgående akselerasjon fra akselerometeret.
+   Lineær akselerasjon projiseres på horisontalplanet (tyngdekraften fjernes), og kjøreretningen i
+   telefonens ramme finnes ved minste kvadraters tilpasning mot GPS-akselerasjonen. Så virker det uansett
+   hvordan telefonen står. Hvis tilpasningen er dårlig (løs holder, manglende data) returneres null,
+   og GPS brukes som før. */
+function accAlongSeries(input, L, alongGps) {
+  if (!Array.isArray(input.acc) || input.acc.length < 50 || !Array.isArray(input.grav) || input.grav.length < 10) return null;
+  const acc = input.acc.filter(a => Number.isFinite(a.t) && Number.isFinite(a.x)).sort((a, b) => a.t - b.t);
+  const grav = input.grav.slice().sort((a, b) => a.t - b.t);
+  if (acc.length < 50) return null;
+  const at = [], px = [0], py = [0], pz = [0];
+  let j = 0, gx = 0, gy = 0, gz = 0;
+  for (const a of acc) {
+    while (j < grav.length - 1 && grav[j + 1].t <= a.t) j++;
+    const q = grav[j];
+    const m = Math.hypot(q.x, q.y, q.z) || 1;
+    const ux = q.x / m, uy = q.y / m, uz = q.z / m;
+    gx += ux; gy += uy; gz += uz;
+    const dot = a.x * ux + a.y * uy + a.z * uz;
+    const hx = a.x - dot * ux, hy = a.y - dot * uy, hz = a.z - dot * uz;
+    at.push(a.t);
+    px.push(px[px.length - 1] + hx); py.push(py[py.length - 1] + hy); pz.push(pz[pz.length - 1] + hz);
+  }
+  const H = L.map(p => {
+    const a = lowerBound(at, p.t - 0.5), b = lowerBound(at, p.t + 0.5);
+    const n = b - a;
+    return n >= 5 ? { x: (px[b] - px[a]) / n, y: (py[b] - py[a]) / n, z: (pz[b] - pz[a]) / n, n } : null;
+  });
+  let ux = 0, uy = 0, uz = 0, used = 0;
+  for (let i = 0; i < L.length; i++) {
+    if (!H[i] || Math.abs(alongGps[i]) < 0.3) continue;
+    ux += alongGps[i] * H[i].x; uy += alongGps[i] * H[i].y; uz += alongGps[i] * H[i].z; used++;
+  }
+  if (used < 10) return null;
+  const gm = Math.hypot(gx, gy, gz) || 1;
+  const gux = gx / gm, guy = gy / gm, guz = gz / gm;
+  const d = ux * gux + uy * guy + uz * guz;
+  ux -= d * gux; uy -= d * guy; uz -= d * guz;
+  const um = Math.hypot(ux, uy, uz);
+  if (!(um > 0)) return null;
+  ux /= um; uy /= um; uz /= um;
+  let ssRes = 0, ssTot = 0, mean = 0, n = 0;
+  for (let i = 0; i < L.length; i++) if (H[i]) { mean += alongGps[i]; n++; }
+  mean = n ? mean / n : 0;
+  const out = new Array(L.length);
+  for (let i = 0; i < L.length; i++) {
+    if (!H[i]) { out[i] = alongGps[i]; continue; }
+    const pred = H[i].x * ux + H[i].y * uy + H[i].z * uz;
+    out[i] = pred;
+    ssRes += (alongGps[i] - pred) ** 2; ssTot += (alongGps[i] - mean) ** 2;
+  }
+  const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+  if (r2 < 0.4) return null;
+  out[0] = 0; out[out.length - 1] = 0;
+  return { series: out, r2, axis: { x: ux, y: uy, z: uz } };
+}
+
 function findEvents(L, series, vs, kind, sign, th, minSpeed) {
   const ev = [];
   let cur = null;
@@ -119,6 +176,8 @@ const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
 
 export function analyze(input, opts = {}) {
   const th = scaleTH(opts.factor);
+  const engine = opts.engine === 'v3' ? 'v3' : 'v1';
+  const perKm = !!opts.perKm;
   const raw = input.loc.filter(p => Number.isFinite(p.t) && Number.isFinite(p.lat) && Number.isFinite(p.lon)
     && Math.abs(p.lat) > 1e-4 && (!Number.isFinite(p.acc) || p.acc <= 50));
   raw.sort((a, b) => a.t - b.t);
@@ -142,10 +201,12 @@ export function analyze(input, opts = {}) {
   });
   const { source, yaw } = yawSeries(input, L, vs);
   const alat = L.map((p, i) => vs[i] * Math.abs(yaw[i]));
+  const accFit = engine === 'v3' ? accAlongSeries(input, L, along) : null;
+  const alongEv = accFit ? accFit.series : along;
 
   const events = [
-    ...findEvents(L, along, vs, 'brake', -1, th.brake, 0),
-    ...findEvents(L, along, vs, 'accel', 1, th.accel, 0),
+    ...findEvents(L, alongEv, vs, 'brake', -1, th.brake, 0),
+    ...findEvents(L, alongEv, vs, 'accel', 1, th.accel, 0),
     ...findEvents(L, alat, vs, 'turn', 1, th.turn, 3)
   ].sort((a, b) => a.t - b.t);
   events.forEach((e, i) => { e.n = i + 1; });
@@ -166,10 +227,12 @@ export function analyze(input, opts = {}) {
     accel: { harsh: count('accel', 'harsh'), brisk: count('accel', 'brisk') },
     turn:  { harsh: count('turn', 'harsh'),  brisk: count('turn', 'brisk') }
   };
+  // Poeng justert for distanse: trekk per 10 km, med gulv på 5 km så korte turer ikke blir «perfekte».
+  const kmFactor = perKm ? 10 / Math.max(dist / 1000, 5) : 1;
   const scores = {
-    brake: clamp(100 - 20 * c.brake.harsh - 8 * c.brake.brisk),
-    accel: clamp(100 - 16 * c.accel.harsh - 6 * c.accel.brisk),
-    turn:  clamp(100 - 16 * c.turn.harsh - 6 * c.turn.brisk),
+    brake: clamp(100 - (20 * c.brake.harsh + 8 * c.brake.brisk) * kmFactor),
+    accel: clamp(100 - (16 * c.accel.harsh + 6 * c.accel.brisk) * kmFactor),
+    turn:  clamp(100 - (16 * c.turn.harsh + 6 * c.turn.brisk) * kmFactor),
     smooth: clamp(100 - Math.max(0, rms - 0.55) * 70)
   };
   const overall = clamp(0.3 * scores.brake + 0.2 * scores.accel + 0.25 * scores.turn + 0.25 * scores.smooth);
@@ -182,7 +245,8 @@ export function analyze(input, opts = {}) {
       km: dist / 1000, duration: L[L.length - 1].t - L[0].t, moving,
       maxKmh: maxV * 3.6, avgKmh: moving > 0 ? dist / moving * 3.6 : 0, stops, rms
     },
-    counts: c, scores, overall, tips: makeTips(c, scores), source
+    counts: c, scores, overall, tips: makeTips(c, scores), source,
+    engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2 } : null, perKm, kmFactor
   };
 }
 
@@ -213,18 +277,34 @@ export function rating(score) {
 }
 
 /* Simulated drive (central Trondheim) for the demo button and tests */
-export function makeDemo(seed = 7) {
-  let s = seed;
+export function makeDemo(seed = 7, mount = null) {
+  let s = seed, s2 = seed + 1;
   const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647 - 0.5; };
+  const rnd2 = () => { s2 = (s2 * 16807) % 2147483647; return s2 / 2147483647 - 0.5; };  // egen støy til akselerometer
   const lat0 = 63.4305, lon0 = 10.3951;
   const mLat = 111320, mLon = 111320 * Math.cos(lat0 * Math.PI / 180);
   let t = 0, v = 0, h = 1.1, x = 0, y = 0, nextLoc = 0;
-  const dt = 0.1, loc = [], gyro = [], grav = [];
+  const dt = 0.1, loc = [], gyro = [], grav = [], acc = [];
+  // Valgfri montering: telefonen rotert (yaw om z, pitch om x) i bilen. Da roteres gyro, tyngdekraft
+  // og akselerasjon likt, og det legges til akselerometerdata – brukes til å teste v3-motoren.
+  const rot = mount ? rotation(mount.yaw || 0, mount.pitch || 0) : null;
+  const R = vec => (rot ? { x: rot[0][0] * vec.x + rot[0][1] * vec.y + rot[0][2] * vec.z,
+    y: rot[1][0] * vec.x + rot[1][1] * vec.y + rot[1][2] * vec.z,
+    z: rot[2][0] * vec.x + rot[2][1] * vec.y + rot[2][2] * vec.z } : vec);
   const step = (a, yr) => {
+    const vBefore = v;
     v = Math.max(0, v + a * dt); h += yr * dt;
     x += v * Math.sin(h) * dt; y += v * Math.cos(h) * dt; t += dt;
-    gyro.push({ t, x: 0.01 * rnd(), y: 0.01 * rnd(), z: -yr + 0.01 * rnd() });
-    grav.push({ t, x: 0, y: 0, z: -9.81 });
+    const g = R({ x: 0.01 * rnd(), y: 0.01 * rnd(), z: -yr + 0.01 * rnd() });
+    gyro.push({ t, x: g.x, y: g.y, z: g.z });
+    const q = R({ x: 0, y: 0, z: -9.81 });
+    grav.push({ t, x: q.x, y: q.y, z: q.z });
+    if (rot) {
+      // Bilramme: y fram, x til høyre. Langsgående = faktisk fartsendring, sideveis = v·yr.
+      const car = { x: v * yr + 0.3 * rnd2(), y: (v - vBefore) / dt + 0.3 * rnd2(), z: 0.3 * rnd2() };
+      const p = R(car);
+      acc.push({ t, x: p.x, y: p.y, z: p.z });
+    }
     if (t >= nextLoc) {
       nextLoc += 1;
       loc.push({ t, lat: lat0 + y / mLat + rnd() * 2e-6, lon: lon0 + x / mLon + rnd() * 4e-6,
@@ -243,5 +323,15 @@ export function makeDemo(seed = 7) {
   to(0, 1.9); hold(8); to(13.9, 3.9); cruise(35); to(16.7, 1.2); cruise(30);
   to(5, 4.6); cruise(4); to(11.1, 2.0); turn(80, 0.43); to(7, 1.8); turn(-270, 0.28);
   to(19.4, 1.4); cruise(60); to(13.9, 1.6); cruise(20); to(8.3, 2.9); cruise(10); to(0, 1.7); hold(5);
-  return { loc, gyro, grav };
+  return rot ? { loc, gyro, grav, acc } : { loc, gyro, grav };
+}
+
+function rotation(yaw, pitch) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  // Rz(yaw) · Rx(pitch)
+  return [
+    [cy, -sy * cp, sy * sp],
+    [sy, cy * cp, -cy * sp],
+    [0, sp, cp]
+  ];
 }

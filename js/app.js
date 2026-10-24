@@ -1,17 +1,18 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, SENSITIVITY } from './analysis.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
-import { listDrives, getDrive, getRaw, putDrive, updateDrive, importDrive, deleteDrive, deleteAll, getSettings, saveSettings } from './db.js';
+import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
 import { renderReport, trendChart, eventsPer10km } from './report.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
 
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.3.0';
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
 let stopPrecheck = null;
 let swUpdateReady = null;
 let installPrompt = null;
+let persistState = null;
 
 function show(name) {
   Object.values(screens).forEach(s => s.hidden = true);
@@ -40,19 +41,26 @@ function currentSensitivity() {
   return SENSITIVITY[s.sensitivity] || SENSITIVITY.normal;
 }
 
+function analysisOptions() {
+  const s = getSettings();
+  return { factor: currentSensitivity().factor, engine: s.engine === 'v3' ? 'v3' : 'v1', perKm: s.perKm !== false };
+}
+
 async function analyzeDrive(drive) {
-  const factor = currentSensitivity().factor;
-  if (drive.result && drive.resultFactor === factor && drive.resultVersion === 1) return drive.result;
+  const opts = analysisOptions();
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|3`;
+  if (drive.result && drive.resultKey === key) return drive.result;
+  const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
   let result;
   try {
-    result = analyze(raw, { factor });
+    result = analyze(raw, opts);
   } catch (err) {
-    drive.result = null; drive.error = err.message; drive.resultFactor = factor; drive.resultVersion = 1;
+    drive.result = null; drive.error = err.message; drive.resultKey = key;
     await putDrive(drive);
     throw err;
   }
-  drive.result = result; drive.error = null; drive.resultFactor = factor; drive.resultVersion = 1;
+  drive.result = result; drive.error = null; drive.resultKey = key;
   await putDrive(drive);
   return result;
 }
@@ -117,6 +125,7 @@ function renderInstallHint() {
     $('#btn-install').onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; el.hidden = true; };
   } else if (isIOS()) {
     el.innerHTML = `<p><strong>Legg til på Hjem-skjerm</strong> for eget ikon og bruk uten nett: trykk Del-knappen <span class="share-glyph" aria-hidden="true">⎙</span> nederst i Safari, og velg «Legg til på Hjem-skjerm».</p>
+      <p class="small"><strong>Viktig:</strong> Safari kan slette lagrede turer etter 7 dager uten bruk hvis appen ikke ligger på Hjem-skjermen. Ta en sikkerhetskopi i Innstillinger.</p>
       <button type="button" class="link" id="btn-hide-install">Skjul dette</button>`;
   } else { el.hidden = true; return; }
   el.hidden = false;
@@ -179,9 +188,10 @@ async function startRecording(replay = null) {
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
   show('record');
   const settings = getSettings();
-  const elapsed = $('#rec-elapsed'), dist = $('#rec-dist'), gps = $('#rec-gps'), warn = $('#rec-warn'), saved = $('#rec-saved');
+  const elapsed = $('#rec-elapsed'), dist = $('#rec-dist'), gps = $('#rec-gps'), warn = $('#rec-warn'), saved = $('#rec-saved'), markCount = $('#rec-marks');
   warn.innerHTML = '';
   saved.textContent = '';
+  markCount.textContent = '';
   let gapMsg = '';
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
@@ -194,6 +204,7 @@ async function startRecording(replay = null) {
       else if (!st.gpsFresh) { gps.textContent = 'GPS: venter …'; gps.dataset.state = 'wait'; }
       else { gps.textContent = `GPS: ${n0(st.acc)} m`; gps.dataset.state = st.acc <= 20 ? 'ok' : 'wait'; }
       saved.textContent = st.lastCheckpoint === null ? 'Lagrer første bit om litt' : `Sist lagret for ${n0(st.elapsed - st.lastCheckpoint)} s siden · ${st.locCount} GPS-punkter`;
+      markCount.textContent = st.marks ? `${st.marks} ${st.marks === 1 ? 'merke' : 'merker'}` : '';
       if (st.returnedFromGap) gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`;
       const msgs = [];
       if (st.wakeLockFailed) msgs.push('Sett Autolås til Aldri mens du kjører.');
@@ -278,6 +289,8 @@ async function renderDriveReport(id) {
       title: 'Kjørerapport', subtitle: date(drive.startedAt) + (tags.length ? ' · ' + tags.join(', ') : ''),
       gaps: drive.gaps || [], interrupted: !!drive.interrupted, factor: sens.factor, sensitivityLabel: sens.label,
       note: drive.note || '',
+      marks: drive.marks || [],
+      onMarkNote: async (i, text) => { const d = await getDrive(id); if (d && d.marks && d.marks[i]) { d.marks[i].note = text; await putDrive(d); } },
       onNoteChange: async text => { await updateDrive(id, { note: text }); },
       onShare: shareText,
       onDelete: async () => { if (confirm('Slette denne turen? Dette kan ikke angres.')) { await deleteDrive(id); location.hash = '#/'; } }
@@ -316,11 +329,40 @@ async function renderSettings() {
     r.checked = r.value === (settings.theme || 'auto');
     r.onchange = () => { saveSettings({ ...getSettings(), theme: r.value }); applyTheme(); };
   });
+  document.querySelectorAll('input[name=engine]').forEach(r => {
+    r.checked = r.value === (settings.engine === 'v3' ? 'v3' : 'v1');
+    r.onchange = () => { saveSettings({ ...getSettings(), engine: r.value }); };
+  });
+  document.querySelectorAll('input[name=perkm]').forEach(r => {
+    r.checked = r.value === (settings.perKm === false ? 'off' : 'on');
+    r.onchange = () => { saveSettings({ ...getSettings(), perKm: r.value === 'on' }); };
+  });
   const sel = $('#export-select');
   const drives = await listDrives();
   sel.innerHTML = drives.length ? drives.map(d => `<option value="${d.id}">${esc(date(d.startedAt))}${d.demo ? ' (demo)' : ''}${d.note ? ' – ' + esc(d.note.slice(0, 30)) : ''}</option>`).join('') : '<option value="">Ingen turer</option>';
   $('#btn-export').disabled = !drives.length;
   $('#btn-export').onclick = () => exportDrive(sel.value);
+  $('#persist-status').textContent = persistState === true ? 'Varig lagring: på. Nettleseren skal ikke slette turene dine.'
+    : persistState === false ? 'Varig lagring: nettleseren sa nei. Legg appen på Hjem-skjermen og ta sikkerhetskopi.'
+    : 'Varig lagring: ukjent i denne nettleseren. Ta sikkerhetskopi jevnlig.';
+  $('#btn-backup').disabled = !drives.length;
+  $('#btn-backup').onclick = () => backupAll(drives);
+  $('#restore-file').onchange = async e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      const list = Array.isArray(payload.drives) ? payload.drives : [payload];
+      let added = 0, skipped = 0;
+      for (const item of list) { const r = await importDrive(item, { keepId: true }); if (r && r.skipped) skipped++; else added++; }
+      e.target.value = '';
+      alert(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}.`);
+      location.hash = '#/';
+    } catch (err) {
+      alert('Kunne ikke gjenopprette: ' + err.message);
+      e.target.value = '';
+    }
+  };
   $('#import-file').onchange = async e => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -348,21 +390,26 @@ async function renderSettings() {
     taps = now - last < 1500 ? taps + 1 : 1; last = now;
     if (taps >= 7) { $('#dev-section').hidden = false; taps = 0; }
   };
-  $('#btn-dev-demo').onclick = () => startRecording({ data: makeDemo(), speed: 60 });
-  $('#btn-dev-demo-slow').onclick = () => startRecording({ data: makeDemo(), speed: 10 });
+  // Demoen spilles av med telefonen «montert» skrått, så akselerometerdata og v3-motoren også testes.
+  $('#btn-dev-demo').onclick = () => startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 60 });
+  $('#btn-dev-demo-slow').onclick = () => startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 });
 }
 
 async function exportDrive(id) {
   if (!id) return;
   const drive = await getDrive(id);
-  const raw = await getRaw(id);
-  const payload = {
-    app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(),
-    drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt, sensitivity: drive.sensitivity, gaps: drive.gaps, demo: drive.demo, interrupted: !!drive.interrupted, note: drive.note || '' },
-    input: raw
-  };
-  const json = JSON.stringify(payload, (k, v) => (typeof v === 'number' && Number.isNaN(v) ? null : v));
-  const name = `kjorerapport-${drive.startedAt.slice(0, 16).replace(/[:T]/g, '-')}.json`;
+  const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), ...(await exportPayload(drive)) };
+  await shareFile(toJSON(payload), `kjorerapport-${drive.startedAt.slice(0, 16).replace(/[:T]/g, '-')}.json`);
+}
+
+async function backupAll(drives) {
+  const items = [];
+  for (const d of drives) items.push(await exportPayload(d));
+  const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), drives: items };
+  await shareFile(toJSON(payload), `kjorerapport-sikkerhetskopi-${new Date().toISOString().slice(0, 10)}.json`);
+}
+
+async function shareFile(json, name) {
   const file = new File([json], name, { type: 'application/json' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], title: 'Kjørerapport' }); return; } catch { /* avbrutt */ }
@@ -394,12 +441,23 @@ function init() {
   $('#btn-settings').onclick = () => { location.hash = '#/innstillinger'; };
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = () => { location.hash = '#/'; });
   setupLongPress($('#btn-stop'), finishRecording);
+  $('#btn-mark').onclick = () => {
+    if (!recorder || !recorder.running) return;
+    const m = recorder.mark();
+    if (m) {
+      vibrate(40);
+      const b = $('#btn-mark');
+      b.classList.add('flash');
+      setTimeout(() => b.classList.remove('flash'), 400);
+    }
+  };
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
   $('#version').textContent = `Kjørerapport versjon ${APP_VERSION}`;
   window.addEventListener('hashchange', route);
   window.addEventListener('beforeunload', e => { if (recorder && recorder.running) { e.preventDefault(); e.returnValue = ''; } });
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (!screens.home.hidden) renderInstallHint(); });
   registerSW();
+  requestPersistentStorage().then(r => { persistState = r; });
   route();
 }
 

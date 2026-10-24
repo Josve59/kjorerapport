@@ -80,6 +80,11 @@
       <p class="rec-saved muted small" id="rec-saved"></p>
     </div>
     <div id="rec-warn" aria-live="polite"></div>
+    <div class="mark-wrap">
+      <button type="button" class="btn-mark" id="btn-mark" aria-label="Merk dette tidspunktet">Merk</button>
+      <p class="muted small" id="rec-marks" aria-live="polite"></p>
+      <p class="muted small">Ledsager: trykk «Merk» når du ser noe å snakke om etterpå. Føreren får ingen beskjed.</p>
+    </div>
     <button type="button" class="stop" id="btn-stop" aria-label="Stopp (hold inne i ett sekund)">
       <span class="progress" aria-hidden="true"></span>
       <span class="stop-label">Stopp</span>
@@ -111,6 +116,22 @@
       </div>
     </section>
     <section class="card">
+      <h2>Analysemotor</h2>
+      <p class="muted small">v1 bruker GPS-fart til bremsing og gass. v3 bruker akselerometeret i tillegg, kalibrert mot GPS, og fanger korte, harde bremser. Prøv begge på samme tur og se hva som stemmer best.</p>
+      <div class="segment" role="radiogroup" aria-label="Analysemotor">
+        <label><input type="radio" name="engine" value="v1"><span>v1 (GPS)</span></label>
+        <label><input type="radio" name="engine" value="v3"><span>v3 (GPS + aks.)</span></label>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Poeng justert for distanse</h2>
+      <p class="muted small">Trekk regnes per 10 km, så en lang tur ikke straffes for å være lang. Turer under 5 km regnes som 5 km.</p>
+      <div class="segment" role="radiogroup" aria-label="Poeng justert for distanse">
+        <label><input type="radio" name="perkm" value="on"><span>På</span></label>
+        <label><input type="radio" name="perkm" value="off"><span>Av</span></label>
+      </div>
+    </section>
+    <section class="card">
       <h2>Utseende</h2>
       <div class="segment" role="radiogroup" aria-label="Utseende">
         <label><input type="radio" name="theme" value="auto"><span>Automatisk</span></label>
@@ -126,6 +147,13 @@
       <label class="btn secondary file-btn">Importer JSON-fil<input type="file" id="import-file" accept="application/json,.json"></label>
     </section>
     <section class="card">
+      <h2>Sikkerhetskopi</h2>
+      <p class="muted small" id="persist-status"></p>
+      <p class="muted small">Én fil med alle turer og rådata. Lagre den i Filer eller send den til deg selv. Gjenoppretting hopper over turer som finnes fra før.</p>
+      <button type="button" class="btn secondary" id="btn-backup">Sikkerhetskopier alle turer</button>
+      <label class="btn secondary file-btn">Gjenopprett fra sikkerhetskopi<input type="file" id="restore-file" accept="application/json,.json"></label>
+    </section>
+    <section class="card">
       <h2>Data</h2>
       <p class="muted small">Alt lagres bare på denne telefonen. Appen sender ingenting noe sted.</p>
       <button type="button" class="btn secondary" id="btn-reanalyze">Analyser alle turer på nytt</button>
@@ -137,7 +165,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.2.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.3.0</p>
   </section>
 
 </main>

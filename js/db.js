@@ -76,9 +76,9 @@ export async function getRaw(driveId) {
   const idx = db.transaction('chunks').objectStore('chunks').index('driveId');
   const chunks = await reqToPromise(idx.getAll(driveId));
   chunks.sort((a, b) => a.seq - b.seq);
-  const raw = { loc: [], gyro: [], grav: [] };
+  const raw = { loc: [], gyro: [], grav: [], acc: [] };
   for (const c of chunks) {
-    for (const k of ['loc', 'gyro', 'grav']) if (c[k]) for (const s of c[k]) raw[k].push(s);
+    for (const k of ['loc', 'gyro', 'grav', 'acc']) if (c[k]) for (const s of c[k]) raw[k].push(s);
   }
   return raw;
 }
@@ -92,17 +92,19 @@ export async function updateDrive(id, patch) {
 }
 
 /* Importerer en eksportert JSON-fil (eller rå {loc,gyro,grav}) som en ny tur. */
-export async function importDrive(payload) {
+export async function importDrive(payload, { keepId = false } = {}) {
   const input = payload && payload.input ? payload.input : payload;
   if (!input || !Array.isArray(input.loc) || input.loc.length < 2) throw new Error('Fant ingen GPS-data i filen.');
+  const xyz = arr => (arr || []).map(g => ({ t: num(g.t), x: num(g.x), y: num(g.y), z: num(g.z) }));
   const raw = {
     loc: input.loc.map(p => ({ t: num(p.t), lat: num(p.lat), lon: num(p.lon), speed: num(p.speed), bearing: num(p.bearing), acc: num(p.acc) })),
-    gyro: (input.gyro || []).map(g => ({ t: num(g.t), x: num(g.x), y: num(g.y), z: num(g.z) })),
-    grav: (input.grav || []).map(g => ({ t: num(g.t), x: num(g.x), y: num(g.y), z: num(g.z) }))
+    gyro: xyz(input.gyro), grav: xyz(input.grav), acc: xyz(input.acc)
   };
   const meta = payload && payload.drive ? payload.drive : {};
+  const id = keepId && typeof meta.id === 'string' && meta.id ? meta.id : newId();
+  if (keepId && await getDrive(id)) return { skipped: true, id };
   const drive = {
-    id: newId(),
+    id,
     startedAt: typeof meta.startedAt === 'string' && !isNaN(Date.parse(meta.startedAt)) ? meta.startedAt : new Date().toISOString(),
     endedAt: meta.endedAt || null,
     status: 'done',
@@ -111,14 +113,39 @@ export async function importDrive(payload) {
     interrupted: !!meta.interrupted,
     note: typeof meta.note === 'string' ? meta.note : '',
     gaps: Array.isArray(meta.gaps) ? meta.gaps : [],
-    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length },
-    appVersion: 2
+    marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '' })) : [],
+    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length },
+    appVersion: 3
   };
   await putDrive(drive);
   await putChunk(drive.id, 0, raw);
   return drive;
 }
 const num = v => (v === null || v === undefined || v === '' ? NaN : Number(v));
+
+/* Eksportformat for én tur (brukes av eksport og sikkerhetskopi). */
+export async function exportPayload(drive) {
+  const raw = await getRaw(drive.id);
+  return {
+    drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
+      marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '' },
+    input: raw
+  };
+}
+
+/* JSON med NaN → null og tall rundet til 6 desimaler (mindre filer, ingen tap som betyr noe). */
+export function toJSON(obj) {
+  return JSON.stringify(obj, (k, v) => (typeof v === 'number' ? (Number.isNaN(v) ? null : Math.round(v * 1e6) / 1e6) : v));
+}
+
+/* Varig lagring: ber nettleseren om å ikke kaste dataene. Returnerer true/false/null (ukjent). */
+export async function requestPersistentStorage() {
+  try {
+    if (!navigator.storage || !navigator.storage.persist) return null;
+    if (await navigator.storage.persisted()) return true;
+    return await navigator.storage.persist();
+  } catch { return null; }
+}
 
 export async function deleteDrive(id) {
   const db = await open();

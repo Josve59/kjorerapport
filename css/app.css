@@ -190,7 +190,7 @@ details[open] summary::before { transform: rotate(90deg); }
 .segment { display: flex; border: 2px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .segment label { flex: 1; position: relative; }
 .segment input { position: absolute; opacity: 0; inset: 0; }
-.segment span { display: grid; place-items: center; min-height: 52px; font-weight: 700; cursor: pointer; }
+.segment span { display: grid; place-items: center; min-height: 52px; font-weight: 700; cursor: pointer; text-align: center; padding: 0 6px; }
 .segment input:checked + span { background: var(--ink); color: var(--bg); }
 .segment input:focus-visible + span { outline: 3px solid var(--accel); outline-offset: -3px; }
 select { width: 100%; min-height: 52px; font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); margin-bottom: 12px; }
@@ -231,3 +231,22 @@ select { width: 100%; min-height: 52px; font: inherit; padding: 10px 12px; borde
 .rec-saved { margin-top: 10px; }
 .stats { grid-template-columns: 1fr 1fr; }
 @media (min-width: 560px) { .stats { grid-template-columns: 1fr 1fr 1fr; } }
+
+/* ---- v0.3.0 ---- */
+.quicknav { position: sticky; top: env(safe-area-inset-top, 0); z-index: 5; display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 10px; margin: 0 -16px 6px; padding-left: 16px; padding-right: 16px; background: var(--bg); scrollbar-width: none; }
+.quicknav::-webkit-scrollbar { display: none; }
+.quicknav a { flex: none; min-height: 40px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 0.95rem; }
+.btn.small-btn { min-height: 48px; padding: 10px 20px; font-size: 1.05rem; }
+.mark-wrap { text-align: center; margin: 8px 0; }
+.mark-wrap p { margin: 6px 0 0; }
+.btn-mark { min-width: 200px; min-height: 64px; border-radius: 32px; border: 3px solid var(--ink); background: var(--surface); color: var(--ink); font-weight: 800; font-size: 1.4rem; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.btn-mark.flash { background: var(--ink); color: var(--bg); }
+.marks { list-style: none; margin: 0; padding: 0; }
+.marks li + li { border-top: 1px solid var(--line); }
+.mark-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 4px; }
+.mark-num { flex: none; width: 34px; height: 34px; display: grid; place-items: center; background: var(--ink); color: var(--bg); font-weight: 800; border-radius: 6px; transform: rotate(45deg); margin: 4px 2px 0 2px; }
+.mark-num { transform: none; border-radius: 8px; }
+.mark-note { width: 100%; font: inherit; font-size: 1rem; padding: 8px 10px; margin-top: 6px; border-radius: 8px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); resize: vertical; min-height: 44px; }
+.g-word { display: block; font-size: 0.78rem; font-weight: 700; text-align: right; }
+.legend .dot.diamond { border-radius: 2px; transform: rotate(45deg) scale(0.85); }
+.markpin { cursor: default; }
