@@ -3,9 +3,10 @@ import { analyze, makeDemo, SENSITIVITY } from './analysis.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
 import { renderReport, trendChart, eventsPer10km } from './report.js';
+import { enrichDrive } from './enrich.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
 
-export const APP_VERSION = '0.3.0';
+export const APP_VERSION = '0.3.1';
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
@@ -284,17 +285,49 @@ async function renderDriveReport(id) {
   const tags = [drive.demo ? 'demotur via opptakeren' : '', drive.imported ? 'importert' : ''].filter(Boolean);
   try {
     const r = await analyzeDrive(drive);
-    renderReport(root, r, {
+    const settings = getSettings();
+    const wants = { limits: !!settings.netLimits, names: !!settings.netNames };
+    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.names && !(drive.enrich && drive.enrich.names));
+    const draw = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
       title: 'Kjørerapport', subtitle: date(drive.startedAt) + (tags.length ? ' · ' + tags.join(', ') : ''),
       gaps: drive.gaps || [], interrupted: !!drive.interrupted, factor: sens.factor, sensitivityLabel: sens.label,
       note: drive.note || '',
       marks: drive.marks || [],
+      enrich: drive.enrich || null,
+      enrichStatus: status || null,
+      canFetch: (wants.limits || wants.names) && missing && navigator.onLine,
+      onFetch: () => runEnrich(true),
       onMarkNote: async (i, text) => { const d = await getDrive(id); if (d && d.marks && d.marks[i]) { d.marks[i].note = text; await putDrive(d); } },
       onNoteChange: async text => { await updateDrive(id, { note: text }); },
       onShare: shareText,
       onDelete: async () => { if (confirm('Slette denne turen? Dette kan ikke angres.')) { await deleteDrive(id); location.hash = '#/'; } }
     });
+    let enriching = false;
+    const runEnrich = async (manual) => {
+      if (enriching || !missing || !navigator.onLine) return;
+      const last = drive.enrich && drive.enrich.attemptedAt ? Date.parse(drive.enrich.attemptedAt) : 0;
+      if (!manual && Date.now() - last < 3600000) return;   // ikke mas ved gjentatte feil
+      enriching = true;
+      draw({ text: 'Starter …' });
+      const marksRows = (drive.marks || []).map((m, i) => { const t = m.t - (r.t0 || 0); const pt = r.points.length ? r.points.reduce((a, b) => Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a) : null; return { i, lat: pt ? pt.lat : NaN, lon: pt ? pt.lon : NaN }; });
+      try {
+        const enrich = await enrichDrive(r, marksRows, wants, drive.enrich, text => {
+          const el = root.querySelector('#enrich-status'); if (el) el.textContent = text;
+        });
+        enrich.attemptedAt = new Date().toISOString(); enrich.error = null;
+        drive.enrich = enrich;
+        await putDrive(drive);
+        if (location.hash === '#/rapport/' + id) renderDriveReport(id);
+      } catch (err) {
+        drive.enrich = { ...(drive.enrich || {}), attemptedAt: new Date().toISOString(), error: err.message };
+        await putDrive(drive);
+        enriching = false;
+        draw({ text: 'Kunne ikke hente: ' + err.message, error: true });
+      }
+    };
+    draw(null);
+    if (missing && navigator.onLine) runEnrich(false);
   } catch (err) {
     root.innerHTML = `<section class="card"><h2>Ikke nok data</h2><p>${esc(err.message)}</p>
       <p class="muted">Turen startet ${esc(date(drive.startedAt))}. Rådataene er lagret, så du kan slette turen eller beholde den.</p>
@@ -332,6 +365,11 @@ async function renderSettings() {
   document.querySelectorAll('input[name=engine]').forEach(r => {
     r.checked = r.value === (settings.engine === 'v3' ? 'v3' : 'v1');
     r.onchange = () => { saveSettings({ ...getSettings(), engine: r.value }); };
+  });
+  ['netLimits', 'netNames'].forEach(key => {
+    const el = $('#' + key);
+    el.checked = !!settings[key];
+    el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
   document.querySelectorAll('input[name=perkm]').forEach(r => {
     r.checked = r.value === (settings.perKm === false ? 'off' : 'on');
