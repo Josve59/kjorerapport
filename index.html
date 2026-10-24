@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kjørerapport</title>
+  <meta name="description" content="Tar opp en kjøretur med telefonens sensorer og gir føreren en tilbakemeldingsrapport.">
+  <meta name="theme-color" content="#e9ecea" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1f22" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Kjørerapport">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="preload" href="./fonts/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+<main id="app">
+
+  <!-- Hjem -->
+  <section id="home" class="screen" hidden>
+    <header class="top">
+      <h1 class="brand">Kjørerapport</h1>
+      <button type="button" class="icon-btn" id="btn-settings" aria-label="Innstillinger">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.3 7.3 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.4l-.4 2.7a7.3 7.3 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.5 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5c.1.2.4.3.6.2l2.5-1a7.3 7.3 0 0 0 1.7 1l.4 2.6c0 .3.2.5.5.5h4c.3 0 .5-.2.5-.4l.4-2.7a7.3 7.3 0 0 0 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+      </button>
+    </header>
+    <div id="update-banner" class="notice" hidden>Ny versjon er klar. <button type="button" class="link" id="btn-update">Oppdater nå</button></div>
+    <button type="button" class="btn primary big" id="btn-go-precheck">Start kjøretur</button>
+    <button type="button" class="btn secondary" id="btn-demo">Se en demotur</button>
+    <section class="card" id="trend"></section>
+    <section class="card">
+      <h2>Tidligere turer</h2>
+      <ul id="drive-list" class="drives"></ul>
+    </section>
+    <footer class="report-foot">Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</footer>
+  </section>
+
+  <!-- Før kjøring -->
+  <section id="precheck" class="screen" hidden>
+    <header class="top">
+      <button type="button" class="btn-back link">‹ Tilbake</button>
+      <h1>Før du kjører</h1>
+    </header>
+    <p class="reminder card"><strong>Fest telefonen godt i en holder.</strong> Ledsageren starter og stopper opptaket – føreren skal ikke røre telefonen under kjøring.</p>
+    <button type="button" class="btn primary" id="btn-permissions">Gi tilgang til posisjon og bevegelse</button>
+    <ul class="checks card">
+      <li id="check-gps" data-state="wait"><span class="check-icon" aria-hidden="true"></span><span><strong>GPS-nøyaktighet 20 m eller bedre</strong><br><span class="check-text muted"></span></span></li>
+      <li id="check-motion" data-state="wait"><span class="check-icon" aria-hidden="true"></span><span><strong>Bevegelsesdata</strong><br><span class="check-text muted"></span></span></li>
+    </ul>
+    <p id="precheck-error" class="notice" aria-live="polite"></p>
+    <button type="button" class="btn primary big" id="btn-start-record" disabled>Start</button>
+    <p class="muted small">Ingen lyder, poeng eller tilbakemelding vises mens du kjører. Rapporten kommer når ledsageren trykker «Stopp».</p>
+  </section>
+
+  <!-- Opptak -->
+  <section id="record" class="screen record" hidden>
+    <div class="rec-top">
+      <span class="rec-dot" aria-hidden="true"></span><span>Opptak pågår</span>
+    </div>
+    <div class="rec-stats">
+      <p class="rec-elapsed" id="rec-elapsed" aria-label="Tid">0:00</p>
+      <p class="rec-dist" id="rec-dist">0,0 km</p>
+      <p class="rec-gps" id="rec-gps" data-state="wait">GPS: venter …</p>
+    </div>
+    <div id="rec-warn" aria-live="polite"></div>
+    <button type="button" class="stop" id="btn-stop" aria-label="Stopp (hold inne i ett sekund)">
+      <span class="progress" aria-hidden="true"></span>
+      <span class="stop-label">Stopp</span>
+      <span class="stop-hint">Hold inne i 1 sekund</span>
+    </button>
+  </section>
+
+  <!-- Rapport -->
+  <section id="report" class="screen" hidden>
+    <header class="top">
+      <button type="button" class="btn-back link">‹ Hjem</button>
+    </header>
+    <div id="report-root"></div>
+  </section>
+
+  <!-- Innstillinger -->
+  <section id="settings" class="screen" hidden>
+    <header class="top">
+      <button type="button" class="btn-back link">‹ Tilbake</button>
+      <h1>Innstillinger</h1>
+    </header>
+    <section class="card">
+      <h2>Følsomhet</h2>
+      <p class="muted small">Hvor strengt hendelser skal vurderes. Gjelder også gamle turer.</p>
+      <div class="segment" role="radiogroup" aria-label="Følsomhet">
+        <label><input type="radio" name="sensitivity" value="snill"><span>Snill</span></label>
+        <label><input type="radio" name="sensitivity" value="normal"><span>Normal</span></label>
+        <label><input type="radio" name="sensitivity" value="streng"><span>Streng</span></label>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Eksporter en tur</h2>
+      <p class="muted small">Rådata som JSON-fil, for eksempel til trafikklæreren eller til å analysere på nytt senere.</p>
+      <select id="export-select" aria-label="Velg tur"></select>
+      <button type="button" class="btn secondary" id="btn-export">Eksporter som JSON</button>
+    </section>
+    <section class="card">
+      <h2>Data</h2>
+      <p class="muted small">Alt lagres bare på denne telefonen. Appen sender ingenting noe sted.</p>
+      <button type="button" class="btn danger" id="btn-delete-all">Slett alle turer</button>
+    </section>
+    <section class="card" id="dev-section" hidden>
+      <h2>Utvikler</h2>
+      <p class="muted small">Spiller demoturen gjennom opptakeren, lagringen og rapporten, som om sensorene leverte dataene.</p>
+      <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
+      <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
+    </section>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.1.0</p>
+  </section>
+
+</main>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>
