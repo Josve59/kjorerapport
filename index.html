@@ -132,6 +132,12 @@
       </div>
     </section>
     <section class="card">
+      <h2>Nettjenester etter turen</h2>
+      <p class="muted small">Av som standard. Når de er på, sendes rutens posisjoner til tjenestene under når en rapport åpnes med nett. Ingenting annet sendes, og svaret lagres på telefonen så rapporten virker uten nett etterpå.</p>
+      <label class="toggle"><input type="checkbox" id="netLimits"><span><strong>Fartsgrenser</strong><br><span class="muted small">Fra Statens vegvesen (NVDB). Gir egen poengkategori for fartsgrenser og markerer overtredelser i fartsgrafen.</span></span></label>
+      <label class="toggle"><input type="checkbox" id="netNames"><span><strong>Stedsnavn</strong><br><span class="muted small">Fra Kartverket. Gatenavn på hendelser og merker, f.eks. «Kraftig nedbremsing · Kongens gate».</span></span></label>
+    </section>
+    <section class="card">
       <h2>Utseende</h2>
       <div class="segment" role="radiogroup" aria-label="Utseende">
         <label><input type="radio" name="theme" value="auto"><span>Automatisk</span></label>
@@ -165,7 +171,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.3.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.3.1</p>
   </section>
 
 </main>

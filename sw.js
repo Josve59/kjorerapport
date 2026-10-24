@@ -1,11 +1,11 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.3.0';
+const VERSION = 'v0.3.1';
 const CACHE = 'kjorerapport-' + VERSION;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
-  './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js',
+  './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js',
   './fonts/overpass-latin.woff2', './fonts/overpass-latin-ext.woff2',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'
 ];
