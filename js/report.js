@@ -102,6 +102,7 @@ export function renderReport(root, r, ctx = {}) {
     </nav>
     ${short ? `<p class="notice">Kort tur (${km(r.stats.km)}). Grunnlaget er tynt, så poengene bør ikke vektlegges. Kjør minst noen kilometer for en rapport som betyr noe.</p>` : ''}
     ${interrupted ? `<p class="notice">Opptaket ble avbrutt før «Stopp» ble trykket. Rapporten gjelder den delen som ble lagret.</p>` : ''}
+    ${r.droppedPoints ? `<p class="notice">${r.droppedPoints === 1 ? 'Ett GPS-punkt' : r.droppedPoints + ' GPS-punkter'} med umulige posisjonshopp ble sett bort fra (typisk i starten, før GPS-en har låst).</p>` : ''}
     ${gaps.length ? `<p class="notice">Appen var skjult ${gaps.length === 1 ? 'én gang' : gaps.length + ' ganger'} underveis (til sammen ${n0(gaps.reduce((s, g) => s + (g.to - g.from), 0))} s). Disse hullene er markert grått i fartsgrafen.</p>` : ''}
     <section class="hero card">
       ${speedSign(r.overall)}
