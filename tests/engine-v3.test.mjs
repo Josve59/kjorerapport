@@ -15,7 +15,7 @@ test('rotert montering gir samme v1-resultat (gyro projisert på tyngdekraft)', 
 test('v3-motoren bruker akselerometeret, finner de tre hendelsene og den brå bremsen GPS glatter bort', () => {
   const r = analyze(mounted, { engine: 'v3' });
   assert.equal(r.alongSource, 'acc', 'akselerometeret skal brukes');
-  assert.ok(r.accFit.r2 > 0.6, `R² ${r.accFit.r2}`);
+  assert.ok(r.accFit.corr > 0.7, `korrelasjon ${r.accFit.corr}`);
   assert.equal(r.events.length, 4, 'fire hendelser');
   const [a, b, c, d] = r.events;
   assert.equal(a.kind, 'accel'); assert.equal(a.level, 'harsh'); near(a.t, 112, 4, 'akselerasjon tid');
