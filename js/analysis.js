@@ -95,7 +95,7 @@ function yawSeries(input, L, vs) {
    telefonens ramme finnes ved minste kvadraters tilpasning mot GPS-akselerasjonen. Så virker det uansett
    hvordan telefonen står. Hvis tilpasningen er dårlig (løs holder, manglende data) returneres null,
    og GPS brukes som før. */
-function accAlongSeries(input, L, alongGps) {
+export function accAlongSeries(input, L, alongGps) {
   if (!Array.isArray(input.acc) || input.acc.length < 50 || !Array.isArray(input.grav) || input.grav.length < 10) return null;
   const acc = input.acc.filter(a => Number.isFinite(a.t) && Number.isFinite(a.x)).sort((a, b) => a.t - b.t);
   const grav = input.grav.slice().sort((a, b) => a.t - b.t);
@@ -120,7 +120,7 @@ function accAlongSeries(input, L, alongGps) {
   });
   let ux = 0, uy = 0, uz = 0, used = 0;
   for (let i = 0; i < L.length; i++) {
-    if (!H[i] || Math.abs(alongGps[i]) < 0.3) continue;
+    if (!H[i] || Math.abs(alongGps[i]) < 0.3 || Math.abs(alongGps[i]) > 8) continue;   // ignorer støy og GPS-utslag
     ux += alongGps[i] * H[i].x; uy += alongGps[i] * H[i].y; uz += alongGps[i] * H[i].z; used++;
   }
   if (used < 10) return null;
@@ -131,20 +131,29 @@ function accAlongSeries(input, L, alongGps) {
   const um = Math.hypot(ux, uy, uz);
   if (!(um > 0)) return null;
   ux /= um; uy /= um; uz /= um;
-  let ssRes = 0, ssTot = 0, mean = 0, n = 0;
-  for (let i = 0; i < L.length; i++) if (H[i]) { mean += alongGps[i]; n++; }
-  mean = n ? mean / n : 0;
+  // Kvalitet: korrelasjon mellom GPS-akselerasjon og akselerometer-akselerasjon. GPS-farten fra
+  // telefonen er glattet og dempet, så R² blir lav selv når retningen stemmer; korrelasjonen viser om
+  // de to kildene følger hverandre. Under 0,5 brukes GPS som før.
   const out = new Array(L.length);
+  let n = 0, mx = 0, my = 0;
   for (let i = 0; i < L.length; i++) {
     if (!H[i]) { out[i] = alongGps[i]; continue; }
-    const pred = H[i].x * ux + H[i].y * uy + H[i].z * uz;
-    out[i] = pred;
-    ssRes += (alongGps[i] - pred) ** 2; ssTot += (alongGps[i] - mean) ** 2;
+    out[i] = H[i].x * ux + H[i].y * uy + H[i].z * uz;
+    mx += alongGps[i]; my += out[i]; n++;
   }
-  const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
-  if (r2 < 0.4) return null;
+  if (n < 10) return null;
+  mx /= n; my /= n;
+  let sxy = 0, sxx = 0, syy = 0, ssRes = 0;
+  for (let i = 0; i < L.length; i++) {
+    if (!H[i]) continue;
+    const x = alongGps[i] - mx, y = out[i] - my;
+    sxy += x * y; sxx += x * x; syy += y * y; ssRes += (alongGps[i] - out[i]) ** 2;
+  }
+  const corr = sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : 0;
+  const r2 = sxx > 0 ? 1 - ssRes / sxx : 0;
+  if (corr < 0.5) return null;
   out[0] = 0; out[out.length - 1] = 0;
-  return { series: out, r2, axis: { x: ux, y: uy, z: uz } };
+  return { series: out, r2, corr, axis: { x: ux, y: uy, z: uz } };
 }
 
 function findEvents(L, series, vs, kind, sign, th, minSpeed) {
@@ -187,14 +196,14 @@ export function removeGpsOutliers(pts) {
     segs[segs.length - 1].push(pts[i]);
   }
   if (segs.length === 1) return pts;
+  // Biter som er mye kortere enn hovedsporet er glipper (f.eks. 10 s gammel posisjon før GPS låser).
   const longest = Math.max(...segs.map(s => s.length));
-  return segs.filter(s => s.length > 5 || s.length === longest).flat();
+  return segs.filter(s => s.length === longest || s.length >= 0.2 * longest).flat();
 }
 
-export function analyze(input, opts = {}) {
-  const th = scaleTH(opts.factor);
-  const engine = opts.engine === 'v3' ? 'v3' : 'v1';
-  const perKm = !!opts.perKm;
+/* Forbehandling av GPS-sporet: filtrering, deduplisering, glippfilter, fartsutfylling, glattet fart og
+   langsgående akselerasjon fra GPS. Skilt ut så den kan brukes i analyseverktøy. */
+export function prepareTrack(input) {
   const raw = input.loc.filter(p => Number.isFinite(p.t) && Number.isFinite(p.lat) && Number.isFinite(p.lon)
     && Math.abs(p.lat) > 1e-4 && (!Number.isFinite(p.acc) || p.acc <= 50));
   raw.sort((a, b) => a.t - b.t);
@@ -220,6 +229,14 @@ export function analyze(input, opts = {}) {
     const a = dt > 0 && dt <= 6 ? (L[i + 1].speed - L[i - 1].speed) / dt : 0;
     return Math.abs(a) > 15 ? 0 : a;
   });
+  return { L, ts, vs, along, droppedPoints };
+}
+
+export function analyze(input, opts = {}) {
+  const th = scaleTH(opts.factor);
+  const engine = opts.engine === 'v3' ? 'v3' : 'v1';
+  const perKm = !!opts.perKm;
+  const { L, vs, along, droppedPoints } = prepareTrack(input);
   const { source, yaw } = yawSeries(input, L, vs);
   const alat = L.map((p, i) => vs[i] * Math.abs(yaw[i]));
   const accFit = engine === 'v3' ? accAlongSeries(input, L, along) : null;
@@ -267,7 +284,7 @@ export function analyze(input, opts = {}) {
       maxKmh: maxV * 3.6, avgKmh: moving > 0 ? dist / moving * 3.6 : 0, stops, rms
     },
     counts: c, scores, overall, tips: makeTips(c, scores), source,
-    engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2 } : null, perKm, kmFactor,
+    engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2, corr: accFit.corr } : null, perKm, kmFactor,
     droppedPoints
   };
 }
