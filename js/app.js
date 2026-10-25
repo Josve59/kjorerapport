@@ -6,7 +6,7 @@ import { renderReport, trendChart, eventsPer10km } from './report.js';
 import { enrichDrive } from './enrich.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
 
-export const APP_VERSION = '0.3.3';
+export const APP_VERSION = '0.3.4';
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
@@ -49,7 +49,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|4`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|5`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
