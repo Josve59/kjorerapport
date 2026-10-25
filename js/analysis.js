@@ -174,6 +174,23 @@ function findEvents(L, series, vs, kind, sign, th, minSpeed) {
 
 const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
 
+/* GPS-glipper (v0.3.3). Første ekte tur viste et posisjonshopp i starten som ga 416 km/t og 35 g.
+   Punktene deles i biter ved hopp som ville kreve over MAX_V m/s (216 km/t); korte biter kastes.
+   Fart fra GPS over MAX_V forkastes også, og fartsendringer over 15 m/s² regnes som sensorfeil. */
+const MAX_V = 60;
+export function removeGpsOutliers(pts) {
+  if (pts.length < 2) return pts;
+  const segs = [[pts[0]]];
+  for (let i = 1; i < pts.length; i++) {
+    const dt = Math.max(pts[i].t - pts[i - 1].t, 0.5);
+    if (hav(pts[i - 1], pts[i]) / dt > MAX_V) segs.push([]);
+    segs[segs.length - 1].push(pts[i]);
+  }
+  if (segs.length === 1) return pts;
+  const longest = Math.max(...segs.map(s => s.length));
+  return segs.filter(s => s.length > 5 || s.length === longest).flat();
+}
+
 export function analyze(input, opts = {}) {
   const th = scaleTH(opts.factor);
   const engine = opts.engine === 'v3' ? 'v3' : 'v1';
@@ -181,11 +198,14 @@ export function analyze(input, opts = {}) {
   const raw = input.loc.filter(p => Number.isFinite(p.t) && Number.isFinite(p.lat) && Number.isFinite(p.lon)
     && Math.abs(p.lat) > 1e-4 && (!Number.isFinite(p.acc) || p.acc <= 50));
   raw.sort((a, b) => a.t - b.t);
-  const L = [];
-  for (const p of raw) if (!L.length || p.t - L[L.length - 1].t > 0.2) L.push({ ...p });
+  const dedup = [];
+  for (const p of raw) if (!dedup.length || p.t - dedup[dedup.length - 1].t > 0.2) dedup.push({ ...p });
+  const L = removeGpsOutliers(dedup);
+  const droppedPoints = dedup.length - L.length;
   if (L.length < 30) throw new Error('For få GPS-punkter. Ta opp en tur på minst et par minutter med posisjon slått på.');
 
   for (let i = 0; i < L.length; i++) {
+    if (Number.isFinite(L[i].speed) && L[i].speed > MAX_V) L[i].speed = NaN;
     if (!(Number.isFinite(L[i].speed) && L[i].speed >= 0)) {
       const a = L[Math.max(0, i - 1)], b = L[Math.min(L.length - 1, i + 1)];
       const dt = b.t - a.t;
@@ -197,7 +217,8 @@ export function analyze(input, opts = {}) {
   const along = L.map((p, i) => {
     if (i === 0 || i === L.length - 1) return 0;
     const dt = L[i + 1].t - L[i - 1].t;
-    return dt > 0 && dt <= 6 ? (L[i + 1].speed - L[i - 1].speed) / dt : 0;
+    const a = dt > 0 && dt <= 6 ? (L[i + 1].speed - L[i - 1].speed) / dt : 0;
+    return Math.abs(a) > 15 ? 0 : a;
   });
   const { source, yaw } = yawSeries(input, L, vs);
   const alat = L.map((p, i) => vs[i] * Math.abs(yaw[i]));
@@ -246,7 +267,8 @@ export function analyze(input, opts = {}) {
       maxKmh: maxV * 3.6, avgKmh: moving > 0 ? dist / moving * 3.6 : 0, stops, rms
     },
     counts: c, scores, overall, tips: makeTips(c, scores), source,
-    engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2 } : null, perKm, kmFactor
+    engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2 } : null, perKm, kmFactor,
+    droppedPoints
   };
 }
 
