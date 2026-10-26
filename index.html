@@ -15,6 +15,7 @@
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="preload" href="./fonts/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="./css/app.css">
 </head>
 <body>
@@ -41,7 +42,9 @@
       </ol>
       <p class="muted small">Ingen poeng, lyder eller tilbakemelding underveis. Alt lagres bare på telefonen.</p>
     </section>
+    <div class="chips" id="driver-chips" role="group" aria-label="Vis turer for" hidden></div>
     <section class="tiles" id="summary" hidden></section>
+    <section class="card" id="goals" hidden></section>
     <section class="card" id="trend"></section>
     <section class="card">
       <h2>Tidligere turer</h2>
@@ -57,10 +60,14 @@
       <h1>Før du kjører</h1>
     </header>
     <p class="reminder card"><strong>Fest telefonen godt i en holder.</strong> Ledsageren starter og stopper opptaket – føreren skal ikke røre telefonen under kjøring.</p>
+    <label class="card driver-pick">Hvem kjører?
+      <select id="driver-select" aria-label="Velg fører"></select>
+    </label>
     <button type="button" class="btn primary" id="btn-permissions">Gi tilgang til posisjon og bevegelse</button>
     <ul class="checks card">
       <li id="check-gps" data-state="wait"><span class="check-icon" aria-hidden="true"></span><span><strong>GPS-nøyaktighet 20 m eller bedre</strong><br><span class="check-text muted"></span></span></li>
       <li id="check-motion" data-state="wait"><span class="check-icon" aria-hidden="true"></span><span><strong>Bevegelsesdata</strong><br><span class="check-text muted"></span></span></li>
+      <li id="check-holder" data-state="wait"><span class="check-icon" aria-hidden="true"></span><span><strong>Telefonen står stødig</strong> <span class="muted small">(anbefalt)</span><br><span class="check-text muted"></span></span></li>
     </ul>
     <p id="precheck-error" class="notice" aria-live="polite"></p>
     <button type="button" class="btn primary big" id="btn-start-record" disabled>Start</button>
@@ -122,6 +129,31 @@
         <label><input type="radio" name="engine" value="v1"><span>v1 (GPS)</span></label>
         <label><input type="radio" name="engine" value="v3"><span>v3 (GPS + aks.)</span></label>
       </div>
+      <label class="toggle"><input type="checkbox" id="cityAware"><span><strong>Jevn fart: se bort fra kryss og lyskryss</strong><br><span class="muted small">De 10 sekundene før og etter hvert stopp telles ikke, så naturlig bykjøring ikke trekker ned.</span></span></label>
+      <details class="adv">
+        <summary>Avanserte terskler</summary>
+        <p class="muted small">Grensene i m/s² før følsomheten over brukes. «Brå» gir lite trekk, «kraftig» gir mer. Endres alle turer.</p>
+        <div class="th-grid">
+          <span></span><span class="muted small">Brå</span><span class="muted small">Kraftig</span>
+          <span>Bremsing</span><label><input class="th-input" data-k="brake.brisk" inputmode="decimal" aria-label="Bremsing brå"><span class="th-g muted small"></span></label><label><input class="th-input" data-k="brake.harsh" inputmode="decimal" aria-label="Bremsing kraftig"><span class="th-g muted small"></span></label>
+          <span>Akselerasjon</span><label><input class="th-input" data-k="accel.brisk" inputmode="decimal" aria-label="Akselerasjon brå"><span class="th-g muted small"></span></label><label><input class="th-input" data-k="accel.harsh" inputmode="decimal" aria-label="Akselerasjon kraftig"><span class="th-g muted small"></span></label>
+          <span>Sving</span><label><input class="th-input" data-k="turn.brisk" inputmode="decimal" aria-label="Sving brå"><span class="th-g muted small"></span></label><label><input class="th-input" data-k="turn.harsh" inputmode="decimal" aria-label="Sving kraftig"><span class="th-g muted small"></span></label>
+        </div>
+        <p class="muted small" id="th-status" aria-live="polite"></p>
+        <button type="button" class="btn secondary" id="btn-th-reset">Tilbake til standard</button>
+      </details>
+    </section>
+    <section class="card">
+      <h2>Førere</h2>
+      <p class="muted small">Velg hvem som kjører før hver tur. Hjemskjermen kan da vise utvikling per fører, og «Forrige tur» sammenligner med samme fører.</p>
+      <ul class="driver-list" id="driver-list"></ul>
+      <div class="add-row"><input id="new-driver" maxlength="40" placeholder="Navn" aria-label="Navn på ny fører"><button type="button" class="btn secondary" id="btn-add-driver">Legg til</button></div>
+    </section>
+    <section class="card">
+      <h2>Mål</h2>
+      <p class="muted small">Valgfritt. Hjemskjermen viser om snittet av de tre siste turene når målet. La feltet stå tomt for ingen mål.</p>
+      <label class="field">Poengsum minst<input id="goal-score" inputmode="numeric" placeholder="f.eks. 85"></label>
+      <label class="field">Høyst hendelser per 10 km<input id="goal-ev10" inputmode="decimal" placeholder="f.eks. 2"></label>
     </section>
     <section class="card">
       <h2>Poeng justert for distanse</h2>
@@ -133,7 +165,8 @@
     </section>
     <section class="card">
       <h2>Nettjenester etter turen</h2>
-      <p class="muted small">Av som standard. Når de er på, sendes rutens posisjoner til tjenestene under når en rapport åpnes med nett. Ingenting annet sendes, og svaret lagres på telefonen så rapporten virker uten nett etterpå.</p>
+      <p class="muted small">Når disse er på, sendes rutens posisjoner til tjenestene under når en rapport åpnes med nett. Ingenting annet sendes. Fartsgrenser og stedsnavn lagres på telefonen, og kartbiter du har sett, mellomlagres, så rapporten virker uten nett etterpå.</p>
+      <label class="toggle"><input type="checkbox" id="netMap"><span><strong>Kart</strong> <span class="muted small">(på som standard)</span><br><span class="muted small">Kartbakgrunn fra Kartverket under ruten. Av: ruten tegnes uten kart, helt uten nett.</span></span></label>
       <label class="toggle"><input type="checkbox" id="netLimits"><span><strong>Fartsgrenser</strong><br><span class="muted small">Fra Statens vegvesen (NVDB). Gir egen poengkategori for fartsgrenser og markerer overtredelser i fartsgrafen.</span></span></label>
       <label class="toggle"><input type="checkbox" id="netNames"><span><strong>Stedsnavn</strong><br><span class="muted small">Fra Kartverket. Gatenavn på hendelser og merker, f.eks. «Kraftig nedbremsing · Kongens gate».</span></span></label>
     </section>
@@ -171,10 +204,11 @@
       <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.3.5</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.4.0</p>
   </section>
 
 </main>
+<script src="./vendor/leaflet/leaflet.js" defer></script>
 <script type="module" src="./js/app.js"></script>
 </body>
 </html>

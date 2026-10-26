@@ -28,7 +28,7 @@ Node.js 20 or newer is needed (only for the tests, not for the app). Then:
 npm test
 ```
 
-Expected: 33 passing tests. They check that the demo drive gives about 4.2 km, exactly three events (harsh acceleration ≈ 0.40 g at 1:52, harsh braking ≈ 0.47 g at 3:02, harsh turn ≈ 0.49 g at 3:12), an overall score of 82, that sensitivity presets scale the thresholds, and that the GPS fallback for turns works.
+Expected: 39 passing tests. They check that the demo drive gives about 4.2 km, exactly three events (harsh acceleration ≈ 0.40 g at 1:52, harsh braking ≈ 0.47 g at 3:02, harsh turn ≈ 0.49 g at 3:12), an overall score of 82, that sensitivity presets scale the thresholds, and that the GPS fallback for turns works.
 
 ## Running it locally on the Mac
 
@@ -108,6 +108,19 @@ At the end:
 - **Overpass is self-hosted as one variable-weight file** (plus a Latin-extended file), which covers 400/700/800 and works offline.
 - **Font and icon files are the only third-party assets.** No scripts or styles are loaded from any CDN.
 
+## What's new in 0.4.0
+
+- **Real map in the report.** The route is drawn on a map from Kartverket (topographic, grey tone; inverted in dark mode) using Leaflet 1.9.4, which is bundled in `vendor/leaflet` so no CDN is involved. The route keeps its road look with a yellow centre line, stretches over the speed limit are red, events are numbered markers and companion marks are diamonds. Pinch to zoom; «Utforsk kartet» opens a full-screen map that can be panned. Tapping a marker opens that event's details. Map tiles you have seen are cached by the service worker (up to 1 500 tiles), so reports open offline afterwards. The map can be turned off under Nettjenester; the old offline route drawing is then used.
+- **Event details.** Tapping an event opens a panel with a ±20 s chart of speed and the measured force with the brisk/harsh thresholds, a plain-language description («Farten falt fra … til …»), duration over the threshold, the speed limit and street at that spot, any companion mark nearby, a tip, and «Vis i kartet», which zooms the map to the event.
+- **Print / PDF.** «PDF» in the report header opens the print dialog (on iPhone: share → save as PDF). The print layout hides buttons, forces light colours, expands «Slik måles det» and keeps the map.
+- **Drivers.** Add drivers in settings and pick «Hvem kjører?» before each drive. The home screen gets driver filter chips; tiles, goals and trends follow the filter, and «Forrige tur» compares with the same driver. The driver can be changed on a report afterwards and is included in exports.
+- **Goals and category trend.** Optional goals (minimum score, maximum events per 10 km) shown on the home screen against the average of the last three drives, with the score goal as a line on the trend. The trend can switch between overall score and the four categories.
+- **City-aware «Jevn fart»** (default on): the 10 s before and after each stop are ignored. On the first real drive this raises «Jevn fart» from 87 to 92.
+- **Holder check.** During analysis, sudden changes in the phone's orientation (over 12° between 5 s windows, ignoring the first and last 30 s) are reported with time, and whether the phone sat differently afterwards. If it did, the v3 engine calibrates the driving direction separately before and after. On the first real drive it found the moment the phone was handled at 13:22–13:50, put back the same way. The pre-drive check also shows «Telefonen står stødig» (advisory).
+- **Advanced thresholds** in settings: brisk and harsh limits for braking, acceleration and turns in m/s² (with g shown), applied before the sensitivity preset, with a reset button.
+- Fixes: report no longer jumps to the top when street names or speed limits finish loading; buttons marked hidden (for example «Start likevel») are now really hidden.
+- Tests: 39.
+
 ## What's new in 0.3.5
 
 - **v3 is the default engine.** On the first real drive the iPhone delivered full 60 Hz motion data and the accelerometer agreed with GPS (correlation 0,76), while GPS alone missed eight brisk brakes. v1 remains available in settings.
@@ -163,4 +176,3 @@ At the end:
 - The service worker could not be tested inside the desktop preview browser (it blocks service workers). Verify offline mode on the phone: load the app once, turn on flight mode, open it again from the home screen.
 - Camera-based mirror and shoulder checks.
 - An instructor view for comparing drives and pupils.
-- Map tiles (currently the route is drawn without a background map so it works offline).
