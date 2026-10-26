@@ -6,7 +6,7 @@ import { renderReport, trendChart, eventsPer10km } from './report.js';
 import { enrichDrive } from './enrich.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
 
-export const APP_VERSION = '0.3.4';
+export const APP_VERSION = '0.3.5';
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
@@ -44,7 +44,7 @@ function currentSensitivity() {
 
 function analysisOptions() {
   const s = getSettings();
-  return { factor: currentSensitivity().factor, engine: s.engine === 'v3' ? 'v3' : 'v1', perKm: s.perKm !== false };
+  return { factor: currentSensitivity().factor, engine: s.engine === 'v1' ? 'v1' : 'v3', perKm: s.perKm !== false };
 }
 
 async function analyzeDrive(drive) {
@@ -204,6 +204,7 @@ async function startRecording(replay = null) {
       elapsed.textContent = fmtClock(st.elapsed);
       dist.textContent = km(st.distanceM / 1000);
       if (st.gpsError) { gps.textContent = 'GPS: ingen signal'; gps.dataset.state = 'fail'; }
+      else if (st.warmup) { gps.textContent = 'GPS: venter på fersk posisjon …'; gps.dataset.state = 'wait'; }
       else if (!st.gpsFresh) { gps.textContent = 'GPS: venter …'; gps.dataset.state = 'wait'; }
       else { gps.textContent = `GPS: ${n0(st.acc)} m`; gps.dataset.state = st.acc <= 20 ? 'ok' : 'wait'; }
       saved.textContent = st.lastCheckpoint === null ? 'Lagrer første bit om litt' : `Sist lagret for ${n0(st.elapsed - st.lastCheckpoint)} s siden · ${st.locCount} GPS-punkter`;
@@ -368,7 +369,7 @@ async function renderSettings() {
     r.onchange = () => { saveSettings({ ...getSettings(), theme: r.value }); applyTheme(); };
   });
   document.querySelectorAll('input[name=engine]').forEach(r => {
-    r.checked = r.value === (settings.engine === 'v3' ? 'v3' : 'v1');
+    r.checked = r.value === (settings.engine === 'v1' ? 'v1' : 'v3');
     r.onchange = () => { saveSettings({ ...getSettings(), engine: r.value }); };
   });
   ['netLimits', 'netNames'].forEach(key => {
