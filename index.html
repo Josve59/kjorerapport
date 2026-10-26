@@ -117,7 +117,7 @@
     </section>
     <section class="card">
       <h2>Analysemotor</h2>
-      <p class="muted small">v1 bruker GPS-fart til bremsing og gass. v3 bruker akselerometeret i tillegg, kalibrert mot GPS, og fanger korte, harde bremser. Prøv begge på samme tur og se hva som stemmer best.</p>
+      <p class="muted small">v3 (standard) bruker akselerometeret til bremsing og gass, kalibrert mot GPS, og fanger korte, harde bremser som GPS glatter bort. v1 bruker bare GPS-fart, som prototypen. Synes dere v3 er for streng i by, prøv «Snill» over.</p>
       <div class="segment" role="radiogroup" aria-label="Analysemotor">
         <label><input type="radio" name="engine" value="v1"><span>v1 (GPS)</span></label>
         <label><input type="radio" name="engine" value="v3"><span>v3 (GPS + aks.)</span></label>
@@ -171,7 +171,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.3.4</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.3.5</p>
   </section>
 
 </main>
