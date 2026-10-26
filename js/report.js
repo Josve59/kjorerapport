@@ -2,6 +2,7 @@
 import { CATS, rating } from './analysis.js';
 import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
 import { analyzeSpeeding } from './enrich.js';
+import { icon } from './ui.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
 const LABEL = {
@@ -18,6 +19,7 @@ const POSITIVE = {
 const LIMITS = [30, 50, 60, 70, 80, 90, 110];
 const KIND_CSS = { brake: 'brake', accel: 'accel', turn: 'turn' };
 let leafletMap = null;
+let navObserver = null;
 const TILE_URL = 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png';
 
 export function eventLabel(e) { return LABEL[e.kind][e.level]; }
@@ -87,64 +89,75 @@ export function renderReport(root, r, ctx = {}) {
     enrich = null, enrichStatus = null, canFetch = false, onFetch = null, diag = null,
     realMap = false, driver = '', drivers = [], onDriverChange = null } = ctx;
   if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+  if (navObserver) { navObserver.disconnect(); navObserver = null; }
   const useReal = realMap && typeof window !== 'undefined' && window.L && r.points.length > 1;
   const positives = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] >= 90);
   const marks = markRows(rawMarks, r);
   const short = r.stats.km < 1;
   const names = enrich && enrich.names ? enrich.names : { events: {}, marks: {} };
   const sp = speedingFor(r, enrich);
+
+  // Datakvalitet: alt teknisk samlet ett sted
+  const quality = [];
+  if (interrupted) quality.push({ sev: 2, text: 'Opptaket ble avbrutt før «Stopp» ble trykket. Rapporten gjelder den delen som ble lagret.' });
+  if (short) quality.push({ sev: 2, text: `Kort tur (${km(r.stats.km)}). Grunnlaget er tynt, så poengene bør ikke vektlegges.` });
+  if (r.holder && r.holder.episodes.length) quality.push({ sev: r.holder.permanentShift ? 2 : 1, text: `${r.holder.episodes.map(e => `Telefonen ble flyttet i holderen ${mss(e.from)}–${mss(e.to)}.`).join(' ')} ${r.holder.permanentShift
+      ? (r.alongSource === 'acc' && r.accFit && r.accFit.segments > 1 ? 'Den satt annerledes etterpå, så v3 kalibrerte på nytt.' : 'Den satt annerledes etterpå, så målingene etter dette er mindre sikre.')
+      : 'Den ble satt tilbake som før, så målingene er fortsatt gode.'}` });
+  if (gaps.length) quality.push({ sev: 1, text: `Appen var skjult ${gaps.length === 1 ? 'én gang' : gaps.length + ' ganger'} (til sammen ${n0(gaps.reduce((s, g) => s + (g.to - g.from), 0))} s). Hullene er grå i fartsgrafen.` });
+  if (r.droppedPoints) quality.push({ sev: 0, text: `${r.droppedPoints === 1 ? 'Ett GPS-punkt' : r.droppedPoints + ' GPS-punkter'} med umulige posisjonshopp ble sett bort fra.` });
+  if (r.engine === 'v3' && r.alongSource !== 'acc') quality.push({ sev: 1, text: 'Akselerometeret passet dårlig med GPS (løs holder?), så bremsing og gass ble målt med GPS.' });
+  const qualitySev = quality.reduce((m, q) => Math.max(m, q.sev), 0);
+  const qualityCount = quality.filter(q => q.sev > 0).length;
+  const reportActions = typeof document !== 'undefined' ? document.getElementById('report-actions') : null;
+  const barTitle = typeof document !== 'undefined' ? document.getElementById('report-bar-title') : null;
+  if (barTitle) barTitle.textContent = title;
+  if (reportActions) {
+    reportActions.innerHTML = `<button type="button" class="icon-btn" id="btn-print" aria-label="Skriv ut eller lagre som PDF">${icon('print', 22)}</button>
+      ${onShare ? `<button type="button" class="icon-btn" id="btn-share" aria-label="Del oppsummering">${icon('share', 22)}</button>` : ''}`;
+  }
+  const tipsAll = r.tips.filter(t => t.cat !== 'good');
   root.innerHTML = `
     <header class="report-head">
-      <div class="report-title">
-        <h1>${esc(title)}</h1>
-        <span class="head-actions">
-          <button type="button" class="btn small-btn secondary" id="btn-print" aria-label="Skriv ut eller lagre som PDF">PDF</button>
-          ${onShare ? '<button type="button" class="btn small-btn secondary" id="btn-share">Del</button>' : ''}
-        </span>
-      </div>
-      ${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ''}
+      <p class="eyebrow">${esc(subtitle)}</p>
       ${enrichStatus ? `<p class="enrich-status ${enrichStatus.error ? 'error' : ''}" id="enrich-status" aria-live="polite">${esc(enrichStatus.text)}${enrichStatus.error && onFetch ? ' <button type="button" class="link" id="btn-fetch">Prøv igjen</button>' : ''}</p>`
         : (enrich && enrich.error && canFetch && onFetch ? `<p class="enrich-status error">Forrige henting feilet: ${esc(enrich.error)} <button type="button" class="link" id="btn-fetch">Prøv igjen</button></p>` : '')}
     </header>
-    <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser</a>${marks.length ? '<a href="#marks-section">Merker</a>' : ''}
-    </nav>
-    ${short ? `<p class="notice">Kort tur (${km(r.stats.km)}). Grunnlaget er tynt, så poengene bør ikke vektlegges. Kjør minst noen kilometer for en rapport som betyr noe.</p>` : ''}
-    ${interrupted ? `<p class="notice">Opptaket ble avbrutt før «Stopp» ble trykket. Rapporten gjelder den delen som ble lagret.</p>` : ''}
-    ${r.droppedPoints ? `<p class="notice">${r.droppedPoints === 1 ? 'Ett GPS-punkt' : r.droppedPoints + ' GPS-punkter'} med umulige posisjonshopp ble sett bort fra (typisk i starten, før GPS-en har låst).</p>` : ''}
-    ${r.holder && r.holder.episodes.length ? `<p class="notice">${r.holder.episodes.map(e => `Telefonen ble flyttet i holderen ${mss(e.from)}–${mss(e.to)} inn i turen.`).join(' ')} ${r.holder.permanentShift
-      ? (r.alongSource === 'acc' && r.accFit && r.accFit.segments > 1 ? 'Den satt annerledes etterpå, så v3 kalibrerte kjøreretningen på nytt etter flyttingen.' : 'Den satt annerledes etterpå, så bremsing og svinger etter dette kan være mindre nøyaktige.')
-      : 'Den ble satt tilbake som før, så målingene er fortsatt gode.'} Fest telefonen godt og la den stå under hele turen.</p>` : ''}
-    ${gaps.length ? `<p class="notice">Appen var skjult ${gaps.length === 1 ? 'én gang' : gaps.length + ' ganger'} underveis (til sammen ${n0(gaps.reduce((s, g) => s + (g.to - g.from), 0))} s). Disse hullene er markert grått i fartsgrafen.</p>` : ''}
     <section class="hero card">
       ${speedSign(r.overall)}
       <div class="hero-text">
         <p class="rating">${esc(rating(r.overall))}</p>
-        <dl class="stats">
-          <div><dt>Distanse</dt><dd>${km(r.stats.km)}</dd></div>
-          <div><dt>Tid</dt><dd>${duration(r.stats.duration)}</dd></div>
-          <div><dt>Snittfart</dt><dd>${kmh(r.stats.avgKmh)}</dd></div>
-          <div><dt>Toppfart</dt><dd>${kmh(r.stats.maxKmh)}</dd></div>
-          <div><dt>Stopp</dt><dd>${r.stats.stops}</dd></div>
-          <div><dt>Hendelser per 10 km</dt><dd>${n1(eventsPer10km(r))}</dd></div>
-        </dl>
-        ${prevScore !== null ? `<p class="compare">Forrige tur: ${n0(prevScore)} poeng. Denne turen: ${n0(r.overall)}. ${delta(r.overall, prevScore, true)}</p>` : ''}
+        ${prevScore !== null ? `<p class="delta-pill ${r.overall > prevScore ? 'up' : r.overall < prevScore ? 'down' : ''}">${r.overall > prevScore ? '▲ ' + (r.overall - prevScore) : r.overall < prevScore ? '▼ ' + (prevScore - r.overall) : '='} fra forrige tur (${n0(prevScore)})</p>` : ''}
+        ${qualitySev >= 2 ? `<p class="hero-warn">${icon('warn', 18)}<span>${esc(quality.find(q => q.sev >= 2).text)}</span></p>` : ''}
       </div>
+      <dl class="stat-chips">
+        <div><dt>Distanse</dt><dd>${km(r.stats.km)}</dd></div>
+        <div><dt>Tid</dt><dd>${duration(r.stats.duration)}</dd></div>
+        <div><dt>Snittfart</dt><dd>${kmh(r.stats.avgKmh)}</dd></div>
+        <div><dt>Toppfart</dt><dd>${kmh(r.stats.maxKmh)}</dd></div>
+        <div><dt>Hendelser</dt><dd>${r.events.length}</dd></div>
+        <div><dt>Per 10 km</dt><dd>${n1(eventsPer10km(r))}</dd></div>
+      </dl>
     </section>
 
-    ${onNoteChange ? `<section class="card note-card">
-      ${onDriverChange && (drivers.length || driver) ? `<label class="driver-row">Fører
-        <select id="drive-driver">
-          <option value="">Ikke valgt</option>
-          ${[...new Set([...(drivers || []), ...(driver ? [driver] : [])])].map(d => `<option value="${esc(d)}" ${d === driver ? 'selected' : ''}>${esc(d)}</option>`).join('')}
-        </select></label>` : ''}
-      <label for="drive-note"><h2>Notat</h2></label>
-      <textarea id="drive-note" rows="2" placeholder="Hva øvde dere på? F.eks. «rundkjøringer og feltskifte»">${esc(note || '')}</textarea>
-      <p class="muted small" id="note-status">Lagres automatisk.</p>
-    </section>` : ''}
+    <section class="card summary-card">
+      <h2 class="card-title">${icon('list')}Kort fortalt</h2>
+      <ul class="summary-list">
+        ${positives.map(k => `<li class="sum-good">${icon('check', 20)}<span><strong>${CATS[k]}:</strong> ${POSITIVE[k]}</span></li>`).join('')}
+        ${tipsAll.map(t => `<li class="sum-work sum-${t.cat}">${icon('chev', 20)}<span>${esc(t.text)}</span></li>`).join('')}
+        ${!positives.length && !tipsAll.length ? r.tips.map(t => `<li class="sum-good">${icon('check', 20)}<span>${esc(t.text)}</span></li>`).join('') : ''}
+        ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.</span></li>` : ''}
+        ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket ${marks.length === 1 ? 'ett sted' : marks.length + ' steder'}. Se «Merker».</span></li>` : ''}
+      </ul>
+    </section>
+
+    <nav class="quicknav" aria-label="Hopp til">
+      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a>${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
+    </nav>
+
 
     <section class="card" id="map-section">
-      <h2>Ruten</h2>
+      <h2 class="card-title">${icon('map')}Ruten</h2>
       ${useReal ? `<div class="lmap-wrap" id="lmap-wrap">
           <div id="lmap" class="lmap" role="region" aria-label="Kart over ruten med ${r.events.length} hendelser"></div>
           <button type="button" class="btn small-btn secondary lmap-toggle" id="btn-map-expand">Utforsk kartet</button>
@@ -164,14 +177,14 @@ export function renderReport(root, r, ctx = {}) {
     </section>
 
     <section class="card" id="score-section">
-      <h2>Slik gikk det</h2>
+      <h2 class="card-title">${icon('chart')}Slik gikk det</h2>
       ${prev ? '<p class="muted small">Pilene viser endring fra forrige tur.</p>' : ''}
       ${r.perKm ? `<p class="muted small">Poengene er justert for distanse: trekk regnes per 10 km${r.kmFactor > 1.01 ? ', og turer under 5 km regnes som 5 km' : ''}.</p>` : ''}
       <div class="bars">${['brake', 'accel', 'turn', 'smooth'].map(k => scoreBar(k, r.scores[k], prev ? prev.scores[k] : null)).join('')}</div>
     </section>
 
     ${sp ? `<section class="card" id="limits-section">
-      <h2>Fartsgrenser</h2>
+      <h2 class="card-title">${icon('speed')}Fartsgrenser</h2>
       <p class="muted small">Fra Statens vegvesen (NVDB). Teller når farten er minst 4 km/t over grensen i minst 3 sekunder. Inngår ikke i samlet poengsum.</p>
       <div class="bars">${scoreBar('limits', sp.score, null)}</div>
       <dl class="stats limits-stats">
@@ -185,24 +198,14 @@ export function renderReport(root, r, ctx = {}) {
         : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
     </section>` : ''}
 
-    ${positives.length ? `<section class="card">
-      <h2>Dette gikk bra</h2>
-      <ul class="positives">${positives.map(k => `<li><strong>${CATS[k]}:</strong> ${POSITIVE[k]}</li>`).join('')}</ul>
-    </section>` : ''}
-
-    <section class="card">
-      <h2>Dette kan du jobbe med</h2>
-      <div class="tips">${r.tips.map(t => `<div class="tip tip-${t.cat}"><p>${esc(t.text)}</p></div>`).join('')}</div>
-    </section>
-
     <section class="card" id="speed-section">
-      <h2>Fart underveis</h2>
+      <h2 class="card-title">${icon('speed')}Fart underveis</h2>
       ${speedChart(r, gaps, marks, sp)}
       ${sp ? '<p class="muted small">Rød stiplet linje er fartsgrensen. Rødt felt er tid over grensen.</p>' : ''}
     </section>
 
     <section class="card" id="events-section">
-      <h2>Hendelser</h2>
+      <h2 class="card-title">${icon('warn')}Hendelser</h2>
       ${r.events.length ? `<ol class="events">${r.events.map(e => `
         <li><button type="button" class="event" data-n="${e.n}" style="--c:${KIND_COLOR[e.kind]}">
           <span class="num">${e.n}</span>
@@ -215,7 +218,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>
 
     ${marks.length ? `<section class="card" id="marks-section">
-      <h2>Ledsagerens merker</h2>
+      <h2 class="card-title">${icon('flag')}Ledsagerens merker</h2>
       <p class="muted small">Tidspunkt ledsageren merket underveis. Skriv hva som skjedde, så blir det med i rapporten.</p>
       <ol class="marks">${marks.map(m => `
         <li class="mark-row" data-i="${m.i}">
@@ -227,11 +230,39 @@ export function renderReport(root, r, ctx = {}) {
         </li>`).join('')}</ol>
     </section>` : ''}
 
+    ${onNoteChange ? `<section class="card note-card">
+      ${onDriverChange && (drivers.length || driver) ? `<label class="driver-row">Fører
+        <select id="drive-driver">
+          <option value="">Ikke valgt</option>
+          ${[...new Set([...(drivers || []), ...(driver ? [driver] : [])])].map(d => `<option value="${esc(d)}" ${d === driver ? 'selected' : ''}>${esc(d)}</option>`).join('')}
+        </select></label>` : ''}
+      <label for="drive-note"><h2 class="card-title">${icon('note')}Notat</h2></label>
+      <textarea id="drive-note" rows="2" placeholder="Hva øvde dere på? F.eks. «rundkjøringer og feltskifte»">${esc(note || '')}</textarea>
+      <p class="muted small" id="note-status">Lagres automatisk.</p>
+    </section>` : ''}
+
+    <section class="card" id="quality-section">
+      <details ${qualitySev >= 2 ? 'open' : ''}>
+        <summary><span class="card-title">${icon('shield')}Datakvalitet</span><span class="pill ${qualityCount ? 'warn' : 'ok'}">${qualityCount ? qualityCount + (qualityCount === 1 ? ' merknad' : ' merknader') : 'God'}</span></summary>
+        <ul class="quality-list">
+          ${quality.length ? quality.map(q => `<li class="q-${q.sev}">${icon(q.sev ? 'warn' : 'info', 18)}<span>${esc(q.text)}</span></li>`).join('') : `<li class="q-0">${icon('check', 18)}<span>Ingen problemer funnet. GPS og sensorer leverte jevnt hele turen.</span></li>`}
+        </ul>
+        ${diag ? `<h3>Telefonen leverte</h3>
+        <ul class="diag">
+          <li>Bevegelsesdata: ${diag.motionEvents ? `${n1(diag.motionHz)} per sekund` : 'ingen'}${diag.hasGyro ? ', med gyroskop' : ', <strong>uten gyroskop</strong>'}${diag.hasLinearAcc ? ', med lineær akselerasjon' : ', <strong>uten lineær akselerasjon</strong>'}${diag.hasIncGravity ? '' : ', <strong>uten tyngdekraft</strong>'}</li>
+          <li>GPS: ${diag.gpsFixes} posisjoner (${n1(diag.gpsHz)} per sekund)${Number.isFinite(diag.gpsMedianAcc) ? `, typisk nøyaktighet ${diag.gpsMedianAcc} m` : ''}</li>
+          <li>Skjermlås (Wake Lock): ${esc(diag.wakeLock)} · Hjem-skjerm: ${diag.standalone ? 'ja' : 'nei'}${diag.replay ? ' · avspilt demo' : ''}</li>
+          ${diag.appVersion ? `<li>Appversjon ved opptak: ${esc(diag.appVersion)}</li>` : ''}
+          <li class="muted small">${esc(diag.userAgent || '')}</li>
+        </ul>` : ''}
+      </details>
+    </section>
+
     <section class="card">
       <details>
-        <summary>Slik måles det</summary>
+        <summary><span class="card-title">${icon('info')}Slik måles det</span></summary>
         <div class="method">
-          <p>Appen bruker telefonens GPS og bevegelsessensorer. Alt beregnes på telefonen, og ingenting sendes noe sted.</p>
+          <p>Appen bruker telefonens GPS og bevegelsessensorer. Alt beregnes på telefonen.</p>
           <p><strong>Grenser denne rapporten bruker</strong> (etter følsomhet${ctx.customThresholds ? ' og egne terskler' : ''}): bremsing ${thTxt(r, 'brake')}, akselerasjon ${thTxt(r, 'accel')}, sving ${thTxt(r, 'turn')}.</p>
           <p><strong>Svinger</strong> måles som sidekraft: fart ganger hvor raskt bilen roterer. ${r.source === 'gyro'
             ? 'Rotasjonen kom fra gyroskopet, projisert på tyngdekraften, så det spiller ingen rolle hvordan telefonen står i holderen.'
@@ -245,20 +276,11 @@ export function renderReport(root, r, ctx = {}) {
           <p>Hendelser som ligger mindre enn to sekunder fra hverandre slås sammen til én. Poengsummen trekker mest for kraftige hendelser, og samlet poengsum vekter bremsing 30 %, svinger 25 %, jevn fart 25 % og akselerasjon 20 %.</p>
           ${sp ? `<p><strong>Fartsgrenser</strong> hentes fra Statens vegvesen etter turen. Hvert GPS-punkt kobles til nærmeste fartsgrensestrekning innen 25 m, så i kryss og ved avkjøringer kan grensen bomme et sekund eller to. Poeng: 100 minus 1,5 per sekund over grensen, minus 10 per episode med 10 km/t eller mer over.</p>` : ''}
           <p>Følsomhet: ${esc(ctx.sensitivityLabel || 'Normal')}.</p>
-          ${diag ? `<h3>Telefonen leverte</h3>
-          <ul class="diag">
-            <li>Bevegelsesdata: ${diag.motionEvents ? `${n1(diag.motionHz)} per sekund` : 'ingen'}${diag.hasGyro ? ', med gyroskop' : ', <strong>uten gyroskop</strong>'}${diag.hasLinearAcc ? ', med lineær akselerasjon' : ', <strong>uten lineær akselerasjon</strong> (v3-motoren får ikke data)'}${diag.hasIncGravity ? '' : ', <strong>uten tyngdekraft</strong>'}</li>
-            <li>GPS: ${diag.gpsFixes} posisjoner (${n1(diag.gpsHz)} per sekund)${Number.isFinite(diag.gpsMedianAcc) ? `, typisk nøyaktighet ${diag.gpsMedianAcc} m` : ''}</li>
-            <li>Skjermlås (Wake Lock): ${esc(diag.wakeLock)}</li>
-            <li>Kjørt fra Hjem-skjermen: ${diag.standalone ? 'ja' : 'nei'}${diag.replay ? ' · avspilt demo' : ''}${diag.gaps ? ` · ${diag.gaps} hull` : ''}</li>
-            ${diag.appVersion ? `<li>Appversjon ved opptak: ${esc(diag.appVersion)}</li>` : ''}
-            <li class="muted small">${esc(diag.userAgent || '')}</li>
-          </ul>` : ''}
         </div>
       </details>
     </section>
 
-    ${onDelete ? '<button type="button" class="btn danger" id="btn-delete-drive">Slett denne turen</button>' : ''}
+    ${onDelete ? `<button type="button" class="btn danger" id="btn-delete-drive">${icon('trash', 20)}Slett denne turen</button>` : ''}
     <footer class="report-foot">Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</footer>
   `;
 
@@ -270,7 +292,8 @@ export function renderReport(root, r, ctx = {}) {
   const showOnMap = n => {
     select(n);
     const e = r.events.find(x => String(x.n) === String(n));
-    root.querySelector('#map-section').scrollIntoView({ behavior: smooth, block: 'start' });
+    const ms = root.querySelector('#map-section');
+    window.scrollTo({ top: ms.getBoundingClientRect().top + window.scrollY - 118, behavior: smooth });
     if (leafletMap && e) leafletMap.setView([e.lat, e.lon], Math.max(leafletMap.getZoom(), 16), { animate: !prefersReduced() });
   };
   const openDetail = (n, open) => {
@@ -301,7 +324,23 @@ export function renderReport(root, r, ctx = {}) {
   };
   root.querySelectorAll('.marker').forEach(m => m.addEventListener('click', () => fromMap(m.dataset.n)));
   if (useReal) initRealMap(root, r, marks, sp, fromMap);
-  root.querySelector('#btn-print').addEventListener('click', () => window.print());
+  const printBtn = document.getElementById('btn-print');
+  if (printBtn) printBtn.onclick = () => window.print();
+  // Fanelinje: marker seksjonen som er i bildet
+  const links = [...root.querySelectorAll('.quicknav a')];
+  if ('IntersectionObserver' in window && links.length) {
+    navObserver = new IntersectionObserver(entries => {
+      for (const en of entries) if (en.isIntersecting) {
+        links.forEach(l => l.classList.toggle('on', l.getAttribute('href') === '#' + en.target.id));
+        const on = links.find(l => l.classList.contains('on'));
+        const nav = on && on.parentElement;
+        if (on && nav) nav.scrollTo({ left: on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2, behavior: 'auto' });
+      }
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    links.forEach(l => { const sec = root.querySelector(l.getAttribute('href')); if (sec) navObserver.observe(sec); });
+  }
+  // Poengstolper vokser inn
+  root.querySelectorAll('.bar-fill').forEach(f => { const w = f.style.width; f.style.width = '0%'; requestAnimationFrame(() => requestAnimationFrame(() => { f.style.width = w; })); });
   const driverSel = root.querySelector('#drive-driver');
   if (driverSel && onDriverChange) driverSel.addEventListener('change', () => onDriverChange(driverSel.value));
 
@@ -322,13 +361,18 @@ export function renderReport(root, r, ctx = {}) {
   root.querySelectorAll('.quicknav a').forEach(a => a.addEventListener('click', e => {
     e.preventDefault();
     const el = root.querySelector(a.getAttribute('href'));
-    if (el) el.scrollIntoView({ behavior: smooth, block: 'start' });
+    if (el) {
+      const y = el.getBoundingClientRect().top + window.scrollY - 118;
+      window.scrollTo({ top: y, behavior: smooth });
+      if (el.id === 'quality-section') { const d = el.querySelector('details'); if (d) d.open = true; }
+    }
   }));
   countUp(root.querySelector('.sign text'), r.overall);
   if (onDelete) root.querySelector('#btn-delete-drive').addEventListener('click', onDelete);
   const fetchBtn = root.querySelector('#btn-fetch');
   if (fetchBtn && onFetch) fetchBtn.addEventListener('click', onFetch);
-  if (onShare) root.querySelector('#btn-share').addEventListener('click', () => onShare(buildSummary(r, { subtitle, note, marks: rawMarks, enrich, driver })));
+  const shareBtn = document.getElementById('btn-share');
+  if (onShare && shareBtn) shareBtn.onclick = () => onShare(buildSummary(r, { subtitle, note, marks: rawMarks, enrich, driver }));
 }
 
 function thTxt(r, k) {
