@@ -1,12 +1,12 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
-import { analyze, makeDemo, SENSITIVITY } from './analysis.js';
+import { analyze, makeDemo, SENSITIVITY, TH } from './analysis.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
-import { renderReport, trendChart, eventsPer10km } from './report.js';
+import { renderReport, trendChart, categoryTrendChart, eventsPer10km } from './report.js';
 import { enrichDrive } from './enrich.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
 
-export const APP_VERSION = '0.3.5';
+export const APP_VERSION = '0.4.0';
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
@@ -44,12 +44,18 @@ function currentSensitivity() {
 
 function analysisOptions() {
   const s = getSettings();
-  return { factor: currentSensitivity().factor, engine: s.engine === 'v1' ? 'v1' : 'v3', perKm: s.perKm !== false };
+  return {
+    factor: currentSensitivity().factor,
+    engine: s.engine === 'v1' ? 'v1' : 'v3',
+    perKm: s.perKm !== false,
+    cityAware: s.cityAware !== false,
+    th: s.th && typeof s.th === 'object' ? s.th : undefined
+  };
 }
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|5`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|6`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -66,32 +72,48 @@ async function analyzeDrive(drive) {
   return result;
 }
 
+const isReal = d => !d.demo && !d.imported;
+const num = v => (v === '' || v === null || v === undefined ? NaN : Number(String(v).replace(',', '.')));
+
 /* ---------- Hjem ---------- */
 async function renderHome() {
   show('home');
+  const settings = getSettings();
   const list = $('#drive-list');
   list.innerHTML = '<li class="muted">Laster …</li>';
-  const drives = await listDrives();
-  for (const d of drives) if (d.status === 'recording') { d.status = 'done'; d.interrupted = true; await putDrive(d); }
+  const allDrives = await listDrives();
+  for (const d of allDrives) if (d.status === 'recording') { d.status = 'done'; d.interrupted = true; await putDrive(d); }
+
+  // Førerfilter
+  const driverNames = [...new Set([...(settings.drivers || []), ...allDrives.map(d => d.driver).filter(Boolean)])];
+  let filter = settings.homeDriver || '';
+  if (filter && !driverNames.includes(filter)) filter = '';
+  const chips = $('#driver-chips');
+  if (driverNames.length) {
+    chips.innerHTML = ['', ...driverNames].map(n => `<button type="button" class="chip ${n === filter ? 'on' : ''}" data-d="${esc(n)}" aria-pressed="${n === filter}">${n ? esc(n) : 'Alle'}</button>`).join('');
+    chips.hidden = false;
+    chips.querySelectorAll('.chip').forEach(c => c.onclick = () => { saveSettings({ ...getSettings(), homeDriver: c.dataset.d }); renderHome(); });
+  } else chips.hidden = true;
+  const drives = filter ? allDrives.filter(d => d.driver === filter) : allDrives;
+
   const items = [];
   const results = [];     // bare ekte opptak – demo og importerte turer holdes utenfor oppsummering og trend
   let best = null;
-  const isReal = d => !d.demo && !d.imported;
   for (const d of drives) {
     let res = null;
     try { res = await analyzeDrive(d); } catch { /* for lite data */ }
     if (res && isReal(d)) { results.push(res); if (!best || res.overall > best.overall) best = { ...res, id: d.id }; }
-    const tags = [d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : ''].filter(Boolean);
+    const tags = [d.driver && !filter ? d.driver : '', d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : ''].filter(Boolean);
     items.push(`<li>
       <button type="button" class="drive" data-id="${d.id}">
         <span class="drive-main"><strong>${esc(date(d.startedAt))}</strong>
-          <span class="muted">${res ? [km(res.stats.km), duration(res.stats.duration), ...tags].join('<span class="sep">·</span>') : ['For lite data til rapport', ...tags].join('<span class="sep">·</span>')}</span>
+          <span class="muted">${(res ? [km(res.stats.km), duration(res.stats.duration), ...tags] : ['For lite data til rapport', ...tags]).map(esc).join('<span class="sep">·</span>')}</span>
           ${d.note ? `<span class="muted small note-snippet">${esc(d.note)}</span>` : ''}</span>
         ${res ? `<span class="score ${res.overall >= 90 ? 'good' : res.overall >= 75 ? 'mid' : 'bad'}">${res.overall}</span>` : '<span class="score muted">–</span>'}
       </button>
     </li>`);
   }
-  list.innerHTML = items.length ? items.join('') : '<li class="empty muted">Ingen turer enda. Fest telefonen i holderen, og trykk «Start kjøretur».</li>';
+  list.innerHTML = items.length ? items.join('') : `<li class="empty muted">${filter ? `Ingen turer for ${esc(filter)} enda.` : 'Ingen turer enda. Fest telefonen i holderen, og trykk «Start kjøretur».'}</li>`;
   list.querySelectorAll('.drive').forEach(b => b.addEventListener('click', () => { location.hash = '#/rapport/' + b.dataset.id; }));
 
   // Oppsummering
@@ -109,9 +131,34 @@ async function renderHome() {
     sum.hidden = false;
   } else sum.hidden = true;
 
-  const scores = results.map(r => r.overall).reverse();
-  $('#trend').innerHTML = scores.length >= 2 ? `<h2>Utvikling</h2><p class="muted small">Bare ekte opptak telles med her.</p>${trendChart(scores)}` : '';
-  $('#howto').hidden = drives.length > 0;
+  // Mål: snitt av de tre siste ekte turene
+  const goalCard = $('#goals');
+  const gScore = num(settings.goalScore), gEv = num(settings.goalEv10);
+  if (results.length && (Number.isFinite(gScore) || Number.isFinite(gEv))) {
+    const last = results.slice(0, 3);
+    const lastKm = last.reduce((s, r) => s + r.stats.km, 0);
+    const avgScore = last.reduce((s, r) => s + r.overall, 0) / last.length;
+    const ev10 = lastKm > 0.2 ? last.reduce((s, r) => s + r.events.length, 0) / lastKm * 10 : 0;
+    const row = (label, ok, txt) => `<li class="${ok ? 'goal-ok' : 'goal-no'}"><span class="goal-icon" aria-hidden="true">${ok ? '✓' : '○'}</span><span><strong>${label}</strong><br><span class="muted small">${txt}</span></span></li>`;
+    goalCard.innerHTML = `<h2>Mål</h2><p class="muted small">Snitt av ${last.length === 1 ? 'siste tur' : `de ${last.length} siste turene`}${filter ? ` for ${esc(filter)}` : ''}.</p><ul class="goal-list">
+      ${Number.isFinite(gScore) ? row(`Poengsum minst ${n0(gScore)}`, avgScore >= gScore, `Nå: ${n0(avgScore)} poeng`) : ''}
+      ${Number.isFinite(gEv) ? row(`Høyst ${n1(gEv)} hendelser per 10 km`, ev10 <= gEv, `Nå: ${n1(ev10)} per 10 km`) : ''}
+    </ul>`;
+    goalCard.hidden = false;
+  } else goalCard.hidden = true;
+
+  // Trend: samlet eller per kategori
+  const chrono = results.slice().reverse();
+  const mode = settings.trendMode === 'cats' ? 'cats' : 'total';
+  $('#trend').innerHTML = chrono.length >= 2 ? `<div class="trend-head"><h2>Utvikling</h2>
+      <div class="mini-seg" role="group" aria-label="Vis">
+        <button type="button" data-m="total" class="${mode === 'total' ? 'on' : ''}" aria-pressed="${mode === 'total'}">Samlet</button>
+        <button type="button" data-m="cats" class="${mode === 'cats' ? 'on' : ''}" aria-pressed="${mode === 'cats'}">Kategorier</button>
+      </div></div>
+      <p class="muted small">Bare ekte opptak telles med her.</p>
+      ${mode === 'cats' ? categoryTrendChart(chrono) : trendChart(chrono.map(r => r.overall), Number.isFinite(gScore) ? gScore : null)}` : '';
+  $('#trend').querySelectorAll('.mini-seg button').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), trendMode: b.dataset.m }); renderHome(); });
+  $('#howto').hidden = allDrives.length > 0;
   $('#update-banner').hidden = !swUpdateReady;
   renderInstallHint();
 }
@@ -147,6 +194,9 @@ function renderPrecheck() {
   btnPerm.disabled = false;
   setCheck(gps, null, 'Venter på tilgang');
   setCheck(mot, null, 'Venter på tilgang');
+  const hold = $('#check-holder');
+  setCheck(hold, null, 'Venter på bevegelsesdata');
+  renderDriverPicker();
   $('#precheck-error').textContent = '';
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
 
@@ -169,6 +219,8 @@ function renderPrecheck() {
       if (st.gpsError) setCheck(gps, false, st.gpsError.code === 1 ? 'Posisjonstilgang avslått' : 'Ingen GPS-signal');
       else if (Number.isFinite(st.acc)) setCheck(gps, st.gpsOk, `${n0(st.acc)} m nøyaktighet${st.gpsOk ? '' : ' (må være 20 m eller bedre' + (waited > 10 ? ' – blir ofte bedre når bilen står ute og står stille)' : ')')}`);
       if (motion !== 'denied' && motion !== 'unsupported') setCheck(mot, st.motionOk, st.motionOk ? 'Bevegelsesdata mottas' : 'Ingen bevegelsesdata enda – beveg telefonen litt');
+      if (st.steady === null) setCheck(hold, null, 'Venter på bevegelsesdata');
+      else setCheck(hold, st.steady, st.steady ? 'Telefonen står stødig' : 'Telefonen beveger seg – fest den i holderen og slipp den');
       btnStart.disabled = !(st.gpsOk && st.motionOk);
       // Nødutgang: etter 20 s venting med brukbar GPS (≤ 40 m) kan man starte likevel.
       const anyway = !st.gpsOk && st.motionOk && Number.isFinite(st.acc) && st.acc <= 40 && waited > 20;
@@ -178,6 +230,26 @@ function renderPrecheck() {
   };
   btnStart.onclick = () => startRecording();
   btnAnyway.onclick = () => startRecording();
+}
+
+/* Hvem kjører? Velges før start og lagres på turen. */
+function renderDriverPicker() {
+  const s = getSettings();
+  const sel = $('#driver-select');
+  const drivers = s.drivers || [];
+  sel.innerHTML = `<option value="">Ikke valgt</option>${drivers.map(d => `<option value="${esc(d)}" ${d === s.activeDriver ? 'selected' : ''}>${esc(d)}</option>`).join('')}<option value="__new">Legg til fører …</option>`;
+  sel.onchange = () => {
+    if (sel.value === '__new') {
+      const name = (prompt('Navn på fører:') || '').trim().slice(0, 40);
+      if (name) {
+        const list = [...new Set([...(getSettings().drivers || []), name])];
+        saveSettings({ ...getSettings(), drivers: list, activeDriver: name });
+      }
+      renderDriverPicker();
+      return;
+    }
+    saveSettings({ ...getSettings(), activeDriver: sel.value });
+  };
 }
 
 function setCheck(el, ok, text) {
@@ -198,6 +270,7 @@ async function startRecording(replay = null) {
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
     appVersion: APP_VERSION,
+    driver: replay ? '' : (settings.activeDriver || ''),
     replay,
     onStatus: st => {
       if (st.replayDone) { finishRecording(); return; }
@@ -274,10 +347,10 @@ async function shareText(text) {
   catch { prompt('Kopier teksten:', text); }
 }
 
-async function renderDriveReport(id) {
-  show('report');
+async function renderDriveReport(id, { keepScroll = false } = {}) {
+  const y = window.scrollY;
+  if (!keepScroll) { show('report'); $('#report-root').innerHTML = '<p class="muted">Analyserer turen …</p>'; }
   const root = $('#report-root');
-  root.innerHTML = '<p class="muted">Analyserer turen …</p>';
   const drive = await getDrive(id);
   if (!drive) { root.innerHTML = '<p class="notice">Fant ikke turen.</p>'; return; }
   const drives = await listDrives();
@@ -285,7 +358,7 @@ async function renderDriveReport(id) {
   let prev = null;
   // Sammenlign bare med forrige ekte opptak, og bare hvis denne turen selv er ekte.
   if (!drive.demo && !drive.imported) {
-    for (let i = idx + 1; i < drives.length; i++) if (drives[i].result && !drives[i].demo && !drives[i].imported) { prev = drives[i].result; break; }
+    for (let i = idx + 1; i < drives.length; i++) if (drives[i].result && isReal(drives[i]) && (drives[i].driver || '') === (drive.driver || '')) { prev = drives[i].result; break; }
   }
   const sens = currentSensitivity();
   const tags = [drive.demo ? 'demotur via opptakeren' : '', drive.imported ? 'importert' : ''].filter(Boolean);
@@ -296,7 +369,11 @@ async function renderDriveReport(id) {
     const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.names && !(drive.enrich && drive.enrich.names));
     const draw = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
-      title: 'Kjørerapport', subtitle: date(drive.startedAt) + (tags.length ? ' · ' + tags.join(', ') : ''),
+      title: 'Kjørerapport', subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),
+      realMap: settings.netMap !== false,
+      customThresholds: !!(settings.th),
+      driver: drive.driver || '', drivers: settings.drivers || [],
+      onDriverChange: async name => { await updateDrive(id, { driver: name }); renderDriveReport(id, { keepScroll: true }); },
       gaps: drive.gaps || [], interrupted: !!drive.interrupted, factor: sens.factor, sensitivityLabel: sens.label,
       note: drive.note || '',
       marks: drive.marks || [],
@@ -316,7 +393,8 @@ async function renderDriveReport(id) {
       const last = drive.enrich && drive.enrich.attemptedAt ? Date.parse(drive.enrich.attemptedAt) : 0;
       if (!manual && Date.now() - last < 3600000) return;   // ikke mas ved gjentatte feil
       enriching = true;
-      draw({ text: 'Starter …' });
+      const el0 = root.querySelector('#enrich-status');
+      if (!el0) { const yy = window.scrollY; draw({ text: 'Starter …' }); window.scrollTo(0, yy); }
       const marksRows = (drive.marks || []).map((m, i) => { const t = m.t - (r.t0 || 0); const pt = r.points.length ? r.points.reduce((a, b) => Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a) : null; return { i, lat: pt ? pt.lat : NaN, lon: pt ? pt.lon : NaN }; });
       try {
         const enrich = await enrichDrive(r, marksRows, wants, drive.enrich, text => {
@@ -325,15 +403,18 @@ async function renderDriveReport(id) {
         enrich.attemptedAt = new Date().toISOString(); enrich.error = null;
         drive.enrich = enrich;
         await putDrive(drive);
-        if (location.hash === '#/rapport/' + id) renderDriveReport(id);
+        if (location.hash === '#/rapport/' + id) await renderDriveReport(id, { keepScroll: true });
       } catch (err) {
         drive.enrich = { ...(drive.enrich || {}), attemptedAt: new Date().toISOString(), error: err.message };
         await putDrive(drive);
         enriching = false;
+        const yy = window.scrollY;
         draw({ text: 'Kunne ikke hente: ' + err.message, error: true });
+        window.scrollTo(0, yy);
       }
     };
     draw(null);
+    if (keepScroll) window.scrollTo(0, y);
     if (missing && navigator.onLine) runEnrich(false);
   } catch (err) {
     root.innerHTML = `<section class="card"><h2>Ikke nok data</h2><p>${esc(err.message)}</p>
@@ -352,6 +433,7 @@ async function renderDemoReport() {
   renderReport(root, r, {
     prevScore: null, prev: null,
     title: 'Demotur', subtitle: 'Simulert tur i Trondheim sentrum. Ikke lagret.',
+    realMap: getSettings().netMap !== false, customThresholds: !!getSettings().th,
     factor: sens.factor, sensitivityLabel: sens.label, onShare: shareText
   });
 }
@@ -377,6 +459,20 @@ async function renderSettings() {
     el.checked = !!settings[key];
     el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
+  // Kart og by-tilpasset jevn fart er på som standard
+  [['netMap', '#netMap'], ['cityAware', '#cityAware']].forEach(([key, sel]) => {
+    const el = $(sel);
+    el.checked = settings[key] !== false;
+    el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
+  });
+  // Mål
+  [['goalScore', '#goal-score'], ['goalEv10', '#goal-ev10']].forEach(([key, sel]) => {
+    const el = $(sel);
+    el.value = Number.isFinite(num(settings[key])) ? String(settings[key]).replace('.', ',') : '';
+    el.onchange = () => { const v = num(el.value); saveSettings({ ...getSettings(), [key]: Number.isFinite(v) && v >= 0 ? v : null }); };
+  });
+  renderDriverSettings();
+  renderThresholdSettings();
   document.querySelectorAll('input[name=perkm]').forEach(r => {
     r.checked = r.value === (settings.perKm === false ? 'off' : 'on');
     r.onchange = () => { saveSettings({ ...getSettings(), perKm: r.value === 'on' }); };
@@ -439,6 +535,54 @@ async function renderSettings() {
   $('#btn-dev-demo-slow').onclick = () => startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 });
 }
 
+function renderDriverSettings() {
+  const s = getSettings();
+  const list = $('#driver-list');
+  const drivers = s.drivers || [];
+  list.innerHTML = drivers.length ? drivers.map(d => `<li><span>${esc(d)}${d === s.activeDriver ? ' <span class="muted small">(valgt)</span>' : ''}</span>
+    <button type="button" class="link danger-link" data-d="${esc(d)}" aria-label="Fjern ${esc(d)}">Fjern</button></li>`).join('') : '<li class="muted small">Ingen førere lagt inn. Turer lagres da uten navn.</li>';
+  list.querySelectorAll('button[data-d]').forEach(b => b.onclick = () => {
+    if (!confirm(`Fjerne ${b.dataset.d} fra listen? Turene beholder navnet.`)) return;
+    const cur = getSettings();
+    saveSettings({ ...cur, drivers: (cur.drivers || []).filter(x => x !== b.dataset.d), activeDriver: cur.activeDriver === b.dataset.d ? '' : cur.activeDriver });
+    renderDriverSettings();
+  });
+  $('#btn-add-driver').onclick = () => {
+    const input = $('#new-driver');
+    const name = input.value.trim().slice(0, 40);
+    if (!name) return;
+    const cur = getSettings();
+    saveSettings({ ...cur, drivers: [...new Set([...(cur.drivers || []), name])], activeDriver: cur.activeDriver || name });
+    input.value = '';
+    renderDriverSettings();
+  };
+}
+
+function renderThresholdSettings() {
+  const s = getSettings();
+  const base = s.th || TH;
+  const G = 9.81;
+  document.querySelectorAll('.th-input').forEach(inp => {
+    const [k, lvl] = inp.dataset.k.split('.');
+    inp.value = String(Math.round(base[k][lvl] * 100) / 100).replace('.', ',');
+    const out = inp.parentElement.querySelector('.th-g');
+    const showG = () => { const v = num(inp.value); out.textContent = Number.isFinite(v) ? `= ${(v / G).toFixed(2).replace('.', ',')} g` : ''; };
+    showG();
+    inp.oninput = showG;
+    inp.onchange = () => {
+      const cur = getSettings();
+      const th = JSON.parse(JSON.stringify(cur.th || TH));
+      const v = num(inp.value);
+      if (Number.isFinite(v) && v > 0 && v < 15) th[k][lvl] = v;
+      saveSettings({ ...cur, th });
+      $('#th-status').textContent = 'Egne terskler er i bruk. Alle turer analyseres på nytt.';
+      renderThresholdSettings();
+    };
+  });
+  $('#th-status').textContent = s.th ? 'Egne terskler er i bruk.' : 'Standard terskler fra prototypen.';
+  $('#btn-th-reset').onclick = () => { const cur = getSettings(); delete cur.th; saveSettings(cur); renderThresholdSettings(); };
+}
+
 async function exportDrive(id) {
   if (!id) return;
   const drive = await getDrive(id);
@@ -498,6 +642,12 @@ function init() {
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
   $('#version').textContent = `Kjørerapport versjon ${APP_VERSION}`;
   window.addEventListener('hashchange', route);
+  let printOpened = [];
+  window.addEventListener('beforeprint', () => {
+    printOpened = [...document.querySelectorAll('#report details:not([open])')];
+    printOpened.forEach(d => { d.open = true; });
+  });
+  window.addEventListener('afterprint', () => { printOpened.forEach(d => { d.open = false; }); printOpened = []; });
   window.addEventListener('beforeunload', e => { if (recorder && recorder.running) { e.preventDefault(); e.returnValue = ''; } });
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (!screens.home.hidden) renderInstallHint(); });
   registerSW();

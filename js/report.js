@@ -16,6 +16,9 @@ const POSITIVE = {
   smooth: 'Jevn fart gjennom hele turen.'
 };
 const LIMITS = [30, 50, 60, 70, 80, 90, 110];
+const KIND_CSS = { brake: 'brake', accel: 'accel', turn: 'turn' };
+let leafletMap = null;
+const TILE_URL = 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png';
 
 export function eventLabel(e) { return LABEL[e.kind][e.level]; }
 
@@ -52,7 +55,7 @@ export function eventsPer10km(r) {
 /* Tekstoppsummering til deling (meldinger, e-post, AirDrop). */
 export function buildSummary(r, ctx = {}) {
   const lines = [];
-  lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}`);
+  lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}${ctx.driver ? ' – ' + ctx.driver : ''}`);
   lines.push(`Poeng: ${r.overall} – ${rating(r.overall)}`);
   lines.push(`Distanse ${km(r.stats.km)} · Tid ${duration(r.stats.duration)} · Snittfart ${kmh(r.stats.avgKmh)} · Toppfart ${kmh(r.stats.maxKmh)}`);
   lines.push(`Bremsing ${r.scores.brake} · Akselerasjon ${r.scores.accel} · Svinger ${r.scores.turn} · Jevn fart ${r.scores.smooth}`);
@@ -81,7 +84,10 @@ export function buildSummary(r, ctx = {}) {
 export function renderReport(root, r, ctx = {}) {
   const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false,
     note = null, onNoteChange = null, onDelete = null, onShare = null, marks: rawMarks = [], onMarkNote = null,
-    enrich = null, enrichStatus = null, canFetch = false, onFetch = null, diag = null } = ctx;
+    enrich = null, enrichStatus = null, canFetch = false, onFetch = null, diag = null,
+    realMap = false, driver = '', drivers = [], onDriverChange = null } = ctx;
+  if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+  const useReal = realMap && typeof window !== 'undefined' && window.L && r.points.length > 1;
   const positives = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] >= 90);
   const marks = markRows(rawMarks, r);
   const short = r.stats.km < 1;
@@ -91,7 +97,10 @@ export function renderReport(root, r, ctx = {}) {
     <header class="report-head">
       <div class="report-title">
         <h1>${esc(title)}</h1>
-        ${onShare ? '<button type="button" class="btn small-btn secondary" id="btn-share">Del rapport</button>' : ''}
+        <span class="head-actions">
+          <button type="button" class="btn small-btn secondary" id="btn-print" aria-label="Skriv ut eller lagre som PDF">PDF</button>
+          ${onShare ? '<button type="button" class="btn small-btn secondary" id="btn-share">Del</button>' : ''}
+        </span>
       </div>
       ${subtitle ? `<p class="muted">${esc(subtitle)}</p>` : ''}
       ${enrichStatus ? `<p class="enrich-status ${enrichStatus.error ? 'error' : ''}" id="enrich-status" aria-live="polite">${esc(enrichStatus.text)}${enrichStatus.error && onFetch ? ' <button type="button" class="link" id="btn-fetch">Prøv igjen</button>' : ''}</p>`
@@ -103,6 +112,9 @@ export function renderReport(root, r, ctx = {}) {
     ${short ? `<p class="notice">Kort tur (${km(r.stats.km)}). Grunnlaget er tynt, så poengene bør ikke vektlegges. Kjør minst noen kilometer for en rapport som betyr noe.</p>` : ''}
     ${interrupted ? `<p class="notice">Opptaket ble avbrutt før «Stopp» ble trykket. Rapporten gjelder den delen som ble lagret.</p>` : ''}
     ${r.droppedPoints ? `<p class="notice">${r.droppedPoints === 1 ? 'Ett GPS-punkt' : r.droppedPoints + ' GPS-punkter'} med umulige posisjonshopp ble sett bort fra (typisk i starten, før GPS-en har låst).</p>` : ''}
+    ${r.holder && r.holder.episodes.length ? `<p class="notice">${r.holder.episodes.map(e => `Telefonen ble flyttet i holderen ${mss(e.from)}–${mss(e.to)} inn i turen.`).join(' ')} ${r.holder.permanentShift
+      ? (r.alongSource === 'acc' && r.accFit && r.accFit.segments > 1 ? 'Den satt annerledes etterpå, så v3 kalibrerte kjøreretningen på nytt etter flyttingen.' : 'Den satt annerledes etterpå, så bremsing og svinger etter dette kan være mindre nøyaktige.')
+      : 'Den ble satt tilbake som før, så målingene er fortsatt gode.'} Fest telefonen godt og la den stå under hele turen.</p>` : ''}
     ${gaps.length ? `<p class="notice">Appen var skjult ${gaps.length === 1 ? 'én gang' : gaps.length + ' ganger'} underveis (til sammen ${n0(gaps.reduce((s, g) => s + (g.to - g.from), 0))} s). Disse hullene er markert grått i fartsgrafen.</p>` : ''}
     <section class="hero card">
       ${speedSign(r.overall)}
@@ -121,6 +133,11 @@ export function renderReport(root, r, ctx = {}) {
     </section>
 
     ${onNoteChange ? `<section class="card note-card">
+      ${onDriverChange && (drivers.length || driver) ? `<label class="driver-row">Fører
+        <select id="drive-driver">
+          <option value="">Ikke valgt</option>
+          ${[...new Set([...(drivers || []), ...(driver ? [driver] : [])])].map(d => `<option value="${esc(d)}" ${d === driver ? 'selected' : ''}>${esc(d)}</option>`).join('')}
+        </select></label>` : ''}
       <label for="drive-note"><h2>Notat</h2></label>
       <textarea id="drive-note" rows="2" placeholder="Hva øvde dere på? F.eks. «rundkjøringer og feltskifte»">${esc(note || '')}</textarea>
       <p class="muted small" id="note-status">Lagres automatisk.</p>
@@ -128,7 +145,12 @@ export function renderReport(root, r, ctx = {}) {
 
     <section class="card" id="map-section">
       <h2>Ruten</h2>
-      ${routeMap(r, marks)}
+      ${useReal ? `<div class="lmap-wrap" id="lmap-wrap">
+          <div id="lmap" class="lmap" role="region" aria-label="Kart over ruten med ${r.events.length} hendelser"></div>
+          <button type="button" class="btn small-btn secondary lmap-toggle" id="btn-map-expand">Utforsk kartet</button>
+        </div>
+        ${typeof navigator !== 'undefined' && !navigator.onLine ? '<p class="muted small">Uten nett vises bare kartbiter du har sett før.</p>' : ''}`
+        : routeMap(r, marks)}
       <ul class="legend">
         <li><span class="dot" style="background:var(--good)"></span>Start</li>
         <li><span class="dot square" style="background:var(--road-edge)"></span>Slutt</li>
@@ -136,8 +158,9 @@ export function renderReport(root, r, ctx = {}) {
         <li><span class="dot" style="background:var(--accel)"></span>Akselerasjon</li>
         <li><span class="dot" style="background:var(--turn)"></span>Sving</li>
         ${marks.length ? '<li><span class="dot diamond" style="background:var(--ink)"></span>Merke</li>' : ''}
+        ${useReal && sp && sp.episodes.length ? '<li><span class="dot line" style="background:var(--sign)"></span>Over fartsgrensen</li>' : ''}
       </ul>
-      <p class="muted small">Trykk på et nummer i kartet eller i listen over hendelser for å koble dem sammen.</p>
+      <p class="muted small">Trykk på et nummer i kartet for å se hendelsen. ${useReal ? 'Knip for å zoome, eller trykk «Utforsk kartet» for å flytte rundt.' : ''}</p>
     </section>
 
     <section class="card" id="score-section">
@@ -185,7 +208,10 @@ export function renderReport(root, r, ctx = {}) {
           <span class="num">${e.n}</span>
           <span class="ev-text"><strong>${esc(eventLabel(e))}</strong><span class="muted">${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}</span>${names.events[e.n] ? `<span class="ev-place">${esc(names.events[e.n])}</span>` : ''}</span>
           <span class="ev-g">${gee(e.g)}<span class="g-word muted">${gWord(e.g)}</span></span>
-        </button></li>`).join('')}</ol>` : '<p class="muted">Ingen brå hendelser registrert på denne turen.</p>'}
+          <span class="ev-chev" aria-hidden="true">›</span>
+        </button>
+        <div class="ev-detail" id="ev-detail-${e.n}" hidden></div></li>`).join('')}</ol>
+        <p class="muted small">Trykk på en hendelse for detaljer.</p>` : '<p class="muted">Ingen brå hendelser registrert på denne turen.</p>'}
     </section>
 
     ${marks.length ? `<section class="card" id="marks-section">
@@ -206,11 +232,12 @@ export function renderReport(root, r, ctx = {}) {
         <summary>Slik måles det</summary>
         <div class="method">
           <p>Appen bruker telefonens GPS og bevegelsessensorer. Alt beregnes på telefonen, og ingenting sendes noe sted.</p>
-          <p><strong>Bremsing og akselerasjon</strong> beregnes fra hvordan GPS-farten endrer seg fra sekund til sekund. Over ${(2.5 * (ctx.factor || 1)).toFixed(1).replace('.', ',')} m/s² regnes det som brått, og over ${(3.5 * (ctx.factor || 1)).toFixed(1).replace('.', ',')} m/s² som kraftig.</p>
+          <p><strong>Grenser denne rapporten bruker</strong> (etter følsomhet${ctx.customThresholds ? ' og egne terskler' : ''}): bremsing ${thTxt(r, 'brake')}, akselerasjon ${thTxt(r, 'accel')}, sving ${thTxt(r, 'turn')}.</p>
           <p><strong>Svinger</strong> måles som sidekraft: fart ganger hvor raskt bilen roterer. ${r.source === 'gyro'
             ? 'Rotasjonen kom fra gyroskopet, projisert på tyngdekraften, så det spiller ingen rolle hvordan telefonen står i holderen.'
             : 'Gyroskopdata manglet på denne turen, så rotasjonen ble beregnet fra GPS-retningen i stedet. Det er grovere og kan gå glipp av korte svinger.'}</p>
-          <p><strong>Jevn fart</strong> ser på hvor mye farten varierer mens bilen er i bevegelse.</p>
+          <p><strong>Jevn fart</strong> ser på hvor mye farten varierer mens bilen er i bevegelse.${r.cityAware ? ' De siste og første 10 sekundene rundt hvert stopp telles ikke med, så kryss og lyskryss ikke trekker ned.' : ''}</p>
+          <p><strong>Holder-sjekk:</strong> ${r.holder && r.holder.episodes.length ? `telefonen ble flyttet ${r.holder.episodes.length === 1 ? 'én gang' : r.holder.episodes.length + ' ganger'} underveis.` : 'telefonen sto stødig hele turen.'} Måles ved at tyngdekraftens retning i telefonen endrer seg brått.</p>
           <p><strong>Hendelser per 10 km</strong> gjør det lettere å sammenligne korte og lange turer.</p>
           <p><strong>Motor:</strong> ${r.alongSource === 'acc'
             ? `v3 – bremsing og gass ble målt med akselerometeret (100 ganger i sekundet) og kalibrert mot GPS (samsvar ${Math.round((r.accFit ? r.accFit.corr : 0) * 100)} %). Det fanger korte, harde bremser som GPS glatter bort.`
@@ -237,20 +264,46 @@ export function renderReport(root, r, ctx = {}) {
 
   const smooth = prefersReduced() ? 'auto' : 'smooth';
   const select = n => {
-    root.querySelectorAll('.marker').forEach(m => m.classList.toggle('active', m.dataset.n === n));
+    root.querySelectorAll('.marker, .lm-ev').forEach(m => m.classList.toggle('active', m.dataset.n === n));
     root.querySelectorAll('.event').forEach(b => b.classList.toggle('active', b.dataset.n === n));
   };
-  // Hendelse i listen → marker på kartet
-  root.querySelectorAll('.event').forEach(btn => btn.addEventListener('click', () => {
-    select(btn.dataset.n);
+  const showOnMap = n => {
+    select(n);
+    const e = r.events.find(x => String(x.n) === String(n));
     root.querySelector('#map-section').scrollIntoView({ behavior: smooth, block: 'start' });
-  }));
+    if (leafletMap && e) leafletMap.setView([e.lat, e.lon], Math.max(leafletMap.getZoom(), 16), { animate: !prefersReduced() });
+  };
+  const openDetail = (n, open) => {
+    const panel = root.querySelector(`#ev-detail-${n}`), btn = root.querySelector(`.event[data-n="${n}"]`);
+    if (!panel) return;
+    const willOpen = open === undefined ? panel.hidden : open;
+    if (willOpen && !panel.innerHTML) {
+      const e = r.events.find(x => String(x.n) === String(n));
+      panel.innerHTML = eventDetail(r, e, { marks, names, sp });
+      panel.querySelector('.btn-show-map').addEventListener('click', () => showOnMap(n));
+    }
+    panel.hidden = !willOpen;
+    btn.setAttribute('aria-expanded', String(willOpen));
+    btn.classList.toggle('open', willOpen);
+  };
+  // Hendelse i listen → åpne detaljer og marker på kartet
+  root.querySelectorAll('.event').forEach(btn => {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', `ev-detail-${btn.dataset.n}`);
+    btn.addEventListener('click', () => { select(btn.dataset.n); openDetail(btn.dataset.n); });
+  });
   // Marker på kartet → hendelse i listen
-  root.querySelectorAll('.marker').forEach(m => m.addEventListener('click', () => {
-    select(m.dataset.n);
-    const row = root.querySelector(`.event[data-n="${m.dataset.n}"]`);
+  const fromMap = n => {
+    select(n);
+    openDetail(n, true);
+    const row = root.querySelector(`.event[data-n="${n}"]`);
     if (row) row.scrollIntoView({ behavior: smooth, block: 'center' });
-  }));
+  };
+  root.querySelectorAll('.marker').forEach(m => m.addEventListener('click', () => fromMap(m.dataset.n)));
+  if (useReal) initRealMap(root, r, marks, sp, fromMap);
+  root.querySelector('#btn-print').addEventListener('click', () => window.print());
+  const driverSel = root.querySelector('#drive-driver');
+  if (driverSel && onDriverChange) driverSel.addEventListener('change', () => onDriverChange(driverSel.value));
 
   if (onNoteChange) {
     const ta = root.querySelector('#drive-note'), status = root.querySelector('#note-status');
@@ -275,7 +328,125 @@ export function renderReport(root, r, ctx = {}) {
   if (onDelete) root.querySelector('#btn-delete-drive').addEventListener('click', onDelete);
   const fetchBtn = root.querySelector('#btn-fetch');
   if (fetchBtn && onFetch) fetchBtn.addEventListener('click', onFetch);
-  if (onShare) root.querySelector('#btn-share').addEventListener('click', () => onShare(buildSummary(r, { subtitle, note, marks: rawMarks, enrich })));
+  if (onShare) root.querySelector('#btn-share').addEventListener('click', () => onShare(buildSummary(r, { subtitle, note, marks: rawMarks, enrich, driver })));
+}
+
+function thTxt(r, k) {
+  const t = r.thresholds && r.thresholds[k];
+  if (!t) return '–';
+  const f = v => (v / 9.81).toFixed(2).replace('.', ',');
+  return `brå over ${f(t.brisk)} g, kraftig over ${f(t.harsh)} g`;
+}
+
+/* Ekte kart (Leaflet + Kartverket). Ruten tegnes som vei med gul midtlinje, hendelser som nummer. */
+function initRealMap(root, r, marks, sp, onEventTap) {
+  const L = window.L;
+  const el = root.querySelector('#lmap');
+  const mobile = L.Browser.mobile;
+  const map = L.map(el, {
+    zoomControl: true, attributionControl: true, scrollWheelZoom: false,
+    dragging: !mobile, tap: false, zoomSnap: 0.5
+  });
+  leafletMap = map;
+  L.tileLayer(TILE_URL, { maxZoom: 18, minZoom: 5, crossOrigin: true,
+    attribution: '© <a href="https://www.kartverket.no/" target="_blank" rel="noopener">Kartverket</a>' }).addTo(map);
+  const ll = r.points.map(p => [p.lat, p.lon]);
+  L.polyline(ll, { className: 'route-edge', weight: 11, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(map);
+  L.polyline(ll, { className: 'route-asphalt', weight: 7, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(map);
+  L.polyline(ll, { className: 'route-lane', weight: 1.5, dashArray: '8 7', interactive: false }).addTo(map);
+  if (sp) {
+    let run = [];
+    const flush = () => { if (run.length > 1) L.polyline(run, { className: 'route-over', weight: 7, lineCap: 'round', interactive: false }).addTo(map); run = []; };
+    r.points.forEach((p, i) => { if (Number.isFinite(sp.limits[i]) && p.kmh - sp.limits[i] >= 4) run.push([p.lat, p.lon]); else flush(); });
+    flush();
+  }
+  const icon = (html, cls, size) => L.divIcon({ html, className: cls, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+  const first = r.points[0], last = r.points[r.points.length - 1];
+  L.marker([first.lat, first.lon], { icon: icon('<span>Start</span>', 'lm-start', 22), interactive: false, keyboard: false }).addTo(map);
+  L.marker([last.lat, last.lon], { icon: icon('<span>Slutt</span>', 'lm-end', 22), interactive: false, keyboard: false }).addTo(map);
+  for (const m of marks) if (Number.isFinite(m.lat)) {
+    L.marker([m.lat, m.lon], { icon: icon(`<span>${m.letter}</span>`, 'lm-mark', 28), interactive: false, keyboard: false }).addTo(map);
+  }
+  for (const e of r.events) {
+    const mk = L.marker([e.lat, e.lon], { icon: icon(`<span class="lm-ev lm-${KIND_CSS[e.kind]}" data-n="${e.n}">${e.n}</span>`, 'lm-ev-wrap', 36),
+      title: `${e.n}. ${eventLabel(e)}`, riseOnHover: true, zIndexOffset: 1000 }).addTo(map);
+    mk.on('click', () => onEventTap(String(e.n)));
+  }
+  map.fitBounds(L.latLngBounds(ll), { padding: [28, 28] });
+  // «Utforsk kartet»: fullskjerm med flytting (på mobil er dra av ellers, så siden kan rulles)
+  const wrap = root.querySelector('#lmap-wrap'), btn = root.querySelector('#btn-map-expand');
+  btn.addEventListener('click', () => {
+    const on = !wrap.classList.contains('expanded');
+    wrap.classList.toggle('expanded', on);
+    document.body.classList.toggle('map-open', on);
+    btn.textContent = on ? 'Lukk kartet' : 'Utforsk kartet';
+    if (on || !mobile) map.dragging.enable(); else map.dragging.disable();
+    setTimeout(() => { if (leafletMap === map) map.invalidateSize(); }, 50);
+  });
+  setTimeout(() => { if (leafletMap === map) map.invalidateSize(); }, 100);
+}
+
+/* Detaljer for én hendelse: fart og kraft ±20 s, før/etter, terskler, gate, fartsgrense og nære merker. */
+export function eventDetail(r, e, { marks = [], names = { events: {} }, sp = null } = {}) {
+  if (!e) return '';
+  const pts = r.points, G = 9.81;
+  const idx = []; for (let i = 0; i < pts.length; i++) if (Math.abs(pts[i].t - e.t) <= 20) idx.push(i);
+  const series = r.series || {};
+  const force = i => {
+    if (e.kind === 'turn') return Math.abs((series.lat || [])[i] || 0) / G;
+    const a = (series.along || [])[i] || 0;
+    return (e.kind === 'brake' ? -a : a) / G;
+  };
+  const near = t => { let best = null; for (const i of idx) if (!best || Math.abs(pts[i].t - t) < Math.abs(pts[best].t - t)) best = i; return best; };
+  const iBefore = near(e.t - 5), iAfter = near(e.t + 5), iPeak = near(e.t);
+  const vB = iBefore !== null ? pts[iBefore].kmh : NaN, vA = iAfter !== null ? pts[iAfter].kmh : NaN, vP = iPeak !== null ? pts[iPeak].kmh : NaN;
+  const th = r.thresholds && r.thresholds[e.kind];
+  const start = r.points[e.i0] ? r.points[e.i0].t : e.t;
+  const dur = Number.isFinite(e.tEnd) ? Math.max(1, Math.round(e.tEnd - (r.t0 || 0) - start + 1)) : 1;
+  const limit = sp && iPeak !== null && Number.isFinite(sp.limits[iPeak]) ? sp.limits[iPeak] : null;
+  const nearMarks = marks.filter(m => Math.abs(m.t - e.t) <= 20);
+  const ms2 = (e.g * G).toFixed(1).replace('.', ',');
+  const what = e.kind === 'brake'
+    ? `Farten falt fra ${kmh(vB)} til ${kmh(vA)} på ti sekunder. Kraftigste nedbremsing var ${ms2} m/s² (${gee(e.g)}).`
+    : e.kind === 'accel'
+      ? `Farten økte fra ${kmh(vB)} til ${kmh(vA)} på ti sekunder. Kraftigste akselerasjon var ${ms2} m/s² (${gee(e.g)}).`
+      : `Sidekraften var ${ms2} m/s² (${gee(e.g)}) i ${kmh(vP)}. Det kjennes som å bli presset ut mot siden i setet.`;
+  const advice = e.kind === 'brake' ? 'Se lenger fram og slipp gassen tidligere, så kan bremsen tas gradvis.'
+    : e.kind === 'accel' ? 'Trykk gassen gradvis inn, og la farten bygge seg opp over flere sekunder.'
+    : 'Ta ned farten før svingen, og hold jevn fart gjennom den.';
+  // minigraf
+  const W = 600, H = 190, pl = 40, pr = 62, pt = 14, pb = 28;
+  const vMax = Math.max(30, ...idx.map(i => pts[i].kmh)) * 1.1;
+  const gMax = Math.max(0.5, th ? th.harsh / G * 1.2 : 0.5, ...idx.map(force));
+  const X = t => pl + (t - (e.t - 20)) / 40 * (W - pl - pr);
+  const Yv = v => pt + (1 - v / vMax) * (H - pt - pb);
+  const Yg = g => pt + (1 - Math.max(0, g) / gMax) * (H - pt - pb);
+  const vLine = idx.map((i, k) => `${k ? 'L' : 'M'}${X(pts[i].t).toFixed(1)} ${Yv(pts[i].kmh).toFixed(1)}`).join('');
+  const gLine = idx.map((i, k) => `${k ? 'L' : 'M'}${X(pts[i].t).toFixed(1)} ${Yg(force(i)).toFixed(1)}`).join('');
+  const thLines = th ? [['brisk', 'brå'], ['harsh', 'kraftig']].map(([k, lbl]) => `<line x1="${pl}" x2="${W - pr}" y1="${Yg(th[k] / G).toFixed(1)}" y2="${Yg(th[k] / G).toFixed(1)}" class="th-line"/><text x="${W - pr + 4}" y="${(Yg(th[k] / G) + 4).toFixed(1)}" class="axis">${lbl}</text>`).join('') : '';
+  const ticks = [-20, -10, 0, 10, 20].map(s => `<text x="${X(e.t + s).toFixed(1)}" y="${H - 8}" text-anchor="middle" class="axis">${s > 0 ? '+' : ''}${s} s</text>`).join('');
+  const chart = idx.length > 2 ? `<svg class="chart ev-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Fart og kraft rundt hendelse ${e.n}">
+    <line x1="${X(e.t).toFixed(1)}" x2="${X(e.t).toFixed(1)}" y1="${pt}" y2="${H - pb}" class="ev-now"/>
+    ${thLines}
+    <path d="${vLine}" fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-dasharray="1 0"/>
+    <path d="${gLine}" fill="none" stroke="var(--${KIND_CSS[e.kind]})" stroke-width="3" class="g-line"/>
+    <text x="${pl - 6}" y="${pt + 4}" text-anchor="end" class="axis">${n0(vMax)}</text><text x="${pl - 6}" y="${H - pb}" text-anchor="end" class="axis">0</text>
+    <text x="${W - pr + 4}" y="${pt + 4}" class="axis">${gMax.toFixed(1).replace('.', ',')} g</text>
+    ${ticks}
+  </svg>
+  <p class="ev-legend muted small"><span class="dot line" style="background:var(--muted)"></span>Fart (km/t) <span class="dot line" style="background:var(--${KIND_CSS[e.kind]})"></span>${e.kind === 'turn' ? 'Sidekraft' : e.kind === 'brake' ? 'Nedbremsing' : 'Akselerasjon'} (g)</p>` : '';
+  return `${chart}
+    <p>${what}</p>
+    <dl class="stats ev-stats">
+      <div><dt>Varighet over grensen</dt><dd>${dur} s</dd></div>
+      <div><dt>Styrke</dt><dd>${gee(e.g)} · ${gWord(e.g)}</dd></div>
+      ${th ? `<div><dt>Grense brå / kraftig</dt><dd>${(th.brisk / G).toFixed(2).replace('.', ',')} / ${(th.harsh / G).toFixed(2).replace('.', ',')} g</dd></div>` : ''}
+      ${limit ? `<div><dt>Fartsgrense her</dt><dd>${limit} km/t</dd></div>` : ''}
+      ${names.events && names.events[e.n] ? `<div><dt>Sted</dt><dd>${esc(names.events[e.n])}</dd></div>` : ''}
+    </dl>
+    ${nearMarks.length ? `<p class="ev-marks">${nearMarks.map(m => `Ledsager merket <strong>${m.letter}</strong> ${Math.abs(Math.round(m.t - e.t))} s ${m.t >= e.t ? 'etter' : 'før'}${m.note ? `: «${esc(m.note)}»` : '.'}`).join(' ')}</p>` : ''}
+    <p class="ev-advice"><strong>Tips:</strong> ${advice}</p>
+    <button type="button" class="btn secondary btn-show-map">Vis i kartet</button>`;
 }
 
 function delta(now, before, words = false) {
@@ -456,8 +627,25 @@ function nearest(pts, t) {
   return pts[lo];
 }
 
+/* Trend per kategori (fire linjer). results: eldste først. */
+export function categoryTrendChart(results) {
+  if (results.length < 2) return '';
+  const W = 600, H = 230, pl = 40, pr = 16, pt = 16, pb = 30;
+  const X = i => pl + (i / (results.length - 1)) * (W - pl - pr);
+  const Y = v => pt + (1 - v / 100) * (H - pt - pb);
+  const cats = [['brake', 'var(--brake)'], ['accel', 'var(--accel)'], ['turn', 'var(--turn)'], ['smooth', 'var(--good)']];
+  const lines = cats.map(([k, c]) => `<path d="${results.map((r, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(r.scores[k]).toFixed(1)}`).join('')}" fill="none" stroke="${c}" stroke-width="3" stroke-linejoin="round"/>`).join('');
+  return `<svg class="chart trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poeng per kategori over ${results.length} turer">
+    ${[50, 75, 90].map(l => `<line x1="${pl}" x2="${W - pr}" y1="${Y(l).toFixed(1)}" y2="${Y(l).toFixed(1)}" class="grid"/><text x="${pl - 6}" y="${(Y(l) + 4).toFixed(1)}" text-anchor="end" class="axis big">${l}</text>`).join('')}
+    ${lines}
+    <text x="${pl}" y="${H - 6}" class="axis big">Eldste</text>
+    <text x="${W - pr}" y="${H - 6}" text-anchor="end" class="axis big">Nyeste</text>
+  </svg>
+  <ul class="legend">${cats.map(([k, c]) => `<li><span class="dot line" style="background:${c}"></span>${CATS[k]}</li>`).join('')}</ul>`;
+}
+
 /* Liten trendgraf på hjemskjermen */
-export function trendChart(scores) {
+export function trendChart(scores, goal = null) {
   if (scores.length < 2) return '';
   const W = 600, H = 230, pl = 40, pr = 16, pt = 16, pb = 30;
   const X = i => pl + (i / (scores.length - 1)) * (W - pl - pr);
@@ -466,6 +654,7 @@ export function trendChart(scores) {
   const dots = scores.map((s, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(s).toFixed(1)}" r="7" fill="${s >= 90 ? 'var(--good)' : s >= 75 ? 'var(--turn)' : 'var(--brake)'}" stroke="var(--surface)" stroke-width="2"/>`).join('');
   return `<svg class="chart trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poengtrend over ${scores.length} turer">
     ${[50, 75, 90].map(l => `<line x1="${pl}" x2="${W - pr}" y1="${Y(l).toFixed(1)}" y2="${Y(l).toFixed(1)}" class="grid"/><text x="${pl - 6}" y="${(Y(l) + 4).toFixed(1)}" text-anchor="end" class="axis big">${l}</text>`).join('')}
+    ${Number.isFinite(goal) ? `<line x1="${pl}" x2="${W - pr}" y1="${Y(goal).toFixed(1)}" y2="${Y(goal).toFixed(1)}" class="goal-line"/><text x="${W - pr}" y="${(Y(goal) - 6).toFixed(1)}" text-anchor="end" class="axis big goal-text">Mål ${goal}</text>` : ''}
     <path d="${line}" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linejoin="round"/>
     ${dots}
     <text x="${pl}" y="${H - 6}" class="axis big">Eldste</text>

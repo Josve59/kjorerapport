@@ -15,10 +15,15 @@ export const SENSITIVITY = {
   streng: { label: 'Streng', factor: 0.85 }
 };
 
-function scaleTH(factor) {
+function scaleTH(factor, base = TH) {
   const f = Number.isFinite(factor) && factor > 0 ? factor : 1;
-  const s = o => ({ brisk: o.brisk * f, harsh: o.harsh * f });
-  return { brake: s(TH.brake), accel: s(TH.accel), turn: s(TH.turn) };
+  const pick = k => {
+    const o = base && base[k] ? base[k] : TH[k];
+    const brisk = Number.isFinite(o.brisk) && o.brisk > 0 ? o.brisk : TH[k].brisk;
+    const harsh = Number.isFinite(o.harsh) && o.harsh > brisk ? o.harsh : Math.max(TH[k].harsh, brisk + 0.1);
+    return { brisk: brisk * f, harsh: harsh * f };
+  };
+  return { brake: pick('brake'), accel: pick('accel'), turn: pick('turn') };
 }
 
 function hav(a, b) {
@@ -88,6 +93,46 @@ function yawSeries(input, L, vs) {
     if (Number.isFinite(a) && Number.isFinite(c) && dt > 0 && dt < 6) raw[i] = (c - a) / dt * Math.PI / 180;
   }
   return { source: 'gps', yaw: smoothBy(L.map(p => p.t), raw, 1) };
+}
+
+/* Holder-sjekk (v0.4.0): ser etter at telefonen har flyttet seg i holderen underveis.
+   Tyngdekraftretningen i telefonens ramme tas som median over 5 s-vinduer. Et sprang over 12° mellom
+   to vinduer betyr at telefonen ble flyttet (rystelser og svinger gir under 5°). Første og siste 30 s
+   ignoreres (telefonen settes i og tas ut). For hver episode måles om retningen etterpå er en annen
+   enn før (varig forskyvning), som betyr at holderen ikke satt som før. */
+export function holderCheck(grav, tStart, tEnd, { win = 5, jumpDeg = 12, edge = 30 } = {}) {
+  const g = (grav || []).filter(v => Number.isFinite(v.t) && Number.isFinite(v.x)).slice().sort((a, b) => a.t - b.t);
+  const unit = v => { const m = Math.hypot(v.x, v.y, v.z) || 1; return { x: v.x / m, y: v.y / m, z: v.z / m }; };
+  const ang = (a, b) => Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z))) * 180 / Math.PI;
+  const wins = [];
+  let i = 0;
+  while (i < g.length) {
+    const t0 = g[i].t, w = [];
+    while (i < g.length && g[i].t < t0 + win) { w.push(unit(g[i])); i++; }
+    if (w.length < 3) continue;
+    const med = k => { const a = w.map(v => v[k]).sort((p, q) => p - q); return a[Math.floor(a.length / 2)]; };
+    wins.push({ t: t0, v: unit({ x: med('x'), y: med('y'), z: med('z') }) });
+  }
+  const inside = w => w.t >= tStart + edge && w.t <= tEnd - edge;
+  const jumps = [];
+  for (let k = 1; k < wins.length; k++) {
+    if (!inside(wins[k]) || !inside(wins[k - 1]) || wins[k].t - wins[k - 1].t > 3 * win) continue;
+    const a = ang(wins[k].v, wins[k - 1].v);
+    if (a > jumpDeg) jumps.push({ t: wins[k].t, a });
+  }
+  const episodes = [];
+  for (const j of jumps) {
+    const last = episodes[episodes.length - 1];
+    if (last && j.t - last.to <= 15) { last.to = j.t + win; last.maxJump = Math.max(last.maxJump, j.a); }
+    else episodes.push({ from: j.t - win, to: j.t + win, maxJump: j.a });
+  }
+  const meanDir = ws => { const s = { x: 0, y: 0, z: 0 }; for (const w of ws) { s.x += w.v.x; s.y += w.v.y; s.z += w.v.z; } return ws.length ? unit(s) : null; };
+  for (const e of episodes) {
+    const before = meanDir(wins.filter(w => w.t >= e.from - 30 && w.t < e.from));
+    const after = meanDir(wins.filter(w => w.t > e.to && w.t <= e.to + 30));
+    e.shift = before && after ? ang(before, after) : 0;
+  }
+  return { episodes, stable: episodes.length === 0, permanentShift: episodes.some(e => e.shift > 10) };
 }
 
 /* v3: langsgående akselerasjon fra akselerometeret.
@@ -233,13 +278,32 @@ export function prepareTrack(input) {
 }
 
 export function analyze(input, opts = {}) {
-  const th = scaleTH(opts.factor);
+  const th = scaleTH(opts.factor, opts.th);
   const engine = opts.engine === 'v3' ? 'v3' : 'v1';
   const perKm = !!opts.perKm;
   const { L, vs, along, droppedPoints } = prepareTrack(input);
   const { source, yaw } = yawSeries(input, L, vs);
   const alat = L.map((p, i) => vs[i] * Math.abs(yaw[i]));
-  const accFit = engine === 'v3' ? accAlongSeries(input, L, along) : null;
+  const holder = holderCheck(input.grav, L[0].t, L[L.length - 1].t);
+  let accFit = null;
+  if (engine === 'v3') {
+    // Har telefonen flyttet seg varig, tilpasses kjøreretningen separat før og etter hver forskyvning.
+    const cuts = holder.episodes.filter(e => e.shift > 10).map(e => (e.from + e.to) / 2);
+    if (!cuts.length) accFit = accAlongSeries(input, L, along);
+    else {
+      const bounds = [L[0].t - 1, ...cuts, L[L.length - 1].t + 1];
+      const series = [], corrs = [];
+      let ok = 0;
+      for (let k = 0; k < bounds.length - 1; k++) {
+        const idx = []; for (let i = 0; i < L.length; i++) if (L[i].t >= bounds[k] && L[i].t < bounds[k + 1]) idx.push(i);
+        if (!idx.length) continue;
+        const fit = idx.length >= 60 ? accAlongSeries(input, idx.map(i => L[i]), idx.map(i => along[i])) : null;
+        idx.forEach((i, j) => { series[i] = fit ? fit.series[j] : along[i]; });
+        if (fit) { ok++; corrs.push(fit.corr); }
+      }
+      if (ok) accFit = { series, corr: corrs.reduce((a, b) => a + b, 0) / corrs.length, r2: NaN, segments: bounds.length - 1 };
+    }
+  }
   const alongEv = accFit ? accFit.series : along;
 
   const events = [
@@ -249,15 +313,25 @@ export function analyze(input, opts = {}) {
   ].sort((a, b) => a.t - b.t);
   events.forEach((e, i) => { e.n = i + 1; });
 
-  let dist = 0, moving = 0, maxV = 0, sq = 0, sqN = 0, stops = 0, wasMoving = false;
+  // By-tilpasset «Jevn fart» (valgfritt): ser bort fra 10 s før og etter hvert stopp, så naturlig
+  // nedbremsing til og igangkjøring fra kryss og lyskryss ikke trekker ned.
+  const nearStop = new Array(L.length).fill(false);
+  if (opts.cityAware) {
+    for (let i = 0; i < L.length; i++) if (vs[i] < 0.5) {
+      for (let k = i; k >= 0 && L[i].t - L[k].t <= 10; k--) nearStop[k] = true;
+      for (let k = i; k < L.length && L[k].t - L[i].t <= 10; k++) nearStop[k] = true;
+    }
+  }
+  let dist = 0, moving = 0, maxV = 0, sq = 0, sqN = 0, stops = 0, wasMoving = false, sqAll = 0, sqAllN = 0;
   for (let i = 1; i < L.length; i++) {
     const dt = L[i].t - L[i - 1].t;
     if (dt < 10) dist += hav(L[i - 1], L[i]);
-    if (vs[i] > 1.5) { moving += dt; sq += along[i] ** 2; sqN++; }
+    if (vs[i] > 1.5) { moving += dt; sqAll += along[i] ** 2; sqAllN++; if (!nearStop[i]) { sq += along[i] ** 2; sqN++; } }
     maxV = Math.max(maxV, vs[i]);
     if (vs[i] > 2) wasMoving = true;
     if (wasMoving && vs[i] < 0.5) { stops++; wasMoving = false; }
   }
+  if (sqN < 30) { sq = sqAll; sqN = sqAllN; }   // for lite cruise-data: bruk alt
   const rms = sqN ? Math.sqrt(sq / sqN) : 0;
   const count = (k, lvl) => events.filter(e => e.kind === k && e.level === lvl).length;
   const c = {
@@ -284,8 +358,11 @@ export function analyze(input, opts = {}) {
       maxKmh: maxV * 3.6, avgKmh: moving > 0 ? dist / moving * 3.6 : 0, stops, rms
     },
     counts: c, scores, overall, tips: makeTips(c, scores), source,
-    engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2, corr: accFit.corr } : null, perKm, kmFactor,
-    droppedPoints
+    engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2, corr: accFit.corr, segments: accFit.segments || 1 } : null, perKm, kmFactor,
+    droppedPoints, cityAware: !!opts.cityAware, thresholds: th,
+    holder: { ...holder, episodes: holder.episodes.map(e => ({ ...e, from: e.from - L[0].t, to: e.to - L[0].t })) },
+    // Serier for hendelsesdetalj (m/s², rundet)
+    series: { along: alongEv.map(v => Math.round(v * 100) / 100), lat: alat.map(v => Math.round(v * 100) / 100) }
   };
 }
 
