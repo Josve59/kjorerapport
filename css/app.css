@@ -40,6 +40,7 @@
 :root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
@@ -182,7 +183,7 @@ button { font: inherit; color: inherit; }
 details summary { font-weight: 700; font-size: 1.15rem; cursor: pointer; min-height: 48px; display: flex; align-items: center; list-style: none; }
 details summary::-webkit-details-marker { display: none; }
 details summary::before { content: '›'; display: inline-block; margin-right: 10px; transition: transform 0.2s; font-size: 1.4rem; }
-details[open] summary::before { transform: rotate(90deg); }
+details[open] > summary::before { transform: rotate(90deg); }
 .method p { font-size: 0.97rem; }
 .report-foot { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 16px 8px 8px; }
 
@@ -270,3 +271,96 @@ select { width: 100%; min-height: 52px; font: inherit; padding: 10px 12px; borde
 .method h3 { font-size: 1rem; margin: 12px 0 6px; }
 .diag { margin: 0; padding-left: 20px; font-size: 0.95rem; }
 .diag li { margin-bottom: 4px; word-break: break-word; }
+
+/* ---- v0.4.0 ---- */
+.head-actions { display: flex; gap: 8px; flex: none; }
+/* Ekte kart */
+.lmap-wrap { position: relative; }
+.lmap { height: 380px; border-radius: 10px; overflow: hidden; background: var(--bg); z-index: 0; }
+.lmap-toggle { position: absolute; right: 10px; bottom: 26px; z-index: 500; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.lmap-wrap.expanded { position: fixed; inset: 0; z-index: 2000; background: var(--bg); padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.lmap-wrap.expanded .lmap { height: 100%; border-radius: 0; }
+.lmap-wrap.expanded .lmap-toggle { bottom: calc(26px + env(safe-area-inset-bottom)); }
+body.map-open { overflow: hidden; }
+.route-edge { stroke: var(--road-edge); }
+.route-asphalt { stroke: var(--asphalt); }
+.route-lane { stroke: var(--lane); }
+.route-over { stroke: var(--sign); opacity: 0.85; }
+.leaflet-container { font-family: inherit; }
+.leaflet-control-attribution { font-size: 11px; }
+.leaflet-bar a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
+:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); } }
+.lm-start span, .lm-end span { display: block; width: 22px; height: 22px; font-size: 0; border: 3px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.lm-start span { background: var(--good); border-radius: 50%; }
+.lm-end span { background: var(--road-edge); }
+.lm-mark span { display: grid; place-items: center; width: 24px; height: 24px; margin: 2px; transform: rotate(45deg); background: var(--ink); border: 2px solid var(--surface); border-radius: 4px; }
+.lm-mark span { font-weight: 800; color: var(--surface); font-size: 13px; }
+.lm-ev-wrap { background: none; border: 0; }
+.lm-ev { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff; font-weight: 800; font-size: 16px; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); cursor: pointer; }
+.lm-brake { background: var(--brake); } .lm-accel { background: var(--accel); } .lm-turn { background: var(--turn); }
+.lm-ev.active { outline: 4px solid var(--ink); outline-offset: 1px; }
+.legend .dot.line { width: 18px; height: 5px; border-radius: 3px; }
+/* Hendelsesdetalj */
+.event { position: relative; }
+.ev-chev { flex: none; font-size: 1.5rem; color: var(--muted); transition: transform .2s; margin-left: 4px; }
+.event.open .ev-chev { transform: rotate(90deg); }
+.ev-detail { padding: 6px 4px 14px 50px; }
+.ev-detail p { margin-bottom: 8px; }
+.ev-detail .btn { margin: 4px 0 0; }
+.ev-stats { grid-template-columns: 1fr 1fr; margin: 8px 0; }
+.ev-chart { margin: 4px 0 2px; }
+.ev-now { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.th-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 5 4; }
+.ev-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin: 0 0 8px; }
+.ev-legend .dot { display: inline-block; margin-right: 6px; }
+.ev-marks { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.ev-advice { border-left: 4px solid var(--good); padding-left: 10px; }
+@media (max-width: 420px) { .ev-detail { padding-left: 4px; } }
+/* Førere og mål */
+.chips { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 12px; padding-bottom: 2px; scrollbar-width: none; }
+.chip { flex: none; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 700; cursor: pointer; }
+.chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.driver-pick { display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+.driver-pick select { margin: 0; }
+.driver-row { display: flex; align-items: center; gap: 10px; font-weight: 700; margin-bottom: 10px; }
+.driver-row select { margin: 0; flex: 1; min-height: 48px; }
+.driver-list { list-style: none; padding: 0; margin: 0 0 10px; }
+.driver-list li { display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-bottom: 1px solid var(--line); }
+.danger-link { color: var(--brake); }
+.add-row { display: flex; gap: 8px; }
+.add-row input, .field input { flex: 1; min-height: 52px; font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); }
+.add-row .btn { width: auto; margin: 0; }
+.field { display: flex; flex-direction: column; gap: 6px; font-weight: 700; margin-bottom: 12px; }
+.goal-list { list-style: none; margin: 0; padding: 0; }
+.goal-list li { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; }
+.goal-icon { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; border: 2px solid var(--line); }
+.goal-ok .goal-icon { background: var(--good); border-color: var(--good); color: #fff; }
+.goal-line { stroke: var(--good); stroke-width: 2; stroke-dasharray: 6 5; }
+.goal-text { fill: var(--good); font-weight: 700; }
+.trend-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.trend-head h2 { margin: 0; }
+.mini-seg { display: flex; border: 2px solid var(--line); border-radius: 22px; overflow: hidden; }
+.mini-seg button { min-height: 40px; padding: 0 12px; border: 0; background: none; color: var(--ink); font-weight: 700; cursor: pointer; }
+.mini-seg button.on { background: var(--ink); color: var(--bg); }
+/* Avanserte terskler */
+details.adv { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 4px; }
+details.adv summary { font-size: 1rem; }
+.th-grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px 10px; align-items: center; margin-bottom: 8px; }
+.th-grid label { display: flex; flex-direction: column; gap: 2px; }
+.th-grid input { width: 100%; min-height: 48px; font: inherit; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); }
+/* Utskrift / PDF */
+@media print {
+  :root { --bg: #fff; --surface: #fff; --ink: #111; --muted: #444; --line: #ccc; --asphalt: #3b4146; --road-edge: #2a2f33; --lane: #f2be22;
+    --brake: #c8412b; --accel: #1f5fa8; --turn: #c7741f; --good: #2f7d4f; color-scheme: light; }
+  body { padding: 0; background: #fff; }
+  #app { max-width: none; padding: 0; }
+  .screen:not(#report), .top, .quicknav, .head-actions, .lmap-toggle, .btn, .enrich-status button, .ev-chev, .leaflet-control-zoom, #btn-delete-drive, .ev-detail .btn { display: none !important; }
+  .card { break-inside: avoid; border-color: #ccc; }
+  .lmap { height: 420px; }
+  textarea { border: 0 !important; resize: none; background: none !important; padding: 0 !important; }
+  textarea:placeholder-shown { display: none; }
+  .ev-detail[hidden] { display: none; }
+  .leaflet-tile-pane { filter: none !important; }
+  a { color: inherit; text-decoration: none; }
+}
