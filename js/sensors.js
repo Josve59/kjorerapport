@@ -56,3 +56,12 @@ export function haversine(a, b) {
   const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * k) * Math.cos(b.lat * k) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(s));
 }
+
+/* Oppvarming: før første ferske, nøyaktige posisjon forkastes gamle/unøyaktige fikser (typisk en
+   mobilnett-posisjon fra før GPS-en har låst). Returnerer true hvis fiksen skal forkastes. */
+export function isStaleStartFix(accuracyM, ageMs, locked, maxAcc = 30, maxAgeMs = 5000) {
+  if (locked) return false;
+  if (Number.isFinite(accuracyM) && accuracyM > maxAcc) return true;
+  if (Number.isFinite(ageMs) && ageMs > maxAgeMs) return true;
+  return false;
+}

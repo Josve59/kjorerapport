@@ -2,7 +2,7 @@
    Alle tidsstempler er sekunder siden opptaket startet (performance.now()). */
 
 import { newId, putDrive, putChunk } from './db.js';
-import { RAD, deriveGravity, shouldStore, gyroFromRotationRate, linearFromEvent, gapFromHidden, haversine } from './sensors.js';
+import { RAD, deriveGravity, shouldStore, gyroFromRotationRate, linearFromEvent, gapFromHidden, haversine, isStaleStartFix } from './sensors.js';
 
 const CHECKPOINT_MS = 10000;
 
@@ -165,6 +165,11 @@ export class Recorder {
   handlePosition(pos, tOverride) {
     const c = pos.coords;
     const t = Number.isFinite(tOverride) ? tOverride : this.now();
+    // Oppvarming: gamle eller unøyaktige fikser før første gode posisjon forkastes (ga 416 km/t på første ekte tur).
+    const age = Number.isFinite(pos.timestamp) ? Date.now() - pos.timestamp : NaN;
+    if (!this.replay && isStaleStartFix(c.accuracy, age, this.gpsLocked)) { this.diag.staleStartFixes = (this.diag.staleStartFixes || 0) + 1; this.warmup = true; return; }
+    this.gpsLocked = true;
+    this.warmup = false;
     const sample = {
       t,
       lat: c.latitude,
@@ -272,7 +277,7 @@ export class Recorder {
       gpsFixes: d.gpsFixes, gpsHz: Math.round(d.gpsFixes / sec * 100) / 100,
       gpsMedianAcc: acc.length ? acc[Math.floor(acc.length / 2)] : null,
       wakeLock: d.wakeLock, standalone: d.standalone, replay: d.replay,
-      gaps: this.gaps.length, marks: this.marks.length,
+      gaps: this.gaps.length, marks: this.marks.length, staleStartFixes: d.staleStartFixes || 0,
       userAgent: d.userAgent, appVersion: this.appVersion || null
     };
   }
@@ -284,6 +289,7 @@ export class Recorder {
       distanceM: this.distance,
       acc: this.acc,
       gpsFresh: gpsAge < 5,
+      warmup: !!this.warmup,
       gpsError: this.gpsError || null,
       motionCount: this.motionCount,
       locCount: this.locCount,

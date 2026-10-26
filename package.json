@@ -1,6 +1,6 @@
 {
   "name": "kjorerapport",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "private": true,
   "description": "Kjørerapport – hjemmekjørelærer som tar opp en kjøretur med telefonens sensorer og gir tilbakemelding.",
   "type": "module",

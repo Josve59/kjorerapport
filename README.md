@@ -28,7 +28,7 @@ Node.js 20 or newer is needed (only for the tests, not for the app). Then:
 npm test
 ```
 
-Expected: 32 passing tests. They check that the demo drive gives about 4.2 km, exactly three events (harsh acceleration ≈ 0.40 g at 1:52, harsh braking ≈ 0.47 g at 3:02, harsh turn ≈ 0.49 g at 3:12), an overall score of 82, that sensitivity presets scale the thresholds, and that the GPS fallback for turns works.
+Expected: 33 passing tests. They check that the demo drive gives about 4.2 km, exactly three events (harsh acceleration ≈ 0.40 g at 1:52, harsh braking ≈ 0.47 g at 3:02, harsh turn ≈ 0.49 g at 3:12), an overall score of 82, that sensitivity presets scale the thresholds, and that the GPS fallback for turns works.
 
 ## Running it locally on the Mac
 
@@ -107,6 +107,12 @@ At the end:
 - **Service-worker updates are not applied automatically.** A new version waits until you press «Oppdater nå» on the home screen, so an update can never reload the app in the middle of a drive.
 - **Overpass is self-hosted as one variable-weight file** (plus a Latin-extended file), which covers 400/700/800 and works offline.
 - **Font and icon files are the only third-party assets.** No scripts or styles are loaded from any CDN.
+
+## What's new in 0.3.5
+
+- **v3 is the default engine.** On the first real drive the iPhone delivered full 60 Hz motion data and the accelerometer agreed with GPS (correlation 0,76), while GPS alone missed eight brisk brakes. v1 remains available in settings.
+- **Stale fixes are dropped at the start of a recording.** Until the first fresh, accurate position (accuracy ≤ 30 m and age ≤ 5 s), GPS fixes are ignored, and the recording screen says «GPS: venter på fersk posisjon …». This removes the cause of the 416 km/t glitch at the source; the analysis filter stays as a safety net. The number of dropped start fixes is in the diagnostics.
+- Tests: 33.
 
 ## What's new in 0.3.4
 

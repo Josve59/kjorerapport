@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveGravity, shouldStore, gyroFromRotationRate, linearFromEvent, gapFromHidden, haversine, LP_ALPHA } from '../js/sensors.js';
+import { deriveGravity, shouldStore, gyroFromRotationRate, linearFromEvent, gapFromHidden, haversine, isStaleStartFix, LP_ALPHA } from '../js/sensors.js';
 
 test('tyngdekraft = inkl. − uten når begge finnes', () => {
   const { grav } = deriveGravity({ x: 1, y: 2, z: -9 }, { x: 1, y: 0, z: 0.5 }, null);
@@ -54,4 +54,12 @@ test('hull markeres bare når det er over ett sekund', () => {
 test('haversine', () => {
   const d = haversine({ lat: 63.4305, lon: 10.3951 }, { lat: 63.4395, lon: 10.3951 });
   assert.ok(Math.abs(d - 1001) < 5, `1 km nordover ga ${d}`);
+});
+
+test('gamle eller unøyaktige fikser forkastes bare før første gode posisjon', () => {
+  assert.equal(isStaleStartFix(44, 100, false), true, '44 m før låsing');
+  assert.equal(isStaleStartFix(5, 12000, false), true, '12 s gammel før låsing');
+  assert.equal(isStaleStartFix(5, 100, false), false, 'fersk og nøyaktig');
+  assert.equal(isStaleStartFix(44, 12000, true), false, 'etter låsing slipper alt gjennom (analysen filtrerer)');
+  assert.equal(isStaleStartFix(NaN, NaN, false), false);
 });
