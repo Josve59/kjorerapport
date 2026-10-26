@@ -13,6 +13,7 @@ js/db.js               IndexedDB storage (drives + raw-data chunks) and settings
 js/report.js           the report: speed sign, SVG route map, score bars, tips, speed chart, events
 js/app.js              screens, routing, settings, export, hidden developer option
 js/format.js           Norwegian number, time and date formatting
+js/ui.js               icons, toasts, dialogs, route thumbnails, score badges
 sw.js                  service worker: caches everything so the app works offline
 manifest.webmanifest   PWA manifest
 fonts/                 Overpass (self-hosted, variable weight)
@@ -107,6 +108,16 @@ At the end:
 - **Service-worker updates are not applied automatically.** A new version waits until you press «Oppdater nå» on the home screen, so an update can never reload the app in the middle of a drive.
 - **Overpass is self-hosted as one variable-weight file** (plus a Latin-extended file), which covers 400/700/800 and works offline.
 - **Font and icon files are the only third-party assets.** No scripts or styles are loaded from any CDN.
+
+## What's new in 0.5.0 – design and experience
+
+- **New look.** Sticky app bar with icons on every screen, softer cards with depth, a consistent icon set (`js/ui.js`), subtle screen transitions and growing score bars. Light and dark mode both checked.
+- **Home.** A dark start card with a road motif and a yellow «Start kjøretur» button that greets the selected driver. A «Siste tur» card shows the score sign, key numbers, the change from the previous drive and the most important tip. Summary is a clean 2×2 grid. Drives are grouped by «I dag», «I går», «Denne uken» and month, each with a small route thumbnail and a score badge. Loading shows skeleton rows, and an empty list has a proper empty state. Goals show progress bars.
+- **Report.** Score and a «Kort fortalt» card come first: what went well, what to work on, time over the speed limit and companion marks, in one list. Technical notices (GPS glitches, holder moved, hidden app, sensor details) moved to a «Datakvalitet» card with a status pill; only serious ones (short or interrupted drive) still show next to the score. Print and share are icons in the app bar. The section tabs highlight where you are while scrolling and show counts for events and marks.
+- **Before driving.** Three numbered steps (fest telefonen, gi tilgang, sjekker sensorene) that tick off as they complete. The start button says what it is waiting for («Venter på GPS (34 m) …») and gives a short vibration when ready.
+- **Settings.** Grouped under Vurdering, Førere og mål, Kart og nettjenester, Utseende and Data, with iOS-style switches. Distance-adjusted scoring is now a switch.
+- **Own dialogs and toasts** replace the browser's alert, confirm and prompt boxes.
+- Fixes: the page could become wider than the screen (goal fields), which made phones zoom out; the tab bar no longer interrupts scrolling.
 
 ## What's new in 0.4.0
 

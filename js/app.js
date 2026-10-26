@@ -5,8 +5,9 @@ import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, 
 import { renderReport, trendChart, categoryTrendChart, eventsPer10km } from './report.js';
 import { enrichDrive } from './enrich.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
+import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge } from './ui.js';
 
-export const APP_VERSION = '0.4.0';
+export const APP_VERSION = '0.5.0';
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
@@ -16,9 +17,48 @@ let installPrompt = null;
 let persistState = null;
 
 function show(name) {
-  Object.values(screens).forEach(s => s.hidden = true);
-  screens[name].hidden = false;
+  const target = screens[name];
+  const changed = target.hidden;
+  Object.values(screens).forEach(s => { if (s !== target) s.hidden = true; });
+  target.hidden = false;
+  if (changed) { target.classList.remove('enter'); void target.offsetWidth; target.classList.add('enter'); }
   window.scrollTo(0, 0);
+}
+
+/* Fyller [data-icon]-elementer med SVG-ikoner. */
+export function hydrateIcons(root = document) {
+  root.querySelectorAll('[data-icon]').forEach(el => {
+    if (el.dataset.iconDone) return;
+    el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon, el.classList.contains('icon-btn') ? 24 : 20));
+    el.dataset.iconDone = '1';
+  });
+}
+
+const monthFmt = new Intl.DateTimeFormat('nb-NO', { month: 'long', year: 'numeric' });
+const dayFmt = new Intl.DateTimeFormat('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' });
+const timeFmt = new Intl.DateTimeFormat('nb-NO', { hour: '2-digit', minute: '2-digit' });
+const shortDayFmt = new Intl.DateTimeFormat('nb-NO', { weekday: 'short', day: 'numeric', month: 'short' });
+const SEP = '<span class="sep">·</span>';
+function shortDay(iso) {
+  const d = new Date(iso), now = new Date();
+  const days = Math.floor((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
+  const day = days <= 0 ? 'I dag' : days === 1 ? 'I går' : cap(shortDayFmt.format(d));
+  return `${day}, ${timeFmt.format(d)}`;
+}
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+function groupLabel(iso) {
+  const d = new Date(iso), now = new Date();
+  const days = Math.floor((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
+  if (days <= 0) return 'I dag';
+  if (days === 1) return 'I går';
+  if (days < 7) return 'Denne uken';
+  return cap(monthFmt.format(d));
+}
+function niceDay(iso) {
+  const d = new Date(iso), now = new Date();
+  const days = Math.floor((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
+  const day = days <= 0 ? 'I dag' : days === 1 ? 'I går' : cap(dayFmt.format(d));
+  return `${day} kl. ${timeFmt.format(d)}`;
 }
 
 function vibrate(pattern) {
@@ -80,7 +120,8 @@ async function renderHome() {
   show('home');
   const settings = getSettings();
   const list = $('#drive-list');
-  list.innerHTML = '<li class="muted">Laster …</li>';
+  if (!list.children.length || list.querySelector('.empty')) list.innerHTML = '<li class="skeleton-row"></li><li class="skeleton-row"></li><li class="skeleton-row"></li>';
+  $('#start-hello').textContent = settings.activeDriver ? `Hei, ${settings.activeDriver}!` : 'Klar for en tur?';
   const allDrives = await listDrives();
   for (const d of allDrives) if (d.status === 'recording') { d.status = 'done'; d.interrupted = true; await putDrive(d); }
 
@@ -96,27 +137,63 @@ async function renderHome() {
   } else chips.hidden = true;
   const drives = filter ? allDrives.filter(d => d.driver === filter) : allDrives;
 
-  const items = [];
+  const rows = [];
   const results = [];     // bare ekte opptak – demo og importerte turer holdes utenfor oppsummering og trend
-  let best = null;
+  let best = null, lastReal = null, prevReal = null;
   for (const d of drives) {
     let res = null;
     try { res = await analyzeDrive(d); } catch { /* for lite data */ }
-    if (res && isReal(d)) { results.push(res); if (!best || res.overall > best.overall) best = { ...res, id: d.id }; }
-    const tags = [d.driver && !filter ? d.driver : '', d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : ''].filter(Boolean);
-    items.push(`<li>
-      <button type="button" class="drive" data-id="${d.id}">
-        <span class="drive-main"><strong>${esc(date(d.startedAt))}</strong>
-          <span class="muted">${(res ? [km(res.stats.km), duration(res.stats.duration), ...tags] : ['For lite data til rapport', ...tags]).map(esc).join('<span class="sep">·</span>')}</span>
-          ${d.note ? `<span class="muted small note-snippet">${esc(d.note)}</span>` : ''}</span>
-        ${res ? `<span class="score ${res.overall >= 90 ? 'good' : res.overall >= 75 ? 'mid' : 'bad'}">${res.overall}</span>` : '<span class="score muted">–</span>'}
-      </button>
-    </li>`);
+    if (res && isReal(d)) {
+      results.push(res);
+      if (!best || res.overall > best.overall) best = res;
+      if (!lastReal) lastReal = { d, res };
+      else if (!prevReal && (d.driver || '') === (lastReal.d.driver || '')) prevReal = { d, res };
+    }
+    rows.push({ d, res });
   }
-  list.innerHTML = items.length ? items.join('') : `<li class="empty muted">${filter ? `Ingen turer for ${esc(filter)} enda.` : 'Ingen turer enda. Fest telefonen i holderen, og trykk «Start kjøretur».'}</li>`;
-  list.querySelectorAll('.drive').forEach(b => b.addEventListener('click', () => { location.hash = '#/rapport/' + b.dataset.id; }));
 
-  // Oppsummering
+  // Liste gruppert etter tid
+  let html = '', lastGroup = '';
+  for (const { d, res } of rows) {
+    const g = groupLabel(d.startedAt);
+    if (g !== lastGroup) { html += `<li class="group-head">${esc(g)}</li>`; lastGroup = g; }
+    const tags = [d.driver && !filter ? d.driver : '', d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : ''].filter(Boolean);
+    const meta = res ? [km(res.stats.km), duration(res.stats.duration)] : ['For lite data'];
+    html += `<li>
+      <button type="button" class="drive" data-id="${d.id}">
+        ${routeThumb(res ? res.points : null)}
+        <span class="drive-main"><strong>${esc(shortDay(d.startedAt))}</strong>
+          <span class="muted small">${meta.map(esc).join(SEP)}</span>
+          ${tags.length ? `<span class="tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</span>` : ''}
+          ${d.note ? `<span class="muted small note-snippet">${esc(d.note)}</span>` : ''}</span>
+        ${res ? scoreBadge(res.overall, 44) : '<span class="score muted">–</span>'}
+      </button>
+    </li>`;
+  }
+  list.innerHTML = rows.length ? html : `<li class="empty"><span class="empty-ico">${icon('wheel', 40)}</span><strong>${filter ? `Ingen turer for ${esc(filter)} enda` : 'Ingen turer enda'}</strong><span class="muted small">Første rapport kommer når dere har kjørt en tur.</span></li>`;
+  list.querySelectorAll('.drive').forEach(b => b.addEventListener('click', () => { location.hash = '#/rapport/' + b.dataset.id; }));
+  $('#drive-section').hidden = false;
+
+  // Siste tur
+  const lastCard = $('#last-drive');
+  if (lastReal) {
+    const r = lastReal.res;
+    const diff = prevReal ? r.overall - prevReal.res.overall : null;
+    const tip = r.tips && r.tips[0] ? r.tips[0].text : '';
+    lastCard.innerHTML = `<button type="button" class="card last-card" data-id="${lastReal.d.id}">
+      <span class="last-head"><span class="eyebrow">Siste tur</span><span class="muted small">${esc(shortDay(lastReal.d.startedAt))}</span></span>
+      <span class="last-body">${scoreBadge(r.overall, 76)}
+        <span class="last-text"><strong>${esc(ratingShort(r.overall))}</strong>
+          <span class="muted">${[km(r.stats.km), duration(r.stats.duration), `${r.events.length} ${r.events.length === 1 ? 'hendelse' : 'hendelser'}`].join(SEP)}</span>
+          ${diff !== null ? `<span class="delta-pill ${diff > 0 ? 'up' : diff < 0 ? 'down' : ''}">${diff > 0 ? '▲ ' + diff : diff < 0 ? '▼ ' + -diff : '='} fra forrige</span>` : ''}</span></span>
+      ${tip ? `<span class="last-tip">${icon('info', 18)}<span>${esc(tip)}</span></span>` : ''}
+      <span class="last-cta">Se rapporten ${icon('chev', 18)}</span>
+    </button>`;
+    lastCard.hidden = false;
+    lastCard.querySelector('button').onclick = () => { location.hash = '#/rapport/' + lastReal.d.id; };
+  } else lastCard.hidden = true;
+
+  // Oppsummering (2×2)
   const sum = $('#summary');
   if (results.length) {
     const totalKm = results.reduce((s, r) => s + r.stats.km, 0);
@@ -124,14 +201,13 @@ async function renderHome() {
     const ev10 = totalKm > 0.2 ? results.reduce((s, r) => s + r.events.length, 0) / totalKm * 10 : 0;
     sum.innerHTML = `
       <div class="tile"><span class="tile-val">${results.length}</span><span class="tile-label">${results.length === 1 ? 'tur' : 'turer'}</span></div>
-      <div class="tile"><span class="tile-val">${km(totalKm)}</span><span class="tile-label">til sammen</span></div>
-      <div class="tile"><span class="tile-val">${n0(avg)}</span><span class="tile-label">snittpoeng</span></div>
-      <div class="tile"><span class="tile-val">${best.overall}</span><span class="tile-label">beste tur</span></div>
+      <div class="tile"><span class="tile-val">${km(totalKm)}</span><span class="tile-label">kjørt</span></div>
+      <div class="tile"><span class="tile-val">${n0(avg)}</span><span class="tile-label">snittpoeng · beste ${best.overall}</span></div>
       <div class="tile"><span class="tile-val">${n1(ev10)}</span><span class="tile-label">hendelser per 10 km</span></div>`;
     sum.hidden = false;
   } else sum.hidden = true;
 
-  // Mål: snitt av de tre siste ekte turene
+  // Mål: snitt av de tre siste ekte turene, med fremdriftsstolpe
   const goalCard = $('#goals');
   const gScore = num(settings.goalScore), gEv = num(settings.goalEv10);
   if (results.length && (Number.isFinite(gScore) || Number.isFinite(gEv))) {
@@ -139,10 +215,12 @@ async function renderHome() {
     const lastKm = last.reduce((s, r) => s + r.stats.km, 0);
     const avgScore = last.reduce((s, r) => s + r.overall, 0) / last.length;
     const ev10 = lastKm > 0.2 ? last.reduce((s, r) => s + r.events.length, 0) / lastKm * 10 : 0;
-    const row = (label, ok, txt) => `<li class="${ok ? 'goal-ok' : 'goal-no'}"><span class="goal-icon" aria-hidden="true">${ok ? '✓' : '○'}</span><span><strong>${label}</strong><br><span class="muted small">${txt}</span></span></li>`;
-    goalCard.innerHTML = `<h2>Mål</h2><p class="muted small">Snitt av ${last.length === 1 ? 'siste tur' : `de ${last.length} siste turene`}${filter ? ` for ${esc(filter)}` : ''}.</p><ul class="goal-list">
-      ${Number.isFinite(gScore) ? row(`Poengsum minst ${n0(gScore)}`, avgScore >= gScore, `Nå: ${n0(avgScore)} poeng`) : ''}
-      ${Number.isFinite(gEv) ? row(`Høyst ${n1(gEv)} hendelser per 10 km`, ev10 <= gEv, `Nå: ${n1(ev10)} per 10 km`) : ''}
+    const row = (label, ok, pct, txt) => `<li class="${ok ? 'goal-ok' : 'goal-no'}">
+      <span class="goal-top"><strong>${label}</strong><span class="goal-state">${ok ? icon('check', 18) + 'Nådd' : txt}</span></span>
+      <span class="goal-bar"><span style="width:${Math.max(4, Math.min(100, pct))}%"></span></span></li>`;
+    goalCard.innerHTML = `<h2 class="card-title">${icon('target')}Mål</h2><p class="muted small">Snitt av ${last.length === 1 ? 'siste tur' : `de ${last.length} siste turene`}${filter ? ` for ${esc(filter)}` : ''}.</p><ul class="goal-list">
+      ${Number.isFinite(gScore) ? row(`Poengsum minst ${n0(gScore)}`, avgScore >= gScore, avgScore / gScore * 100, `${n0(avgScore)} nå`) : ''}
+      ${Number.isFinite(gEv) ? row(`Høyst ${n1(gEv)} hendelser per 10 km`, ev10 <= gEv, ev10 <= gEv ? 100 : gEv / Math.max(ev10, 0.01) * 100, `${n1(ev10)} nå`) : ''}
     </ul>`;
     goalCard.hidden = false;
   } else goalCard.hidden = true;
@@ -150,17 +228,23 @@ async function renderHome() {
   // Trend: samlet eller per kategori
   const chrono = results.slice().reverse();
   const mode = settings.trendMode === 'cats' ? 'cats' : 'total';
-  $('#trend').innerHTML = chrono.length >= 2 ? `<div class="trend-head"><h2>Utvikling</h2>
+  $('#trend').innerHTML = chrono.length >= 2 ? `<div class="trend-head"><h2 class="card-title">${icon('chart')}Utvikling</h2>
       <div class="mini-seg" role="group" aria-label="Vis">
         <button type="button" data-m="total" class="${mode === 'total' ? 'on' : ''}" aria-pressed="${mode === 'total'}">Samlet</button>
         <button type="button" data-m="cats" class="${mode === 'cats' ? 'on' : ''}" aria-pressed="${mode === 'cats'}">Kategorier</button>
       </div></div>
-      <p class="muted small">Bare ekte opptak telles med her.</p>
       ${mode === 'cats' ? categoryTrendChart(chrono) : trendChart(chrono.map(r => r.overall), Number.isFinite(gScore) ? gScore : null)}` : '';
   $('#trend').querySelectorAll('.mini-seg button').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), trendMode: b.dataset.m }); renderHome(); });
   $('#howto').hidden = allDrives.length > 0;
   $('#update-banner').hidden = !swUpdateReady;
   renderInstallHint();
+}
+
+function ratingShort(score) {
+  if (score >= 90) return 'Rolig og trygg kjøring';
+  if (score >= 75) return 'Bra, noen ting å jobbe med';
+  if (score >= 55) return 'Ujevn kjøring';
+  return 'Mye brå kjøring';
 }
 
 function renderInstallHint() {
@@ -189,9 +273,14 @@ function renderPrecheck() {
   const btnAnyway = $('#btn-start-anyway');
   const gps = $('#check-gps'), mot = $('#check-motion');
   btnStart.disabled = true;
+  btnStart.textContent = 'Venter på tilgang';
   btnAnyway.hidden = true;
   btnPerm.hidden = false;
   btnPerm.disabled = false;
+  btnPerm.textContent = 'Gi tilgang';
+  $('#step-perm').dataset.state = 'active';
+  $('#step-check').dataset.state = 'todo';
+  $('#perm-text').textContent = 'Appen trenger posisjon og bevegelse. Alt lagres bare på telefonen.';
   setCheck(gps, null, 'Venter på tilgang');
   setCheck(mot, null, 'Venter på tilgang');
   const hold = $('#check-holder');
@@ -202,6 +291,7 @@ function renderPrecheck() {
 
   btnPerm.onclick = async () => {
     btnPerm.disabled = true;
+    btnPerm.textContent = 'Venter på svar …';
     const motion = await requestMotionPermission();
     if (motion === 'denied') setCheck(mot, false, 'Tilgang avslått. Slå på «Bevegelse og retning» i Safari-innstillingene.');
     else if (motion === 'unsupported') setCheck(mot, false, 'Ingen bevegelsessensorer på denne enheten');
@@ -213,6 +303,10 @@ function renderPrecheck() {
       setCheck(gps, false, err.code === 1 ? 'Posisjonstilgang avslått. Tillat posisjon for denne appen i Innstillinger.' : 'Fikk ikke posisjon. Gå ut i friluft og prøv igjen.');
     }
     btnPerm.hidden = true;
+    $('#step-perm').dataset.state = 'done';
+    $('#perm-text').textContent = 'Tilgang gitt.';
+    $('#step-check').dataset.state = 'active';
+    btnStart.textContent = 'Venter på GPS …';
     const since = performance.now();
     stopPrecheck = startPrecheck(st => {
       const waited = (performance.now() - since) / 1000;
@@ -222,12 +316,18 @@ function renderPrecheck() {
       if (st.steady === null) setCheck(hold, null, 'Venter på bevegelsesdata');
       else setCheck(hold, st.steady, st.steady ? 'Telefonen står stødig' : 'Telefonen beveger seg – fest den i holderen og slipp den');
       btnStart.disabled = !(st.gpsOk && st.motionOk);
+      btnStart.textContent = !btnStart.disabled ? 'Start opptak'
+        : !st.motionOk ? 'Venter på bevegelsesdata …'
+        : Number.isFinite(st.acc) ? `Venter på GPS (${n0(st.acc)} m) …` : 'Venter på GPS …';
+      $('#step-check').dataset.state = btnStart.disabled ? 'active' : 'done';
+      if (!btnStart.disabled && !btnStart.dataset.buzzed) { vibrate(30); btnStart.dataset.buzzed = '1'; }
       // Nødutgang: etter 20 s venting med brukbar GPS (≤ 40 m) kan man starte likevel.
       const anyway = !st.gpsOk && st.motionOk && Number.isFinite(st.acc) && st.acc <= 40 && waited > 20;
       btnAnyway.hidden = !anyway;
       if (anyway) btnAnyway.textContent = `Start likevel (${n0(st.acc)} m nøyaktighet)`;
     });
   };
+  delete btnStart.dataset.buzzed;
   btnStart.onclick = () => startRecording();
   btnAnyway.onclick = () => startRecording();
 }
@@ -238,9 +338,9 @@ function renderDriverPicker() {
   const sel = $('#driver-select');
   const drivers = s.drivers || [];
   sel.innerHTML = `<option value="">Ikke valgt</option>${drivers.map(d => `<option value="${esc(d)}" ${d === s.activeDriver ? 'selected' : ''}>${esc(d)}</option>`).join('')}<option value="__new">Legg til fører …</option>`;
-  sel.onchange = () => {
+  sel.onchange = async () => {
     if (sel.value === '__new') {
-      const name = (prompt('Navn på fører:') || '').trim().slice(0, 40);
+      const name = ((await promptDialog({ title: 'Ny fører', placeholder: 'Navn', ok: 'Legg til', maxLength: 40 })) || '').trim().slice(0, 40);
       if (name) {
         const list = [...new Set([...(getSettings().drivers || []), name])];
         saveSettings({ ...getSettings(), drivers: list, activeDriver: name });
@@ -281,7 +381,9 @@ async function startRecording(replay = null) {
       else if (!st.gpsFresh) { gps.textContent = 'GPS: venter …'; gps.dataset.state = 'wait'; }
       else { gps.textContent = `GPS: ${n0(st.acc)} m`; gps.dataset.state = st.acc <= 20 ? 'ok' : 'wait'; }
       saved.textContent = st.lastCheckpoint === null ? 'Lagrer første bit om litt' : `Sist lagret for ${n0(st.elapsed - st.lastCheckpoint)} s siden · ${st.locCount} GPS-punkter`;
-      markCount.textContent = st.marks ? `${st.marks} ${st.marks === 1 ? 'merke' : 'merker'}` : '';
+      const pill = $('#rec-marks-pill');
+      pill.hidden = !st.marks;
+      pill.textContent = st.marks ? `${st.marks} ${st.marks === 1 ? 'merke' : 'merker'}` : '';
       if (st.returnedFromGap) gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`;
       const msgs = [];
       if (st.wakeLockFailed) msgs.push('Sett Autolås til Aldri mens du kjører.');
@@ -293,7 +395,7 @@ async function startRecording(replay = null) {
     await recorder.start();
     vibrate(80);
   } catch (err) {
-    alert('Kunne ikke starte opptak: ' + err.message);
+    infoDialog({ title: 'Kunne ikke starte opptaket', text: err.message });
     location.hash = '#/';
   }
 }
@@ -343,8 +445,8 @@ async function shareText(text) {
   if (navigator.share) {
     try { await navigator.share({ title: 'Kjørerapport', text }); return; } catch { /* avbrutt */ }
   }
-  try { await navigator.clipboard.writeText(text); alert('Oppsummeringen er kopiert. Lim den inn i en melding eller e-post.'); }
-  catch { prompt('Kopier teksten:', text); }
+  try { await navigator.clipboard.writeText(text); toast('Oppsummeringen er kopiert. Lim den inn i en melding.', { type: 'ok' }); }
+  catch { infoDialog({ title: 'Kunne ikke dele', text: 'Merk teksten i rapporten og kopier den manuelt.' }); }
 }
 
 async function renderDriveReport(id, { keepScroll = false } = {}) {
@@ -385,7 +487,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       onMarkNote: async (i, text) => { const d = await getDrive(id); if (d && d.marks && d.marks[i]) { d.marks[i].note = text; await putDrive(d); } },
       onNoteChange: async text => { await updateDrive(id, { note: text }); },
       onShare: shareText,
-      onDelete: async () => { if (confirm('Slette denne turen? Dette kan ikke angres.')) { await deleteDrive(id); location.hash = '#/'; } }
+      onDelete: async () => { if (await confirmDialog({ title: 'Slette turen?', text: 'Turen og rådataene slettes fra telefonen. Dette kan ikke angres.', ok: 'Slett', danger: true })) { await deleteDrive(id); toast('Turen er slettet.', { type: 'ok' }); location.hash = '#/'; } }
     });
     let enriching = false;
     const runEnrich = async (manual) => {
@@ -420,7 +522,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     root.innerHTML = `<section class="card"><h2>Ikke nok data</h2><p>${esc(err.message)}</p>
       <p class="muted">Turen startet ${esc(date(drive.startedAt))}. Rådataene er lagret, så du kan slette turen eller beholde den.</p>
       <button type="button" class="btn danger" id="btn-del-drive">Slett denne turen</button></section>`;
-    $('#btn-del-drive').onclick = async () => { if (confirm('Slette denne turen?')) { await deleteDrive(id); location.hash = '#/'; } };
+    $('#btn-del-drive').onclick = async () => { if (await confirmDialog({ title: 'Slette turen?', ok: 'Slett', danger: true })) { await deleteDrive(id); toast('Turen er slettet.', { type: 'ok' }); location.hash = '#/'; } };
   }
 }
 
@@ -444,7 +546,7 @@ async function renderSettings() {
   const settings = getSettings();
   document.querySelectorAll('input[name=sensitivity]').forEach(r => {
     r.checked = r.value === settings.sensitivity;
-    r.onchange = () => { saveSettings({ ...getSettings(), sensitivity: r.value }); };
+    r.onchange = () => { saveSettings({ ...getSettings(), sensitivity: r.value }); toast(`Følsomhet: ${r.parentElement.textContent.trim()}.`, { type: 'ok', ms: 2000 }); };
   });
   document.querySelectorAll('input[name=theme]').forEach(r => {
     r.checked = r.value === (settings.theme || 'auto');
@@ -452,7 +554,7 @@ async function renderSettings() {
   });
   document.querySelectorAll('input[name=engine]').forEach(r => {
     r.checked = r.value === (settings.engine === 'v1' ? 'v1' : 'v3');
-    r.onchange = () => { saveSettings({ ...getSettings(), engine: r.value }); };
+    r.onchange = () => { saveSettings({ ...getSettings(), engine: r.value }); toast(`Analysemotor: ${r.value}.`, { type: 'ok', ms: 2000 }); };
   });
   ['netLimits', 'netNames'].forEach(key => {
     const el = $('#' + key);
@@ -473,16 +575,13 @@ async function renderSettings() {
   });
   renderDriverSettings();
   renderThresholdSettings();
-  document.querySelectorAll('input[name=perkm]').forEach(r => {
-    r.checked = r.value === (settings.perKm === false ? 'off' : 'on');
-    r.onchange = () => { saveSettings({ ...getSettings(), perKm: r.value === 'on' }); };
-  });
+  { const el = $('#perKm'); el.checked = settings.perKm !== false; el.onchange = () => { saveSettings({ ...getSettings(), perKm: el.checked }); toast('Lagret. Turene analyseres på nytt.', { type: 'ok', ms: 2000 }); }; }
   const sel = $('#export-select');
   const drives = await listDrives();
   sel.innerHTML = drives.length ? drives.map(d => `<option value="${d.id}">${esc(date(d.startedAt))}${d.demo ? ' (demo)' : ''}${d.note ? ' – ' + esc(d.note.slice(0, 30)) : ''}</option>`).join('') : '<option value="">Ingen turer</option>';
   $('#btn-export').disabled = !drives.length;
   $('#btn-export').onclick = () => exportDrive(sel.value);
-  $('#persist-status').textContent = persistState === true ? 'Varig lagring: på. Nettleseren skal ikke slette turene dine.'
+  $('#persist-status').textContent = persistState === true ? 'Varig lagring er på. Nettleseren skal ikke slette turene dine.'
     : persistState === false ? 'Varig lagring: nettleseren sa nei. Legg appen på Hjem-skjermen og ta sikkerhetskopi.'
     : 'Varig lagring: ukjent i denne nettleseren. Ta sikkerhetskopi jevnlig.';
   $('#btn-backup').disabled = !drives.length;
@@ -496,10 +595,10 @@ async function renderSettings() {
       let added = 0, skipped = 0;
       for (const item of list) { const r = await importDrive(item, { keepId: true }); if (r && r.skipped) skipped++; else added++; }
       e.target.value = '';
-      alert(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}.`);
+      toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}.`, { type: 'ok' });
       location.hash = '#/';
     } catch (err) {
-      alert('Kunne ikke gjenopprette: ' + err.message);
+      infoDialog({ title: 'Kunne ikke gjenopprette', text: err.message });
       e.target.value = '';
     }
   };
@@ -512,16 +611,16 @@ async function renderSettings() {
       e.target.value = '';
       location.hash = '#/rapport/' + d.id;
     } catch (err) {
-      alert('Kunne ikke importere: ' + err.message);
+      infoDialog({ title: 'Kunne ikke importere', text: err.message });
       e.target.value = '';
     }
   };
   $('#btn-reanalyze').onclick = async () => {
     for (const d of drives) { d.result = null; await putDrive(d); }
-    alert('Alle turer analyseres på nytt neste gang de åpnes.');
+    toast('Alle turer analyseres på nytt når de åpnes.', { type: 'ok' });
   };
   $('#btn-delete-all').onclick = async () => {
-    if (confirm('Slette alle turer? Dette kan ikke angres.')) { await deleteAll(); alert('Alle turer er slettet.'); location.hash = '#/'; }
+    if (await confirmDialog({ title: 'Slette alle turer?', text: 'Alle turer og rådata slettes fra telefonen. Ta en sikkerhetskopi først hvis du vil beholde dem.', ok: 'Slett alt', danger: true })) { await deleteAll(); toast('Alle turer er slettet.', { type: 'ok' }); location.hash = '#/'; }
   };
   // Skjult utvikleralternativ: trykk 7 ganger på versjonsnummeret
   let taps = 0, last = 0;
@@ -541,8 +640,8 @@ function renderDriverSettings() {
   const drivers = s.drivers || [];
   list.innerHTML = drivers.length ? drivers.map(d => `<li><span>${esc(d)}${d === s.activeDriver ? ' <span class="muted small">(valgt)</span>' : ''}</span>
     <button type="button" class="link danger-link" data-d="${esc(d)}" aria-label="Fjern ${esc(d)}">Fjern</button></li>`).join('') : '<li class="muted small">Ingen førere lagt inn. Turer lagres da uten navn.</li>';
-  list.querySelectorAll('button[data-d]').forEach(b => b.onclick = () => {
-    if (!confirm(`Fjerne ${b.dataset.d} fra listen? Turene beholder navnet.`)) return;
+  list.querySelectorAll('button[data-d]').forEach(b => b.onclick = async () => {
+    if (!(await confirmDialog({ title: `Fjerne ${b.dataset.d}?`, text: 'Turene beholder navnet.', ok: 'Fjern', danger: true }))) return;
     const cur = getSettings();
     saveSettings({ ...cur, drivers: (cur.drivers || []).filter(x => x !== b.dataset.d), activeDriver: cur.activeDriver === b.dataset.d ? '' : cur.activeDriver });
     renderDriverSettings();
@@ -555,6 +654,7 @@ function renderDriverSettings() {
     saveSettings({ ...cur, drivers: [...new Set([...(cur.drivers || []), name])], activeDriver: cur.activeDriver || name });
     input.value = '';
     renderDriverSettings();
+    toast(`${name} er lagt til.`, { type: 'ok', ms: 2000 });
   };
 }
 
@@ -575,12 +675,12 @@ function renderThresholdSettings() {
       const v = num(inp.value);
       if (Number.isFinite(v) && v > 0 && v < 15) th[k][lvl] = v;
       saveSettings({ ...cur, th });
-      $('#th-status').textContent = 'Egne terskler er i bruk. Alle turer analyseres på nytt.';
+      toast('Egne terskler er lagret.', { type: 'ok', ms: 2000 });
       renderThresholdSettings();
     };
   });
   $('#th-status').textContent = s.th ? 'Egne terskler er i bruk.' : 'Standard terskler fra prototypen.';
-  $('#btn-th-reset').onclick = () => { const cur = getSettings(); delete cur.th; saveSettings(cur); renderThresholdSettings(); };
+  $('#btn-th-reset').onclick = () => { const cur = getSettings(); delete cur.th; saveSettings(cur); renderThresholdSettings(); toast('Standard terskler er tilbake.', { type: 'ok', ms: 2000 }); };
 }
 
 async function exportDrive(id) {
@@ -623,6 +723,7 @@ function route() {
 
 function init() {
   applyTheme();
+  hydrateIcons();
   ['home', 'precheck', 'record', 'report', 'settings'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
