@@ -26,9 +26,19 @@ export function requestLocationOnce(timeout = 15000) {
 
 /* Liten "live-sjekk"-overvåker for før-kjøring-skjermen. */
 export function startPrecheck(onUpdate) {
-  const state = { acc: NaN, motionCount: 0, motionOk: false, gpsOk: false, gpsError: null, motionSeen: 0 };
-  let lastMotion = 0;
-  const onMotion = () => { state.motionSeen++; lastMotion = performance.now(); };
+  const state = { acc: NaN, motionCount: 0, motionOk: false, gpsOk: false, gpsError: null, motionSeen: 0, steady: null };
+  let lastMotion = 0, lastG = 0;
+  const gWin = [];   // tyngdekraftretning siste ca. 2 s, for «står stødig»
+  const onMotion = e => {
+    state.motionSeen++; lastMotion = performance.now();
+    const g = e.accelerationIncludingGravity;
+    if (g && Number.isFinite(g.x) && lastMotion - lastG > 50) {
+      lastG = lastMotion;
+      const m = Math.hypot(g.x, g.y, g.z) || 1;
+      gWin.push({ t: lastMotion, x: g.x / m, y: g.y / m, z: g.z / m });
+      while (gWin.length && lastMotion - gWin[0].t > 2000) gWin.shift();
+    }
+  };
   window.addEventListener('devicemotion', onMotion);
   const watchId = navigator.geolocation ? navigator.geolocation.watchPosition(pos => {
     state.acc = pos.coords.accuracy;
@@ -39,6 +49,12 @@ export function startPrecheck(onUpdate) {
     { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }) : null;
   const timer = setInterval(() => {
     state.motionOk = performance.now() - lastMotion < 2000 && state.motionSeen > 5;
+    if (gWin.length >= 15) {
+      const mean = gWin.reduce((a, v) => ({ x: a.x + v.x, y: a.y + v.y, z: a.z + v.z }), { x: 0, y: 0, z: 0 });
+      const mm = Math.hypot(mean.x, mean.y, mean.z) || 1;
+      const spread = Math.max(...gWin.map(v => Math.acos(Math.min(1, (v.x * mean.x + v.y * mean.y + v.z * mean.z) / mm)) * 180 / Math.PI));
+      state.steady = spread < 4;
+    } else state.steady = null;
     onUpdate({ ...state });
   }, 500);
   return () => {
@@ -53,6 +69,7 @@ export class Recorder {
     this.onStatus = opts.onStatus || (() => {});
     this.sensitivity = opts.sensitivity || 'normal';
     this.appVersion = opts.appVersion || null;
+    this.driver = opts.driver || '';
     this.replay = opts.replay || null;        // { data, speed } – utvikleralternativ: spill av demotur
     this.reset();
   }
@@ -100,6 +117,7 @@ export class Recorder {
       status: 'recording',
       sensitivity: this.sensitivity,
       demo: !!this.replay,
+      driver: this.driver,
       gaps: [],
       marks: [],
       counts: { loc: 0, gyro: 0, grav: 0, acc: 0 },

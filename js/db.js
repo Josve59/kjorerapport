@@ -116,6 +116,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '' })) : [],
     counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length },
     diag: meta.diag && typeof meta.diag === 'object' ? meta.diag : null,
+    driver: typeof meta.driver === 'string' ? meta.driver.slice(0, 40) : '',
     appVersion: 3
   };
   await putDrive(drive);
@@ -130,7 +131,7 @@ export async function exportPayload(drive) {
   return {
     drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
       marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '',
-      diag: drive.diag || null, counts: drive.counts || null },
+      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '' },
     input: raw
   };
 }
@@ -171,7 +172,7 @@ export async function deleteAll() {
 
 /* Innstillinger er små og ufarlige, så de ligger i localStorage. */
 const SETTINGS_KEY = 'kjorerapport.settings';
-const DEFAULTS = { sensitivity: 'normal', theme: 'auto', hideInstallHint: false };
+const DEFAULTS = { sensitivity: 'normal', theme: 'auto', hideInstallHint: false, drivers: [], activeDriver: '' };
 export function getSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
   catch { return { ...DEFAULTS }; }
