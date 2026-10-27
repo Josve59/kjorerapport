@@ -609,6 +609,7 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .mark-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 74px; border-radius: 16px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 800; font-size: .95rem; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .1s, background .2s; }
 .mark-btn:active { transform: scale(.96); }
 .mark-btn[data-cat="felt"] { grid-column: 1 / -1; flex-direction: row; min-height: 56px; border-style: dashed; }
+.undo-mark { display: flex; align-items: center; gap: 8px; margin: 10px auto 0; }
 .lane-truth { display: flex; gap: 8px; align-items: flex-start; font-weight: 700; }
 .mark-btn.flash { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .mark-n { position: absolute; top: 6px; right: 8px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--ink); color: var(--bg); font-size: .75rem; display: grid; place-items: center; padding: 0 5px; }

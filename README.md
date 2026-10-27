@@ -128,6 +128,16 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.7.8 / k0.3.0 – undo, marked lane changes for the camera, forward drift
+
+Based on the 27 Oct 18:27 drive, where the companion marked all 10 lane changes. One was a double tap, and there was one stray «Annet».
+
+- **Undo**: «Angre «Feltskifte» (6:59)» under the mark buttons removes the last mark. Two taps on the same mark within 2.5 s count as one, and in the report «Feltskifte» marks less than 4 s apart count as one.
+- **Automatic lane changes stay strict.** Loosening the sensor detector enough to find 5 of the 9 marked lane changes also gave 14–18 false ones on the other drives. At highway speed a lane change is about 1–2 °/s of rotation and a few metres in the GPS track, which is the same size as normal weaving and GPS noise. Half of the marked ones were also below 45 km/h.
+- **The camera uses the companion's «Feltskifte» marks** as the lane changes when there are any (`markedLanes` in `evaluateMirrors`). The direction is unknown, so any mirror 15–1 s before the mark and either shoulder 12–0 s before count. Without marks it falls back to the sensor lane changes. 18:27 drive: mirror before 8 of 9, shoulder before 3 of 9.
+- **Forward drift**: every 30 s the median head pose near «straight ahead» is found, and all targets shift with it (at most 10°, `forwardDrift`). On the 18:27 drive the head sat about 3° higher than at calibration. «Straight ahead» went from 47 % to 58 % and «looking elsewhere» from 39 % to 26 %. The report warns when the drift exceeds 6°.
+- **Shoulder checks**: the threshold is now at least 8° or 40 % beyond the mirror on the same side (it was 50 % + 5°). The camera underestimates large head turns and loses the face around 50–60°, so the old right-hand threshold (61° in our car) was almost never reached.
+
 ## What's new in 0.7.7 / k0.2.4 – turn thresholds raised
 
 Default turn thresholds raised from 3.0 / 4.0 m/s² (0.31 / 0.41 g) to **3.5 / 4.5 m/s² (0.36 / 0.46 g)** for «brå» / «kraftig». They were never really exercised before 0.7.5, because the iPhone gyroscope was read with the wrong axes. With correct axes, ordinary roundabouts at 20–25 km/h gave 0.31–0.37 g. The «Snill» and «Streng» sensitivity settings and custom thresholds scale from the new values as before. Results: 27 Oct 17:46 → 1 turn event (0.37 g at 13:00), 27 Oct 17:07 → 0, 24 Oct → 4 (0.36–0.41 g).

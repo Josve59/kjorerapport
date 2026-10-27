@@ -45,4 +45,5 @@ test('fasit for feltskifter: ledsagerens merker kobles til funne feltskifter', a
   assert.equal(f.missed.length, 1);
   assert.equal(f.missed[0].t, 200);
   assert.equal(laneTruth(lc, [{ t: 110, cat: 'annet' }]), null, 'uten fasitmerker ingen sammenligning');
+  assert.equal(laneTruth(lc, [{ t: 110, cat: 'felt' }, { t: 111.5, cat: 'felt' }]).marked, 1, 'dobbelttrykk teller én gang');
 });

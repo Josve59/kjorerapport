@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { poseFromMatrix, calibrationFromSamples, classifyPose, detectGlances, evaluateMirrors } from '../kamera/js/camera.js';
+import { poseFromMatrix, calibrationFromSamples, classifyPose, detectGlances, evaluateMirrors, forwardDrift } from '../kamera/js/camera.js';
 
 const pts = (yaw, pitch, n = 10) => Array.from({ length: n }, () => ({ yaw: yaw + (Math.random() - 0.5), pitch: pitch + (Math.random() - 0.5) }));
 const calib = calibrationFromSamples({ forward: pts(0, 0), left: pts(-35, -3), right: pts(48, -2), rear: pts(22, 14) });
@@ -61,4 +61,25 @@ test('vurdering: speil og skulder før feltskifte, lengste pause og dekning', ()
   assert.deepEqual([e.counts.left, e.counts.right, e.counts.shoulderL], [2, 1, 1]);
   assert.ok(e.longestGap >= 49 && e.longestGap <= 51, `lengste pause ${e.longestGap}`);
   assert.equal(e.start.mirror, false, 'ingen speilblikk før start');
+});
+
+test('rett fram som har flyttet seg under turen, rettes opp', () => {
+  // Hodet sitter 4° høyere og 3° mer mot høyre enn ved kalibreringen
+  const s = series(120, [[30, 0.6, -34, -3], [80, 0.6, 46, -1]]).map(x => x.ok ? { ...x, yaw: x.yaw + 3, pitch: x.pitch + 4 } : x);
+  const off = forwardDrift(s, calib);
+  assert.ok(Math.abs(off(60).yaw - 3) < 1 && Math.abs(off(60).pitch - 4) < 1, JSON.stringify(off(60)));
+  assert.deepEqual(detectGlances(s, calib).map(g => g.cls), ['left', 'right']);
+});
+
+test('feltskifter merket av ledsager brukes, dobbelttrykk teller én gang', () => {
+  const s = series(120, [[40, 0.6, -34, -3], [45, 0.5, -70, 0], [90, 0.6, 22, 13]]);
+  const points = Array.from({ length: 121 }, (_, i) => ({ t: i, kmh: 60 }));
+  const e = evaluateMirrors(s, calib, { points, t0: 0, laneChanges: [{ t: 10, tFrom: 9, tTo: 12, dir: 'venstre' }], markedLanes: [50, 51.5, 100] });
+  assert.equal(e.laneSource, 'marks');
+  assert.equal(e.lane.length, 2);
+  assert.equal(e.lane[0].mirror, true);
+  assert.equal(e.lane[0].shoulder, true);
+  assert.equal(e.lane[1].mirror, true, 'bakspeil 10 s før');
+  assert.equal(e.lane[1].shoulder, false);
+  assert.equal(evaluateMirrors(s, calib, { points, laneChanges: [{ t: 10, tFrom: 9, tTo: 12, dir: 'venstre' }] }).laneSource, 'sensors');
 });

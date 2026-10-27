@@ -59,10 +59,12 @@ export function classifyPose(pose, calib) {
   const f = calib.forward;
   const v = { y: pose.yaw - f.yaw, p: pose.pitch - f.pitch };
   const rel = id => ({ y: calib[id].yaw - f.yaw, p: calib[id].pitch - f.pitch });
-  // Skulderblikk: hodet vridd tydelig lenger enn sidespeilet på samme side
+  // Skulderblikk: hodet vridd tydelig lenger enn sidespeilet på samme side.
+  // v0.7.8: minst 8° eller 40 % forbi speilet (før: 50 % + 5°). Kameraet undervurderer store vridninger og
+  // mister ansiktet rundt 50–60°, så den gamle grensen (61° mot høyre i bilen vår) ble nesten aldri nådd.
   for (const [id, cls] of [['left', 'shoulderL'], ['right', 'shoulderR']]) {
     const t = rel(id);
-    if (Math.sign(v.y) === Math.sign(t.y) && Math.abs(v.y) > Math.abs(t.y) * 1.5 + 5) return cls;
+    if (Math.sign(v.y) === Math.sign(t.y) && Math.abs(v.y) > Math.abs(t.y) + Math.max(8, 0.4 * Math.abs(t.y))) return cls;
   }
   const d = (a, b) => Math.hypot(a.y - b.y, 0.8 * (a.p - b.p));
   let best = 'forward', bd = d(v, { y: 0, p: 0 });
@@ -72,15 +74,42 @@ export function classifyPose(pose, calib) {
   return bd <= limit ? best : 'other';
 }
 
+/* Rett fram kan flytte seg litt under turen: føreren sitter annerledes, eller holderen siger. For hvert
+   30-sekund finnes medianen av hodestillingene nær rett fram, og alle mål forskyves like mye (v0.7.8).
+   Returnerer en funksjon t → { yaw, pitch } i grader. Aldri mer enn 10°. */
+export function forwardDrift(samples, calib, { bucket = 30, near = 12, min = 30 } = {}) {
+  const zero = () => ({ yaw: 0, pitch: 0 });
+  zero.max = 0;
+  if (!calib || !calib.ok) return zero;
+  const s = samples.filter(x => x.ok && Number.isFinite(x.yaw) && Number.isFinite(x.t)).sort((a, b) => a.t - b.t);
+  if (!s.length) return zero;
+  const t0 = s[0].t, nb = Math.floor((s[s.length - 1].t - t0) / bucket) + 1;
+  const clamp = v => Math.max(-10, Math.min(10, v));
+  const offs = [];
+  let prev = { yaw: 0, pitch: 0 }, k0 = 0;
+  for (let k = 0; k < nb; k++) {
+    const end = t0 + (k + 1) * bucket, w = [];
+    while (k0 < s.length && s[k0].t < end) { w.push(s[k0]); k0++; }
+    const near0 = w.filter(x => Math.hypot(x.yaw - calib.forward.yaw - prev.yaw, x.pitch - calib.forward.pitch - prev.pitch) < near);
+    if (near0.length >= min) prev = { yaw: clamp(median(near0.map(x => x.yaw)) - calib.forward.yaw), pitch: clamp(median(near0.map(x => x.pitch)) - calib.forward.pitch) };
+    offs.push(prev);
+  }
+  const fn = t => offs[Math.min(nb - 1, Math.max(0, Math.floor((t - t0) / bucket)))];
+  fn.max = Math.max(0, ...offs.map(o => Math.hypot(o.yaw, o.pitch)));
+  return fn;
+}
+
 /* Blikk: sammenhengende perioder mot et speil eller skulder.
    samples: [{ t, yaw, pitch, ok }] (sekunder). Mister kameraet ansiktet like etter at hodet var på vei
    kraftig til siden, regnes det som skulderblikk (ansiktet forsvinner ofte da). */
 export function detectGlances(samples, calib, { maxGap = 0.35, minDur = 0.2 } = {}) {
   const s = samples.filter(x => Number.isFinite(x.t)).slice().sort((a, b) => a.t - b.t);
+  const drift = forwardDrift(s, calib);
   const cls = [];
   let lastValid = null;
   for (const x of s) {
-    let c = x.ok ? classifyPose(x, calib) : 'none';
+    const o = x.ok ? drift(x.t) : null;
+    let c = x.ok ? classifyPose({ yaw: x.yaw - o.yaw, pitch: x.pitch - o.pitch }, calib) : 'none';
     if (c === 'none' && lastValid && x.t - lastValid.t <= 0.6 && (lastValid.c === 'shoulderL' || lastValid.c === 'shoulderR' || lastValid.c === 'left' || lastValid.c === 'right')) {
       c = lastValid.c === 'left' || lastValid.c === 'shoulderL' ? 'shoulderL' : 'shoulderR';
     }
@@ -109,7 +138,7 @@ export function detectGlances(samples, calib, { maxGap = 0.35, minDur = 0.2 } = 
 
 /* Vurdering mot turen. points: rapportens punkter (t relativt til start), t0: start i opptakstid.
    laneChanges: rapportens feltskifter. Returnerer tall og sjekker for rapporten. */
-export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChanges = [] } = {}) {
+export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChanges = [], markedLanes = [] } = {}) {
   const valid = samples.filter(x => Number.isFinite(x.t));
   if (!valid.length) return null;
   const coverage = valid.filter(x => x.ok).length / valid.length;
@@ -123,7 +152,14 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
     if (points[i].kmh > 10) { moving += dt; gap += dt; if (gap > longest) { longest = gap; longestAt = points[i].t; } }
   }
   const within = (cls, a, b) => glances.some(g => cls.includes(g.cls) && g.tEnd >= a && g.t <= b);
-  const lane = laneChanges.map(l => {
+  // Merket av ledsager (v0.7.8): merket kommer etter feltskiftet, og retningen er ukjent.
+  // Speil (et hvilket som helst) 15–1 s før merket, skulderblikk (en av sidene) 12–0 s før.
+  const marked = markedLanes.slice().sort((a, b) => a - b).filter((t, i, a) => !i || t - a[i - 1] >= 4);
+  const lane = marked.length ? marked.map(t => ({
+    t, dir: null, marked: true, kmh: null,
+    mirror: within(MIRRORS, t - 15, t - 1),
+    shoulder: within(['shoulderL', 'shoulderR'], t - 12, t + 0.5)
+  })) : laneChanges.map(l => {
     const left = l.dir === 'venstre';
     return {
       t: l.t, dir: l.dir, kmh: l.kmh,
@@ -139,6 +175,7 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
     counts: { left: count('left'), right: count('right'), rear: count('rear'), shoulderL: count('shoulderL'), shoulderR: count('shoulderR') },
     perMin: moving > 30 ? mirrors.length / (moving / 60) : 0,
     longestGap: longest, longestGapAt: longestAt - longest,
-    lane, start, calibrated: !!(calib && calib.ok)
+    lane, laneSource: marked.length ? 'marks' : 'sensors', start, calibrated: !!(calib && calib.ok),
+    drift: Math.round(forwardDrift(valid, calib).max * 10) / 10
   };
 }

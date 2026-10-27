@@ -9,7 +9,7 @@ import { esc, km, n0, n1, date, duration } from './format.js';
 import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 
-export const APP_VERSION = '0.7.7';
+export const APP_VERSION = '0.7.8';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -655,6 +655,9 @@ async function startRecording(replay = null) {
       saved.textContent = st.lastCheckpoint === null ? 'Lagrer første bit om litt' : `Sist lagret for ${n0(st.elapsed - st.lastCheckpoint)} s siden · ${st.locCount} GPS-punkter`;
       const pill = $('#rec-marks-pill');
       pill.hidden = !st.marks;
+      const undoBtn = $('#btn-undo-mark'), lastMark = recorder && recorder.marks[recorder.marks.length - 1];
+      undoBtn.hidden = !lastMark;
+      if (lastMark) undoBtn.lastChild.textContent = `Angre «${MARK_CATS[lastMark.cat].label}» (${fmtClock(lastMark.t)})`;
       pill.textContent = st.marks ? `${st.marks} ${st.marks === 1 ? 'merke' : 'merker'}` : '';
       if (st.markCats) renderMarkCounts(st.markCats);
       if (st.returnedFromGap) gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`;
@@ -674,6 +677,13 @@ async function startRecording(replay = null) {
 }
 
 function renderMarkGrid() {
+  const undo = $('#btn-undo-mark');
+  undo.hidden = true;
+  undo.onclick = () => {
+    if (!recorder || !recorder.running) return;
+    const m = recorder.undoMark();
+    if (m) { vibrate(20); toast(`Fjernet merket «${MARK_CATS[m.cat].label}» fra ${fmtClock(m.t)}.`, { type: 'ok', ms: 2500 }); }
+  };
   const grid = $('#mark-grid');
   grid.innerHTML = Object.entries(MARK_CATS).map(([k, c]) => `<button type="button" class="mark-btn" data-cat="${k}" aria-label="Merk: ${c.label}">${icon(c.icon, 26)}<span>${c.label}</span><span class="mark-n" aria-hidden="true"></span></button>`).join('');
   grid.querySelectorAll('.mark-btn').forEach(b => b.onclick = () => {

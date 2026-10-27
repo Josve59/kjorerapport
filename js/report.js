@@ -46,7 +46,7 @@ const MARK_LETTER = i => String.fromCharCode(65 + (i % 26));
 /* Fasit fra ledsageren (v0.7.6): merket «Feltskifte» trykkes like etter hvert feltskifte. Et merke hører
    til et funnet feltskifte hvis det kom fra 3 s før start til 15 s etter slutt. Tider relativt til rapporten. */
 export function laneTruth(laneChanges, marks) {
-  const felt = (marks || []).filter(m => m.cat === 'felt');
+  const felt = (marks || []).filter(m => m.cat === 'felt').filter((m, i, a) => !i || m.t - a[i - 1].t >= 4);   // dobbelttrykk
   if (!felt.length) return null;
   const used = new Set();
   const hits = (laneChanges || []).map(l => {

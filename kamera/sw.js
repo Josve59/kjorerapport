@@ -1,6 +1,6 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'k0.2.4';
+const VERSION = 'k0.3.0';
 const CACHE = 'kjorerapport-kamera-' + VERSION;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',

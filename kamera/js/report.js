@@ -46,7 +46,7 @@ const MARK_LETTER = i => String.fromCharCode(65 + (i % 26));
 /* Fasit fra ledsageren (v0.7.6): merket «Feltskifte» trykkes like etter hvert feltskifte. Et merke hører
    til et funnet feltskifte hvis det kom fra 3 s før start til 15 s etter slutt. Tider relativt til rapporten. */
 export function laneTruth(laneChanges, marks) {
-  const felt = (marks || []).filter(m => m.cat === 'felt');
+  const felt = (marks || []).filter(m => m.cat === 'felt').filter((m, i, a) => !i || m.t - a[i - 1].t >= 4);   // dobbelttrykk
   if (!felt.length) return null;
   const used = new Set();
   const hits = (laneChanges || []).map(l => {
@@ -583,8 +583,9 @@ function cameraSection(r, ctx = {}) {
       <ul class="legend"><li><span class="dot gl-dot gl-rear"></span>Bakspeil</li><li><span class="dot gl-dot gl-left"></span>Venstre</li><li><span class="dot gl-dot gl-right"></span>Høyre</li><li><span class="dot gl-dot gl-shoulderL"></span>Skulder</li><li><span class="dot gl-dot gl-gap"></span>Lengste pause</li><li>▲ Feltskifte</li></ul>
       <p class="muted small">${['left', 'right', 'rear', 'shoulderL', 'shoulderR'].filter(k => c.counts[k]).map(k => `${GLANCE_LABEL[k]} ${c.counts[k]}`).join(' · ') || 'Ingen blikk registrert'}</p>
       ${c.start ? `<h3 class="mt">Igangkjøring</h3><p>${yes(c.start.mirror, 'Speil før start')} ${yes(c.start.shoulder, 'Skulderblikk venstre')}</p>` : ''}
-      ${c.lane.length ? `<h3 class="mt">Feltskifter</h3><ul class="cam-lanes">${c.lane.map(l => `<li><span>${mss(l.t)} · til ${esc(l.dir)}</span><span>${yes(l.mirror, 'Speil')} ${yes(l.shoulder, 'Skulder')}</span></li>`).join('')}</ul>` : ''}
+      ${c.lane.length ? `<h3 class="mt">Feltskifter</h3>${c.laneSource === 'marks' ? '<p class="muted small">Feltskiftene ledsageren merket. Speil 15–1 s før merket og skulderblikk 12–0 s før.</p>' : ''}<ul class="cam-lanes">${c.lane.map(l => `<li><span>${mss(l.t)} · ${l.dir ? 'til ' + esc(l.dir) : 'merket'}</span><span>${yes(l.mirror, 'Speil')} ${yes(l.shoulder, 'Skulder')}</span></li>`).join('')}</ul>` : ''}
       <p class="muted small">Kameraet så ansiktet ${cov} % av tiden${cov < 70 ? ' – flytt holderen så ansiktet er bedre synlig' : ''}. Dette er en test: kameraet ser hodet, ikke øynene, så korte blikk med bare øynene blir ikke med. Bruk tallene som en pekepinn og snakk med ledsageren om dem.</p>
+      ${c.drift > 6 ? `<p class="notice">«Rett fram» flyttet seg ${Math.round(c.drift)}° i forhold til kalibreringen. Appen justerer for det, men kalibrer på nytt hvis holderen er flyttet.</p>` : ''}
       ${ctx.onCalibrate ? '<button type="button" class="link" id="btn-calib-drive">Stemmer ikke speilene? Kalibrer på nytt for denne turen</button>' : ''}
     </section>`;
 }

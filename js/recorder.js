@@ -235,8 +235,19 @@ export class Recorder {
   /* Ledsagerens merke: et tidspunkt å kommentere etterpå. Ingen tilbakemelding til føreren. */
   mark(cat = 'annet') {
     if (!this.running) return null;
-    const m = { t: this.now(), note: '', cat };
+    const t = this.now(), last = this.marks[this.marks.length - 1];
+    if (last && last.cat === cat && t - last.t < 2.5) return null;   // dobbelttrykk
+    const m = { t, note: '', cat };
     this.marks.push(m);
+    this.drive.marks = this.marks;
+    this.emit();
+    return m;
+  }
+
+  /* Angrer siste merke (feiltrykk). Returnerer merket som ble fjernet. */
+  undoMark() {
+    if (!this.running || !this.marks.length) return null;
+    const m = this.marks.pop();
     this.drive.marks = this.marks;
     this.emit();
     return m;
