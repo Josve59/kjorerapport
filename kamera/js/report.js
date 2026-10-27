@@ -59,7 +59,7 @@ export function eventsPer10km(r) {
 /* Tekstoppsummering til deling (meldinger, e-post, AirDrop). */
 export function buildSummary(r, ctx = {}) {
   const lines = [];
-  lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}${ctx.driver ? ' – ' + ctx.driver : ''}`);
+  lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}${ctx.driver && !(ctx.subtitle || '').includes(ctx.driver) ? ' – ' + ctx.driver : ''}`);
   lines.push(`Poeng: ${r.overall} – ${rating(r.overall)}`);
   lines.push(`Distanse ${km(r.stats.km)} · Tid ${duration(r.stats.duration)} · Snittfart ${kmh(r.stats.avgKmh)} · Toppfart ${kmh(r.stats.maxKmh)}`);
   lines.push(`Bremsing ${r.scores.brake} · Akselerasjon ${r.scores.accel} · Svinger ${r.scores.turn} · Jevn fart ${r.scores.smooth}`);
@@ -250,7 +250,7 @@ export function renderReport(root, r, ctx = {}) {
 
     ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}
 
-    ${r.camera ? cameraSection(r) : ''}
+    ${r.camera ? cameraSection(r, ctx) : ''}
 
     ${marks.length ? `<section class="card" id="marks-section">
       <h2 class="card-title">${icon('flag')}Ledsagerens merker</h2>
@@ -375,6 +375,10 @@ export function renderReport(root, r, ctx = {}) {
   root.querySelectorAll('.route-table tr[data-id]').forEach(tr => { if (!tr.classList.contains('cur')) { tr.tabIndex = 0; tr.onclick = () => { location.hash = '#/rapport/' + tr.dataset.id; }; } });
   const printBtn = document.getElementById('btn-print');
   if (printBtn) printBtn.onclick = () => window.print();
+  const calibBtn = document.getElementById('btn-calib-drive');
+  if (calibBtn && ctx.onCalibrate) calibBtn.onclick = () => ctx.onCalibrate(false);
+  const useCalibBtn = document.getElementById('btn-use-calib');
+  if (useCalibBtn && ctx.onCalibrate) useCalibBtn.onclick = () => ctx.onCalibrate(true);
   // Fanelinje: marker seksjonen som er i bildet
   const links = [...root.querySelectorAll('.quicknav a')];
   if ('IntersectionObserver' in window && links.length) {
@@ -527,13 +531,15 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
 
 /* Kamera-testversjonen: speil- og skulderblikk fra hodets retning */
 const GLANCE_LABEL = { left: 'Venstre speil', right: 'Høyre speil', rear: 'Bakspeil', shoulderL: 'Skulder venstre', shoulderR: 'Skulder høyre' };
-function cameraSection(r) {
+function cameraSection(r, ctx = {}) {
   const c = r.camera;
   const T = Math.max(1, r.points.length ? r.points[r.points.length - 1].t : 1);
   const cov = Math.round(c.coverage * 100);
   if (!c.calibrated) return `<section class="card" id="camera-section">
       <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Test</span></h2>
-      <p>Kameraet var på (så ansiktet ${cov} % av tiden), men det var ikke kalibrert. Kalibrer i <a href="#/kamera">Kameratest</a> før neste tur, så kan appen skille speilene fra hverandre.</p>
+      <p>Kameraet var på og så ansiktet ${cov} % av tiden, men det var ikke kalibrert. Hodets vinkler er lagret, så turen kan vurderes nå: sett telefonen i holderen akkurat der den sto under turen, og kalibrer.</p>
+      ${ctx.onCalibrate ? `<button type="button" class="btn primary" id="btn-calib-drive">${icon('target', 20)}Kalibrer og vurder turen</button>
+      ${ctx.hasCalib ? `<button type="button" class="btn secondary" id="btn-use-calib">Bruk kalibreringen jeg har</button><p class="muted small">Passer bare hvis holderen sto på samme sted.</p>` : ''}` : ''}
     </section>`;
   const W = 340, H = 64, x = t => (Math.max(0, Math.min(T, t)) / T * W).toFixed(1);
   const rowY = { rear: 10, left: 22, right: 34, shoulderL: 46, shoulderR: 46 };
@@ -559,6 +565,7 @@ function cameraSection(r) {
       ${c.start ? `<h3 class="mt">Igangkjøring</h3><p>${yes(c.start.mirror, 'Speil før start')} ${yes(c.start.shoulder, 'Skulderblikk venstre')}</p>` : ''}
       ${c.lane.length ? `<h3 class="mt">Feltskifter</h3><ul class="cam-lanes">${c.lane.map(l => `<li><span>${mss(l.t)} · til ${esc(l.dir)}</span><span>${yes(l.mirror, 'Speil')} ${yes(l.shoulder, 'Skulder')}</span></li>`).join('')}</ul>` : ''}
       <p class="muted small">Kameraet så ansiktet ${cov} % av tiden${cov < 70 ? ' – flytt holderen så ansiktet er bedre synlig' : ''}. Dette er en test: kameraet ser hodet, ikke øynene, så korte blikk med bare øynene blir ikke med. Bruk tallene som en pekepinn og snakk med ledsageren om dem.</p>
+      ${ctx.onCalibrate ? '<button type="button" class="link" id="btn-calib-drive">Stemmer ikke speilene? Kalibrer på nytt for denne turen</button>' : ''}
     </section>`;
 }
 

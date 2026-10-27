@@ -734,9 +734,18 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .cam-label[data-cls="left"], .cam-label[data-cls="right"], .cam-label[data-cls="rear"] { background: var(--good); }
 .cam-label[data-cls="shoulderL"], .cam-label[data-cls="shoulderR"] { background: var(--accel); }
 .cam-label[data-cls="none"] { background: var(--brake); }
-.cam-calib { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: rgba(0,0,0,.55); color: #fff; padding: 16px; }
-.cam-calib p { margin: 4px 0; font-size: 1.4rem; font-weight: 800; }
-.cam-calib .cam-count { font-size: 2.6rem; }
+/* Kalibrering over hele skjermen: stor tekst som kan leses fra førersetet, og opplest instruksjon */
+.calib-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; background: #1b1f22; color: #fff; }
+.calib-overlay[hidden] { display: none; }
+.calib-progress { color: #f2c230; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: .95rem; margin: 0; }
+.calib-step { font-size: 2rem; font-weight: 800; line-height: 1.15; margin: 0; max-width: 14em; }
+.calib-count { font-size: 4rem; font-weight: 800; margin: 8px 0; min-height: 1.2em; font-variant-numeric: tabular-nums; }
+.calib-face { margin: 0 0 16px; color: #a3abb1; }
+.calib-face[data-ok="0"] { color: #f2c230; font-weight: 700; }
+.calib-overlay .btn { background: transparent; color: #fff; border-color: #5b6369; }
+.pre-calib { margin-top: 8px; }
+.cam-card.warn { border-color: var(--turn); }
+.cam-card.warn .cam-card-ico { background: color-mix(in srgb, var(--turn) 18%, var(--surface)); color: var(--turn); }
 .cam-calib-status { display: flex; gap: 8px; align-items: flex-start; }
 .cam-log { list-style: none; margin: 0; padding: 0; }
 .cam-log li { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); }

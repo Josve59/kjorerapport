@@ -25,3 +25,10 @@ test('hendelsesnavn', () => {
   assert.equal(eventLabel({ kind: 'brake', level: 'brisk' }), 'Brå nedbremsing');
   assert.equal(eventLabel({ kind: 'turn', level: 'harsh' }), 'Svært skarp sving');
 });
+
+test('oppsummering: førernavnet står ikke to ganger', () => {
+  const r = analyze(makeDemo());
+  const first = buildSummary(r, { subtitle: 'tir. 27. okt. · Kari', driver: 'Kari' }).split('\n')[0];
+  assert.equal(first.match(/Kari/g).length, 1, first);
+  assert.match(buildSummary(r, { subtitle: 'tir. 27. okt.', driver: 'Kari' }).split('\n')[0], /– Kari$/);
+});

@@ -9,7 +9,7 @@ import { esc, km, n0, n1, date, duration } from './format.js';
 import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 
-export const APP_VERSION = '0.7.2';
+export const APP_VERSION = '0.7.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};

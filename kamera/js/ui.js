@@ -102,9 +102,9 @@ export function toast(text, { type = 'info', ms = 3200 } = {}) {
   el.className = `toast toast-${type}`;
   el.innerHTML = `${icon(type === 'error' ? 'warn' : type === 'ok' ? 'check' : 'info', 20)}<span></span>`;
   el.querySelector('span').textContent = text;
-  requestAnimationFrame(() => el.classList.add('show'));
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+  // Tidtakeren starter først når meldingen vises, ellers kan den bli stående hvis siden var skjult
+  requestAnimationFrame(() => { el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms); });
 }
 
 /* ---------- Dialoger (erstatter alert/confirm/prompt) ---------- */

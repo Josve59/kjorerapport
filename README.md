@@ -128,6 +128,14 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.7.3 / k0.2.0
+
+- Camera version: calibration is easy to find. «Kalibrer nå» sits in the camera row of the pre-drive checklist, the home card turns orange with «Ikke kalibrert» when the camera is on but not calibrated, and the camera screen shows «Kalibrer» at the top (it starts the camera itself).
+- Calibration runs full screen with large text and reads each step aloud («Se i venstre sidespeil»), because the driver is looking at the mirrors, not the screen. It can be cancelled.
+- A drive recorded without calibration can be assessed afterwards: the report offers «Kalibrer og vurder turen» (calibrate with the holder where it was, then the drive is re-analysed from the stored head angles) or «Bruk kalibreringen jeg har». Calibrated drives get «Kalibrer på nytt for denne turen».
+- If the selected driver has no calibration, the newest calibration is used.
+- Fixed: the driver's name appeared twice in the shared summary. Toasts could stay on screen if the page was hidden when they appeared.
+
 ## What's new in 0.7.2
 
 - Settings has a new «Om appen» card with «Gi tilbakemelding» (opens an e-mail to Jo@svendsenmedia.net with the app version and device filled in), «Personvern» and a link to the driving-school page.

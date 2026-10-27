@@ -59,7 +59,7 @@ export function eventsPer10km(r) {
 /* Tekstoppsummering til deling (meldinger, e-post, AirDrop). */
 export function buildSummary(r, ctx = {}) {
   const lines = [];
-  lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}${ctx.driver ? ' – ' + ctx.driver : ''}`);
+  lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}${ctx.driver && !(ctx.subtitle || '').includes(ctx.driver) ? ' – ' + ctx.driver : ''}`);
   lines.push(`Poeng: ${r.overall} – ${rating(r.overall)}`);
   lines.push(`Distanse ${km(r.stats.km)} · Tid ${duration(r.stats.duration)} · Snittfart ${kmh(r.stats.avgKmh)} · Toppfart ${kmh(r.stats.maxKmh)}`);
   lines.push(`Bremsing ${r.scores.brake} · Akselerasjon ${r.scores.accel} · Svinger ${r.scores.turn} · Jevn fart ${r.scores.smooth}`);
