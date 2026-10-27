@@ -128,6 +128,10 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.7.7 / k0.2.4 – turn thresholds raised
+
+Default turn thresholds raised from 3.0 / 4.0 m/s² (0.31 / 0.41 g) to **3.5 / 4.5 m/s² (0.36 / 0.46 g)** for «brå» / «kraftig». They were never really exercised before 0.7.5, because the iPhone gyroscope was read with the wrong axes. With correct axes, ordinary roundabouts at 20–25 km/h gave 0.31–0.37 g. The «Snill» and «Streng» sensitivity settings and custom thresholds scale from the new values as before. Results: 27 Oct 17:46 → 1 turn event (0.37 g at 13:00), 27 Oct 17:07 → 0, 24 Oct → 4 (0.36–0.41 g).
+
 ## What's new in 0.7.6 / k0.2.3 – lane change ground truth
 
 - New companion button «Feltskifte» (wide, dashed, below the others). It is not a remark: the companion presses it right after each lane change to give the app a ground truth.

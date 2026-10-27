@@ -6,7 +6,7 @@ const G = 9.81;
 export const TH = {
   brake: { brisk: 2.5, harsh: 3.5 },   // m/s², deceleration
   accel: { brisk: 2.5, harsh: 3.4 },   // m/s²
-  turn:  { brisk: 3.0, harsh: 4.0 }    // m/s², sideways
+  turn:  { brisk: 3.5, harsh: 4.5 }    // m/s², sideways (v0.7.7: hevet fra 3,0/4,0 da gyroskopet på iPhone ble lest riktig; vanlige rundkjøringer ga 0,31–0,37 g)
 };
 
 export const SENSITIVITY = {
