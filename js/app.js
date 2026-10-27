@@ -5,9 +5,10 @@ import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, 
 import { renderReport, trendChart, categoryTrendChart, eventsPer10km } from './report.js';
 import { enrichDrive } from './enrich.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
-import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge } from './ui.js';
+import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS } from './ui.js';
+import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 
-export const APP_VERSION = '0.5.0';
+export const APP_VERSION = '0.6.0';
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
@@ -51,7 +52,7 @@ function groupLabel(iso) {
   const days = Math.floor((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
   if (days <= 0) return 'I dag';
   if (days === 1) return 'I går';
-  if (days < 7) return 'Denne uken';
+  if (days < 7) return 'Siste 7 dager';
   return cap(monthFmt.format(d));
 }
 function niceDay(iso) {
@@ -95,7 +96,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|6`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|7`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -207,6 +208,21 @@ async function renderHome() {
     sum.hidden = false;
   } else sum.hidden = true;
 
+  // Kjørelogg (kort)
+  const logCard = $('#log-card');
+  const realRows = rows.filter(x => x.res && isReal(x.d));
+  if (realRows.length) {
+    const tot = sumLogs(realRows.map(x => logFor(x.d, x.res)));
+    logCard.innerHTML = `<button type="button" class="card log-card-btn">
+      <span class="card-title">${icon('book')}Kjørelogg</span>
+      <span class="log-row"><span><strong>${fmtHours(tot.total.sec)}</strong><span class="muted small">øvelseskjøring</span></span>
+        <span><strong>${km(tot.total.km)}</strong><span class="muted small">kjørt</span></span>
+        <span><strong>${fmtHours(tot.light.dark)}</strong><span class="muted small">i mørke</span></span></span>
+      <span class="last-cta">Se loggen ${icon('chev', 18)}</span></button>`;
+    logCard.querySelector('button').onclick = () => { location.hash = '#/logg'; };
+    logCard.hidden = false;
+  } else logCard.hidden = true;
+
   // Mål: snitt av de tre siste ekte turene, med fremdriftsstolpe
   const goalCard = $('#goals');
   const gScore = num(settings.goalScore), gEv = num(settings.goalEv10);
@@ -238,6 +254,90 @@ async function renderHome() {
   $('#howto').hidden = allDrives.length > 0;
   $('#update-banner').hidden = !swUpdateReady;
   renderInstallHint();
+}
+
+function logFor(d, res) {
+  const limits = d.enrich && Array.isArray(d.enrich.limits) && d.enrich.limits.length === res.points.length ? d.enrich.limits.map(v => (v === null ? NaN : v)) : null;
+  return driveLog(res, Date.parse(d.startedAt), limits);
+}
+function fmtHours(sec) {
+  const m = Math.round(sec / 60);
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)} t ${String(m % 60).padStart(2, '0')} min`;
+}
+
+/* ---------- Kjørelogg ---------- */
+async function renderLog() {
+  show('log');
+  const root = $('#log-root');
+  root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
+  const settings = getSettings();
+  const filter = settings.homeDriver || '';
+  const drives = (await listDrives()).filter(d => isReal(d) && (!filter || d.driver === filter));
+  const rows = [];
+  for (const d of drives) { try { const res = await analyzeDrive(d); rows.push({ d, res, log: logFor(d, res) }); } catch { /* for lite data */ } }
+  if (!rows.length) { root.innerHTML = `<div class="empty card"><span class="empty-ico">${icon('book', 40)}</span><strong>Ingen turer i loggen enda</strong><span class="muted small">Ekte opptak legges inn her automatisk.</span></div>`; return; }
+  const tot = sumLogs(rows.map(x => x.log));
+  const bar = (obj, keys, labels, cls) => {
+    const sum = keys.reduce((s, k) => s + obj[k], 0) || 1;
+    return `<div class="road-mix">${keys.filter(k => obj[k] > 0).map(k => `<span class="${cls}-${k}" style="width:${(obj[k] / sum * 100).toFixed(1)}%"></span>`).join('')}</div>
+      <ul class="legend">${keys.map(k => `<li><span class="dot mix-dot ${cls}-${k}"></span>${labels[k]}: ${fmtHours(obj[k])}</li>`).join('')}</ul>`;
+  };
+  // Uker (siste 8)
+  // Uker regnes på kalenderdato (ikke millisekunder), så overgang til sommer-/vintertid ikke forskyver dem
+  const weekStart = d => { const x = new Date(d); const day = (x.getDay() + 6) % 7; x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - day); return x; };
+  const key = x => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  const thisWeek = weekStart(Date.now());
+  const weeks = Array.from({ length: 8 }, (_, i) => { const w = new Date(thisWeek); w.setDate(w.getDate() - (7 - i) * 7); return { start: w.getTime(), key: key(w), sec: 0 }; });
+  for (const x of rows) { const w = weeks.find(w => w.key === key(weekStart(Date.parse(x.d.startedAt)))); if (w) w.sec += x.log.total.sec; }
+  const maxW = Math.max(...weeks.map(w => w.sec), 1);
+  const wkFmt = new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short' });
+  root.innerHTML = `
+    ${filter ? `<p class="eyebrow pad">Fører: ${esc(filter)}</p>` : ''}
+    <section class="tiles">
+      <div class="tile"><span class="tile-val">${fmtHours(tot.total.sec)}</span><span class="tile-label">kjøretid</span></div>
+      <div class="tile"><span class="tile-val">${km(tot.total.km)}</span><span class="tile-label">kjørt</span></div>
+      <div class="tile"><span class="tile-val">${rows.length}</span><span class="tile-label">${rows.length === 1 ? 'tur' : 'turer'}</span></div>
+      <div class="tile"><span class="tile-val">${fmtHours(tot.light.dark)}</span><span class="tile-label">i mørke</span></div>
+    </section>
+    <section class="card"><h2 class="card-title">${icon('map')}Veityper</h2>${bar(tot.sec, ['by', 'land', 'motor'], ROAD_LABEL, 'mix')}
+      <p class="muted small">Ut fra fartsgrensen når Veidata er på, ellers anslått ut fra farten.</p></section>
+    <section class="card"><h2 class="card-title">${icon('moon')}Lysforhold</h2>${bar(tot.light, ['day', 'twilight', 'dark'], LIGHT_LABEL, 'light')}
+      <p class="muted small">Regnet ut fra solhøyden der og da. Mørke er når sola står mer enn 6° under horisonten.</p></section>
+    <section class="card"><h2 class="card-title">${icon('chart')}Siste åtte uker</h2>
+      <div class="week-bars" role="img" aria-label="Kjøretid per uke">${weeks.map(w => `<div class="wk"><span class="wk-val">${w.sec ? Math.round(w.sec / 60) : ''}</span><span class="wk-bar" style="height:${Math.max(2, w.sec / maxW * 100)}%"></span><span class="wk-lbl">${wkFmt.format(new Date(w.start))}</span></div>`).join('')}</div>
+      <p class="muted small">Minutter per uke, fra mandag.</p></section>
+    <h2 class="section-title">Alle turer</h2>
+    <ul class="drives log-list card">${rows.map(x => `<li><button type="button" class="drive" data-id="${x.d.id}">
+      <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
+      <span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.log.light.dark > 60 ? `${fmtHours(x.log.light.dark)} mørke` : ''].filter(Boolean).join(SEP)}</span>
+      ${x.d.driver && !filter ? `<span class="tags"><span class="tag">${esc(x.d.driver)}</span></span>` : ''}</span>
+      ${scoreBadge(x.res.overall, 40)}</button></li>`).join('')}</ul>
+    <button type="button" class="btn secondary" id="btn-log-csv2">${icon('download', 20)}Eksporter loggen (regneark)</button>`;
+  root.querySelectorAll('.drive').forEach(b => b.onclick = () => { location.hash = '#/rapport/' + b.dataset.id; });
+  const csv = () => exportLogCsv(rows, filter);
+  $('#btn-log-csv').onclick = csv;
+  root.querySelector('#btn-log-csv2').onclick = csv;
+}
+
+async function exportLogCsv(rows, filter) {
+  const dec = v => String(Math.round(v * 10) / 10).replace('.', ',');
+  const min = v => String(Math.round(v / 60));
+  const head = ['Dato', 'Klokkeslett', 'Fører', 'Minutter', 'Km', 'By (min)', 'Landevei (min)', 'Motorvei (min)', 'Mørke (min)', 'Skumring (min)', 'Poeng', 'Hendelser', 'Notat'];
+  const lines = [head.join(';')];
+  for (const x of rows.slice().reverse()) {
+    const d = new Date(x.d.startedAt);
+    const cell = v => `"${String(v).replace(/"/g, '""')}"`;
+    lines.push([d.toLocaleDateString('nb-NO'), d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }), cell(x.d.driver || ''), min(x.log.total.sec), dec(x.log.total.km),
+      min(x.log.sec.by), min(x.log.sec.land), min(x.log.sec.motor), min(x.log.light.dark), min(x.log.light.twilight), x.res.overall, x.res.events.length, cell(x.d.note || '')].join(';'));
+  }
+  const name = `kjorelogg${filter ? '-' + filter.toLowerCase().replace(/[^a-z0-9æøå]+/g, '-') : ''}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const file = new File(['\ufeff' + lines.join('\r\n')], name, { type: 'text/csv' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'Kjørelogg' }); return; } catch { /* avbrutt */ } }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast('Loggen er lastet ned.', { type: 'ok' });
 }
 
 function ratingShort(score) {
@@ -286,6 +386,7 @@ function renderPrecheck() {
   const hold = $('#check-holder');
   setCheck(hold, null, 'Venter på bevegelsesdata');
   renderDriverPicker();
+  renderFocusChips();
   $('#precheck-error').textContent = '';
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
 
@@ -332,6 +433,20 @@ function renderPrecheck() {
   btnAnyway.onclick = () => startRecording();
 }
 
+/* Dagens øvingsmål: opptil tre, huskes til neste tur. */
+function renderFocusChips() {
+  const box = $('#focus-chips');
+  const sel = new Set((getSettings().focus || []).filter(id => FOCUS.some(f => f.id === id)));
+  box.innerHTML = FOCUS.map(f => `<button type="button" class="chip ${sel.has(f.id) ? 'on' : ''}" data-f="${f.id}" aria-pressed="${sel.has(f.id)}">${esc(f.label)}</button>`).join('');
+  box.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+    const cur = new Set(getSettings().focus || []);
+    if (cur.has(c.dataset.f)) cur.delete(c.dataset.f);
+    else { if (cur.size >= 3) { toast('Velg høyst tre mål per tur.', { ms: 2000 }); return; } cur.add(c.dataset.f); }
+    saveSettings({ ...getSettings(), focus: [...cur] });
+    renderFocusChips();
+  });
+}
+
 /* Hvem kjører? Velges før start og lagres på turen. */
 function renderDriverPicker() {
   const s = getSettings();
@@ -366,11 +481,13 @@ async function startRecording(replay = null) {
   warn.innerHTML = '';
   saved.textContent = '';
   markCount.textContent = '';
+  renderMarkGrid({});
   let gapMsg = '';
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
     appVersion: APP_VERSION,
     driver: replay ? '' : (settings.activeDriver || ''),
+    focus: replay ? [] : (settings.focus || []),
     replay,
     onStatus: st => {
       if (st.replayDone) { finishRecording(); return; }
@@ -384,6 +501,7 @@ async function startRecording(replay = null) {
       const pill = $('#rec-marks-pill');
       pill.hidden = !st.marks;
       pill.textContent = st.marks ? `${st.marks} ${st.marks === 1 ? 'merke' : 'merker'}` : '';
+      if (st.markCats) renderMarkCounts(st.markCats);
       if (st.returnedFromGap) gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`;
       const msgs = [];
       if (st.wakeLockFailed) msgs.push('Sett Autolås til Aldri mens du kjører.');
@@ -398,6 +516,19 @@ async function startRecording(replay = null) {
     infoDialog({ title: 'Kunne ikke starte opptaket', text: err.message });
     location.hash = '#/';
   }
+}
+
+function renderMarkGrid() {
+  const grid = $('#mark-grid');
+  grid.innerHTML = Object.entries(MARK_CATS).map(([k, c]) => `<button type="button" class="mark-btn" data-cat="${k}" aria-label="Merk: ${c.label}">${icon(c.icon, 26)}<span>${c.label}</span><span class="mark-n" aria-hidden="true"></span></button>`).join('');
+  grid.querySelectorAll('.mark-btn').forEach(b => b.onclick = () => {
+    if (!recorder || !recorder.running) return;
+    const m = recorder.mark(b.dataset.cat);
+    if (m) { vibrate(40); b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 450); }
+  });
+}
+function renderMarkCounts(counts) {
+  document.querySelectorAll('#mark-grid .mark-btn').forEach(b => { const n = counts[b.dataset.cat] || 0; b.querySelector('.mark-n').textContent = n ? n : ''; });
 }
 
 function fmtClock(sec) {
@@ -476,6 +607,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       customThresholds: !!(settings.th),
       driver: drive.driver || '', drivers: settings.drivers || [],
       onDriverChange: async name => { await updateDrive(id, { driver: name }); renderDriveReport(id, { keepScroll: true }); },
+      startedAt: drive.startedAt, focus: drive.focus || [],
       gaps: drive.gaps || [], interrupted: !!drive.interrupted, factor: sens.factor, sensitivityLabel: sens.label,
       note: drive.note || '',
       marks: drive.marks || [],
@@ -717,6 +849,7 @@ function route() {
   else if (h === '#/opptak') { if (!recorder) location.hash = '#/'; }
   else if (h === '#/demo') renderDemoReport();
   else if (h === '#/innstillinger') renderSettings();
+  else if (h === '#/logg') renderLog();
   else if (h.startsWith('#/rapport/')) renderDriveReport(h.slice('#/rapport/'.length));
   else location.hash = '#/';
 }
@@ -724,22 +857,12 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
   $('#btn-settings').onclick = () => { location.hash = '#/innstillinger'; };
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = () => { location.hash = '#/'; });
   setupLongPress($('#btn-stop'), finishRecording);
-  $('#btn-mark').onclick = () => {
-    if (!recorder || !recorder.running) return;
-    const m = recorder.mark();
-    if (m) {
-      vibrate(40);
-      const b = $('#btn-mark');
-      b.classList.add('flash');
-      setTimeout(() => b.classList.remove('flash'), 400);
-    }
-  };
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
   $('#version').textContent = `Kjørerapport versjon ${APP_VERSION}`;
   window.addEventListener('hashchange', route);

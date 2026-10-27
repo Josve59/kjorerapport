@@ -13,7 +13,8 @@ js/db.js               IndexedDB storage (drives + raw-data chunks) and settings
 js/report.js           the report: speed sign, SVG route map, score bars, tips, speed chart, events
 js/app.js              screens, routing, settings, export, hidden developer option
 js/format.js           Norwegian number, time and date formatting
-js/ui.js               icons, toasts, dialogs, route thumbnails, score badges
+js/ui.js               icons, toasts, dialogs, route thumbnails, score badges, mark categories, practice goals
+js/log.js              driving log: road type, sun altitude and light, weekly totals
 sw.js                  service worker: caches everything so the app works offline
 manifest.webmanifest   PWA manifest
 fonts/                 Overpass (self-hosted, variable weight)
@@ -29,7 +30,7 @@ Node.js 20 or newer is needed (only for the tests, not for the app). Then:
 npm test
 ```
 
-Expected: 39 passing tests. They check that the demo drive gives about 4.2 km, exactly three events (harsh acceleration ≈ 0.40 g at 1:52, harsh braking ≈ 0.47 g at 3:02, harsh turn ≈ 0.49 g at 3:12), an overall score of 82, that sensitivity presets scale the thresholds, and that the GPS fallback for turns works.
+Expected: 48 passing tests. They check that the demo drive gives about 4.2 km, exactly three events (harsh acceleration ≈ 0.40 g at 1:52, harsh braking ≈ 0.47 g at 3:02, harsh turn ≈ 0.49 g at 3:12), an overall score of 82, that sensitivity presets scale the thresholds, and that the GPS fallback for turns works.
 
 ## Running it locally on the Mac
 
@@ -108,6 +109,21 @@ At the end:
 - **Service-worker updates are not applied automatically.** A new version waits until you press «Oppdater nå» on the home screen, so an update can never reload the app in the middle of a drive.
 - **Overpass is self-hosted as one variable-weight file** (plus a Latin-extended file), which covers 400/700/800 and works offline.
 - **Font and icon files are the only third-party assets.** No scripts or styles are loaded from any CDN.
+
+## What's new in 0.6.0
+
+- **Quick-mark buttons for the companion.** The recording screen has six large buttons: Speil, Skulder, Blinklys, Plassering, Fart and Annet. Each tap stamps the moment with that category and shows a running count on the button. In the report the marks carry their category, are summarised («Ledsageren merket: speil 2, fart 1») and are linked to lane changes and events nearby.
+- **Today's practice goals.** Step 1 before driving lets you pick up to three goals (myk bremsing, rolig akselerasjon, svinger, jevn fart, fartsgrenser, rundkjøringer, feltskifte, kryss og vikeplikt, speil og skulderblikk, mørkekjøring). The report opens with «Dagens mål» saying for each one whether it was reached, with the numbers behind it. The choice is remembered for the next drive.
+- **Roads and maneuvers.** A new report section shows time on town roads, country roads and motorways, the light conditions, and a list of maneuvers you can tap to see on the map:
+  - **Lane changes** detected from the gyroscope at 45 km/t or more, after subtracting the road's own curvature (from a smoothed GPS track). On the first real drive this went from 22 false hits to 6 plausible ones.
+  - **Roundabouts** from NVDB (junction type «Rundkjøring», with diameter), or from the gyroscope's right–left–right pattern when road data is off. Each shows whether there were harsh events inside it.
+  - **Stop signs** (sign 204 in Norway – rare) from NVDB: whether the car came to a full stop (below 3 km/t) or rolled.
+  - **Give-way junctions** (sign 202) where you slowed down, with speed in and lowest speed. Informational only: the app cannot know if there was traffic.
+  - Road data is fetched with the existing «Veidata» switch (formerly «Fartsgrenser»), in parallel: about 6 seconds for a 15 km drive.
+- **Driving log.** A new «Kjørelogg» screen (card on the home screen) with total driving time, distance, number of drives and time in darkness; time split by road type (from speed limits when road data is on, otherwise estimated from speed) and by light (computed from the sun's altitude at each point, no network); minutes per week for the last eight weeks; and export as a spreadsheet (CSV with semicolons and decimal commas for Norwegian Excel/Numbers).
+- **Reminder in the car.** Settings explain how to make the iPhone Shortcuts app show a notification when the phone connects to the car's Bluetooth. It deliberately does not open a URL, because that opens Safari, which has separate storage from the home-screen app.
+- Fixes: week buckets in the log no longer break on the daylight-saving change; the drive list heading «Denne uken» is now «Siste 7 dager».
+- Tests: 48.
 
 ## What's new in 0.5.0 – design and experience
 

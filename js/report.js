@@ -1,8 +1,9 @@
 /* Rapportvisning – ren SVG/HTML, ingen nettverk. */
 import { CATS, rating } from './analysis.js';
 import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
-import { analyzeSpeeding } from './enrich.js';
-import { icon } from './ui.js';
+import { analyzeSpeeding, evaluateRoad } from './enrich.js';
+import { icon, MARK_CATS, FOCUS } from './ui.js';
+import { driveLog, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
 const LABEL = {
@@ -20,6 +21,7 @@ const LIMITS = [30, 50, 60, 70, 80, 90, 110];
 const KIND_CSS = { brake: 'brake', accel: 'accel', turn: 'turn' };
 let leafletMap = null;
 let navObserver = null;
+let highlight = null;
 const TILE_URL = 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png';
 
 export function eventLabel(e) { return LABEL[e.kind][e.level]; }
@@ -46,7 +48,7 @@ function markRows(marks, r) {
   return (marks || []).map((m, i) => {
     const t = m.t - (r.t0 || 0);
     const p = r.points.length ? nearest(r.points, t) : null;
-    return { i, letter: MARK_LETTER(i), t, kmh: p ? p.kmh : NaN, lat: p ? p.lat : NaN, lon: p ? p.lon : NaN, note: m.note || '' };
+    return { i, letter: MARK_LETTER(i), t, kmh: p ? p.kmh : NaN, lat: p ? p.lat : NaN, lon: p ? p.lon : NaN, note: m.note || '', cat: MARK_CATS[m.cat] ? m.cat : 'annet' };
   });
 }
 
@@ -76,7 +78,11 @@ export function buildSummary(r, ctx = {}) {
   const marks = markRows(ctx.marks, r);
   if (marks.length) {
     lines.push(`Ledsagerens merker (${marks.length}):`);
-    for (const m of marks) lines.push(`${m.letter}. ${mss(m.t)}${Number.isFinite(m.kmh) ? ', ' + kmh(m.kmh) : ''}${names.marks[m.i] ? ', ' + names.marks[m.i] : ''}${m.note ? ' – ' + m.note : ''}`);
+    for (const m of marks) lines.push(`${m.letter}. ${MARK_CATS[m.cat].label} – ${mss(m.t)}${Number.isFinite(m.kmh) ? ', ' + kmh(m.kmh) : ''}${names.marks[m.i] ? ', ' + names.marks[m.i] : ''}${m.note ? ' – ' + m.note : ''}`);
+  }
+  if (ctx.focusResults && ctx.focusResults.length) {
+    lines.push('Dagens mål:');
+    for (const f of ctx.focusResults) lines.push(`– ${f.label}: ${f.state === 'ok' ? 'nådd' : f.state === 'no' ? 'ikke nådd' : 'ikke målt'} (${f.text})`);
   }
   if (ctx.note) lines.push(`Notat: ${ctx.note}`);
   lines.push('Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.');
@@ -87,8 +93,8 @@ export function renderReport(root, r, ctx = {}) {
   const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false,
     note = null, onNoteChange = null, onDelete = null, onShare = null, marks: rawMarks = [], onMarkNote = null,
     enrich = null, enrichStatus = null, canFetch = false, onFetch = null, diag = null,
-    realMap = false, driver = '', drivers = [], onDriverChange = null } = ctx;
-  if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+    realMap = false, driver = '', drivers = [], onDriverChange = null, startedAt = null, focus = [] } = ctx;
+  if (leafletMap) { leafletMap.remove(); leafletMap = null; highlight = null; }
   if (navObserver) { navObserver.disconnect(); navObserver = null; }
   const useReal = realMap && typeof window !== 'undefined' && window.L && r.points.length > 1;
   const positives = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] >= 90);
@@ -96,6 +102,9 @@ export function renderReport(root, r, ctx = {}) {
   const short = r.stats.km < 1;
   const names = enrich && enrich.names ? enrich.names : { events: {}, marks: {} };
   const sp = speedingFor(r, enrich);
+  const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events), fromNvdb: true } : null;
+  const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null) : null;
+  const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
 
   // Datakvalitet: alt teknisk samlet ett sted
   const quality = [];
@@ -147,12 +156,19 @@ export function renderReport(root, r, ctx = {}) {
         ${tipsAll.map(t => `<li class="sum-work sum-${t.cat}">${icon('chev', 20)}<span>${esc(t.text)}</span></li>`).join('')}
         ${!positives.length && !tipsAll.length ? r.tips.map(t => `<li class="sum-good">${icon('check', 20)}<span>${esc(t.text)}</span></li>`).join('') : ''}
         ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.</span></li>` : ''}
-        ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket ${marks.length === 1 ? 'ett sted' : marks.length + ' steder'}. Se «Merker».</span></li>` : ''}
+        ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket: ${Object.entries(marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {})).map(([c, n]) => `${MARK_CATS[c].label.toLowerCase()} ${n}`).join(', ')}.</span></li>` : ''}
       </ul>
     </section>
 
+    ${focusResults.length ? `<section class="card focus-card">
+      <h2 class="card-title">${icon('target')}Dagens mål</h2>
+      <ul class="focus-list">${focusResults.map(f => `<li class="f-${f.state}"><span class="f-ico">${f.state === 'ok' ? icon('check', 18) : f.state === 'no' ? icon('chev', 18) : icon('info', 18)}</span>
+        <span><strong>${esc(f.label)}</strong><span class="muted small">${esc(f.text)}</span></span>
+        <span class="f-state">${f.state === 'ok' ? 'Nådd' : f.state === 'no' ? 'Øv mer' : ''}</span></li>`).join('')}</ul>
+    </section>` : ''}
+
     <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a>${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
+      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
     </nav>
 
 
@@ -217,13 +233,15 @@ export function renderReport(root, r, ctx = {}) {
         <p class="muted small">Trykk på en hendelse for detaljer.</p>` : '<p class="muted">Ingen brå hendelser registrert på denne turen.</p>'}
     </section>
 
+    ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}
+
     ${marks.length ? `<section class="card" id="marks-section">
       <h2 class="card-title">${icon('flag')}Ledsagerens merker</h2>
       <p class="muted small">Tidspunkt ledsageren merket underveis. Skriv hva som skjedde, så blir det med i rapporten.</p>
       <ol class="marks">${marks.map(m => `
         <li class="mark-row" data-i="${m.i}">
           <span class="num mark-num">${m.letter}</span>
-          <span class="ev-text"><strong>${mss(m.t)} inn i turen${Number.isFinite(m.kmh) ? ', ' + kmh(m.kmh) : ''}</strong>${names.marks[m.i] ? `<span class="ev-place">${esc(names.marks[m.i])}</span>` : ''}
+          <span class="ev-text"><strong><span class="mark-cat">${icon(MARK_CATS[m.cat].icon, 16)}${MARK_CATS[m.cat].label}</span> ${mss(m.t)}${Number.isFinite(m.kmh) ? ', ' + kmh(m.kmh) : ''}</strong>${names.marks[m.i] ? `<span class="ev-place">${esc(names.marks[m.i])}</span>` : ''}
             ${onMarkNote ? `<textarea class="mark-note" rows="1" placeholder="Hva skjedde? F.eks. «glemte speil før feltskifte»" aria-label="Kommentar til merke ${m.letter}">${esc(m.note)}</textarea>`
               : (m.note ? `<span>${esc(m.note)}</span>` : '<span class="muted">Ingen kommentar</span>')}
           </span>
@@ -324,6 +342,16 @@ export function renderReport(root, r, ctx = {}) {
   };
   root.querySelectorAll('.marker').forEach(m => m.addEventListener('click', () => fromMap(m.dataset.n)));
   if (useReal) initRealMap(root, r, marks, sp, fromMap);
+  root.querySelectorAll('.man-item').forEach(b => b.addEventListener('click', () => {
+    const lat = Number(b.dataset.lat), lon = Number(b.dataset.lon);
+    const ms = root.querySelector('#map-section');
+    window.scrollTo({ top: ms.getBoundingClientRect().top + window.scrollY - 118, behavior: smooth });
+    if (leafletMap && Number.isFinite(lat)) {
+      if (highlight) highlight.remove();
+      highlight = window.L.circleMarker([lat, lon], { radius: 18, className: 'map-highlight', weight: 4, fill: false }).addTo(leafletMap);
+      leafletMap.setView([lat, lon], 17, { animate: !prefersReduced() });
+    }
+  }));
   const printBtn = document.getElementById('btn-print');
   if (printBtn) printBtn.onclick = () => window.print();
   // Fanelinje: marker seksjonen som er i bildet
@@ -372,7 +400,108 @@ export function renderReport(root, r, ctx = {}) {
   const fetchBtn = root.querySelector('#btn-fetch');
   if (fetchBtn && onFetch) fetchBtn.addEventListener('click', onFetch);
   const shareBtn = document.getElementById('btn-share');
-  if (onShare && shareBtn) shareBtn.onclick = () => onShare(buildSummary(r, { subtitle, note, marks: rawMarks, enrich, driver }));
+  if (onShare && shareBtn) shareBtn.onclick = () => onShare(buildSummary(r, { subtitle, note, marks: rawMarks, enrich, driver, focusResults }));
+}
+
+const markCount = (marks, cats) => marks.filter(m => cats.includes(m.cat)).length;
+
+/* Dagens øvingsmål: vurderer hvert valgt mål mot turen. state: ok | no | na */
+export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], log = null }) {
+  const out = [];
+  const man = r.maneuvers || { laneChanges: [], roundabouts: [] };
+  const rbs = road && road.roundabouts && (road.roundabouts.length || road.fromNvdb) ? road.roundabouts : man.roundabouts;
+  for (const id of focus || []) {
+    const def = FOCUS.find(f => f.id === id);
+    if (!def) continue;
+    const res = { id, label: def.label, state: 'na', text: '' };
+    const cnt = k => r.events.filter(e => e.kind === k).length;
+    if (['brake', 'accel', 'turn'].includes(id)) {
+      const sc = r.scores[id], n = cnt(id);
+      res.state = sc >= 90 ? 'ok' : 'no';
+      res.text = `${sc} poeng, ${n === 0 ? 'ingen hendelser' : n === 1 ? 'én hendelse' : n + ' hendelser'}`;
+    } else if (id === 'smooth') {
+      res.state = r.scores.smooth >= 85 ? 'ok' : 'no';
+      res.text = `${r.scores.smooth} poeng`;
+    } else if (id === 'limits') {
+      if (!sp) res.text = 'Slå på Veidata i innstillinger for å måle fartsgrenser';
+      else { res.state = sp.secondsOver <= 10 ? 'ok' : 'no'; res.text = sp.secondsOver ? `${n0(sp.secondsOver)} s over grensen` : 'Aldri over grensen'; }
+    } else if (id === 'roundabout') {
+      if (!rbs.length) res.text = 'Ingen rundkjøringer på ruten';
+      else {
+        const withEv = rbs.filter(x => (x.events || r.events.filter(e => e.t >= x.tFrom - 3 && e.t <= x.tTo + 3).map(e => e.n)).length);
+        res.state = withEv.length ? 'no' : 'ok';
+        res.text = `${rbs.length} ${rbs.length === 1 ? 'rundkjøring' : 'rundkjøringer'}${withEv.length ? `, ${withEv.length} med brå hendelse` : ', ingen brå hendelser'}`;
+      }
+    } else if (id === 'lane') {
+      const lc = man.laneChanges;
+      if (!lc.length) res.text = 'Ingen feltskifter funnet';
+      else {
+        const flagged = lc.filter(l => marks.some(m => ['speil', 'skulder', 'blink'].includes(m.cat) && m.t >= l.tFrom - 10 && m.t <= l.tTo + 10));
+        res.state = flagged.length ? 'no' : 'ok';
+        res.text = `${lc.length} ${lc.length === 1 ? 'feltskifte' : 'feltskifter'}${flagged.length ? `, ledsageren merket ${flagged.length}` : ', ingen merknader fra ledsager'}`;
+      }
+    } else if (id === 'junction') {
+      const stops = road ? road.stops : [], gw = road ? road.giveway : [];
+      if (!road) res.text = 'Slå på Veidata i innstillinger for å finne kryss';
+      else if (!stops.length && !gw.length) res.text = 'Ingen stopp- eller vikepliktkryss funnet';
+      else {
+        const rolled = stops.filter(x => !x.full).length;
+        const fast = gw.filter(g => g.approachKmh > 40).length;
+        res.state = rolled || fast ? 'no' : 'ok';
+        res.text = [stops.length ? `${stops.length} stoppskilt${rolled ? `, ${rolled} uten helt stopp` : ', helt stopp ved alle'}` : '', gw.length ? `${gw.length} vikepliktkryss${fast ? `, ${fast} med høy fart inn` : ''}` : ''].filter(Boolean).join(' · ');
+      }
+    } else if (id === 'mirror') {
+      const n = markCount(marks, ['speil', 'skulder']);
+      res.state = n ? 'no' : 'ok';
+      res.text = n ? `Ledsageren merket speil eller skulder ${n === 1 ? 'én gang' : n + ' ganger'}` : 'Ingen merknader fra ledsager';
+    } else if (id === 'dark') {
+      const min = log ? Math.round(log.light.dark / 60) : 0;
+      res.state = min >= 15 ? 'ok' : min > 0 ? 'no' : 'na';
+      res.text = min ? `${min} min i mørke` : 'Turen var i dagslys';
+    }
+    out.push(res);
+  }
+  return out;
+}
+
+function maneuverSection(r, road, log, marks, hasRoadData) {
+  const man = r.maneuvers || { laneChanges: [], roundabouts: [] };
+  const rbs = road && road.fromNvdb ? road.roundabouts : man.roundabouts;
+  const items = [];
+  for (const x of rbs) {
+    const ev = x.events || r.events.filter(e => e.t >= x.tFrom - 3 && e.t <= x.tTo + 3).map(e => e.n);
+    const dir = Number.isFinite(x.net) ? (Math.abs(x.net) < 35 ? 'rett fram' : x.net > 150 ? 'helt rundt' : x.net > 0 ? 'til venstre' : 'til høyre') : '';
+    items.push({ t: x.t, lat: x.lat, lon: x.lon, ico: 'round', ok: !ev.length,
+      title: `Rundkjøring${x.name ? ' · ' + x.name.replace(/^.*?X\s*/, '') : ''}`, sub: `${mss(x.t)}${dir ? ' · ' + dir : ''}`, verdict: ev.length ? `${ev.length === 1 ? 'Én brå hendelse' : ev.length + ' brå hendelser'} (${ev.join(', ')})` : 'Ingen brå hendelser' });
+  }
+  for (const x of man.laneChanges) {
+    const mk = marks.filter(m => m.t >= x.tFrom - 10 && m.t <= x.tTo + 10 && m.cat !== 'annet');
+    items.push({ t: x.t, lat: x.lat, lon: x.lon, ico: 'lane', ok: !mk.length,
+      title: `Feltskifte til ${x.dir}`, sub: `${mss(x.t)} · ${kmh(x.kmh)}`, verdict: mk.length ? `Ledsager merket ${mk.map(m => MARK_CATS[m.cat].label.toLowerCase()).join(', ')}` : 'Ingen merknader' });
+  }
+  for (const x of (road ? road.stops : [])) {
+    items.push({ t: x.t, lat: x.lat, lon: x.lon, ico: 'stop', ok: x.full, title: 'Stoppskilt', sub: mss(x.t), verdict: x.full ? 'Helt stopp' : `Rullende stopp (laveste ${x.minKmh} km/t)` });
+  }
+  items.sort((a, b) => a.t - b.t);
+  const gw = road ? road.giveway : [];
+  const avgIn = gw.length ? gw.reduce((s, g) => s + g.approachKmh, 0) / gw.length : 0;
+  const tot = log ? log.total.sec || 1 : 1;
+  const mix = log ? ['by', 'land', 'motor'].map(k => ({ k, sec: log.sec[k], pct: log.sec[k] / tot * 100 })) : [];
+  return `<section class="card" id="maneuver-section">
+      <h2 class="card-title">${icon('round')}Veier og manøvrer</h2>
+      ${log ? `<div class="road-mix" role="img" aria-label="Fordeling av kjøretid på veityper">${mix.filter(m => m.sec > 0).map(m => `<span class="mix-${m.k}" style="width:${m.pct.toFixed(1)}%"></span>`).join('')}</div>
+      <ul class="legend">${mix.filter(m => m.sec >= 30).map(m => `<li><span class="dot mix-dot mix-${m.k}"></span>${ROAD_LABEL[m.k].split(' og')[0]} ${Math.round(m.sec / 60)} min</li>`).join('')}</ul>
+      <p class="muted small">${['day', 'twilight', 'dark'].filter(k => log.light[k] > 30).map(k => `${LIGHT_LABEL[k]} ${Math.round(log.light[k] / 60)} min`).join(' · ')}${log.roadSource === 'fart' ? ' · Veitype anslått ut fra farten' : ''}</p>` : ''}
+      ${items.length ? `<ul class="man-list">${items.map(it => `<li><button type="button" class="man-item" data-lat="${it.lat}" data-lon="${it.lon}">
+          <span class="man-ico ${it.ok ? 'ok' : 'no'}">${icon(it.ico, 20)}</span>
+          <span class="ev-text"><strong>${esc(it.title)}</strong><span class="muted small">${esc(it.sub)}</span><span class="man-verdict ${it.ok ? 'ok' : 'no'}">${esc(it.verdict)}</span></span>
+          ${icon('chev', 18)}</button></li>`).join('')}</ul>` : '<p class="muted">Ingen rundkjøringer, feltskifter eller stoppskilt funnet på turen.</p>'}
+      ${gw.length ? `<details class="gw"><summary><span><strong>Vikeplikt:</strong> ${gw.length} ${gw.length === 1 ? 'kryss' : 'kryss'} der dere bremset ned · snitt ${kmh(avgIn)} inn</span></summary>
+        <ul class="gw-list">${gw.map(g => `<li><button type="button" class="man-item small" data-lat="${g.lat}" data-lon="${g.lon}"><span>${mss(g.t)}</span><span>${kmh(g.approachKmh)} → ${kmh(g.minKmh)}</span>${icon('chev', 16)}</button></li>`).join('')}</ul>
+        <p class="muted small">Om dere måtte vike for trafikk, kan ikke appen vite. Lav fart inn mot krysset gir tid til å se.</p></details>` : ''}
+      ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Veidata</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
+      <p class="muted small">Feltskifter er beregnet fra sensorene og kan av og til forveksles med kjøring rundt hindringer.</p>
+    </section>`;
 }
 
 function thTxt(r, k) {
