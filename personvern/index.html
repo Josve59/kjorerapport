@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Personvern – Kjørerapport</title>
+  <meta name="description" content="Hvordan Kjørerapport behandler data: alt lagres på telefonen, uten konto og uten server.">
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/side.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <header class="topbar">
+    <a class="brand" href="../trafikkskole/"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
+  </header>
+
+  <main class="doc">
+    <h1>Personvern</h1>
+    <p class="lead">Kort fortalt: Kjørerapport har ingen konto, ingen server og ingen sporing. Turene dine blir liggende på din egen telefon.</p>
+    <p class="muted small">Sist oppdatert 27. oktober 2026. Gjelder Kjørerapport og testversjonen med kamera.</p>
+
+    <h2>Hva appen lagrer</h2>
+    <p>Når ledsageren starter et opptak, lagrer appen dette i telefonens egen nettleserlagring:</p>
+    <ul>
+      <li>Posisjon og fart fra GPS, med tidspunkt.</li>
+      <li>Målinger fra akselerometer og gyroskop (bremsing, akselerasjon og svinger).</li>
+      <li>Det dere legger inn selv: førernavn, merker under turen, notater, mål og avkrysninger i opplæringsplanen.</li>
+      <li>I kameraversjonen: hodets vinkel (hvor føreren ser). Se eget avsnitt under.</li>
+    </ul>
+    <p>Sensorene brukes bare mens et opptak pågår. Appen kjører ikke i bakgrunnen.</p>
+
+    <h2>Hva som sendes ut av telefonen</h2>
+    <p>Ingen turer sendes til oss. Appen har ingen statistikk- eller reklameverktøy. Noen tjenester brukes for å gjøre rapporten bedre, og de får bare det som står i tabellen:</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tjeneste</th><th>Hva den får</th><th>Når</th></tr></thead>
+      <tbody>
+        <tr><td>Kart fra Kartverket</td><td>Hvilke kartruter som vises, altså omtrent hvor turen gikk</td><td>Når en rapport med kart åpnes. Kan slås av.</td></tr>
+        <tr><td>Veidata fra Statens vegvesen (NVDB)</td><td>Rutens posisjoner, for å hente fartsgrenser, vikeplikt, stoppskilt og rundkjøringer</td><td>Bare hvis «Veidata» er slått på. Av som standard.</td></tr>
+        <tr><td>Stedsnavn fra Kartverket</td><td>Posisjonen til hendelser og merker, for å finne gatenavn</td><td>Bare hvis «Stedsnavn» er slått på. Av som standard.</td></tr>
+        <tr><td>GitHub Pages</td><td>Vanlige tekniske opplysninger når appen lastes ned, som IP-adresse</td><td>Når appen åpnes første gang og ved oppdateringer</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>Svarene fra Kartverket og Statens vegvesen lagres på telefonen, så rapporten virker uten nett etterpå. Alle tjenestene kan slås av under Innstillinger → Kart og nettjenester.</p>
+
+    <h2>Kameraversjonen</h2>
+    <p>Testversjonen med kamera bruker frontkameraet til å se om føreren sjekker speil og gjør skulderblikk. Ansiktsgjenkjenningen kjører på selve telefonen. <strong>Bilder og video lagres aldri og sendes aldri noe sted.</strong> Appen lagrer bare hodets vinkel, noen ganger i sekundet, og kalibreringen dere gjør i bilen. Kameraet er av til dere slår det på.</p>
+
+    <h2>Deling er ditt valg</h2>
+    <p>Du kan dele en rapport, skrive den ut som PDF, eksportere en tur eller ta sikkerhetskopi. Da bestemmer du selv hvem som får filen, for eksempel trafikklæreren. Fra da av gjelder mottakerens egne regler.</p>
+
+    <h2>Sletting</h2>
+    <ul>
+      <li>Slett én tur fra rapporten.</li>
+      <li>Slett alt under Innstillinger → Data → «Slett alle turer».</li>
+      <li>Fjerner du appen fra Hjem-skjermen og nettstedsdata i nettleseren, forsvinner alt.</li>
+    </ul>
+    <p>Vi har ingen kopi, så vi kan ikke gjenopprette slettede turer.</p>
+
+    <h2>Tilbakemeldinger</h2>
+    <p>Sender du oss en e-post fra «Gi tilbakemelding», får vi det du skriver, e-postadressen din og appversjonen som står i e-posten. Vi bruker det bare til å svare deg og forbedre appen, og sletter det når vi ikke lenger trenger det.</p>
+
+    <h2>Sikkerhet og ansvar</h2>
+    <ul>
+      <li>Telefonen skal stå fast i en holder. Føreren skal ikke bruke telefonen under kjøring. Ledsageren starter og stopper opptaket.</li>
+      <li>Rapporten er en øvingshjelp. Målingene er veiledende og er ikke en offisiell vurdering. Appen erstatter ikke ledsager, trafikklærer eller førerprøven.</li>
+      <li>Fartsgrenser fra NVDB kan være utdaterte eller mangle. Skiltene langs veien gjelder alltid.</li>
+    </ul>
+
+    <h2>Kontakt</h2>
+    <p>Kjørerapport lages av Svendsen Media. Spørsmål om personvern: <a href="mailto:Jo@svendsenmedia.net?subject=Personvern%20i%20Kj%C3%B8rerapport">Jo@svendsenmedia.net</a>.</p>
+    <p class="muted small">Fordi turene bare ligger på din telefon, behandler Svendsen Media ingen personopplysninger om kjøringen din. Du har likevel alltid rett til å klage til Datatilsynet.</p>
+
+    <p class="btn-row"><a class="btn secondary" href="../">Åpne appen</a><a class="btn secondary" href="../trafikkskole/">For trafikkskoler</a></p>
+  </main>
+</div>
+<footer><div class="wrap narrow"><span>© 2026 Svendsen Media</span><a href="mailto:Jo@svendsenmedia.net">Jo@svendsenmedia.net</a></div></footer>
+</body>
+</html>

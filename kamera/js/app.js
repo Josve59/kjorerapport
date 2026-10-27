@@ -11,7 +11,7 @@ import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = 'k0.1.0';
+export const APP_VERSION = 'k0.1.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -842,6 +842,18 @@ function setupLongPress(btn, onDone) {
 }
 
 /* ---------- Rapport ---------- */
+/* Tilbakemelding på e-post. Brukeren ser og kan endre alt før det sendes. r: rapporten, hvis den gjelder en tur. */
+const FEEDBACK_TO = 'Jo@svendsenmedia.net';
+function feedbackHref(r = null, tag = '') {
+  const ua = navigator.userAgent;
+  const ios = ua.match(/OS (\d+)_(\d+)/);
+  const device = /iPhone/.test(ua) ? 'iPhone' + (ios ? ` · iOS ${ios[1]}.${ios[2]}` : '') : /Android/.test(ua) ? 'Android' : 'datamaskin';
+  const lines = ['Hei!', '', 'Hva stemte?', '', '', 'Hva stemte ikke? (for eksempel en hendelse som ikke skjedde, eller noe som ble oversett)', '', '',
+    'Hva savner du?', '', '', 'Er du elev, ledsager eller trafikklærer?', '', '', '––––', `Kjørerapport Kamera ${APP_VERSION} · ${device}`];
+  if (r) lines.push(`${tag ? tag + ': ' : 'Tur: '}${r.overall} poeng · ${r.stats.km.toFixed(1).replace('.', ',')} km · ${Math.round(r.stats.duration / 60)} min · ${r.events.length} hendelser · motor ${r.engine || 'v3'} · følsomhet ${currentSensitivity().label}`);
+  return `mailto:${FEEDBACK_TO}?subject=${encodeURIComponent('Tilbakemelding på Kjørerapport Kamera')}&body=${encodeURIComponent(lines.join('\n'))}`;
+}
+
 async function shareText(text) {
   if (navigator.share) {
     try { await navigator.share({ title: 'Kjørerapport', text }); return; } catch { /* avbrutt */ }
@@ -890,6 +902,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       startedAt: drive.startedAt, focus: drive.focus || [],
       sameRoute: routeRows,
       onSpeak: text => { if (!speak(text)) toast('Telefonen støtter ikke opplesning.', { type: 'error' }); },
+      feedbackHref: feedbackHref(r),
       gaps: drive.gaps || [], interrupted: !!drive.interrupted, factor: sens.factor, sensitivityLabel: sens.label,
       note: drive.note || '',
       marks: drive.marks || [],
@@ -951,7 +964,8 @@ async function renderDemoReport() {
     prevScore: null, prev: null,
     title: 'Demotur', subtitle: 'Simulert tur i Trondheim sentrum. Ikke lagret.',
     realMap: getSettings().netMap !== false, customThresholds: !!getSettings().th,
-    factor: sens.factor, sensitivityLabel: sens.label, onShare: shareText
+    factor: sens.factor, sensitivityLabel: sens.label, onShare: shareText,
+    feedbackHref: feedbackHref(r, 'Demotur')
   });
 }
 
@@ -959,6 +973,7 @@ async function renderDemoReport() {
 async function renderSettings() {
   show('settings');
   const settings = getSettings();
+  $('#btn-feedback').href = feedbackHref();
   document.querySelectorAll('input[name=sensitivity]').forEach(r => {
     r.checked = r.value === settings.sensitivity;
     r.onchange = () => { saveSettings({ ...getSettings(), sensitivity: r.value }); toast(`Følsomhet: ${r.parentElement.textContent.trim()}.`, { type: 'ok', ms: 2000 }); };

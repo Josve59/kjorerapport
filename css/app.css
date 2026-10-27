@@ -531,6 +531,11 @@ input.switch:focus-visible { outline: 3px solid var(--accel); outline-offset: 2p
 .goal-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .goal-fields .field { font-size: .92rem; }
 .about { margin-top: 18px; }
+a.btn { text-decoration: none; }
+.feedback-btn { width: 100%; margin-top: 12px; }
+.about-actions { display: grid; gap: 10px; margin-top: 12px; }
+.about-actions .btn { margin: 0; }
+.report-foot a { color: inherit; }
 
 /* Rapport */
 .report-head { margin: 0 4px 10px; }

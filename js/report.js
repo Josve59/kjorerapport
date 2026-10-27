@@ -93,7 +93,7 @@ export function renderReport(root, r, ctx = {}) {
   const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false,
     note = null, onNoteChange = null, onDelete = null, onShare = null, marks: rawMarks = [], onMarkNote = null,
     enrich = null, enrichStatus = null, canFetch = false, onFetch = null, diag = null,
-    realMap = false, driver = '', drivers = [], onDriverChange = null, startedAt = null, focus = [], sameRoute = [], onSpeak = null } = ctx;
+    realMap = false, driver = '', drivers = [], onDriverChange = null, startedAt = null, focus = [], sameRoute = [], onSpeak = null, feedbackHref = null } = ctx;
   if (leafletMap) { leafletMap.remove(); leafletMap = null; highlight = null; }
   if (navObserver) { navObserver.disconnect(); navObserver = null; }
   const useReal = realMap && typeof window !== 'undefined' && window.L && r.points.length > 1;
@@ -314,7 +314,8 @@ export function renderReport(root, r, ctx = {}) {
     </section>
 
     ${onDelete ? `<button type="button" class="btn danger" id="btn-delete-drive">${icon('trash', 20)}Slett denne turen</button>` : ''}
-    <footer class="report-foot">Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</footer>
+    ${feedbackHref ? `<a class="btn secondary feedback-btn" href="${esc(feedbackHref)}">${icon('mail', 20)}Stemte rapporten? Si fra</a>` : ''}
+    <footer class="report-foot">Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer. <a href="./personvern/" target="_blank" rel="noopener">Personvern</a></footer>
   `;
 
   const smooth = prefersReduced() ? 'auto' : 'smooth';

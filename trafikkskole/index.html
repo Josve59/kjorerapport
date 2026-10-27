@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kjørerapport for trafikkskoler</title>
+  <meta name="description" content="Kjørerapport gjør elevens telefon til en øvingslogg for øvelseskjøring med ledsager. Rapport etter hver tur, uten konto og uten server.">
+  <meta property="og:title" content="Kjørerapport – eleven kommer forberedt til timen">
+  <meta property="og:description" content="Rapport etter hver øvelsestur: bremsing, gass, svinger, fart og fartsgrenser på kart. Alt blir på elevens telefon.">
+  <meta property="og:image" content="https://josve59.github.io/kjorerapport/trafikkskole/img/rapport.jpg">
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/side.css">
+  <style>
+    .qr { display: inline-block; background: #fff; padding: 10px; border-radius: 12px; line-height: 0; }
+    .qr img { width: 132px; height: 132px; }
+    .try { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; }
+    .stepshot { display: grid; grid-template-columns: 1fr 240px; gap: 32px; align-items: center; }
+    .steps { list-style: none; padding: 0; margin: 0; }
+    .steps li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; margin-bottom: 18px; }
+    .steps .num { margin: 0; }
+    .questions { counter-reset: q; list-style: none; padding: 0; margin: 0; }
+    .questions li { counter-increment: q; padding: 12px 0 12px 40px; position: relative; border-bottom: 1px solid var(--line); }
+    .questions li::before { content: counter(q); position: absolute; left: 0; top: 10px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--ink); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
+    .soon { display: inline-block; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; background: var(--lane); color: #1f2428; border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: 2px; }
+    @media (max-width: 760px) {
+      .try { grid-template-columns: 1fr; }
+      .try .qr { display: none; }
+      .stepshot { grid-template-columns: 1fr; }
+      .stepshot .phone { width: 200px; margin: 0 auto; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <a class="brand" href="./"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
+    <nav><a href="#hva">Hva den gjør</a><a href="#personvern">Personvern</a><a href="#kontakt">Kontakt</a></nav>
+  </header>
+
+  <section class="hero">
+    <div>
+      <span class="eyebrow">For trafikkskoler · testversjon</span>
+      <div class="road" aria-hidden="true"></div>
+      <h1>Eleven kommer forberedt til timen.</h1>
+      <p class="lead">Kjørerapport gjør elevens telefon til en øvingslogg for øvelseskjøring med ledsager. Etter hver tur får eleven en rapport over bremsing, gass, svinger, fart og fartsgrenser, på kart og med konkrete tips til neste tur.</p>
+      <div class="btn-row">
+        <a class="btn primary" href="../#/demo">Se en demotur</a>
+        <a class="btn secondary" href="#kontakt">Ta kontakt</a>
+      </div>
+      <p class="muted small" style="margin-top:14px">Gratis å prøve. Ingen konto og ingen server. Turene blir på elevens telefon.</p>
+    </div>
+    <div class="phones" aria-label="Skjermbilder fra appen">
+      <div class="phone"><img src="img/rapport.jpg" alt="Rapport etter en tur: 72 poeng, distanse, tid, fart og hendelser, med korte tips" width="390" height="844"></div>
+      <div class="phone"><img src="img/kart.jpg" alt="Turen på kart med nummererte hendelser for bremsing, akselerasjon og sving" width="390" height="844"></div>
+    </div>
+  </section>
+
+  <section class="block" id="hva">
+    <h2>Det trafikkskolen får ut av det</h2>
+    <p class="lead">Mesteparten av kjøringen skjer med ledsager, uten at dere ser den. Kjørerapport gjør den synlig.</p>
+    <div class="grid3" style="margin-top:20px">
+      <div class="card">
+        <h3>Tall fra øvelseskjøringen</h3>
+        <p>Eleven viser rapporten på telefonen eller deler den som PDF. Dere ser hvor det bremses brått, hvor svingene går for fort og hvor farten er over grensen.</p>
+      </div>
+      <div class="card">
+        <h3>Opplæringsplanen med bevis</h3>
+        <p>Appen følger hovedtrekkene i læreplanen for klasse B og viser hva som er øvd: minutter i by, på landevei og i mørke, antall rundkjøringer, feltskifter og vikepliktkryss.</p>
+      </div>
+      <div class="card">
+        <h3>Konkrete øvingsmål</h3>
+        <p>Ut fra de siste turene foreslår appen hva neste tur bør handle om, for eksempel «jevn bremsing» eller «mørkekjøring». Etter turen ser eleven om målet ble nådd.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="stepshot">
+      <div>
+        <h2>Slik fungerer det i bilen</h2>
+        <ol class="steps">
+          <li><span class="num">1</span><span><strong>Telefonen festes i en holder.</strong> Appen sjekker at GPS og sensorer virker før start.</span></li>
+          <li><span class="num">2</span><span><strong>Ledsageren trykker «Start».</strong> Føreren rører ikke telefonen. Ingen lyder eller varsler underveis.</span></li>
+          <li><span class="num">3</span><span><strong>Rapporten kommer når turen stoppes.</strong> Telefonen kan lese opp de viktigste tipsene.</span></li>
+        </ol>
+        <p class="muted">Den fungerer på iPhone og Android, direkte fra nettleseren. Den legges til på Hjem-skjermen og virker uten nett.</p>
+      </div>
+      <div class="phone"><img src="img/hjem.jpg" alt="Startskjermen: Klar for en tur? med knapp for å starte kjøretur" width="390" height="844"></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Hva rapporten viser</h2>
+    <div class="grid2" style="margin-top:16px">
+      <ul class="check">
+        <li>Poeng for bremsing, akselerasjon, svinger og jevn fart</li>
+        <li>Hver hendelse på kartet, med fart og gatenavn</li>
+        <li>Fartsgrenser fra Statens vegvesen og tid over grensen</li>
+        <li>Rundkjøringer, stoppskilt, vikeplikt og feltskifter</li>
+      </ul>
+      <ul class="check">
+        <li>Utvikling over tid og sammenligning når samme rute kjøres igjen</li>
+        <li>Faresteder: steder der det går galt på flere turer</li>
+        <li>Kjørelogg med tid i by, på landevei, motorvei og i mørke</li>
+        <li>Speil- og skulderblikk med frontkameraet <span class="soon">Testes nå</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block" id="personvern">
+    <div class="grid2">
+      <div>
+        <h2>Personvern som er lett å forklare</h2>
+        <p>Det finnes ingen konto og ingen server. Turene lagres bare på elevens telefon, og eleven bestemmer selv hva som deles og med hvem. I kameraversjonen behandles bildet på telefonen og lagres aldri.</p>
+        <p><a href="../personvern/">Les hele personvernerklæringen</a></p>
+      </div>
+      <div class="note">
+        <h3>Ærlig status</h3>
+        <p>Kjørerapport er en testversjon. Målingene er veiledende og er ikke en offisiell vurdering. Appen erstatter ikke trafikklæreren. Den er laget for å gjøre øvelseskjøringen mellom timene bedre.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="kontakt">
+    <div class="grid2">
+      <div>
+        <h2>Vi ser etter 2–3 trafikkskoler</h2>
+        <p>Vi vil gjerne at noen trafikkskoler prøver appen med et par elever i noen uker og sier rett ut hva som må til for at den blir nyttig. Det koster ingenting. Det vi lurer mest på:</p>
+        <ol class="questions">
+          <li>Ville elevene deres brukt dette mellom timene?</li>
+          <li>Vil dere se elevenes rapporter, og i så fall hvordan?</li>
+          <li>Hva mangler før dere kunne anbefalt den?</li>
+        </ol>
+      </div>
+      <div class="card try">
+        <span class="qr"><img src="img/qr-app.svg" alt="QR-kode til appen" width="132" height="132"></span>
+        <div>
+          <h3>Prøv på telefonen</h3>
+          <p>Skann koden og trykk «Se en demotur». Det tar ett minutt.</p>
+          <div class="btn-row" style="margin-top:12px">
+            <a class="btn primary" href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Send e-post</a>
+            <a class="btn secondary" href="../">Åpne appen</a>
+          </div>
+          <p class="muted small" style="margin-top:12px">Jo@svendsenmedia.net</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<footer><div class="wrap"><span>© 2026 Svendsen Media</span><span><a href="../personvern/">Personvern</a> · <a href="Kjorerapport-infoark.pdf">Infoark (PDF)</a></span></div></footer>
+</body>
+</html>

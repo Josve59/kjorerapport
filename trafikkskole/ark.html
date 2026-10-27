@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="nb" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kjørerapport – infoark for trafikkskoler</title>
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/side.css">
+  <style>
+    /* Ett A4-ark. Skrives ut eller lagres som PDF fra nettleseren. */
+    @page { size: A4; margin: 0; }
+    html, body { background: #c9cecb; }
+    body { font-size: 10.5pt; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sheet { width: 210mm; height: 297mm; margin: 10mm auto; background: #f7f8f6; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 6px 30px rgba(0,0,0,.15); }
+    @media print { html, body { background: #f7f8f6; } .sheet { margin: 0; box-shadow: none; } }
+    .band { background: #3b4146; color: #fff; padding: 12mm 14mm 10mm; position: relative; min-height: 97mm; }
+    .band::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2.2mm; z-index: 0; background: repeating-linear-gradient(90deg, #f2be22 0 14mm, transparent 14mm 22mm); }
+    .band .brand { color: #fff; font-size: 13pt; }
+    .band .tag { position: absolute; left: 14mm; bottom: 7mm; z-index: 2; font-size: 8.5pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #f2be22; margin-top: 2mm; }
+    .band h1 { font-size: 27pt; margin: 8mm 0 4mm; color: #fff; max-width: 104mm; }
+    .band p { color: #d7dcd9; font-size: 11.5pt; max-width: 100mm; margin: 0; }
+    .shots { position: absolute; right: 14mm; top: 13mm; display: flex; z-index: 1; }
+    .shots .phone { width: 32mm; border-radius: 5.5mm; padding: 1.4mm; box-shadow: none; border: 0.4mm solid #5b6369; }
+    .shots .phone img { border-radius: 4.8mm; }
+    .shots .phone + .phone { margin-left: -8mm; margin-top: 10mm; }
+    .body { padding: 8mm 14mm 5mm; flex: 1; display: flex; flex-direction: column; gap: 5.5mm; }
+    h2 { font-size: 13pt; margin: 0 0 2.5mm; }
+    h3 { font-size: 10.5pt; margin: 0 0 1.5mm; }
+    .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+    .three .card { padding: 4mm; border-radius: 3mm; background: #fff; }
+    .three p { margin: 0; color: #3f474e; font-size: 9.5pt; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+    .check li { margin-bottom: 1.6mm; padding-left: 6mm; font-size: 9.8pt; }
+    .check li::before { left: 0.6mm; top: 0.4em; width: 2.6mm; height: 1.4mm; border-width: 0.6mm; }
+    .steps { margin: 0; padding-left: 5mm; font-size: 9.8pt; }
+    .steps li { margin-bottom: 1.6mm; }
+    .note { padding: 3.5mm 4.5mm; font-size: 9.6pt; background: #fff; border-left-width: 1.2mm; }
+    .note p { margin: 0; }
+    .foot { margin-top: auto; background: #fff; border-top: 1px solid #d2d7d3; padding: 6mm 14mm 7mm; display: grid; grid-template-columns: 1fr auto; gap: 8mm; align-items: center; }
+    .foot h2 { font-size: 14pt; }
+    .foot p { margin: 0 0 1.5mm; }
+    .qr { display: flex; gap: 5mm; align-items: center; }
+    .qr img { width: 27mm; height: 27mm; display: block; }
+    .qr span { font-size: 8.5pt; color: #59626a; max-width: 30mm; }
+    .soon { font-size: 7pt; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; background: #f2be22; border-radius: 99px; padding: 0.3mm 1.8mm; margin-left: 1mm; vertical-align: 1px; }
+  </style>
+</head>
+<body>
+<article class="sheet">
+  <header class="band">
+    <span class="tag">For trafikkskoler</span>
+    <span class="brand"><img src="../icons/icon.svg" alt="" width="26" height="26">Kjørerapport</span>
+    <h1>Eleven kommer forberedt til timen.</h1>
+    <p>En app som gjør elevens telefon til en øvingslogg for øvelseskjøring med ledsager. Etter hver tur kommer en rapport med kart og konkrete tips.</p>
+    <div class="shots" aria-hidden="true">
+      <div class="phone"><img src="img/rapport.jpg" alt=""></div>
+      <div class="phone"><img src="img/kart.jpg" alt=""></div>
+    </div>
+  </header>
+
+  <div class="body">
+    <div class="three">
+      <div class="card"><h3>Tall fra øvelseskjøringen</h3><p>Brå bremsing, for raske svinger og tid over fartsgrensen, vist på kart. Eleven viser rapporten eller deler den som PDF.</p></div>
+      <div class="card"><h3>Opplæringsplanen med bevis</h3><p>Minutter i by, på landevei og i mørke, rundkjøringer, feltskifter og vikepliktkryss, koblet til læreplanen for klasse B.</p></div>
+      <div class="card"><h3>Konkrete øvingsmål</h3><p>Appen foreslår hva neste tur bør handle om ut fra de siste turene, og viser etterpå om målet ble nådd.</p></div>
+    </div>
+
+    <div class="two">
+      <div>
+        <h2>Slik fungerer det</h2>
+        <ol class="steps">
+          <li><strong>Telefonen festes i en holder.</strong> Appen sjekker GPS og sensorer før start.</li>
+          <li><strong>Ledsageren trykker «Start».</strong> Føreren rører ikke telefonen, og det kommer ingen lyder underveis.</li>
+          <li><strong>Rapporten kommer når turen stoppes.</strong> Den kan også leses opp.</li>
+        </ol>
+        <p class="muted small" style="margin-top:2mm">iPhone og Android, rett fra nettleseren. Virker uten nett.</p>
+      </div>
+      <div>
+        <h2>Rapporten viser</h2>
+        <ul class="check">
+          <li>Poeng for bremsing, gass, svinger og jevn fart</li>
+          <li>Fartsgrenser fra Statens vegvesen</li>
+          <li>Rundkjøringer, vikeplikt, stopp og feltskifter</li>
+          <li>Utvikling og faresteder over flere turer</li>
+          <li>Speil- og skulderblikk med kamera <span class="soon">Testes</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="note"><h3>Personvern</h3><p>Ingen konto og ingen server. Turene lagres bare på elevens telefon, og eleven bestemmer selv hva som deles.</p></div>
+      <div class="note"><h3>Ærlig status</h3><p>Testversjon. Målingene er veiledende og erstatter ikke trafikklæreren. Den skal gjøre kjøringen mellom timene bedre.</p></div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <div>
+      <h2>Vi ser etter 2–3 trafikkskoler som vil prøve den</h2>
+      <p>Gratis. Prøv med et par elever i noen uker, og si rett ut hva som må til for at den blir nyttig for dere.</p>
+      <p><strong>Svendsen Media</strong> · Jo@svendsenmedia.net · josve59.github.io/kjorerapport/trafikkskole</p>
+    </div>
+    <div class="qr"><img src="img/qr-app.svg" alt="QR-kode til appen"><span>Skann og trykk «Se en demotur»</span></div>
+  </footer>
+</article>
+</body>
+</html>

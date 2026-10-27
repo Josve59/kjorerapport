@@ -121,6 +121,19 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - **Code:** `kamera/js/camera.js` (pure, tested in `tests/camera.test.mjs`), `kamera/js/facecam.js` (camera and model). The rest is a copy of the main app with its own database name, settings key, caches and manifest id.
 - **Limits:** it sees the head, not the eyes, so eye-only glances are missed. Sun glare, sunglasses and the phone position affect it. It uses more battery.
 
+## For driving schools (trafikkskole/ and personvern/)
+
+- `trafikkskole/` – a plain web page for driving schools: what the app does, screenshots, privacy, honest status and a contact e-mail. Live at https://josve59.github.io/kjorerapport/trafikkskole/
+- `trafikkskole/ark.html` – the one-page A4 info sheet. `trafikkskole/Kjorerapport-infoark.pdf` is the printed version. To make a new PDF after editing the sheet, open `ark.html` in Chrome and choose Print → Save as PDF (margins: none, no headers and footers).
+- `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
+- Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
+
+## What's new in 0.7.2
+
+- Settings has a new «Om appen» card with «Gi tilbakemelding» (opens an e-mail to Jo@svendsenmedia.net with the app version and device filled in), «Personvern» and a link to the driving-school page.
+- Every report ends with «Stemte rapporten? Si fra». The e-mail includes the drive's score, distance, time, number of events, engine and sensitivity, so feedback can be matched to the drive. The user sees and can change everything before sending.
+- Same changes in the camera version (k0.1.1).
+
 ## What's new in 0.7.1
 
 - Fix: the main app and the camera version share a web address, so each service worker now only clears its own caches.
