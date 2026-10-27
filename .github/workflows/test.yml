@@ -1,0 +1,22 @@
+name: Tester
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntakssjekk
+        run: for f in js/*.js sw.js; do node --check "$f"; done
+      - name: Enhetstester
+        run: node --test tests/*.test.mjs
+      - name: Alle filer i service workeren finnes
+        run: |
+          node -e "const fs=require('fs');const m=fs.readFileSync('sw.js','utf8').match(/const ASSETS = \[([\s\S]*?)\];/)[1];const l=[...m.matchAll(/'([^']+)'/g)].map(x=>x[1]).filter(p=>p!=='./');const miss=l.filter(p=>!fs.existsSync(p));if(miss.length){console.error('Mangler:',miss);process.exit(1)}console.log(l.length+' filer OK')"

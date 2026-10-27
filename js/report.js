@@ -44,7 +44,7 @@ export function speedingFor(r, enrich) {
 const MARK_LETTER = i => String.fromCharCode(65 + (i % 26));
 
 /* Ledsagerens merker med fart og tid relativt til rapporten. */
-function markRows(marks, r) {
+export function markRows(marks, r) {
   return (marks || []).map((m, i) => {
     const t = m.t - (r.t0 || 0);
     const p = r.points.length ? nearest(r.points, t) : null;
@@ -93,7 +93,7 @@ export function renderReport(root, r, ctx = {}) {
   const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false,
     note = null, onNoteChange = null, onDelete = null, onShare = null, marks: rawMarks = [], onMarkNote = null,
     enrich = null, enrichStatus = null, canFetch = false, onFetch = null, diag = null,
-    realMap = false, driver = '', drivers = [], onDriverChange = null, startedAt = null, focus = [] } = ctx;
+    realMap = false, driver = '', drivers = [], onDriverChange = null, startedAt = null, focus = [], sameRoute = [], onSpeak = null } = ctx;
   if (leafletMap) { leafletMap.remove(); leafletMap = null; highlight = null; }
   if (navObserver) { navObserver.disconnect(); navObserver = null; }
   const useReal = realMap && typeof window !== 'undefined' && window.L && r.points.length > 1;
@@ -122,7 +122,8 @@ export function renderReport(root, r, ctx = {}) {
   const barTitle = typeof document !== 'undefined' ? document.getElementById('report-bar-title') : null;
   if (barTitle) barTitle.textContent = title;
   if (reportActions) {
-    reportActions.innerHTML = `<button type="button" class="icon-btn" id="btn-print" aria-label="Skriv ut eller lagre som PDF">${icon('print', 22)}</button>
+    reportActions.innerHTML = `${onSpeak ? `<button type="button" class="icon-btn" id="btn-speak" aria-label="Les opp oppsummeringen">${icon('volume', 22)}</button>` : ''}
+      <button type="button" class="icon-btn" id="btn-print" aria-label="Skriv ut eller lagre som PDF">${icon('print', 22)}</button>
       ${onShare ? `<button type="button" class="icon-btn" id="btn-share" aria-label="Del oppsummering">${icon('share', 22)}</button>` : ''}`;
   }
   const tipsAll = r.tips.filter(t => t.cat !== 'good');
@@ -168,7 +169,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
 
     <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
+      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
     </nav>
 
 
@@ -177,6 +178,11 @@ export function renderReport(root, r, ctx = {}) {
       ${useReal ? `<div class="lmap-wrap" id="lmap-wrap">
           <div id="lmap" class="lmap" role="region" aria-label="Kart over ruten med ${r.events.length} hendelser"></div>
           <button type="button" class="btn small-btn secondary lmap-toggle" id="btn-map-expand">Utforsk kartet</button>
+          <div class="replay-hud" id="replay-hud" hidden aria-live="off"><span id="replay-time">0:00</span><span id="replay-speed">0 km/t</span><span id="replay-ev"></span></div>
+        </div>
+        <div class="replay-bar">
+          <button type="button" class="btn small-btn secondary" id="btn-replay">${icon('play', 18)}<span>Spill av turen</span></button>
+          <div class="seg-mini" role="group" aria-label="Avspillingsfart"><button type="button" data-x="20" class="on">20×</button><button type="button" data-x="60">60×</button></div>
         </div>
         ${typeof navigator !== 'undefined' && !navigator.onLine ? '<p class="muted small">Uten nett vises bare kartbiter du har sett før.</p>' : ''}`
         : routeMap(r, marks)}
@@ -198,6 +204,15 @@ export function renderReport(root, r, ctx = {}) {
       ${r.perKm ? `<p class="muted small">Poengene er justert for distanse: trekk regnes per 10 km${r.kmFactor > 1.01 ? ', og turer under 5 km regnes som 5 km' : ''}.</p>` : ''}
       <div class="bars">${['brake', 'accel', 'turn', 'smooth'].map(k => scoreBar(k, r.scores[k], prev ? prev.scores[k] : null)).join('')}</div>
     </section>
+
+    ${sameRoute.length > 1 ? `<section class="card" id="route-section">
+      <h2 class="card-title">${icon('chart')}Samme rute</h2>
+      <p class="muted small">Dere har kjørt denne strekningen ${sameRoute.length} ganger. Slik har det gått:</p>
+      <table class="route-table"><thead><tr><th>Dato</th><th>Poeng</th><th>Hendelser</th><th>Tid</th></tr></thead><tbody>
+      ${sameRoute.map(x => `<tr class="${x.current ? 'cur' : ''}" data-id="${x.id}"><td>${esc(x.date)}${x.current ? ' <span class="tag">denne</span>' : ''}</td><td><strong>${x.overall}</strong></td><td>${x.events}</td><td>${duration(x.duration)}</td></tr>`).join('')}
+      </tbody></table>
+      ${(() => { const others = sameRoute.filter(x => !x.current); const cur = sameRoute.find(x => x.current); if (!others.length || !cur) return ''; const best = Math.max(...others.map(x => x.overall)); const d = cur.overall - best; return `<p class="route-verdict ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? `Beste tur på denne ruten hittil${d > 0 ? ` (${d} poeng over forrige beste)` : ''}.` : `${-d} poeng under beste tur på ruten (${best}).`}</p>`; })()}
+    </section>` : ''}
 
     ${sp ? `<section class="card" id="limits-section">
       <h2 class="card-title">${icon('speed')}Fartsgrenser</h2>
@@ -352,6 +367,9 @@ export function renderReport(root, r, ctx = {}) {
       leafletMap.setView([lat, lon], 17, { animate: !prefersReduced() });
     }
   }));
+  const speakBtn = document.getElementById('btn-speak');
+  if (speakBtn && onSpeak) speakBtn.onclick = () => onSpeak(spokenSummary(r, { focusResults, marks, sp }));
+  root.querySelectorAll('.route-table tr[data-id]').forEach(tr => { if (!tr.classList.contains('cur')) { tr.tabIndex = 0; tr.onclick = () => { location.hash = '#/rapport/' + tr.dataset.id; }; } });
   const printBtn = document.getElementById('btn-print');
   if (printBtn) printBtn.onclick = () => window.print();
   // Fanelinje: marker seksjonen som er i bildet
@@ -546,6 +564,7 @@ function initRealMap(root, r, marks, sp, onEventTap) {
     mk.on('click', () => onEventTap(String(e.n)));
   }
   map.fitBounds(L.latLngBounds(ll), { padding: [28, 28] });
+  setupReplay(root, r, map);
   // «Utforsk kartet»: fullskjerm med flytting (på mobil er dra av ellers, så siden kan rulles)
   const wrap = root.querySelector('#lmap-wrap'), btn = root.querySelector('#btn-map-expand');
   btn.addEventListener('click', () => {
@@ -557,6 +576,63 @@ function initRealMap(root, r, marks, sp, onEventTap) {
     setTimeout(() => { if (leafletMap === map) map.invalidateSize(); }, 50);
   });
   setTimeout(() => { if (leafletMap === map) map.invalidateSize(); }, 100);
+}
+
+/* Avspilling: en prikk kjører ruten med tid og fart, og hendelser blinker når de passeres. */
+function setupReplay(root, r, map) {
+  const L = window.L;
+  const btn = root.querySelector('#btn-replay'), hud = root.querySelector('#replay-hud');
+  if (!btn) return;
+  let factor = 20, raf = null, marker = null, t = 0, last = 0, playing = false;
+  const pts = r.points, tMax = pts[pts.length - 1].t;
+  root.querySelectorAll('.seg-mini button').forEach(b => b.onclick = () => { factor = Number(b.dataset.x); root.querySelectorAll('.seg-mini button').forEach(x => x.classList.toggle('on', x === b)); });
+  const posAt = tt => {
+    let lo = 0, hi = pts.length - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (pts[m].t < tt) lo = m + 1; else hi = m; }
+    const b = pts[lo], a = pts[Math.max(0, lo - 1)];
+    const f = b.t > a.t ? Math.min(1, Math.max(0, (tt - a.t) / (b.t - a.t))) : 1;
+    return { lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f, kmh: a.kmh + (b.kmh - a.kmh) * f };
+  };
+  const label = btn.querySelector('span');
+  const setIcon = name => { const old = btn.querySelector('svg'); if (old) old.outerHTML = icon(name, 18); };
+  const stop = () => { playing = false; if (raf) cancelAnimationFrame(raf); raf = null; setIcon('play'); label.textContent = t > 0 && t < tMax ? 'Fortsett' : 'Spill av turen'; };
+  const frame = now => {
+    if (!playing || leafletMap !== map) return;
+    t = Math.min(tMax, t + (now - last) / 1000 * factor); last = now;
+    const p = posAt(t);
+    marker.setLatLng([p.lat, p.lon]);
+    if (!map.getBounds().pad(-0.15).contains([p.lat, p.lon])) map.panTo([p.lat, p.lon], { animate: false });
+    root.querySelector('#replay-time').textContent = mss(t);
+    root.querySelector('#replay-speed').textContent = kmh(p.kmh);
+    const ev = r.events.find(e => Math.abs(e.t - t) < factor * 0.6);
+    root.querySelector('#replay-ev').textContent = ev ? `${ev.n}. ${eventLabel(ev)}` : '';
+    root.querySelectorAll('.lm-ev').forEach(m => m.classList.toggle('active', ev && m.dataset.n === String(ev.n)));
+    if (t >= tMax) { stop(); t = 0; return; }
+    raf = requestAnimationFrame(frame);
+  };
+  btn.onclick = () => {
+    if (playing) { stop(); return; }
+    if (!marker) marker = L.marker([pts[0].lat, pts[0].lon], { icon: L.divIcon({ html: '<span></span>', className: 'replay-dot', iconSize: [22, 22], iconAnchor: [11, 11] }), interactive: false, zIndexOffset: 2000 }).addTo(map);
+    if (t === 0) map.setView([pts[0].lat, pts[0].lon], Math.max(map.getZoom(), 15), { animate: false });
+    hud.hidden = false; playing = true; last = performance.now(); label.textContent = 'Pause'; setIcon('pause');
+    raf = requestAnimationFrame(frame);
+  };
+}
+
+/* Kort tekst for opplesning etter turen. */
+export function spokenSummary(r, { focusResults = [], marks = [], sp = null } = {}) {
+  const parts = [];
+  parts.push(`Turen er ferdig. ${r.overall} poeng. ${rating(r.overall)}.`);
+  parts.push(`${km(r.stats.km)} på ${duration(r.stats.duration)}.`);
+  parts.push(r.events.length ? `${r.events.length === 1 ? 'Én hendelse' : r.events.length + ' hendelser'}.` : 'Ingen brå hendelser.');
+  const good = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] >= 90).map(k => CATS[k].toLowerCase());
+  if (good.length) parts.push(`Dette gikk bra: ${good.join(', ')}.`);
+  const tip = r.tips.find(t => t.cat !== 'good');
+  if (tip) parts.push(`Det viktigste å jobbe med: ${tip.text}`);
+  if (sp && sp.secondsOver > 0) parts.push(`${Math.round(sp.secondsOver)} sekunder over fartsgrensen.`);
+  for (const f of focusResults) parts.push(`Mål: ${f.label}, ${f.state === 'ok' ? 'nådd' : f.state === 'no' ? 'øv mer' : 'ikke målt'}.`);
+  if (marks.length) parts.push(`Ledsageren merket ${marks.length === 1 ? 'ett sted' : marks.length + ' steder'}. Snakk om dem sammen.`);
+  return parts.join(' ').replace(/km\/t/g, 'kilometer i timen').replace(/ km /g, ' kilometer ').replace(/(\d) km\b/g, '$1 kilometer').replace(/ min\b/g, ' minutter');
 }
 
 /* Detaljer for én hendelse: fart og kraft ±20 s, før/etter, terskler, gate, fartsgrense og nære merker. */

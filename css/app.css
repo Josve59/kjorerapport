@@ -660,3 +660,60 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .log-list { padding: 4px 12px; }
 .pad { margin: 0 4px 10px; }
 #log .btn { margin-top: 4px; }
+
+/* ---- v0.7.0 ---- */
+.start-suggest { margin: -8px 0 16px; font-weight: 700; color: #f2be22; font-size: .95rem; max-width: 80%; }
+.banner > span:first-child { display: flex; align-items: center; gap: 8px; }
+.banner-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.mini-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; font: inherit; color: inherit; cursor: pointer; margin: 0; padding: 14px; }
+.mini-card strong { font-size: 1.5rem; margin-top: 6px; }
+.mini-card .card-title { font-size: .95rem; font-weight: 800; }
+.focus-suggest { margin-top: 12px; padding: 12px; border-radius: 14px; background: var(--bg); }
+.sug-title { display: flex; align-items: center; gap: 6px; font-weight: 800; margin: 0 0 6px; }
+.sug-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.sug-list li { display: flex; flex-direction: column; }
+.focus-suggest .btn { margin: 0; }
+/* Samme rute */
+.route-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.route-table th { text-align: left; font-size: .8rem; color: var(--muted); font-weight: 700; padding: 4px 6px; }
+.route-table td { padding: 10px 6px; border-top: 1px solid var(--line); }
+.route-table tr[data-id]:not(.cur) { cursor: pointer; }
+.route-table tr.cur td { background: var(--bg); }
+.route-verdict { font-weight: 800; margin: 10px 0 0; }
+.route-verdict.up { color: var(--good); } .route-verdict.down { color: var(--turn); }
+/* Avspilling */
+.replay-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 4px; }
+.replay-bar .btn { margin: 0; }
+.seg-mini { display: flex; border: 2px solid var(--line); border-radius: 20px; overflow: hidden; }
+.seg-mini button { min-height: 40px; min-width: 52px; border: 0; background: none; color: var(--ink); font-weight: 800; cursor: pointer; }
+.seg-mini button.on { background: var(--ink); color: var(--bg); }
+.replay-hud { position: absolute; right: 10px; top: 10px; z-index: 500; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: calc(100% - 70px); }
+.replay-hud span { background: var(--ink); color: var(--bg); padding: 4px 10px; border-radius: 14px; font-weight: 800; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.replay-hud span:empty { display: none; }
+.replay-dot span { display: block; width: 22px; height: 22px; border-radius: 50%; background: #f2be22; border: 3px solid #1f2428; box-shadow: 0 0 0 4px rgba(242,190,34,.35); }
+.lm-ev.active { animation: pulse .6s var(--ease) 2; }
+@keyframes pulse { 50% { transform: scale(1.35); } }
+/* Faresteder */
+.spots-route { stroke: var(--asphalt); opacity: .55; }
+.spot-circle { stroke: #fff; fill-opacity: .55; }
+.spot-circle.spot-brake { fill: var(--brake); } .spot-circle.spot-accel { fill: var(--accel); } .spot-circle.spot-turn { fill: var(--turn); } .spot-circle.spot-mark { fill: var(--ink); }
+.spot-n { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; }
+.spot-n.spot-brake { background: var(--brake); } .spot-n.spot-accel { background: var(--accel); } .spot-n.spot-turn { background: var(--turn); } .spot-n.spot-mark { background: var(--ink); color: var(--bg); }
+.spot-list { padding: 4px 12px; }
+#spots-map { height: 360px; }
+/* Opplæring */
+.plan-head .goal-bar span { background: var(--good); }
+.plan-prog { font-size: 1.1rem; margin: 2px 0 8px; }
+.plan-prog strong { font-size: 1.6rem; }
+.plan-list { list-style: none; margin: 0; padding: 0; }
+.plan-list li + li { border-top: 1px solid var(--line); }
+.plan-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; cursor: pointer; }
+.plan-item input { flex: none; width: 26px; height: 26px; margin: 1px 0 0; accent-color: var(--good); }
+.plan-item > span { display: flex; flex-direction: column; gap: 2px; }
+.plan-ev { font-size: .85rem; color: var(--muted); }
+.plan-ev.good { color: var(--good); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .lm-ev.active { animation: none; } }
+.banner { flex-wrap: wrap; }
+.banner > span:first-child { flex: 1 1 180px; min-width: 0; }
+.banner-actions { margin-left: auto; }

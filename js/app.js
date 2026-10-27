@@ -2,13 +2,15 @@
 import { analyze, makeDemo, SENSITIVITY, TH } from './analysis.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
-import { renderReport, trendChart, categoryTrendChart, eventsPer10km } from './report.js';
-import { enrichDrive } from './enrich.js';
+import { renderReport, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel } from './report.js';
+import { enrichDrive, evaluateRoad } from './enrich.js';
+import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } from './insights.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
-import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS } from './ui.js';
+import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 
-export const APP_VERSION = '0.6.0';
+export const APP_VERSION = '0.7.0';
+let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
@@ -252,6 +254,38 @@ async function renderHome() {
       ${mode === 'cats' ? categoryTrendChart(chrono) : trendChart(chrono.map(r => r.overall), Number.isFinite(gScore) ? gScore : null)}` : '';
   $('#trend').querySelectorAll('.mini-seg button').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), trendMode: b.dataset.m }); renderHome(); });
   $('#howto').hidden = allDrives.length > 0;
+
+  // Dagens forslag i startkortet
+  const sugRows = await gatherRows(settings.activeDriver || '');
+  const sug = suggestFocus(sugRows);
+  const sl = $('#suggest-line');
+  if (sug.length) { sl.textContent = `Forslag i dag: ${sug.map(x => (FOCUS.find(f => f.id === x.id) || {}).label).join(', ').toLowerCase()}`; sl.hidden = false; } else sl.hidden = true;
+
+  // Påminnelse om sikkerhetskopi
+  const bb = $('#backup-banner');
+  const realCount = allDrives.filter(isReal).length;
+  const lastB = settings.lastBackupAt ? Date.parse(settings.lastBackupAt) : 0;
+  const newSince = allDrives.filter(d => isReal(d) && Date.parse(d.startedAt) > lastB).length;
+  const snoozed = settings.backupSnoozeUntil && Date.parse(settings.backupSnoozeUntil) > Date.now();
+  if (realCount >= 2 && newSince >= 2 && Date.now() - lastB > 7 * 86400000 && !snoozed) {
+    bb.innerHTML = `<span>${icon('shield', 20)}<span>${newSince} turer er ikke sikkerhetskopiert.</span></span><span class="banner-actions"><button type="button" class="link" id="btn-bb-later">Senere</button><button type="button" class="btn small-btn primary" id="btn-bb-now">Ta kopi</button></span>`;
+    bb.hidden = false;
+    $('#btn-bb-now').onclick = async () => { await backupAll(await listDrives()); bb.hidden = true; };
+    $('#btn-bb-later').onclick = () => { saveSettings({ ...getSettings(), backupSnoozeUntil: new Date(Date.now() + 7 * 86400000).toISOString() }); bb.hidden = true; };
+  } else bb.hidden = true;
+
+  // Faresteder og opplæring
+  const more = $('#more-cards');
+  if (sugRows.length || realCount) {
+    const allRows = filter ? sugRows : await gatherRows(null);
+    const spots = hotspots(allRows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
+    const plan = planProgress(allRows);
+    more.innerHTML = `<button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>
+      <button type="button" class="card mini-card" id="btn-go-plan"><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
+    more.hidden = false;
+    $('#btn-go-spots').onclick = () => { location.hash = '#/faresteder'; };
+    $('#btn-go-plan').onclick = () => { location.hash = '#/opplaering'; };
+  } else more.hidden = true;
   $('#update-banner').hidden = !swUpdateReady;
   renderInstallHint();
 }
@@ -264,6 +298,20 @@ function fmtHours(sec) {
   const m = Math.round(sec / 60);
   if (m < 60) return `${m} min`;
   return `${Math.floor(m / 60)} t ${String(m % 60).padStart(2, '0')} min`;
+}
+
+/* Ekte turer med analyse, logg, fartsgrenser, veidata og merker – grunnlag for innsikt. Nyeste først. */
+async function gatherRows(driver = null) {
+  const drives = (await listDrives()).filter(d => isReal(d) && (driver === null || (d.driver || '') === driver));
+  const rows = [];
+  for (const d of drives) {
+    let res;
+    try { res = await analyzeDrive(d); } catch { continue; }
+    const sp = speedingFor(res, d.enrich || null);
+    const road = d.enrich && d.enrich.road ? { ...evaluateRoad(res.points, d.enrich.road, res.events), fromNvdb: true } : null;
+    rows.push({ d, res, sp, road, log: logFor(d, res), marks: markRows(d.marks || [], res) });
+  }
+  return rows;
 }
 
 /* ---------- Kjørelogg ---------- */
@@ -340,6 +388,97 @@ async function exportLogCsv(rows, filter) {
   toast('Loggen er lastet ned.', { type: 'ok' });
 }
 
+function hotspotItems(x) {
+  const items = x.res.events.map(e => ({ lat: e.lat, lon: e.lon, type: 'event', kind: e.kind, label: eventLabel(e), t: e.t, name: x.d.enrich && x.d.enrich.names && x.d.enrich.names.events ? x.d.enrich.names.events[e.n] : '' }));
+  for (const m of x.marks) if (Number.isFinite(m.lat)) items.push({ lat: m.lat, lon: m.lon, type: 'mark', kind: 'mark', label: `Ledsager: ${MARK_CATS[m.cat].label.toLowerCase()}`, t: m.t, name: x.d.enrich && x.d.enrich.names && x.d.enrich.names.marks ? x.d.enrich.names.marks[m.i] : '' });
+  return items;
+}
+
+let spotsMap = null;
+async function renderSpots() {
+  show('spots');
+  const root = $('#spots-root');
+  root.innerHTML = '<div class="skeleton-row"></div>';
+  const filter = getSettings().homeDriver || '';
+  const rows = await gatherRows(filter || null);
+  const spots = hotspots(rows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
+  if (spotsMap) { spotsMap.remove(); spotsMap = null; }
+  const KIND = { brake: 'Bremsing', accel: 'Akselerasjon', turn: 'Sving', mark: 'Ledsagerens merker' };
+  root.innerHTML = `
+    <p class="muted pad">Steder der det har vært flere hendelser eller merker fra ledsageren${filter ? ` for ${esc(filter)}` : ''}, samlet fra ${rows.length} ${rows.length === 1 ? 'tur' : 'turer'}.</p>
+    ${window.L && getSettings().netMap !== false && rows.length ? '<div class="card"><div id="spots-map" class="lmap"></div></div>' : ''}
+    ${spots.length ? `<ul class="drives spot-list card">${spots.map((h, i) => `<li><button type="button" class="drive spot" data-i="${i}">
+        <span class="spot-n spot-${h.main}">${h.count}</span>
+        <span class="drive-main"><strong>${esc(h.items.find(it => it.name)?.name || `Sted ${i + 1}`)}</strong>
+          <span class="muted small">${h.drives > 1 ? `På ${h.drives} av ${h.passes} turer som passerte` : 'Samme tur'} · ${esc(KIND[h.main] || '')}</span>
+          <span class="muted small">${esc([...new Set(h.items.map(it => it.label))].join(', '))}</span></span>
+        ${icon('chev', 18)}</button></li>`).join('')}</ul>`
+      : `<div class="empty card"><span class="empty-ico">${icon('pin', 40)}</span><strong>Ingen faresteder ennå</strong><span class="muted small">Når samme sted får flere hendelser eller merker, dukker det opp her. Det blir mer nyttig jo flere turer dere kjører.</span></div>`}`;
+  if (root.querySelector('#spots-map')) {
+    const L = window.L;
+    const map = L.map('spots-map', { scrollWheelZoom: false, dragging: !L.Browser.mobile, tap: false });
+    spotsMap = map;
+    L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png', { maxZoom: 18, attribution: '© <a href="https://www.kartverket.no/">Kartverket</a>' }).addTo(map);
+    const all = [];
+    for (const x of rows) { const ll = x.res.points.map(p => [p.lat, p.lon]); all.push(...ll); L.polyline(ll, { className: 'spots-route', weight: 4, interactive: false }).addTo(map); }
+    spots.forEach((h, i) => {
+      const r = 10 + Math.min(16, h.count * 3);
+      L.circleMarker([h.lat, h.lon], { radius: r, className: `spot-circle spot-${h.main}`, weight: 3 }).addTo(map).on('click', () => { root.querySelector(`.spot[data-i="${i}"]`)?.scrollIntoView({ block: 'center' }); });
+    });
+    if (all.length) map.fitBounds(L.latLngBounds(all), { padding: [24, 24] });
+    root.querySelectorAll('.spot').forEach(b => b.onclick = () => { const h = spots[Number(b.dataset.i)]; map.setView([h.lat, h.lon], 17); root.querySelector('#spots-map').scrollIntoView({ block: 'center' }); });
+    setTimeout(() => { if (spotsMap === map) map.invalidateSize(); }, 150);
+  } else root.querySelectorAll('.spot').forEach(b => b.onclick = () => {});
+}
+
+function planState() {
+  const s = getSettings();
+  const key = s.activeDriver || '_';
+  return { key, all: s.curriculum || {}, mine: (s.curriculum || {})[key] || {} };
+}
+function planProgress() {
+  const { mine } = planState();
+  const total = CURRICULUM.reduce((n, st) => n + st.items.length, 0);
+  const done = Object.values(mine).filter(v => v && v.done).length;
+  return { done, total };
+}
+async function renderPlan() {
+  show('plan');
+  const root = $('#plan-root');
+  const s = getSettings();
+  const driver = s.activeDriver || '';
+  const rows = await gatherRows(driver);
+  const ev = curriculumEvidence(rows);
+  const { key, mine } = planState();
+  const prog = planProgress();
+  const dfmt = iso => new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
+  root.innerHTML = `
+    <section class="card plan-head">
+      <p class="eyebrow">${driver ? esc(driver) : 'Fører ikke valgt'}</p>
+      <p class="plan-prog"><strong>${prog.done}</strong> av ${prog.total} punkter krysset av</p>
+      <span class="goal-bar"><span style="width:${(prog.done / prog.total * 100).toFixed(0)}%"></span></span>
+      <p class="muted small">Basert på hovedtrekkene i læreplanen for førerkort klasse B. Trafikkskolen avgjør hva som er gjennomført. Grå tekst viser hva appen har sett på turene.</p>
+    </section>
+    ${CURRICULUM.map(st => `<h2 class="group-title">${esc(st.stage)}</h2><section class="card"><ul class="plan-list">${st.items.map(it => {
+      const e = it.auto ? ev[it.auto] : null;
+      const st2 = mine[it.id] || {};
+      return `<li><label class="plan-item"><input type="checkbox" data-id="${it.id}" ${st2.done ? 'checked' : ''}>
+        <span><strong>${esc(it.label)}</strong>${st2.done && st2.at ? ` <span class="muted small">· ${dfmt(st2.at)}</span>` : ''}
+        ${it.help ? `<span class="muted small">${esc(it.help)}</span>` : ''}
+        ${it.auto ? `<span class="plan-ev ${e && e.good ? 'good' : ''}">${e ? esc(e.text) : 'Ikke øvd på turene ennå'}</span>` : ''}</span></label></li>`;
+    }).join('')}</ul></section>`).join('')}`;
+  root.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => {
+    const cur = getSettings();
+    const allC = { ...(cur.curriculum || {}) };
+    const m = { ...(allC[key] || {}) };
+    m[cb.dataset.id] = cb.checked ? { done: true, at: new Date().toISOString() } : { done: false };
+    allC[key] = m;
+    saveSettings({ ...cur, curriculum: allC });
+    if (cb.checked) vibrate(20);
+    renderPlan();
+  });
+}
+
 function ratingShort(score) {
   if (score >= 90) return 'Rolig og trygg kjøring';
   if (score >= 75) return 'Bra, noen ting å jobbe med';
@@ -387,6 +526,7 @@ function renderPrecheck() {
   setCheck(hold, null, 'Venter på bevegelsesdata');
   renderDriverPicker();
   renderFocusChips();
+  renderFocusSuggestions();
   $('#precheck-error').textContent = '';
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
 
@@ -434,6 +574,19 @@ function renderPrecheck() {
 }
 
 /* Dagens øvingsmål: opptil tre, huskes til neste tur. */
+async function renderFocusSuggestions() {
+  const el = $('#focus-suggest');
+  const rows = await gatherRows(getSettings().activeDriver || '');
+  const sug = suggestFocus(rows);
+  if (!sug.length) { el.hidden = true; return; }
+  const label = id => (FOCUS.find(f => f.id === id) || {}).label || id;
+  el.innerHTML = `<p class="sug-title">${icon('target', 18)}Forslag ut fra de siste turene</p>
+    <ul class="sug-list">${sug.map(x => `<li><strong>${esc(label(x.id))}</strong><span class="muted small">${esc(x.reason)}</span></li>`).join('')}</ul>
+    <button type="button" class="btn secondary small-btn" id="btn-use-sug">Bruk forslagene</button>`;
+  el.hidden = false;
+  $('#btn-use-sug').onclick = () => { saveSettings({ ...getSettings(), focus: sug.map(x => x.id) }); renderFocusChips(); toast('Dagens mål er satt.', { type: 'ok', ms: 1800 }); };
+}
+
 function renderFocusChips() {
   const box = $('#focus-chips');
   const sel = new Set((getSettings().focus || []).filter(id => FOCUS.some(f => f.id === id)));
@@ -461,9 +614,11 @@ function renderDriverPicker() {
         saveSettings({ ...getSettings(), drivers: list, activeDriver: name });
       }
       renderDriverPicker();
+      renderFocusSuggestions();
       return;
     }
     saveSettings({ ...getSettings(), activeDriver: sel.value });
+    renderFocusSuggestions();
   };
 }
 
@@ -545,6 +700,7 @@ async function finishRecording() {
   $('#record').classList.add('busy');
   const drive = await rec.stop();
   $('#record').classList.remove('busy');
+  if (getSettings().autoSpeak) speakNext = drive.id;
   location.hash = '#/rapport/' + drive.id;
 }
 
@@ -595,9 +751,19 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
   }
   const sens = currentSensitivity();
   const tags = [drive.demo ? 'demotur via opptakeren' : '', drive.imported ? 'importert' : ''].filter(Boolean);
+  const routeRows = [];
   try {
     const r = await analyzeDrive(drive);
     const settings = getSettings();
+    // Samme rute: andre ekte turer (samme fører) som har kjørt samme strekning
+    if (isReal(drive)) {
+      for (const d of drives) {
+        if (!isReal(d) || !d.result || (d.driver || '') !== (drive.driver || '')) continue;
+        if (d.id !== drive.id && !sameRoute(r.points, d.result.points)) continue;
+        routeRows.push({ id: d.id, date: shortDay(d.startedAt), overall: d.id === drive.id ? r.overall : d.result.overall, events: (d.id === drive.id ? r : d.result).events.length, duration: (d.id === drive.id ? r : d.result).stats.duration, current: d.id === drive.id, ts: Date.parse(d.startedAt) });
+      }
+      routeRows.sort((a, b) => a.ts - b.ts);
+    }
     const wants = { limits: !!settings.netLimits, names: !!settings.netNames };
     const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.names && !(drive.enrich && drive.enrich.names));
     const draw = (status) => renderReport(root, r, {
@@ -608,6 +774,8 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       driver: drive.driver || '', drivers: settings.drivers || [],
       onDriverChange: async name => { await updateDrive(id, { driver: name }); renderDriveReport(id, { keepScroll: true }); },
       startedAt: drive.startedAt, focus: drive.focus || [],
+      sameRoute: routeRows,
+      onSpeak: text => { if (!speak(text)) toast('Telefonen støtter ikke opplesning.', { type: 'error' }); },
       gaps: drive.gaps || [], interrupted: !!drive.interrupted, factor: sens.factor, sensitivityLabel: sens.label,
       note: drive.note || '',
       marks: drive.marks || [],
@@ -649,6 +817,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     };
     draw(null);
     if (keepScroll) window.scrollTo(0, y);
+    if (speakNext === id) { speakNext = null; const b = document.getElementById('btn-speak'); if (b) setTimeout(() => b.click(), 600); }
     if (missing && navigator.onLine) runEnrich(false);
   } catch (err) {
     root.innerHTML = `<section class="card"><h2>Ikke nok data</h2><p>${esc(err.message)}</p>
@@ -694,6 +863,12 @@ async function renderSettings() {
     el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
   // Kart og by-tilpasset jevn fart er på som standard
+  { const el = $('#autoSpeak'); el.checked = !!settings.autoSpeak; el.onchange = () => { saveSettings({ ...getSettings(), autoSpeak: el.checked }); if (el.checked) speak('Rapporten leses opp når turen er ferdig.'); }; }
+  if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {
+    const mb = (e.usage || 0) / 1048576;
+    $('#storage-status').textContent = `Turene og kartbitene bruker ${mb < 1 ? 'under 1' : n0(mb)} MB på telefonen.`;
+  }).catch(() => {});
+  $('#last-backup').textContent = settings.lastBackupAt ? `Siste sikkerhetskopi: ${date(settings.lastBackupAt)}.` : 'Ingen sikkerhetskopi tatt ennå.';
   [['netMap', '#netMap'], ['cityAware', '#cityAware']].forEach(([key, sel]) => {
     const el = $(sel);
     el.checked = settings[key] !== false;
@@ -727,7 +902,14 @@ async function renderSettings() {
       let added = 0, skipped = 0;
       for (const item of list) { const r = await importDrive(item, { keepId: true }); if (r && r.skipped) skipped++; else added++; }
       e.target.value = '';
-      toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}.`, { type: 'ok' });
+      let restoredSettings = false;
+      if (payload.settings && typeof payload.settings === 'object' && await confirmDialog({ title: 'Gjenopprette innstillingene også?', text: 'Førere, mål, følsomhet, terskler og andre valg fra sikkerhetskopien erstatter de du har nå.', ok: 'Ja, gjenopprett', cancel: 'Behold mine' })) {
+        const cur = getSettings();
+        saveSettings({ ...cur, ...payload.settings, lastBackupAt: cur.lastBackupAt });
+        applyTheme();
+        restoredSettings = true;
+      }
+      toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}${restoredSettings ? ', og innstillingene' : ''}.`, { type: 'ok' });
       location.hash = '#/';
     } catch (err) {
       infoDialog({ title: 'Kunne ikke gjenopprette', text: err.message });
@@ -825,8 +1007,11 @@ async function exportDrive(id) {
 async function backupAll(drives) {
   const items = [];
   for (const d of drives) items.push(await exportPayload(d));
-  const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), drives: items };
+  const { lastBackupAt, backupSnoozeUntil, ...settings } = getSettings();
+  const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), settings, drives: items };
   await shareFile(toJSON(payload), `kjorerapport-sikkerhetskopi-${new Date().toISOString().slice(0, 10)}.json`);
+  saveSettings({ ...getSettings(), lastBackupAt: new Date().toISOString() });
+  toast(`Sikkerhetskopi med ${items.length} ${items.length === 1 ? 'tur' : 'turer'} og innstillinger er laget.`, { type: 'ok' });
 }
 
 async function shareFile(json, name) {
@@ -844,12 +1029,15 @@ function route() {
   const h = location.hash || '#/';
   if (recorder && recorder.running && h !== '#/opptak') { location.hash = '#/opptak'; return; }
   if (stopPrecheck && h !== '#/sjekk') { stopPrecheck(); stopPrecheck = null; }
+  if (!h.startsWith('#/rapport/')) stopSpeaking();
   if (h === '#/') renderHome();
   else if (h === '#/sjekk') renderPrecheck();
   else if (h === '#/opptak') { if (!recorder) location.hash = '#/'; }
   else if (h === '#/demo') renderDemoReport();
   else if (h === '#/innstillinger') renderSettings();
   else if (h === '#/logg') renderLog();
+  else if (h === '#/faresteder') renderSpots();
+  else if (h === '#/opplaering') renderPlan();
   else if (h.startsWith('#/rapport/')) renderDriveReport(h.slice('#/rapport/'.length));
   else location.hash = '#/';
 }
@@ -857,7 +1045,7 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
   $('#btn-settings').onclick = () => { location.hash = '#/innstillinger'; };

@@ -15,6 +15,7 @@ js/app.js              screens, routing, settings, export, hidden developer opti
 js/format.js           Norwegian number, time and date formatting
 js/ui.js               icons, toasts, dialogs, route thumbnails, score badges, mark categories, practice goals
 js/log.js              driving log: road type, sun altitude and light, weekly totals
+js/insights.js         practice suggestions, hotspots, same-route matching, training plan
 sw.js                  service worker: caches everything so the app works offline
 manifest.webmanifest   PWA manifest
 fonts/                 Overpass (self-hosted, variable weight)
@@ -30,7 +31,7 @@ Node.js 20 or newer is needed (only for the tests, not for the app). Then:
 npm test
 ```
 
-Expected: 48 passing tests. They check that the demo drive gives about 4.2 km, exactly three events (harsh acceleration ≈ 0.40 g at 1:52, harsh braking ≈ 0.47 g at 3:02, harsh turn ≈ 0.49 g at 3:12), an overall score of 82, that sensitivity presets scale the thresholds, and that the GPS fallback for turns works.
+Expected: 53 passing tests. They check that the demo drive gives about 4.2 km, exactly three events (harsh acceleration ≈ 0.40 g at 1:52, harsh braking ≈ 0.47 g at 3:02, harsh turn ≈ 0.49 g at 3:12), an overall score of 82, that sensitivity presets scale the thresholds, and that the GPS fallback for turns works.
 
 ## Running it locally on the Mac
 
@@ -109,6 +110,19 @@ At the end:
 - **Service-worker updates are not applied automatically.** A new version waits until you press «Oppdater nå» on the home screen, so an update can never reload the app in the middle of a drive.
 - **Overpass is self-hosted as one variable-weight file** (plus a Latin-extended file), which covers 400/700/800 and works offline.
 - **Font and icon files are the only third-party assets.** No scripts or styles are loaded from any CDN.
+
+## What's new in 0.7.0
+
+- **Practice suggestions.** The app looks at the last five real drives for the selected driver and suggests up to three goals with a reason, for example «Bremsing: snitt 57 poeng på de 2 siste turene» or «Ingen mørkekjøring registrert ennå, og det er mørketid». Shown in the start card on the home screen and in step 1 before driving, with «Bruk forslagene».
+- **Spoken summary.** A speaker icon in the report reads out the score, distance, events, what went well, the most important tip and today's goals in Norwegian. With «Les opp rapporten» on in settings it starts by itself when the companion stops the recording.
+- **Hotspots (Faresteder).** A map and list of places where events or companion marks repeat across drives (within 60 m), with street names and «på 2 av 3 turer som passerte».
+- **Same route.** When a drive follows a route you have driven before (70 % overlap both ways within 80 m), the report shows a table of all drives on that route and whether this was the best one.
+- **Drive replay.** «Spill av turen» under the map moves a dot along the route at 20× or 60× with time and speed, and event markers pulse as they are passed.
+- **Training plan (Opplæring).** A checklist following the main parts of the class B curriculum (obligatory parts, trinn 2, 3 and 4), stored per driver with the date each item was ticked. Items the app can see on the drives show evidence, for example minutes on town roads, darkness, roundabouts, lane changes, junctions and time over the speed limit.
+- **Backups include settings** (drivers, goals, training plan, thresholds, switches); restoring asks whether to restore them too. A banner on the home screen reminds you when two or more drives are not backed up (snooze for a week). Settings show the last backup and how much space the app uses.
+- **Automatic tests on GitHub.** `.github/workflows/test.yml` runs the syntax check, the unit tests and the service-worker file check on every push.
+- **Publishing through GitHub Desktop.** The local history is merged with the history created by browser uploads, so updates are now a normal commit and «Push origin».
+- Tests: 53.
 
 ## What's new in 0.6.0
 

@@ -6,6 +6,7 @@ const P = {
   share: 'M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6',
   print: 'M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v7H7z',
   play: 'M8 5v14l11-7z',
+  pause: 'M8 5v14M16 5v14',
   map: 'M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14',
   chart: 'M4 19h16M7 16V9M12 16V5M17 16v-4',
   speed: 'M5 17a8 8 0 1 1 14 0M12 13l4-4',
@@ -35,8 +36,28 @@ const P = {
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   round: 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM12 2v5M12 17v5M2 12h5M17 12h5',
   stop: 'M8 3h8l5 5v8l-5 5H8l-5-5V8zM8 12h8',
-  bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4'
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4',
+  volume: 'M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11',
+  pin: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  school: 'M3 9l9-5 9 5-9 5zM7 11v5c0 1.5 2.5 3 5 3s5-1.5 5-3v-5M21 9v6',
+  checkbox: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z'
 };
+
+/* Leser opp tekst med norsk stemme hvis telefonen har en. Returnerer false hvis tale ikke støttes. */
+export function speak(text) {
+  if (!('speechSynthesis' in window)) return false;
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const voices = synth.getVoices();
+  const v = voices.find(x => /^nb|^no/i.test(x.lang)) || voices.find(x => /nn|da|sv/i.test(x.lang));
+  if (v) u.voice = v;
+  u.lang = v ? v.lang : 'nb-NO';
+  u.rate = 1;
+  synth.speak(u);
+  return true;
+}
+export function stopSpeaking() { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); }
 
 /* Ledsagerens hurtigknapper */
 export const MARK_CATS = {

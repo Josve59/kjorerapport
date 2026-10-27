@@ -33,10 +33,12 @@
       <div class="start-road" aria-hidden="true"></div>
       <p class="start-hello" id="start-hello">Klar for en tur?</p>
       <p class="start-sub">Fest telefonen i holderen. Ledsageren starter og stopper opptaket.</p>
+      <p class="start-suggest" id="suggest-line" hidden></p>
       <button type="button" class="btn start-btn" id="btn-go-precheck"><span data-icon="play"></span>Start kjøretur</button>
       <button type="button" class="link start-demo" id="btn-demo">Se en demotur</button>
     </section>
 
+    <div id="backup-banner" class="banner" hidden></div>
     <div id="install-hint" class="card install-hint" hidden></div>
 
     <section class="card howto-card" id="howto" hidden>
@@ -53,6 +55,7 @@
     <section id="last-drive" hidden></section>
     <section class="tiles" id="summary" hidden></section>
     <section id="log-card" hidden></section>
+    <section id="more-cards" class="mini-grid" hidden></section>
     <section class="card" id="goals" hidden></section>
     <section class="card" id="trend"></section>
     <section id="drive-section">
@@ -80,6 +83,7 @@
           </label>
           <p class="focus-title">Hva øver dere på i dag? <span class="muted small">(velg opptil tre)</span></p>
           <div class="chips wrap" id="focus-chips" role="group" aria-label="Dagens øvingsmål"></div>
+          <div class="focus-suggest" id="focus-suggest" hidden></div>
         </div>
       </li>
       <li class="flow-step" id="step-perm" data-state="active">
@@ -157,6 +161,26 @@
     <div id="log-root"></div>
   </section>
 
+  <!-- Faresteder -->
+  <section id="spots" class="screen" hidden>
+    <header class="appbar">
+      <button type="button" class="btn-back icon-btn" aria-label="Til hjem" data-icon="back"></button>
+      <h1>Faresteder</h1>
+      <span class="appbar-spacer"></span>
+    </header>
+    <div id="spots-root"></div>
+  </section>
+
+  <!-- Opplæring -->
+  <section id="plan" class="screen" hidden>
+    <header class="appbar">
+      <button type="button" class="btn-back icon-btn" aria-label="Til hjem" data-icon="back"></button>
+      <h1>Opplæring</h1>
+      <span class="appbar-spacer"></span>
+    </header>
+    <div id="plan-root"></div>
+  </section>
+
   <!-- Innstillinger -->
   <section id="settings" class="screen" hidden>
     <header class="appbar">
@@ -222,6 +246,13 @@
       </div>
     </section>
 
+    <h2 class="group-title"><span data-icon="volume"></span>Etter turen</h2>
+    <section class="card">
+      <div class="toggle-list">
+        <label class="toggle"><span><strong>Les opp rapporten</strong><br><span class="muted small">Telefonen leser opp poeng og de viktigste tipsene når ledsageren har trykket «Stopp». Du kan også trykke på høyttaleren øverst i rapporten.</span></span><input type="checkbox" class="switch" id="autoSpeak"></label>
+      </div>
+    </section>
+
     <h2 class="group-title"><span data-icon="bell"></span>Påminnelse i bilen</h2>
     <section class="card">
       <p>iPhone kan minne deg på appen når telefonen kobler seg til bilens Bluetooth. Det settes opp én gang i appen <strong>Snarveier</strong>:</p>
@@ -247,7 +278,9 @@
     <section class="card">
       <h3>Sikkerhetskopi</h3>
       <p class="muted small" id="persist-status"></p>
-      <p class="muted small">Én fil med alle turer og rådata. Gjenoppretting hopper over turer som finnes fra før.</p>
+      <p class="muted small" id="storage-status"></p>
+      <p class="muted small">Én fil med alle turer, rådata og innstillinger (førere, mål, opplæringsplan, terskler). Gjenoppretting hopper over turer som finnes fra før.</p>
+      <p class="small" id="last-backup"></p>
       <div class="btn-row">
         <button type="button" class="btn secondary" id="btn-backup"><span data-icon="download"></span>Ta kopi</button>
         <label class="btn secondary file-btn"><span data-icon="upload"></span>Gjenopprett<input type="file" id="restore-file" accept="application/json,.json"></label>
@@ -271,7 +304,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.6.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.7.0</p>
   </section>
 
 </main>
