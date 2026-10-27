@@ -76,9 +76,9 @@ export async function getRaw(driveId) {
   const idx = db.transaction('chunks').objectStore('chunks').index('driveId');
   const chunks = await reqToPromise(idx.getAll(driveId));
   chunks.sort((a, b) => a.seq - b.seq);
-  const raw = { loc: [], gyro: [], grav: [], acc: [], head: [] };
+  const raw = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [] };
   for (const c of chunks) {
-    for (const k of ['loc', 'gyro', 'grav', 'acc', 'head']) if (c[k]) for (const s of c[k]) raw[k].push(s);
+    for (const k of ['loc', 'gyro', 'grav', 'acc', 'head', 'road']) if (c[k]) for (const s of c[k]) raw[k].push(s);
   }
   return raw;
 }
@@ -99,7 +99,8 @@ export async function importDrive(payload, { keepId = false } = {}) {
   const raw = {
     loc: input.loc.map(p => ({ t: num(p.t), lat: num(p.lat), lon: num(p.lon), speed: num(p.speed), bearing: num(p.bearing), acc: num(p.acc) })),
     gyro: xyz(input.gyro), grav: xyz(input.grav), acc: xyz(input.acc),
-    head: (input.head || []).map(h => ({ t: num(h.t), yaw: num(h.yaw), pitch: num(h.pitch), ok: !!h.ok }))
+    head: (input.head || []).map(h => ({ t: num(h.t), yaw: num(h.yaw), pitch: num(h.pitch), ok: !!h.ok })),
+    road: (input.road || []).map(r => ({ t: num(r.t), cars: num(r.cars) || 0, people: num(r.people) || 0, lead: r.lead && Number.isFinite(num(r.lead.dist)) ? { cls: String(r.lead.cls || 'car'), dist: num(r.lead.dist), wpx: num(r.lead.wpx) } : null }))
   };
   const meta = payload && payload.drive ? payload.drive : {};
   const id = keepId && typeof meta.id === 'string' && meta.id ? meta.id : newId();
@@ -116,7 +117,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     gaps: Array.isArray(meta.gaps) ? meta.gaps : [],
     marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
     focus: Array.isArray(meta.focus) ? meta.focus.filter(f => typeof f === 'string').slice(0, 3) : [],
-    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length },
+    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length, road: raw.road.length },
     calib: meta.calib && typeof meta.calib === 'object' ? meta.calib : null,
     diag: meta.diag && typeof meta.diag === 'object' ? meta.diag : null,
     driver: typeof meta.driver === 'string' ? meta.driver.slice(0, 40) : '',

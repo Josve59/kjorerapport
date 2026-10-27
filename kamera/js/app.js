@@ -10,8 +10,9 @@ import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, score
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
+import { roadSummary } from './road.js';
 
-export const APP_VERSION = 'k0.4.0';
+export const APP_VERSION = 'k0.5.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -100,13 +101,14 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|12k1`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|13k1`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
   let result;
   try {
     result = analyze(raw, opts);
+    if (raw.road && raw.road.length > 10) result.road = roadSummary(raw.road, result.points, { t0: result.t0 });
     if (raw.head && raw.head.length > 20) result.camera = evaluateMirrors(raw.head, drive.calib, { points: result.points, t0: result.t0, laneChanges: result.maneuvers.laneChanges,
       markedLanes: (drive.marks || []).filter(m => m.cat === 'felt').map(m => m.t - result.t0) });
   } catch (err) {
@@ -333,7 +335,25 @@ function getCalib() {
   return Object.values(all).filter(c => c && c.ok).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))[0] || null;
 }
 function saveCalib(c) { const s = getSettings(); saveSettings({ ...s, calib: { ...(s.calib || {}), [calibKey()]: c } }); }
-let camUnsub = null;
+let camUnsub = null, roadUnsub = null;
+let liveKmh = NaN;   // farten fra opptakeren, brukes av planen for kamerabytting
+
+/* Når skal testappen se på føreren, og når på veien? Styrt av farten (samkjøring med GPS):
+   - stille eller under 15 km/t: bare føreren (igangkjøring, kryss, parkering – speil og skulder betyr mest)
+   - 15–50 km/t (by): 6 s føreren, 2 s veien
+   - over 50 km/t: 4 s føreren, 3 s veien (avstand til bilen foran betyr mer)
+   Byttet selv tar tid (måles i kameratesten), og den tiden ser ingen av kameraene noe. */
+function cameraPlan() {
+  let phase = 'user', since = performance.now() / 1000;
+  return () => {
+    const now = performance.now() / 1000, st = cam.state();
+    if (st.switching || st.facing !== phase) since = now;   // tiden telles fra kameraet faktisk viser bildet
+    const [fu, fe] = liveKmh >= 50 ? [4, 3] : liveKmh >= 15 ? [6, 2] : [Infinity, 0];
+    if (phase === 'user' && fe > 0 && now - since >= fu) { phase = 'environment'; since = now; }
+    else if (phase === 'environment' && (fe === 0 || now - since >= fe)) { phase = 'user'; since = now; }
+    return phase;
+  };
+}
 let calibForDrive = null;   // tur som skal få kalibreringen når den er ferdig (fra rapporten)
 
 /* Starter kameraet og ansiktsgjenkjenningen hvis de ikke allerede går. */
@@ -366,6 +386,40 @@ async function renderCamera() {
     const d = await getDrive(calibForDrive);
     forDrive.textContent = `Kalibrerer for turen ${d ? date(d.startedAt) : ''}. Sett telefonen i holderen slik den sto under turen. Etterpå vurderes turen på nytt.`;
   }
+  // Veikamera (test)
+  const roadHelp = {
+    off: 'Bare førerkameraet.',
+    switch: 'Bytter etter farten: under 15 km/t bare fører, i by 6 s fører og 2 s vei, over 50 km/t 4 s fører og 3 s vei. Samkjøringen tar høyde for hullene.',
+    road: 'Bare veikameraet under kjøring. Speil og skulderblikk blir ikke målt.'
+  };
+  document.querySelectorAll('input[name=roadMode]').forEach(r => {
+    r.checked = r.value === (getSettings().roadMode || 'off');
+    r.onchange = () => { saveSettings({ ...getSettings(), roadMode: r.value }); $('#road-mode-help').textContent = roadHelp[r.value]; };
+  });
+  $('#road-mode-help').textContent = roadHelp[getSettings().roadMode || 'off'];
+  const prevTest = getSettings().dualTest;
+  if (prevTest) { $('#dual-result').innerHTML = dualTestHtml(prevTest); $('#btn-dual-share').hidden = false; }
+  $('#btn-dual-share').onclick = () => { const t = getSettings().dualTest; if (t) shareText(dualTestText(t)); };
+  $('#btn-dual-test').onclick = async () => {
+    const btn = $('#btn-dual-test'), out = $('#dual-result'), box = $('#dual-test');
+    if (camUnsub) { camUnsub(); camUnsub = null; }
+    cam.stopCamera();
+    $('#cam-stage').hidden = true; $('#btn-cam-start').hidden = false; $('#btn-cam-stop').hidden = true; status.textContent = '';
+    btn.disabled = true; box.hidden = false;
+    try {
+      out.textContent = 'Prøver begge kameraene samtidig …';
+      const both = await cam.testSimultaneous($('#dual-a'), $('#dual-b'));
+      out.textContent = 'Bytter mellom kameraene 10 ganger …';
+      const sw = await cam.testSwitching($('#dual-a'), 10, (i, n) => { out.textContent = `Bytter mellom kameraene … ${i} av ${n}`; });
+      const res = { at: new Date().toISOString(), both, sw, device: navigator.userAgent };
+      saveSettings({ ...getSettings(), dualTest: res });
+      out.innerHTML = dualTestHtml(res);
+      $('#btn-dual-share').hidden = false;
+    } catch (err) {
+      out.textContent = '';
+      infoDialog({ title: 'Kameratesten stoppet', text: err && err.name === 'NotAllowedError' ? 'Tilgang til kameraet ble avslått.' : String(err && err.message || err) });
+    } finally { btn.disabled = false; box.hidden = true; }
+  };
   const on = $('#cameraOn'); on.checked = !!settings.cameraOn;
   on.onchange = () => { saveSettings({ ...getSettings(), cameraOn: on.checked }); toast(on.checked ? 'Kameraet brukes under kjøring.' : 'Kameraet brukes ikke under kjøring.', { type: 'ok', ms: 2000 }); };
   const recent = [];
@@ -425,6 +479,32 @@ function unlockSpeech() { if ('speechSynthesis' in window) speak(' '); }
 
 /* Kalibrering: fire blikk med nedtelling over hele skjermen. Instruksjonene leses opp,
    fordi føreren ser i speilene og ikke på skjermen. Returnerer kalibreringen, eller null. */
+/* Resultatet av kameratesten, som tekst og HTML. Andelen tid førerkameraet ser føreren regnes ut for
+   planen over 50 km/t (4 s fører, 3 s vei) med målt byttetid to ganger per runde. */
+function dualTestShares(t) {
+  const sw = t.sw.settledAvg / 1000;
+  const cycle = 4 + 3 + 2 * sw;
+  return { front: 4 / cycle, road: 3 / cycle, blind: 2 * sw / cycle };
+}
+function dualTestText(t) {
+  const s = dualTestShares(t), pct = v => Math.round(v * 100) + ' %';
+  return [`Kameratest Kjørerapport (${date(t.at)})`,
+    `Begge kameraer samtidig: ${t.both.both ? 'JA' : 'nei'}${t.both.error ? ` (${t.both.error})` : ''}${!t.both.both && t.both.back && !t.both.front ? ' – frontkameraet stoppet da bakkameraet startet' : ''}`,
+    `Bytte, første bilde: snitt ${t.sw.firstAvg} ms, verst ${t.sw.firstMax} ms`,
+    `Bytte, lyset ferdig innstilt: snitt ${t.sw.settledAvg} ms, verst ${t.sw.settledMax} ms`,
+    `Med bytting over 50 km/t: fører ${pct(s.front)}, vei ${pct(s.road)}, blind ${pct(s.blind)}`,
+    `Enkeltmålinger (ms): ${t.sw.runs.map(r => `${r.to === 'user' ? 'F' : 'V'} ${r.first}/${r.settled}`).join(', ')}`,
+    `Telefon: ${t.device}`].join('\n');
+}
+function dualTestHtml(t) {
+  const s = dualTestShares(t), pct = v => Math.round(v * 100) + ' %';
+  return `<ul class="dual-list">
+    <li><strong>Begge samtidig:</strong> ${t.both.both ? 'Ja! Da trengs ingen bytting.' : 'Nei' + (t.both.back && !t.both.front ? ' – frontkameraet stoppet da bakkameraet startet.' : '.')}</li>
+    <li><strong>Bytte:</strong> første bilde etter ${t.sw.firstAvg} ms i snitt (verst ${t.sw.firstMax} ms), ferdig innstilt lys etter ${t.sw.settledAvg} ms (verst ${t.sw.settledMax} ms).</li>
+    <li><strong>Over 50 km/t</strong> ser førerkameraet føreren ${pct(s.front)} av tiden, veikameraet veien ${pct(s.road)}, og ${pct(s.blind)} går med til bytting.</li>
+  </ul><p class="muted small">Testet ${esc(date(t.at))}.</p>`;
+}
+
 async function runCalibration() {
   const overlay = $('#calib-overlay'), stepEl = $('#calib-step'), count = $('#calib-count'), progress = $('#calib-progress'), face = $('#calib-face');
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -701,6 +781,7 @@ function renderPrecheck() {
       try {
         await cam.startCamera($('#pre-video'));
         await cam.loadModel(t => setCheck(camCheck, null, t));
+        if (getSettings().roadMode && getSettings().roadMode !== 'off') await cam.loadRoadModel(t => setCheck(camCheck, null, t));
         cam.startLoop(8);
         if (camUnsub) camUnsub();
         let seen = 0, n = 0;
@@ -827,6 +908,7 @@ async function startRecording(replay = null) {
       if (lastMark) undoBtn.lastChild.textContent = `Angre «${MARK_CATS[lastMark.cat].label}» (${fmtClock(lastMark.t)})`;
       pill.textContent = st.marks ? `${st.marks} ${st.marks === 1 ? 'merke' : 'merker'}` : '';
       if (st.markCats) renderMarkCounts(st.markCats);
+      liveKmh = st.kmh;
       if (st.returnedFromGap) gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`;
       const msgs = [];
       if (st.wakeLockFailed) msgs.push('Sett Autolås til Aldri mens du kjører.');
@@ -847,6 +929,21 @@ async function startRecording(replay = null) {
       if (n % 16 === 0) { const ok = seen / 16 > 0.5; camPill.textContent = ok ? 'Kamera: ser føreren' : 'Kamera: ser ikke ansiktet'; camPill.dataset.state = ok ? 'ok' : 'wait'; seen = 0; }
     });
     camPill.textContent = 'Kamera: på'; camPill.dataset.state = 'ok';
+    const mode = settings.roadMode || 'off';
+    if (mode !== 'off') {
+      let lastRoad = null;
+      roadUnsub = cam.onRoad(r => { if (recorder) recorder.addRoad(r); lastRoad = r; });
+      if (mode === 'road') cam.switchTo('environment').catch(() => {});
+      else cam.setSchedule(cameraPlan());
+      const tick = setInterval(() => {
+        if (!recorder) { clearInterval(tick); return; }
+        const st = cam.state();
+        if (st.facing === 'environment') {
+          camPill.textContent = st.switching ? 'Kamera: bytter …' : `Veikamera${lastRoad && lastRoad.lead ? ` · bil ${Math.round(lastRoad.lead.dist)} m foran` : lastRoad ? ` · ${lastRoad.cars} biler` : ''}`;
+          camPill.dataset.state = 'ok';
+        }
+      }, 700);
+    }
   }
   try {
     await recorder.start();
@@ -891,6 +988,7 @@ async function finishRecording() {
   $('#record').classList.add('busy');
   const drive = await rec.stop();
   if (camUnsub) { camUnsub(); camUnsub = null; }
+  if (roadUnsub) { roadUnsub(); roadUnsub = null; }
   cam.stopCamera();
   $('#record').classList.remove('busy');
   if (getSettings().autoSpeak) speakNext = drive.id;

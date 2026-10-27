@@ -94,3 +94,15 @@ test('blikket borte fra veien: bare over 2 s, i fart og på rett vei', async () 
   assert.ok(Math.abs(a[0].t - 40) < 0.3 && a[0].dur >= 2.2);
   assert.ok(a[0].metres > 35 && a[0].metres < 45);
 });
+
+test('hull i førerkameraet (veikameraet var på) gir «ukjent», ikke «nei»', () => {
+  // Førerkameraet av mellom 40 og 52 s (veikameraet), et speilblikk ved 30 s
+  const s = series(120, [[30, 0.6, -34, -3]]).filter(x => x.t < 40 || x.t > 52);
+  const points = Array.from({ length: 121 }, (_, i) => ({ t: i, kmh: 60 }));
+  const e = evaluateMirrors(s, calib, { points, t0: 0, markedLanes: [53, 100] });
+  assert.equal(e.lane[0].mirror, null, 'så ikke føreren 38–52 s');
+  assert.equal(e.lane[0].shoulder, null);
+  assert.equal(e.lane[1].mirror, false, 'så føreren hele tiden før 100 s');
+  assert.ok(e.frontShare > 0.85 && e.frontShare < 0.95, String(e.frontShare));
+  assert.ok(e.longestGap > 70 && e.longestGap < 85, 'tiden med veikamera (12 s) teller ikke som tid uten speil: ' + e.longestGap);
+});

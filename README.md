@@ -128,6 +128,32 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.5.0 (camera test app) – road camera and camera switching
+
+The test app `kamera/` is now the test bed for the road-facing (rear) camera.
+
+- **Road camera** (`kamera/js/road.js`, `facecam.js`). It uses the MediaPipe Object Detector with EfficientDet-Lite0 (`vendor/mediapipe/efficientdet_lite0.tflite`, 4.6 MB, Google's model bucket, COCO classes) and only counts car/truck/bus/motorcycle/bicycle/person. The lead vehicle is a vehicle centred in the frame (middle 30 %) with its bottom edge in the lower part, the widest one. Distance = typical vehicle width × focal length / box width, assuming about 66° field of view on the long side, so ±20–30 %. Time gap = distance / GPS speed. Only numbers are stored (`road` samples in the chunks), never images. On five Wikimedia traffic photos it found the cars and picked a sensible lead car (11–19 m in queues). It takes about 80–120 ms per image on a Mac CPU.
+- **Modes** in Kamera → «Veikamera»:
+  - «Av»
+  - «Bytt»: switches between driver and road camera by speed. Below 15 km/h driver only; 15–50 km/h 6 s driver / 2 s road; above 50 km/h 4 s driver / 3 s road. A phase is counted from when the new camera actually shows a frame.
+  - «Bare vei»
+- **Camera test** («Test to kameraer»):
+  - First tries to keep both cameras on at once, by checking that each track is live, not muted and still delivering frames.
+  - Then switches 10 times and measures time to the first frame and to settled exposure (3 frames within 4 % brightness).
+  - Shows how much of the time each camera would see at highway speed, and can share the result.
+  - iPhone Safari is expected to allow only one camera at a time. The test settles it on the actual phone.
+- **Fusion that accounts for the gaps:**
+  - Mirror and shoulder checks are «ukjent» (null, shown as «?») instead of «nei» when the driver camera saw the driver less than half of the window. A glance that was seen still counts as yes.
+  - Time with the road camera is not counted as time without mirror checks, and glances per minute use the time the driver camera was actually on (`frontShare`).
+  - Close following: a time gap under 1.0 s at 50 km/h or more for at least 2 s («Kort avstand til bilen foran», serious under 0.7 s). Between road-camera bursts the gap is assumed unchanged, but only while our GPS speed changed less than 15 km/h. Otherwise no bridge.
+  - Braking: the report says how far ahead the lead car was just before, and braking with a time gap under 1.5 s counts as serious.
+  - The report gets a «Veien foran» section with typical time gap and distance, close-following count and how much of the time each camera saw.
+- New tests: `tests/road.test.mjs` (lead selection, distance, bridging, no bridge after a speed change, storable result), plus gap tests in camera and situations. 75 tests in total.
+
+## What's new in 0.8.1
+
+- Mirror and shoulder checks that could not be judged show «?» instead of ✕ (shared camera code). The source label «Kamera» is now «Førerkamera».
+
 ## What's new in 0.8.0 – camera in the main app, and data fusion
 
 **Camera moved into the main app.** Everything from the camera test version is now in Kjørerapport itself, off by default. It covers calibration from the checklist, spoken full-screen calibration, mirror and shoulder checks, marked lane changes, forward drift and «Kalibrer og vurder turen» afterwards. Turn it on under «Kamera: speil- og skulderblikk» on the home screen. The camera code now lives in `js/camera.js` and `js/facecam.js`, and the MediaPipe files moved to the shared `vendor/mediapipe/`. They are cached on first use in `kjorerapport-ml`, which is kept across versions. `kamera/` stays as a separate test app and will become the test bed for the road-facing camera.

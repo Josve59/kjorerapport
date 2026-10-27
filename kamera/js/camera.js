@@ -204,35 +204,52 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
   const glances = detectGlances(valid, calib).map(g => ({ ...g, t: g.t - t0, tEnd: g.tEnd - t0 }));
   const mirrors = glances.filter(g => MIRRORS.includes(g.cls));
   const count = c => glances.filter(g => g.cls === c).length;
-  let moving = 0, gap = 0, longest = 0, longestAt = 0, gi = 0;
+  // Når så førerkameraet føreren? (v0.8.1) Testappen kan bytte til veikameraet, og da finnes det hull.
+  // Et punkt regnes som sett hvis det finnes en måling innen 0,6 s.
+  const ts = valid.map(x => x.t - t0).sort((a, b) => a - b);
+  const seenAt = t => {
+    let lo = 0, hi = ts.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (ts[mid] < t) lo = mid + 1; else hi = mid; }
+    return Math.abs(ts[lo] - t) <= 0.6 || (lo > 0 && Math.abs(ts[lo - 1] - t) <= 0.6);
+  };
+  const seenShare = (a, b) => { a = Math.max(a, ts[0]); let n = 0, k = 0; for (let t = a; t <= b; t += 0.5) { n++; if (seenAt(t)) k++; } return n ? k / n : 0; };   // før opptaket startet finnes ingenting å se
+  let moving = 0, seenMoving = 0, gap = 0, longest = 0, longestAt = 0, gi = 0;
   for (let i = 1; i < points.length; i++) {
     const dt = Math.min(points[i].t - points[i - 1].t, 5);
     while (gi < mirrors.length && mirrors[gi].t <= points[i].t) { gap = 0; gi++; }
-    if (points[i].kmh > 10) { moving += dt; gap += dt; if (gap > longest) { longest = gap; longestAt = points[i].t; } }
+    if (points[i].kmh > 10) {
+      moving += dt;
+      if (!seenAt(points[i].t)) continue;   // tid kameraet så veien teller ikke som tid uten speil
+      seenMoving += dt; gap += dt;
+      if (gap > longest) { longest = gap; longestAt = points[i].t; }
+    }
   }
   const within = (cls, a, b) => glances.some(g => cls.includes(g.cls) && g.tEnd >= a && g.t <= b);
+  // Ja hvis blikket finnes. Nei bare hvis førerkameraet så føreren minst halve tiden; ellers ukjent (null).
+  const check = (cls, a, b) => within(cls, a, b) ? true : seenShare(a, b) >= 0.5 ? false : null;
   // Merket av ledsager (v0.7.8): merket kommer etter feltskiftet, og retningen er ukjent.
   // Speil (et hvilket som helst) 15–1 s før merket, skulderblikk (en av sidene) 12–0 s før.
   const marked = markedLanes.slice().sort((a, b) => a - b).filter((t, i, a) => !i || t - a[i - 1] >= 4);
   const lane = marked.length ? marked.map(t => ({
     t, dir: null, marked: true, kmh: null,
-    mirror: within(MIRRORS, t - 15, t - 1),
-    shoulder: within(['shoulderL', 'shoulderR'], t - 12, t + 0.5)
+    mirror: check(MIRRORS, t - 15, t - 1),
+    shoulder: check(['shoulderL', 'shoulderR'], t - 12, t + 0.5)
   })) : laneChanges.map(l => {
     const left = l.dir === 'venstre';
     return {
       t: l.t, dir: l.dir, kmh: l.kmh,
-      mirror: within(left ? ['left', 'rear'] : ['right', 'rear'], l.tFrom - 8, l.tFrom + 1),
-      shoulder: within([left ? 'shoulderL' : 'shoulderR'], l.tFrom - 5, l.tFrom + 1.5)
+      mirror: check(left ? ['left', 'rear'] : ['right', 'rear'], l.tFrom - 8, l.tFrom + 1),
+      shoulder: check([left ? 'shoulderL' : 'shoulderR'], l.tFrom - 5, l.tFrom + 1.5)
     };
   });
   let start = null;
   const firstMove = points.find(p => p.kmh > 5);
-  if (firstMove) start = { t: firstMove.t, mirror: within(['left', 'rear'], firstMove.t - 12, firstMove.t + 1), shoulder: within(['shoulderL'], firstMove.t - 8, firstMove.t + 1) };
+  if (firstMove) start = { t: firstMove.t, mirror: check(['left', 'rear'], firstMove.t - 12, firstMove.t + 1), shoulder: check(['shoulderL'], firstMove.t - 8, firstMove.t + 1) };
   return {
     coverage, glances,
     counts: { left: count('left'), right: count('right'), rear: count('rear'), shoulderL: count('shoulderL'), shoulderR: count('shoulderR') },
-    perMin: moving > 30 ? mirrors.length / (moving / 60) : 0,
+    perMin: seenMoving > 30 ? mirrors.length / (seenMoving / 60) : 0,
+    frontShare: moving > 0 ? Math.round(seenMoving / moving * 100) / 100 : 0,
     longestGap: longest, longestGapAt: longestAt - longest,
     lane, laneSource: marked.length ? 'marks' : 'sensors', start, calibrated: !!(calib && calib.ok),
     drift: Math.round(forwardDrift(valid, calib).max * 10) / 10,

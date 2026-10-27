@@ -198,6 +198,22 @@
         <label class="toggle"><span><strong>Bruk kamera under kjøring</strong><br><span class="muted small">Kameraet starter når ledsageren gir tilgang før turen, og rapporten får en del om speil- og skulderblikk.</span></span><input type="checkbox" class="switch" id="cameraOn"></label>
       </div>
     </section>
+    <section class="card">
+      <h2 class="card-title"><span data-icon="layers"></span>Veikamera <span class="beta-tag">Test</span></h2>
+      <p>Bakkameraet ser veien foran: biler, folk og avstanden til bilen foran. Nettleseren på iPhone kan bare bruke ett kamera om gangen, så testappen kan bytte mellom dem. Bilder lagres aldri, bare tall.</p>
+      <div class="segment" role="radiogroup" aria-label="Veikamera">
+        <label><input type="radio" name="roadMode" value="off"><span>Av</span></label>
+        <label><input type="radio" name="roadMode" value="switch"><span>Bytt</span></label>
+        <label><input type="radio" name="roadMode" value="road"><span>Bare vei</span></label>
+      </div>
+      <p class="muted small" id="road-mode-help"></p>
+      <h3 class="mt">Kameratest</h3>
+      <p class="muted small">Tester om begge kameraene kan være på samtidig, og hvor lang tid et bytte tar. Gjør den i bilen med telefonen i holderen. Tar rundt 30 sekunder.</p>
+      <button type="button" class="btn secondary" id="btn-dual-test"><span data-icon="layers"></span>Test to kameraer</button>
+      <div class="dual-test" id="dual-test" hidden><video id="dual-a" playsinline muted></video><video id="dual-b" playsinline muted></video></div>
+      <div class="dual-result" id="dual-result" aria-live="polite"></div>
+      <button type="button" class="btn secondary" id="btn-dual-share" hidden><span data-icon="share"></span>Send resultatet</button>
+    </section>
   </section>
 
   <!-- Faresteder -->
@@ -353,7 +369,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.4.0</p>
+    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.5.0</p>
   </section>
 
 </main>

@@ -120,7 +120,7 @@ export function renderReport(root, r, ctx = {}) {
   const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events), fromNvdb: true } : null;
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null) : null;
   const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
-  const sits = buildSituations(r, { camera: r.camera, marks, sp });
+  const sits = buildSituations(r, { camera: r.camera, marks, sp, road: r.road || null });
   const sitSum = situationSummary(sits);
 
   // Datakvalitet: alt teknisk samlet ett sted
@@ -187,7 +187,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
 
     <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
+      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${r.road ? '<a href="#road-section">Veien</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
     </nav>
 
 
@@ -271,6 +271,7 @@ export function renderReport(root, r, ctx = {}) {
     ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}
 
     ${r.camera ? cameraSection(r, ctx) : ''}
+    ${r.road ? roadSection(r) : ''}
 
     ${marks.length ? `<section class="card" id="marks-section">
       <h2 class="card-title">${icon('flag')}Ledsagerens merker</h2>
@@ -576,6 +577,23 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
 
 /* Kamera-testversjonen: speil- og skulderblikk fra hodets retning */
 const GLANCE_LABEL = { left: 'Venstre speil', right: 'Høyre speil', rear: 'Bakspeil', shoulderL: 'Skulder venstre', shoulderR: 'Skulder høyre' };
+/* Veikameraet (testappen): avstand til bilen foran, sammen med GPS-farten. */
+function roadSection(r) {
+  const rd = r.road;
+  const cov = Math.round(rd.coverage * 100);
+  const cam = r.camera;
+  return `<section class="card" id="road-section">
+      <h2 class="card-title">${icon('layers')}Veien foran <span class="beta-tag">Test</span></h2>
+      <div class="road-stats">
+        <div><strong>${rd.medianHeadway !== null ? n1(rd.medianHeadway) + ' s' : '–'}</strong><span class="muted small">vanlig avstand i tid</span></div>
+        <div><strong>${rd.medianDist !== null ? rd.medianDist + ' m' : '–'}</strong><span class="muted small">vanlig avstand</span></div>
+        <div><strong>${rd.close.length}</strong><span class="muted small">ganger for nær</span></div>
+      </div>
+      <p>${rd.close.length ? `For kort avstand til bilen foran ${rd.close.length === 1 ? 'én gang' : rd.close.length + ' ganger'}. Se Situasjoner.` : rd.medianHeadway !== null ? 'Ingen perioder med for kort avstand til bilen foran.' : 'Det var sjelden en bil rett foran når veikameraet så veien.'} Hold minst 2 sekunder, og 3 i mørke eller på glatt vei.</p>
+      <p class="muted small">Veikameraet så veien ${cov} % av tiden${cam && cam.frontShare !== undefined ? `, førerkameraet føreren ${Math.round(cam.frontShare * 100)} %` : ''}. Opptil ${rd.maxCars} biler i bildet samtidig${rd.peopleSeen ? `, folk eller syklister i ${rd.peopleSeen} bilder` : ''}. Avstanden anslås ut fra hvor bred bilen ser ut og kan bomme med 20–30 %. Mellom bildene fra veikameraet antas avstanden å være den samme, så lenge farten var nesten lik.</p>
+    </section>`;
+}
+
 function cameraSection(r, ctx = {}) {
   const c = r.camera;
   const T = Math.max(1, r.points.length ? r.points[r.points.length - 1].t : 1);
@@ -589,9 +607,9 @@ function cameraSection(r, ctx = {}) {
   const W = 340, H = 64, x = t => (Math.max(0, Math.min(T, t)) / T * W).toFixed(1);
   const rowY = { rear: 10, left: 22, right: 34, shoulderL: 46, shoulderR: 46 };
   const ticks = c.glances.map(g => `<rect class="gl-${g.cls}" x="${x(g.t)}" y="${rowY[g.cls] - 4}" width="${Math.max(2, (g.dur / T) * W).toFixed(1)}" height="8" rx="1.5"/>`).join('');
-  const lanes = c.lane.map(l => `<path class="gl-lane ${l.mirror && l.shoulder ? 'ok' : 'no'}" d="M${x(l.t)} 54 l-4 8 h8 z"/>`).join('');
+  const lanes = c.lane.map(l => `<path class="gl-lane ${l.mirror && l.shoulder ? 'ok' : l.mirror === false || l.shoulder === false ? 'no' : 'unk'}" d="M${x(l.t)} 54 l-4 8 h8 z"/>`).join('');
   const gap = c.longestGap > 5 ? `<rect class="gl-gap" x="${x(c.longestGapAt)}" y="2" width="${Math.max(2, c.longestGap / T * W).toFixed(1)}" height="50"/>` : '';
-  const yes = (ok, txt) => `<span class="cam-chip ${ok ? 'ok' : 'no'}">${ok ? icon('check', 14) : '✕'} ${txt}</span>`;
+  const yes = (ok, txt) => ok === null ? `<span class="cam-chip unk" title="Førerkameraet så veien akkurat da">? ${txt}</span>` : `<span class="cam-chip ${ok ? 'ok' : 'no'}">${ok ? icon('check', 14) : '✕'} ${txt}</span>`;
   const laneOk = c.lane.filter(l => l.mirror && l.shoulder).length;
   const verdict = c.perMin >= 6 ? 'Hyppige speilblikk – bra!' : c.perMin >= 3 ? 'Jevnlige speilblikk. Prøv å sjekke speilene litt oftere.' : 'Få speilblikk registrert. Øv på å sjekke speilene hvert 5.–8. sekund.';
   return `<section class="card" id="camera-section">

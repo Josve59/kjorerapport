@@ -589,9 +589,9 @@ function cameraSection(r, ctx = {}) {
   const W = 340, H = 64, x = t => (Math.max(0, Math.min(T, t)) / T * W).toFixed(1);
   const rowY = { rear: 10, left: 22, right: 34, shoulderL: 46, shoulderR: 46 };
   const ticks = c.glances.map(g => `<rect class="gl-${g.cls}" x="${x(g.t)}" y="${rowY[g.cls] - 4}" width="${Math.max(2, (g.dur / T) * W).toFixed(1)}" height="8" rx="1.5"/>`).join('');
-  const lanes = c.lane.map(l => `<path class="gl-lane ${l.mirror && l.shoulder ? 'ok' : 'no'}" d="M${x(l.t)} 54 l-4 8 h8 z"/>`).join('');
+  const lanes = c.lane.map(l => `<path class="gl-lane ${l.mirror && l.shoulder ? 'ok' : l.mirror === false || l.shoulder === false ? 'no' : 'unk'}" d="M${x(l.t)} 54 l-4 8 h8 z"/>`).join('');
   const gap = c.longestGap > 5 ? `<rect class="gl-gap" x="${x(c.longestGapAt)}" y="2" width="${Math.max(2, c.longestGap / T * W).toFixed(1)}" height="50"/>` : '';
-  const yes = (ok, txt) => `<span class="cam-chip ${ok ? 'ok' : 'no'}">${ok ? icon('check', 14) : '✕'} ${txt}</span>`;
+  const yes = (ok, txt) => ok === null ? `<span class="cam-chip unk" title="Kameraet så ikke føreren akkurat da">? ${txt}</span>` : `<span class="cam-chip ${ok ? 'ok' : 'no'}">${ok ? icon('check', 14) : '✕'} ${txt}</span>`;
   const laneOk = c.lane.filter(l => l.mirror && l.shoulder).length;
   const verdict = c.perMin >= 6 ? 'Hyppige speilblikk – bra!' : c.perMin >= 3 ? 'Jevnlige speilblikk. Prøv å sjekke speilene litt oftere.' : 'Få speilblikk registrert. Øv på å sjekke speilene hvert 5.–8. sekund.';
   return `<section class="card" id="camera-section">

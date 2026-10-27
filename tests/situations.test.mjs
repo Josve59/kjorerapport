@@ -51,3 +51,18 @@ test('samkjøring: fart over grensen og uten kamera', () => {
   assert.equal(speed[0].level, 'medium');
   assert.deepEqual(speed[0].marks, ['fart'], 'ledsagerens merke knyttes til, fasitmerket ikke');
 });
+
+test('samkjøring med veikameraet: kort avstand og bremsing nær bilen foran', () => {
+  const road = { close: [{ t: 150, tEnd: 158, dur: 8, minHeadway: 0.6, minDist: 10, kmh: 60 }], follow: [{ t: 40, dist: 50, headway: 3 }, { t: 99, dist: 18, headway: 1.1 }, { t: 120, dist: 30, headway: 1.8 }] };
+  const cam = { ...camera, away: [], lane: [{ t: 220, dir: null, marked: true, mirror: null, shoulder: null }] };
+  const s = buildSituations(r, { camera: cam, road });
+  const close = s.find(x => x.kind === 'close');
+  assert.equal(close.level, 'high');
+  assert.ok(close.sources.includes('roadcam'));
+  const brake = s.find(x => x.event === 'brake');
+  assert.equal(brake.level, 'high', 'kraftig brems 1,1 s bak bilen foran');
+  assert.match(brake.text, /18 m unna \(1,1 s\)/);
+  const lane = s.find(x => x.kind === 'lane');
+  assert.equal(lane.level, 'low', 'ukjent er ikke en feil');
+  assert.match(lane.text, /så veien akkurat da/);
+});
