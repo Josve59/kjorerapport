@@ -595,3 +595,68 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .field input, .add-row input { width: 100%; min-width: 0; }
 @media (max-width: 360px) { .goal-fields { grid-template-columns: 1fr; } }
 .start-card { contain: paint; }
+
+/* ---- v0.6.0 ---- */
+/* Ledsagerens hurtigknapper */
+.mark-wrap { width: 100%; }
+.mark-help { font-weight: 800; text-align: center; margin: 0 0 8px; color: var(--muted); font-size: .95rem; }
+.mark-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mark-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 74px; border-radius: 16px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 800; font-size: .95rem; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .1s, background .2s; }
+.mark-btn:active { transform: scale(.96); }
+.mark-btn.flash { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.mark-n { position: absolute; top: 6px; right: 8px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--ink); color: var(--bg); font-size: .75rem; display: grid; place-items: center; padding: 0 5px; }
+.mark-n:empty { display: none; }
+.mark-btn.flash .mark-n { background: var(--bg); color: var(--ink); }
+.record .stop { width: 180px; height: 180px; margin: 16px 0 20px; }
+.record .rec-elapsed { margin: 10px 0 4px; }
+
+/* Øvingsmål */
+.focus-title { font-weight: 700; margin: 14px 0 8px; }
+.chips.wrap { flex-wrap: wrap; overflow: visible; margin-bottom: 0; }
+.chips.wrap .chip { min-height: 40px; padding: 0 12px; font-size: .92rem; }
+.focus-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.focus-list li { display: flex; align-items: flex-start; gap: 10px; }
+.focus-list li > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; }
+.f-ico { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--bg); color: var(--muted); }
+.f-ok .f-ico { background: var(--good); color: #fff; }
+.f-no .f-ico { background: var(--turn); color: #fff; }
+.f-state { font-weight: 800; font-size: .85rem; white-space: nowrap; }
+.f-ok .f-state { color: var(--good); } .f-no .f-state { color: var(--turn); }
+
+/* Veier og manøvrer */
+.road-mix { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--bg); margin: 4px 0 6px; }
+.road-mix span { display: block; height: 100%; }
+.mix-by { background: var(--accel); } .mix-land { background: var(--good); } .mix-motor { background: var(--turn); }
+.light-day { background: #f2be22; } .light-twilight { background: var(--muted); } .light-dark { background: #2a2f33; }
+:root[data-theme="dark"] .light-dark { background: #5b6369; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .light-dark { background: #5b6369; } }
+.legend .mix-dot { border-radius: 3px; }
+.man-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.man-list li + li { border-top: 1px solid var(--line); }
+.man-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 2px; background: none; border: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.man-item .ev-text { flex: 1; }
+.man-item > .ico:last-child { color: var(--muted); }
+.man-ico { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--bg); }
+.man-ico.ok { color: var(--good); } .man-ico.no { color: var(--turn); }
+.man-verdict { font-size: .9rem; font-weight: 700; }
+.man-verdict.ok { color: var(--good); } .man-verdict.no { color: var(--turn); }
+details.gw { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 4px; }
+details.gw summary { font-size: 1rem; min-height: 48px; }
+.gw-list { list-style: none; margin: 0; padding: 0; }
+.man-item.small { min-height: 44px; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.mark-cat { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 10px; background: var(--bg); font-size: .85rem; margin-right: 4px; }
+.map-highlight { stroke: var(--ink); }
+
+/* Kjørelogg */
+.log-card-btn { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; margin-bottom: 14px; }
+.log-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.log-row > span { display: flex; flex-direction: column; }
+.log-row strong { font-size: 1.15rem; }
+.week-bars { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; align-items: end; height: 150px; margin: 6px 0; }
+.wk { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.wk-bar { width: 100%; max-width: 30px; border-radius: 6px 6px 2px 2px; background: var(--accel); min-height: 2px; }
+.wk-val { font-size: .75rem; font-weight: 800; color: var(--muted); }
+.wk-lbl { font-size: .7rem; color: var(--muted); white-space: nowrap; }
+.log-list { padding: 4px 12px; }
+.pad { margin: 0 4px 10px; }
+#log .btn { margin-top: 4px; }
