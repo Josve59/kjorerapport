@@ -128,6 +128,33 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.6.0 (camera test app) / 0.8.2 – optimised switching, lane lines
+
+Built on the camera test from the iPhone (27 Oct). Both cameras at once is not possible. A switch takes 0.62 s to the first frame and 0.84 s to settled exposure, very consistently. Before building, the strategies were simulated on the two calibrated drives by removing driver-camera data when a plan would have looked at the road:
+
+| Plan | Driver | Road | Blind | Mirror/shoulder glances kept |
+|---|---|---|---|---|
+| Old (4/3 s, 6/2 s) | 68–71 % | 18–22 % | 13–15 % | 61–79 % |
+| **New, standard** | **82–84 %** | **8–9 %** | **8–9 %** | **84–85 %** |
+| New, goal «speil og skulderblikk» | 91 % | 4–5 % | 4–5 % | 94–95 % |
+
+What was built:
+- **Planner (`kamera/js/plan.js`).** Short road looks of 1.5 s. Never below 15 km/h, never while turning or in the 3 s after (turning = gyro projected on gravity > 6 °/s, using the iPhone axis order). An immediate look on hard horizontal acceleration without turning, i.e. braking. Every 5 s when the last look showed a car closer than 1.5 s. Phases are counted from when the new camera shows a frame. Plain total rotation was tried and rejected: road vibration made it read «turning» 45 % of the time against 13–17 % really.
+- **Practice goal and driver profile** set the interval between looks. «Speil»/«feltskifte» gives 25 s, «fart»/«jevn fart»/«bremsing» gives 6 s, and the standard is 8 s above 50 km/h and 12 s in town. The profile from the driver's last 5 drives (Beta-smoothed mirror and shoulder rates, close following) shortens or lengthens it. The driver camera is clamped to at least about 60 % and the road to at least about 5 %. Reasons are stored with the drive and shown in the report.
+- **Live sensors in the recorder:** smoothed yaw rate about the vertical (°/s) and horizontal linear acceleration (m/s²).
+- **«No» needs 90 % coverage.** A missing mirror or shoulder check is «nei» only when the driver camera saw the driver 90 % of the window, otherwise «?». At 50 % the simulation gave wrong «nei» in up to 25 % of checks.
+- **Frames from the first 250 ms after a switch are dropped** (exposure still settling), so a dark frame cannot look like a lost face, which would read as a shoulder check.
+- **Performance:**
+  - Smoothed time per analysis for each model is measured.
+  - Above 110 ms the camera drops to 5 fps («telefonen er treg (varm?)»), and returns to 8 fps after 20 s of fast frames.
+  - Stored per drive with the camera split, the reasons for road looks and the average switch time (`drive.cameraPlan`).
+  - A camera that delivers no frames can no longer hang a switch (2 s timeout on `play()`).
+- **Lane lines (`kamera/js/lanes.js`).**
+  - **Method:** bright stripes on a dark (asphalt) background in the lower part of a 160 px wide grey image, a RANSAC line per side, then checks that both lines point towards a vanishing point near the centre. Offset from the lane centre uses a 3.25 m lane, and it takes about 1–6 ms per frame.
+  - **Results on Wikimedia road photos:** trees and snow edges are rejected, and the Saltfjellet centre and edge lines are found. Dashed lines far away are often missed.
+  - **Use in the app:** a live overlay («Vis feltlinjer») on the camera screen. Lane position is stored with each road frame, and the report shows «Plassering i feltet» (share of frames with both lines, typical offset, spread, frames near a line).
+- 81 tests (new: `plan.test.mjs`, `lanes.test.mjs`).
+
 ## What's new in k0.5.0 (camera test app) – road camera and camera switching
 
 The test app `kamera/` is now the test bed for the road-facing (rear) camera.

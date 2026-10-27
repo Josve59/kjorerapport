@@ -11,8 +11,9 @@ import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 import { roadSummary } from './road.js';
+import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.5.0';
+export const APP_VERSION = 'k0.6.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -101,7 +102,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|13k1`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|14k1`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -338,21 +339,29 @@ function saveCalib(c) { const s = getSettings(); saveSettings({ ...s, calib: { .
 let camUnsub = null, roadUnsub = null;
 let liveKmh = NaN;   // farten fra opptakeren, brukes av planen for kamerabytting
 
-/* Når skal testappen se på føreren, og når på veien? Styrt av farten (samkjøring med GPS):
-   - stille eller under 15 km/t: bare føreren (igangkjøring, kryss, parkering – speil og skulder betyr mest)
-   - 15–50 km/t (by): 6 s føreren, 2 s veien
-   - over 50 km/t: 4 s føreren, 3 s veien (avstand til bilen foran betyr mer)
-   Byttet selv tar tid (måles i kameratesten), og den tiden ser ingen av kameraene noe. */
-function cameraPlan() {
-  let phase = 'user', since = performance.now() / 1000;
+/* Planen for kamerabytting (k0.6.0) ligger i plan.js. Her kobles den til opptakeren (svingrate om
+   loddlinjen, vannrett akselerasjon, GPS-fart) og kameraet (hvilket kamera som viser bilde, siste bil foran). */
+let planner = null, lastLead = null, roadModeNow = 'off';
+function cameraPlan(settings) {
+  planner = createPlanner(settings);
+  lastLead = null;
   return () => {
-    const now = performance.now() / 1000, st = cam.state();
-    if (st.switching || st.facing !== phase) since = now;   // tiden telles fra kameraet faktisk viser bildet
-    const [fu, fe] = liveKmh >= 50 ? [4, 3] : liveKmh >= 15 ? [6, 2] : [Infinity, 0];
-    if (phase === 'user' && fe > 0 && now - since >= fu) { phase = 'environment'; since = now; }
-    else if (phase === 'environment' && (fe === 0 || now - since >= fe)) { phase = 'user'; since = now; }
-    return phase;
+    const st = cam.state(), r = recorder;
+    const kmh = r && Number.isFinite(r.speed) ? r.speed * 3.6 : liveKmh;
+    return planner({ now: performance.now() / 1000, kmh, yaw: r ? r.liveYaw : 0, hacc: r ? r.liveHacc : 0, facing: st.facing, switching: st.switching, lastLead }).want;
   };
+}
+/* Det som lagres med turen om kameratiden: plan, fordeling, grunner for veiblikk og hvor rask telefonen var. */
+function cameraInfo() {
+  if (roadModeNow === 'off') return null;
+  const st = cam.state(), sw = st.switches;
+  const info = { mode: roadModeNow, switchAvg: sw.length ? Math.round(sw.reduce((a, b) => a + b, 0) / sw.length) : null, switches: sw.length, perf: st.perf };
+  if (planner) {
+    const p = planner.stats, tot = p.front + p.road + p.blind || 1;
+    Object.assign(info, { settings: planner.settings, looks: p.looks, byReason: p.byReason,
+      share: { front: Math.round(p.front / tot * 100) / 100, road: Math.round(p.road / tot * 100) / 100, blind: Math.round(p.blind / tot * 100) / 100 } });
+  }
+  return info;
 }
 let calibForDrive = null;   // tur som skal få kalibreringen når den er ferdig (fra rapporten)
 
@@ -400,6 +409,29 @@ async function renderCamera() {
   const prevTest = getSettings().dualTest;
   if (prevTest) { $('#dual-result').innerHTML = dualTestHtml(prevTest); $('#btn-dual-share').hidden = false; }
   $('#btn-dual-share').onclick = () => { const t = getSettings().dualTest; if (t) shareText(dualTestText(t)); };
+  // Direktevisning av feltlinjer: veikameraet på kamerasiden med linjene tegnet oppå
+  let laneTest = false;
+  const laneBtn = $('#btn-lane-test'), overlay = $('#lane-overlay');
+  const stopLaneTest = async () => {
+    laneTest = false; cam.setLaneOverlay(null); overlay.hidden = true; laneBtn.lastChild.textContent = 'Vis feltlinjer';
+    if (cam.state().running) { await cam.switchTo('user'); }
+  };
+  laneBtn.onclick = async () => {
+    if (laneTest) { await stopLaneTest(); return; }
+    try {
+      laneBtn.disabled = true;
+      if (!cam.state().running && !(await startCam())) return;
+      status.textContent = 'Laster gjenkjenning av biler …';
+      await cam.loadRoadModel(t => { status.textContent = t; });
+      await cam.switchTo('environment');
+      cam.setLaneOverlay(overlay); overlay.hidden = false; laneTest = true;
+      label.textContent = 'Veikamera'; label.dataset.cls = 'forward';
+      status.textContent = 'Veikameraet er på. Bildene lagres ikke.';
+      laneBtn.lastChild.textContent = 'Tilbake til førerkameraet';
+      $('#cam-stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) { infoDialog({ title: 'Veikameraet startet ikke', text: String(err && err.message || err) }); }
+    finally { laneBtn.disabled = false; }
+  };
   $('#btn-dual-test').onclick = async () => {
     const btn = $('#btn-dual-test'), out = $('#dual-result'), box = $('#dual-test');
     if (camUnsub) { camUnsub(); camUnsub = null; }
@@ -930,11 +962,21 @@ async function startRecording(replay = null) {
     });
     camPill.textContent = 'Kamera: på'; camPill.dataset.state = 'ok';
     const mode = settings.roadMode || 'off';
+    roadModeNow = mode; planner = null;
     if (mode !== 'off') {
       let lastRoad = null;
-      roadUnsub = cam.onRoad(r => { if (recorder) recorder.addRoad(r); lastRoad = r; });
+      roadUnsub = cam.onRoad(r => {
+        if (recorder) recorder.addRoad(r);
+        lastRoad = r;
+        const kmh = recorder && Number.isFinite(recorder.speed) ? recorder.speed * 3.6 : NaN;
+        if (r.lead && kmh >= 30) lastLead = { headway: r.lead.dist / (kmh / 3.6), at: performance.now() / 1000 };
+      });
       if (mode === 'road') cam.switchTo('environment').catch(() => {});
-      else cam.setSchedule(cameraPlan());
+      else {
+        // Dagens mål og førerprofilen (siste 5 turer for samme fører) bestemmer hvor ofte veien sjekkes
+        const prev = (await listDrives()).filter(d => isReal(d) && d.result && (d.driver || '') === (settings.activeDriver || '')).slice(0, 5).map(d => d.result);
+        cam.setSchedule(cameraPlan(planSettings({ profile: driverProfile(prev), focus: settings.focus || [] })));
+      }
       const tick = setInterval(() => {
         if (!recorder) { clearInterval(tick); return; }
         const st = cam.state();
@@ -942,6 +984,7 @@ async function startRecording(replay = null) {
           camPill.textContent = st.switching ? 'Kamera: bytter …' : `Veikamera${lastRoad && lastRoad.lead ? ` · bil ${Math.round(lastRoad.lead.dist)} m foran` : lastRoad ? ` · ${lastRoad.cars} biler` : ''}`;
           camPill.dataset.state = 'ok';
         }
+        if (st.perf.slow) { camPill.textContent = 'Kamera: telefonen er treg (varm?)'; camPill.dataset.state = 'wait'; }
       }, 700);
     }
   }
@@ -986,7 +1029,9 @@ async function finishRecording() {
   recorder = null;
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
+  const camInfo = cameraInfo();
   const drive = await rec.stop();
+  if (camInfo) { await updateDrive(drive.id, { cameraPlan: camInfo }); drive.cameraPlan = camInfo; }
   if (camUnsub) { camUnsub(); camUnsub = null; }
   if (roadUnsub) { roadUnsub(); roadUnsub = null; }
   cam.stopCamera();
@@ -1080,6 +1125,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       sameRoute: routeRows,
       onSpeak: text => { if (!speak(text)) toast('Telefonen støtter ikke opplesning.', { type: 'error' }); },
       hasCalib: !!getCalib(),
+      cameraPlan: drive.cameraPlan || null,
       onCalibrate: async useSaved => {
         if (useSaved && getCalib()) { await applyCalibToDrive(id, getCalib()); renderDriveReport(id, { keepScroll: true }); }
         else { calibForDrive = id; location.hash = '#/kamera'; }

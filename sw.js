@@ -1,6 +1,6 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.8.1';
+const VERSION = 'v0.8.2';
 const CACHE = 'kjorerapport-' + VERSION;
 const ML_CACHE = 'kjorerapport-ml';   // ansiktsgjenkjenningen, beholdes mellom versjoner
 const ASSETS = [

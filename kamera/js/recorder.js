@@ -64,6 +64,8 @@ export function startPrecheck(onUpdate) {
   };
 }
 
+const IOS_AXES = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent || '');
+
 export class Recorder {
   constructor(opts = {}) {
     this.onStatus = opts.onStatus || (() => {});
@@ -81,6 +83,7 @@ export class Recorder {
     this.t0 = 0;
     this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [] };
     this.headOk = 0; this.headN = 0; this.roadN = 0; this.roadLead = 0; this.speed = NaN;
+    this.liveYaw = 0; this.liveHacc = 0;
     this.seq = 0;
     this.lastMotionT = -1;
     this.grav = null;
@@ -234,6 +237,19 @@ export class Recorder {
     if (grav) this.buf.grav.push({ t, x: grav.x, y: grav.y, z: grav.z });
     const lin = linearFromEvent(e.acceleration);
     if (lin) this.buf.acc.push({ t, x: lin.x, y: lin.y, z: lin.z });
+    // Underveis (k0.6.0): svingrate om loddlinjen (°/s) og vannrett akselerasjon (m/s²), glattet,
+    // til planen for kamerabytting. iPhone gir alpha om x, beta om y, gamma om z (se GYRO_AXES i analysis.js).
+    if (g && grav) {
+      const r = IOS_AXES ? { x: g.z, y: g.x, z: g.y } : g;
+      const m = Math.hypot(grav.x, grav.y, grav.z) || 1;
+      const yaw = (r.x * grav.x + r.y * grav.y + r.z * grav.z) / m * 180 / Math.PI;
+      this.liveYaw += (yaw - this.liveYaw) * 0.04;
+      if (lin) {
+        const along = (lin.x * grav.x + lin.y * grav.y + lin.z * grav.z) / (m * m);
+        const h = Math.hypot(lin.x - along * grav.x, lin.y - along * grav.y, lin.z - along * grav.z);
+        this.liveHacc += (h - this.liveHacc) * 0.06;
+      }
+    }
   }
 
   /* Ledsagerens merke: et tidspunkt å kommentere etterpå. Ingen tilbakemelding til føreren. */
@@ -251,7 +267,8 @@ export class Recorder {
     if (!this.running) return;
     this.roadN++;
     if (r.lead) this.roadLead++;
-    this.buf.road.push({ t: this.now(), cars: r.cars, people: r.people, lead: r.lead ? { cls: r.lead.cls, dist: r.lead.dist, wpx: r.lead.wpx } : null });
+    this.buf.road.push({ t: this.now(), cars: r.cars, people: r.people, lead: r.lead ? { cls: r.lead.cls, dist: r.lead.dist, wpx: r.lead.wpx } : null,
+      lane: r.lane ? { l: r.lane.l, r: r.lane.r, offset: r.lane.offset } : null });
   }
 
   mark(cat = 'annet') {

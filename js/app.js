@@ -11,7 +11,7 @@ import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.8.1';
+export const APP_VERSION = '0.8.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -100,7 +100,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|12`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|13`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);

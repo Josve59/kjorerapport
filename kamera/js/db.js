@@ -100,7 +100,8 @@ export async function importDrive(payload, { keepId = false } = {}) {
     loc: input.loc.map(p => ({ t: num(p.t), lat: num(p.lat), lon: num(p.lon), speed: num(p.speed), bearing: num(p.bearing), acc: num(p.acc) })),
     gyro: xyz(input.gyro), grav: xyz(input.grav), acc: xyz(input.acc),
     head: (input.head || []).map(h => ({ t: num(h.t), yaw: num(h.yaw), pitch: num(h.pitch), ok: !!h.ok })),
-    road: (input.road || []).map(r => ({ t: num(r.t), cars: num(r.cars) || 0, people: num(r.people) || 0, lead: r.lead && Number.isFinite(num(r.lead.dist)) ? { cls: String(r.lead.cls || 'car'), dist: num(r.lead.dist), wpx: num(r.lead.wpx) } : null }))
+    road: (input.road || []).map(r => ({ t: num(r.t), cars: num(r.cars) || 0, people: num(r.people) || 0, lead: r.lead && Number.isFinite(num(r.lead.dist)) ? { cls: String(r.lead.cls || 'car'), dist: num(r.lead.dist), wpx: num(r.lead.wpx) } : null,
+      lane: r.lane ? { l: !!r.lane.l, r: !!r.lane.r, offset: Number.isFinite(num(r.lane.offset)) ? num(r.lane.offset) : null } : null }))
   };
   const meta = payload && payload.drive ? payload.drive : {};
   const id = keepId && typeof meta.id === 'string' && meta.id ? meta.id : newId();
@@ -119,6 +120,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     focus: Array.isArray(meta.focus) ? meta.focus.filter(f => typeof f === 'string').slice(0, 3) : [],
     counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length, road: raw.road.length },
     calib: meta.calib && typeof meta.calib === 'object' ? meta.calib : null,
+    cameraPlan: meta.cameraPlan && typeof meta.cameraPlan === 'object' ? meta.cameraPlan : null,
     diag: meta.diag && typeof meta.diag === 'object' ? meta.diag : null,
     driver: typeof meta.driver === 'string' ? meta.driver.slice(0, 40) : '',
     appVersion: 3
@@ -135,7 +137,7 @@ export async function exportPayload(drive) {
   return {
     drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
       marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '',
-      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], calib: drive.calib || null },
+      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], calib: drive.calib || null, cameraPlan: drive.cameraPlan || null },
     input: raw
   };
 }

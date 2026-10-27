@@ -187,6 +187,7 @@
     <section class="card" id="cam-stage" hidden>
       <div class="cam-view">
         <video id="cam-video" playsinline muted></video>
+        <canvas class="lane-overlay" id="lane-overlay" hidden></canvas>
         <p class="cam-label" id="cam-label" data-cls="none" aria-live="polite">Ser ikke ansiktet</p>
       </div>
       <p class="muted small center" id="cam-nums"></p>
@@ -213,6 +214,9 @@
       <div class="dual-test" id="dual-test" hidden><video id="dual-a" playsinline muted></video><video id="dual-b" playsinline muted></video></div>
       <div class="dual-result" id="dual-result" aria-live="polite"></div>
       <button type="button" class="btn secondary" id="btn-dual-share" hidden><span data-icon="share"></span>Send resultatet</button>
+      <h3 class="mt">Feltlinjer</h3>
+      <p class="muted small">Viser hva veikameraet ser av feltlinjene, tegnet oppå bildet, og hvor bilen ligger i feltet. Bare for å teste i bilen – lagres ikke. Virker best på merket vei i dagslys.</p>
+      <button type="button" class="btn secondary" id="btn-lane-test"><span data-icon="lane"></span>Vis feltlinjer</button>
     </section>
   </section>
 
@@ -369,7 +373,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.5.0</p>
+    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.6.0</p>
   </section>
 
 </main>

@@ -225,8 +225,9 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
     }
   }
   const within = (cls, a, b) => glances.some(g => cls.includes(g.cls) && g.tEnd >= a && g.t <= b);
-  // Ja hvis blikket finnes. Nei bare hvis førerkameraet så føreren minst halve tiden; ellers ukjent (null).
-  const check = (cls, a, b) => within(cls, a, b) ? true : seenShare(a, b) >= 0.5 ? false : null;
+  // Ja hvis blikket finnes. Nei bare hvis førerkameraet så føreren minst 90 % av tiden; ellers ukjent (null).
+  // v0.8.2: 50 % ga feil «nei» i opptil 25 % av sjekkene da byttestrategiene ble simulert på ekte turer.
+  const check = (cls, a, b) => within(cls, a, b) ? true : seenShare(a, b) >= 0.9 ? false : null;
   // Merket av ledsager (v0.7.8): merket kommer etter feltskiftet, og retningen er ukjent.
   // Speil (et hvilket som helst) 15–1 s før merket, skulderblikk (en av sidene) 12–0 s før.
   const marked = markedLanes.slice().sort((a, b) => a - b).filter((t, i, a) => !i || t - a[i - 1] >= 4);

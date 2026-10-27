@@ -3,16 +3,25 @@
    Ingen bilder lagres eller sendes – bare hodets vinkler og tall om veien går videre til appen. */
 import { poseFromMatrix } from './camera.js';
 import { processDetections } from './road.js';
+import { detectLanes, toGray } from './lanes.js';
 
 const BASE = new URL('../../vendor/mediapipe/', import.meta.url).href;   // delt med hovedappen
 let landmarker = null, loading = null, detector = null, loadingRoad = null, fileset = null;
 let stream = null, video = null, timer = null, facing = 'user', switching = false;
 const listeners = new Set(), roadListeners = new Set();
 let lastPose = null, lastRoad = null, lastTs = 0, frames = 0, startedAt = 0, schedule = null;
+let settleUntil = 0;   // bilder rett etter et bytte er for mørke (lyset stiller seg inn) og brukes ikke
+let fpsWanted = 8, fpsNow = 8;
+const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0 };   // glattet tid per analyse
+let laneCanvas = null, laneCtx = null, laneOverlay = null;
 const switchLog = [];   // byttetider (ms) denne økten
 
 export const state = () => ({ loaded: !!landmarker, roadLoaded: !!detector, running: !!stream, facing, switching,
-  fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, lastPose, lastRoad, video, switches: switchLog.slice() });
+  fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, fpsNow, lastPose, lastRoad, video, switches: switchLog.slice(),
+  perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10 } });
+
+/* Tegner feltlinjene oppå veikamerabildet (direktevisning i kameratesten). null slår av. */
+export function setLaneOverlay(canvas) { laneOverlay = canvas; }
 
 async function vision() {
   const mod = await import(BASE + 'vision_bundle.mjs');
@@ -67,7 +76,8 @@ async function show(el) {
   video.muted = true;
   video.srcObject = stream;
   video.classList.toggle('road', facing === 'environment');
-  await video.play().catch(() => {});
+  // play() kan bli hengende hvis kameraet ikke leverer bilder; da går vi videre etter 2 s
+  await Promise.race([video.play().catch(() => {}), new Promise(r => setTimeout(r, 2000))]);
 }
 
 /* Venter til et nytt bilde faktisk er vist (eller til tidsfristen går ut). */
@@ -100,6 +110,7 @@ export async function switchTo(mode) {
     facing = mode;
     if (video) await show(video);
     if (video) await nextFrame(video);
+    settleUntil = performance.now() + 250;
     const ms = Math.round(performance.now() - t0);
     switchLog.push(ms);
     if (switchLog.length > 200) switchLog.shift();
@@ -123,37 +134,66 @@ export function setSchedule(fn) { schedule = fn; }
 /* Kjører gjenkjenningen ca. 8 ganger i sekundet. Hvilken modell som brukes, avhenger av kameraet. */
 export function startLoop(fps = 8) {
   if (timer) return;
+  fpsWanted = fps; fpsNow = fps;
   frames = 0; startedAt = performance.now();
+  const ema = (k, v) => { perf[k] = perf[k] ? perf[k] * 0.9 + v * 0.1 : v; };
+  /* Blir telefonen treg (varm, eller for mye å gjøre), går vi ned til 5 bilder i sekundet.
+     Tilbake til full fart når analysene igjen er raske i 20 s. */
+  const adapt = () => {
+    const ms = facing === 'user' ? perf.faceMs : perf.roadMs + perf.laneMs;
+    const now = performance.now();
+    if (ms > 110 && fpsNow > 5) { fpsNow = 5; perf.slow = true; perf.slowSince = now; perf.drops++; }
+    else if (ms < 60 && fpsNow < fpsWanted && now - perf.slowSince > 20000) { fpsNow = fpsWanted; perf.slow = false; }
+  };
   const tick = () => {
-    timer = setTimeout(tick, 1000 / fps);
+    timer = setTimeout(tick, 1000 / fpsNow);
     if (schedule && !switching) {
       const want = schedule();
       if (want && want !== facing) { switchTo(want).catch(() => {}); return; }
     }
     if (switching || !video || video.readyState < 2 || video.videoWidth === 0) return;
+    if (performance.now() < settleUntil) return;
     let ts = performance.now();
     if (ts <= lastTs) ts = lastTs + 1;
     lastTs = ts;
     if (facing === 'user') {
       if (!landmarker) return;
       let pose = null;
+      const t1 = performance.now();
       try {
         const res = landmarker.detectForVideo(video, ts);
         const m = res && res.facialTransformationMatrixes && res.facialTransformationMatrixes[0];
         pose = m ? poseFromMatrix(m.data) : null;
       } catch { pose = null; }
+      ema('faceMs', performance.now() - t1); adapt();
       frames++;
       lastPose = pose;
       for (const fn of listeners) fn(pose, ts);
     } else {
       if (!detector) return;
       let road = null;
+      const t1 = performance.now();
       try {
         const res = detector.detectForVideo(video, ts);
         const dets = (res && res.detections || []).map(d => ({ cls: d.categories[0].categoryName, score: d.categories[0].score,
           x: d.boundingBox.originX, y: d.boundingBox.originY, w: d.boundingBox.width, h: d.boundingBox.height }));
         road = processDetections(dets, video.videoWidth, video.videoHeight);
       } catch { road = null; }
+      ema('roadMs', performance.now() - t1);
+      // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
+      if (road) {
+        const t2 = performance.now();
+        try {
+          const W = 160, H = Math.round(160 * video.videoHeight / video.videoWidth);
+          if (!laneCanvas || laneCanvas.height !== H) { laneCanvas = document.createElement('canvas'); laneCanvas.width = W; laneCanvas.height = H; laneCtx = laneCanvas.getContext('2d', { willReadFrequently: true }); }
+          laneCtx.drawImage(video, 0, 0, W, H);
+          const ln = detectLanes(toGray(laneCtx.getImageData(0, 0, W, H).data, W, H), W, H);
+          road.lane = { l: !!ln.left, r: !!ln.right, offset: ln.offset };
+          if (laneOverlay) drawLanes(laneOverlay, ln, W, H);
+        } catch { /* ingen feltlinjer */ }
+        ema('laneMs', performance.now() - t2);
+      }
+      adapt();
       frames++;
       lastRoad = road;
       if (road) for (const fn of roadListeners) fn(road, ts);
@@ -163,6 +203,18 @@ export function startLoop(fps = 8) {
 }
 
 export function stopLoop() { if (timer) clearTimeout(timer); timer = null; }
+
+function drawLanes(cv, ln, W, H) {
+  const g = cv.getContext('2d');
+  cv.width = cv.clientWidth || 320; cv.height = cv.clientHeight || Math.round(320 * H / W);
+  const kx = cv.width / W, ky = cv.height / H;
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.lineWidth = 5; g.lineCap = 'round';
+  for (const [L, col] of [[ln.left, '#3ddc84'], [ln.right, '#ff4fd8']]) if (L) { g.strokeStyle = col; g.beginPath(); g.moveTo(L.xBottom * kx, L.yBottom * ky); g.lineTo(L.xTop * kx, L.yTop * ky); g.stroke(); }
+  g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, 0, cv.width, 30);
+  g.fillStyle = '#fff'; g.font = 'bold 15px system-ui, sans-serif';
+  g.fillText(ln.offset !== null ? `Midt i feltet ${ln.offset > 0 ? '+' : ''}${ln.offset.toFixed(2).replace('.', ',')} m` : ln.left || ln.right ? 'Én linje funnet' : 'Ingen feltlinjer', 8, 21);
+}
 
 export function stopCamera() {
   stopLoop();

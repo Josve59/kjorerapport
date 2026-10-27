@@ -77,9 +77,28 @@ export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1
     medianDist: follow.length ? Math.round(med(follow.map(x => x.lead.dist))) : null,
     followShare: s.length ? follow.length / s.length : 0,
     maxCars: Math.max(0, ...s.map(x => x.cars || 0)), peopleSeen: s.filter(x => x.people > 0).length,
+    lane: laneStats(s),
     close: episodes,
     // Bare tall (lagres i databasen sammen med analysen)
     follow: follow.map(x => ({ t: Math.round(x.t * 100) / 100, dist: x.lead.dist, headway: Math.round(x.headway * 100) / 100 }))
+  };
+}
+
+/* Plassering i feltet (test): hvor ofte begge feltlinjene ble funnet, typisk avvik fra midten og hvor mye
+   det varierer (slingring). Bare bilder i minst 40 km/t, der det er en vei med linjer å følge. */
+function laneStats(s) {
+  const fast = s.filter(x => x.kmh >= 40 && x.lane);
+  if (fast.length < 10) return null;
+  const both = fast.filter(x => Number.isFinite(x.lane.offset));
+  const med = a => { const b = a.slice().sort((p, q) => p - q); return b.length ? b[Math.floor(b.length / 2)] : NaN; };
+  if (both.length < 10) return { share: both.length / fast.length, medianOffset: null, spread: null, nearEdge: 0 };
+  const off = both.map(x => x.lane.offset);
+  const m = med(off);
+  return {
+    share: Math.round(both.length / fast.length * 100) / 100,
+    medianOffset: Math.round(m * 100) / 100,
+    spread: Math.round(med(off.map(v => Math.abs(v - m))) * 100) / 100,
+    nearEdge: both.filter(x => Math.abs(x.lane.offset) > 0.75).length
   };
 }
 

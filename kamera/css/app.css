@@ -782,6 +782,8 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 
 /* Veikamera (test) */
 .cam-view video.road, .rec-video.road, .pre-video.road { transform: none; }
+.cam-view { position: relative; }
+.lane-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .dual-test { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
 .dual-test video { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 12px; background: #000; }
 .dual-result { margin-top: 10px; }
