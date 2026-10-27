@@ -128,6 +128,12 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.7.6 / k0.2.3 – lane change ground truth
+
+- New companion button «Feltskifte» (wide, dashed, below the others). It is not a remark: the companion presses it right after each lane change to give the app a ground truth.
+- The report's «Veier og manøvrer» then shows «Fasit: ledsageren merket N feltskifter, appen fant X av dem, og Y som ikke var merket». Each found lane change is labelled «bekreftet av ledsager» or «ikke merket av ledsager», and marked lane changes the app missed are listed as «Ikke funnet av appen». A mark counts for a detected lane change from 3 s before it starts to 15 s after it ends (`laneTruth` in report.js).
+- These marks are kept out of remark counts, practice-goal suggestions and hotspots.
+
 ## What's new in 0.7.5 / k0.2.2 – iPhone gyroscope axes, GPS-first lane changes
 
 **Gyroscope axes on iPhone.** The recorder stores `rotationRate` per the spec (alpha about z, beta about x, gamma about y). On iPhone (WebKit) alpha is in practice about x, beta about y and gamma about z. With the phone fairly upright (camera facing the driver) the projected yaw was almost zero: gyro vs GPS turning slope 0.02–0.10 on the two 27 Oct drives (0.33 on 24 Oct). `yawSeries` now tries both axis orders on every drive and keeps the one that follows the GPS heading best (`result.gyroAxes`, `result.axesCorr`). Slope is now 0.96–1.02. This fixes old drives too. Turn events, roundabouts and lane changes change accordingly; braking and acceleration don't use the gyroscope and are unchanged.

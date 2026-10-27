@@ -2,7 +2,7 @@
 import { CATS, rating } from './analysis.js';
 import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
 import { analyzeSpeeding, evaluateRoad } from './enrich.js';
-import { icon, MARK_CATS, FOCUS } from './ui.js';
+import { icon, MARK_CATS, FOCUS, isRemark } from './ui.js';
 import { driveLog, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
@@ -42,6 +42,20 @@ export function speedingFor(r, enrich) {
 }
 
 const MARK_LETTER = i => String.fromCharCode(65 + (i % 26));
+
+/* Fasit fra ledsageren (v0.7.6): merket «Feltskifte» trykkes like etter hvert feltskifte. Et merke hører
+   til et funnet feltskifte hvis det kom fra 3 s før start til 15 s etter slutt. Tider relativt til rapporten. */
+export function laneTruth(laneChanges, marks) {
+  const felt = (marks || []).filter(m => m.cat === 'felt');
+  if (!felt.length) return null;
+  const used = new Set();
+  const hits = (laneChanges || []).map(l => {
+    const k = felt.findIndex((m, i) => !used.has(i) && m.t >= l.tFrom - 3 && m.t <= l.tTo + 15);
+    if (k >= 0) used.add(k);
+    return k >= 0;
+  });
+  return { marked: felt.length, found: hits.filter(Boolean).length, extra: hits.filter(h => !h).length, hits, missed: felt.filter((_, i) => !used.has(i)) };
+}
 
 /* Ledsagerens merker med fart og tid relativt til rapporten. */
 export function markRows(marks, r) {
@@ -493,10 +507,15 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
     items.push({ t: x.t, lat: x.lat, lon: x.lon, ico: 'round', ok: !ev.length,
       title: `Rundkjøring${x.name ? ' · ' + x.name.replace(/^.*?X\s*/, '') : ''}`, sub: `${mss(x.t)}${dir ? ' · ' + dir : ''}`, verdict: ev.length ? `${ev.length === 1 ? 'Én brå hendelse' : ev.length + ' brå hendelser'} (${ev.join(', ')})` : 'Ingen brå hendelser' });
   }
-  for (const x of man.laneChanges) {
-    const mk = marks.filter(m => m.t >= x.tFrom - 10 && m.t <= x.tTo + 10 && m.cat !== 'annet');
+  const truth = laneTruth(man.laneChanges, marks);
+  man.laneChanges.forEach((x, k) => {
+    const mk = marks.filter(m => m.t >= x.tFrom - 10 && m.t <= x.tTo + 10 && isRemark(m));
+    const fasit = truth ? (truth.hits[k] ? ' · bekreftet av ledsager' : ' · ikke merket av ledsager') : '';
     items.push({ t: x.t, lat: x.lat, lon: x.lon, ico: 'lane', ok: !mk.length,
-      title: `Feltskifte til ${x.dir}`, sub: `${mss(x.t)} · ${kmh(x.kmh)}`, verdict: mk.length ? `Ledsager merket ${mk.map(m => MARK_CATS[m.cat].label.toLowerCase()).join(', ')}` : 'Ingen merknader' });
+      title: `Feltskifte til ${x.dir}`, sub: `${mss(x.t)} · ${kmh(x.kmh)}${fasit}`, verdict: mk.length ? `Ledsager merket ${mk.map(m => MARK_CATS[m.cat].label.toLowerCase()).join(', ')}` : 'Ingen merknader' });
+  });
+  for (const m of (truth ? truth.missed : [])) {
+    items.push({ t: m.t, lat: m.lat, lon: m.lon, ico: 'shift', ok: true, title: 'Feltskifte merket av ledsager', sub: mss(m.t), verdict: 'Ikke funnet av appen' });
   }
   for (const x of (road ? road.stops : [])) {
     items.push({ t: x.t, lat: x.lat, lon: x.lon, ico: 'stop', ok: x.full, title: 'Stoppskilt', sub: mss(x.t), verdict: x.full ? 'Helt stopp' : `Rullende stopp (laveste ${x.minKmh} km/t)` });
@@ -511,6 +530,7 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
       ${log ? `<div class="road-mix" role="img" aria-label="Fordeling av kjøretid på veityper">${mix.filter(m => m.sec > 0).map(m => `<span class="mix-${m.k}" style="width:${m.pct.toFixed(1)}%"></span>`).join('')}</div>
       <ul class="legend">${mix.filter(m => m.sec >= 30).map(m => `<li><span class="dot mix-dot mix-${m.k}"></span>${ROAD_LABEL[m.k].split(' og')[0]} ${Math.round(m.sec / 60)} min</li>`).join('')}</ul>
       <p class="muted small">${['day', 'twilight', 'dark'].filter(k => log.light[k] > 30).map(k => `${LIGHT_LABEL[k]} ${Math.round(log.light[k] / 60)} min`).join(' · ')}${log.roadSource === 'fart' ? ' · Veitype anslått ut fra farten' : ''}</p>` : ''}
+      ${truth ? `<p class="lane-truth">${icon('shift', 18)}<span>Fasit: ledsageren merket ${truth.marked} ${truth.marked === 1 ? 'feltskifte' : 'feltskifter'}, appen fant ${truth.found} av dem${truth.extra ? `, og ${truth.extra} som ikke var merket` : ''}.</span></p>` : ''}
       ${items.length ? `<ul class="man-list">${items.map(it => `<li><button type="button" class="man-item" data-lat="${it.lat}" data-lon="${it.lon}">
           <span class="man-ico ${it.ok ? 'ok' : 'no'}">${icon(it.ico, 20)}</span>
           <span class="ev-text"><strong>${esc(it.title)}</strong><span class="muted small">${esc(it.sub)}</span><span class="man-verdict ${it.ok ? 'ok' : 'no'}">${esc(it.verdict)}</span></span>

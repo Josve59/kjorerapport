@@ -32,3 +32,17 @@ test('oppsummering: førernavnet står ikke to ganger', () => {
   assert.equal(first.match(/Kari/g).length, 1, first);
   assert.match(buildSummary(r, { subtitle: 'tir. 27. okt.', driver: 'Kari' }).split('\n')[0], /– Kari$/);
 });
+
+test('fasit for feltskifter: ledsagerens merker kobles til funne feltskifter', async () => {
+  const { laneTruth } = await import('../js/report.js');
+  const lc = [{ tFrom: 100, tTo: 106 }, { tFrom: 300, tTo: 305 }];
+  const marks = [{ t: 110, cat: 'felt' }, { t: 200, cat: 'felt' }, { t: 302, cat: 'speil' }];
+  const f = laneTruth(lc, marks);
+  assert.equal(f.marked, 2);
+  assert.equal(f.found, 1);
+  assert.equal(f.extra, 1);
+  assert.deepEqual(f.hits, [true, false]);
+  assert.equal(f.missed.length, 1);
+  assert.equal(f.missed[0].t, 200);
+  assert.equal(laneTruth(lc, [{ t: 110, cat: 'annet' }]), null, 'uten fasitmerker ingen sammenligning');
+});

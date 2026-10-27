@@ -33,6 +33,7 @@ const P = {
   shoulder: 'M9 7a3 3 0 1 0 6 0 3 3 0 0 0-6 0zM5 21v-2a5 5 0 0 1 5-5h2M16 13l3 3-3 3M19 16h-6',
   blink: 'M9 6l-6 6 6 6M15 6l6 6-6 6',
   lane: 'M6 3v18M18 3v18M12 4v3M12 10v4M12 17v3',
+  shift: 'M4 3v18M20 3v18M9 20c0-6 6-7 6-13M12.5 9.5L15 7l2.5 2.5',
   book: 'M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11',
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   round: 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM12 2v5M12 17v5M2 12h5M17 12h5',
@@ -67,8 +68,12 @@ export const MARK_CATS = {
   blink: { label: 'Blinklys', icon: 'blink' },
   plass: { label: 'Plassering', icon: 'lane' },
   fart: { label: 'Fart', icon: 'speed' },
-  annet: { label: 'Annet', icon: 'flag' }
+  annet: { label: 'Annet', icon: 'flag' },
+  // Ikke en merknad, men fasit: ledsageren trykker like etter hvert feltskifte (v0.7.6)
+  felt: { label: 'Feltskifte', icon: 'shift', neutral: true }
 };
+/* Merker som ikke er tilbakemelding på kjøringen */
+export const isRemark = m => m.cat !== 'annet' && !(MARK_CATS[m.cat] && MARK_CATS[m.cat].neutral);
 
 /* Dagens øvingsmål (maks tre per tur) */
 export const FOCUS = [

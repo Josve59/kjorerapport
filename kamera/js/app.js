@@ -11,7 +11,7 @@ import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = 'k0.2.2';
+export const APP_VERSION = 'k0.2.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -533,7 +533,7 @@ async function exportLogCsv(rows, filter) {
 
 function hotspotItems(x) {
   const items = x.res.events.map(e => ({ lat: e.lat, lon: e.lon, type: 'event', kind: e.kind, label: eventLabel(e), t: e.t, name: x.d.enrich && x.d.enrich.names && x.d.enrich.names.events ? x.d.enrich.names.events[e.n] : '' }));
-  for (const m of x.marks) if (Number.isFinite(m.lat)) items.push({ lat: m.lat, lon: m.lon, type: 'mark', kind: 'mark', label: `Ledsager: ${MARK_CATS[m.cat].label.toLowerCase()}`, t: m.t, name: x.d.enrich && x.d.enrich.names && x.d.enrich.names.marks ? x.d.enrich.names.marks[m.i] : '' });
+  for (const m of x.marks) if (Number.isFinite(m.lat) && m.cat !== 'felt') items.push({ lat: m.lat, lon: m.lon, type: 'mark', kind: 'mark', label: `Ledsager: ${MARK_CATS[m.cat].label.toLowerCase()}`, t: m.t, name: x.d.enrich && x.d.enrich.names && x.d.enrich.names.marks ? x.d.enrich.names.marks[m.i] : '' });
   return items;
 }
 

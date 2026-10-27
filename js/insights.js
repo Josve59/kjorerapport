@@ -35,7 +35,7 @@ export function suggestFocus(rows, now = new Date()) {
   if (mirror >= 2) out.push({ id: 'mirror', weight: 8 * mirror / n + 4, reason: `Ledsageren merket speil eller skulder ${mirror} ganger` });
   const rbEv = recent.reduce((s, x) => s + ((x.road && x.road.roundabouts) || x.res.maneuvers?.roundabouts || []).filter(r => (r.events || []).length).length, 0);
   if (rbEv) out.push({ id: 'roundabout', weight: 12 * rbEv, reason: `Brå hendelser i ${rbEv} ${rbEv === 1 ? 'rundkjøring' : 'rundkjøringer'}` });
-  const lane = recent.reduce((s, x) => s + (x.res.maneuvers?.laneChanges || []).filter(l => (x.marks || []).some(m => m.cat !== 'annet' && m.t >= l.tFrom - 10 && m.t <= l.tTo + 10)).length, 0);
+  const lane = recent.reduce((s, x) => s + (x.res.maneuvers?.laneChanges || []).filter(l => (x.marks || []).some(m => m.cat !== 'annet' && m.cat !== 'felt' && m.t >= l.tFrom - 10 && m.t <= l.tTo + 10)).length, 0);
   if (lane) out.push({ id: 'lane', weight: 10 * lane, reason: `Ledsageren merket noe ved ${lane} ${lane === 1 ? 'feltskifte' : 'feltskifter'}` });
   const fastGw = recent.reduce((s, x) => s + ((x.road && x.road.giveway) || []).filter(g => g.approachKmh > 40).length, 0);
   if (fastGw >= 2) out.push({ id: 'junction', weight: 6 * fastGw / n, reason: `Høy fart inn mot ${fastGw} vikepliktkryss` });
