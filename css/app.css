@@ -646,6 +646,10 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .man-item > .ico:last-child { color: var(--muted); }
 .man-ico { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--bg); }
 .man-ico.ok { color: var(--good); } .man-ico.no { color: var(--turn); }
+.sit-high { color: #fff; background: var(--brake); } .sit-medium { color: var(--turn); } .sit-low { color: var(--muted); } .sit-ok { color: var(--good); }
+.sit-text { display: block; margin-top: 2px; }
+.src-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.src-chip { font-size: .75rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .man-verdict { font-size: .9rem; font-weight: 700; }
 .man-verdict.ok { color: var(--good); } .man-verdict.no { color: var(--turn); }
 details.gw { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 4px; }
@@ -725,3 +729,53 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .banner { flex-wrap: wrap; }
 .banner > span:first-child { flex: 1 1 180px; min-width: 0; }
 .banner-actions { margin-left: auto; }
+
+/* ---------- Kamera-testversjonen ---------- */
+.beta-tag { display: inline-block; font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; background: var(--accel); color: #fff; vertical-align: 2px; margin-left: 6px; }
+.cam-card { display: flex; gap: 14px; align-items: center; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.cam-card > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.cam-card-ico { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--accel) 15%, var(--surface)); color: var(--accel); }
+.cam-view { position: relative; border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; }
+.cam-view video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+.cam-label { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); margin: 0; padding: 8px 18px; border-radius: 22px; font-weight: 800; font-size: 1.15rem; color: #fff; background: rgba(0,0,0,.6); white-space: nowrap; }
+.cam-label[data-cls="left"], .cam-label[data-cls="right"], .cam-label[data-cls="rear"] { background: var(--good); }
+.cam-label[data-cls="shoulderL"], .cam-label[data-cls="shoulderR"] { background: var(--accel); }
+.cam-label[data-cls="none"] { background: var(--brake); }
+/* Kalibrering over hele skjermen: stor tekst som kan leses fra førersetet, og opplest instruksjon */
+.calib-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; background: #1b1f22; color: #fff; }
+.calib-overlay[hidden] { display: none; }
+.calib-progress { color: #f2c230; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: .95rem; margin: 0; }
+.calib-step { font-size: 2rem; font-weight: 800; line-height: 1.15; margin: 0; max-width: 14em; }
+.calib-count { font-size: 4rem; font-weight: 800; margin: 8px 0; min-height: 1.2em; font-variant-numeric: tabular-nums; }
+.calib-face { margin: 0 0 16px; color: #a3abb1; }
+.calib-face[data-ok="0"] { color: #f2c230; font-weight: 700; }
+.calib-overlay .btn { background: transparent; color: #fff; border-color: #5b6369; }
+.pre-calib { margin-top: 8px; }
+.cam-card.warn { border-color: var(--turn); }
+.cam-card.warn .cam-card-ico { background: color-mix(in srgb, var(--turn) 18%, var(--surface)); color: var(--turn); }
+.cam-calib-status { display: flex; gap: 8px; align-items: flex-start; }
+.cam-log { list-style: none; margin: 0; padding: 0; }
+.cam-log li { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); }
+.center { text-align: center; }
+.pre-video { flex: none; margin-left: auto; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; transform: scaleX(-1); background: #000; }
+#check-camera > span:nth-child(2) { flex: 1; }
+.rec-video { position: fixed; right: 12px; top: calc(env(safe-area-inset-top) + 64px); width: 72px; height: 72px; border-radius: 50%; object-fit: cover; transform: scaleX(-1); border: 3px solid var(--surface); box-shadow: 0 2px 10px rgba(0,0,0,.3); z-index: 5; }
+#rec-cam[data-state="ok"] { color: var(--good); }
+#rec-cam[data-state="wait"] { color: var(--turn); }
+.cam-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.cam-stats > div { display: flex; flex-direction: column; gap: 2px; }
+.cam-stats strong { font-size: 1.5rem; }
+.cam-timeline { width: 100%; height: 72px; display: block; margin-top: 6px; }
+.gl-axis { stroke: var(--line); stroke-width: 1; }
+.gl-left, .gl-dot.gl-left { fill: var(--good); background: var(--good); }
+.gl-right, .gl-dot.gl-right { fill: var(--turn); background: var(--turn); }
+.gl-rear, .gl-dot.gl-rear { fill: var(--muted); background: var(--muted); }
+.gl-shoulderL, .gl-shoulderR, .gl-dot.gl-shoulderL { fill: var(--accel); background: var(--accel); }
+.gl-gap, .gl-dot.gl-gap { fill: color-mix(in srgb, var(--brake) 18%, transparent); background: color-mix(in srgb, var(--brake) 30%, transparent); }
+.gl-lane.ok { fill: var(--good); }
+.gl-lane.no { fill: var(--brake); }
+.cam-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 14px; font-size: .88rem; font-weight: 700; border: 1px solid var(--line); }
+.cam-chip.ok { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+.cam-chip.no { color: var(--brake); border-color: color-mix(in srgb, var(--brake) 40%, var(--line)); }
+.cam-lanes { list-style: none; margin: 0; padding: 0; }
+.cam-lanes li { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); }

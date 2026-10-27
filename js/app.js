@@ -8,8 +8,10 @@ import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } fro
 import { esc, km, n0, n1, date, duration } from './format.js';
 import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
+import * as cam from './facecam.js';
+import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.7.8';
+export const APP_VERSION = '0.8.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -98,13 +100,15 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|10`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|11`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
   let result;
   try {
     result = analyze(raw, opts);
+    if (raw.head && raw.head.length > 20) result.camera = evaluateMirrors(raw.head, drive.calib, { points: result.points, t0: result.t0, laneChanges: result.maneuvers.laneChanges,
+      markedLanes: (drive.marks || []).filter(m => m.cat === 'felt').map(m => m.t - result.t0) });
   } catch (err) {
     drive.result = null; drive.error = err.message; drive.resultKey = key;
     await putDrive(drive);
@@ -125,6 +129,11 @@ async function renderHome() {
   const list = $('#drive-list');
   if (!list.children.length || list.querySelector('.empty')) list.innerHTML = '<li class="skeleton-row"></li><li class="skeleton-row"></li><li class="skeleton-row"></li>';
   $('#start-hello').textContent = settings.activeDriver ? `Hei, ${settings.activeDriver}!` : 'Klar for en tur?';
+  const calibrated = !!getCalib();
+  $('#btn-go-camera').classList.toggle('warn', !!settings.cameraOn && !calibrated);
+  $('#cam-card-text').textContent = !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
+    : calibrated ? 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.'
+    : 'Ikke kalibrert. Trykk her og kalibrer før turen – det tar 30 sekunder.';
   const allDrives = await listDrives();
   for (const d of allDrives) if (d.status === 'recording') { d.status = 'done'; d.interrupted = true; await putDrive(d); }
 
@@ -312,6 +321,141 @@ async function gatherRows(driver = null) {
     rows.push({ d, res, sp, road, log: logFor(d, res), marks: markRows(d.marks || [], res) });
   }
   return rows;
+}
+
+/* ---------- Kamera ---------- */
+const calibKey = () => getSettings().activeDriver || '_';
+/* Kalibreringen for valgt fører. Finnes ingen, brukes den nyeste (holderen står som regel likt). */
+function getCalib() {
+  const all = getSettings().calib || {};
+  const own = all[calibKey()];
+  if (own && own.ok) return own;
+  return Object.values(all).filter(c => c && c.ok).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))[0] || null;
+}
+function saveCalib(c) { const s = getSettings(); saveSettings({ ...s, calib: { ...(s.calib || {}), [calibKey()]: c } }); }
+let camUnsub = null;
+let calibForDrive = null;   // tur som skal få kalibreringen når den er ferdig (fra rapporten)
+
+/* Starter kameraet og ansiktsgjenkjenningen hvis de ikke allerede går. */
+async function ensureCamera(videoEl, onStatus = () => {}) {
+  if (cam.state().running) { await cam.attachVideo(videoEl); return; }
+  await cam.startCamera(videoEl);
+  await cam.loadModel(onStatus);
+  cam.startLoop(8);
+}
+
+/* Gir en lagret tur kalibreringen og ber om ny analyse. */
+async function applyCalibToDrive(id, c) {
+  await updateDrive(id, { calib: c, resultKey: null });
+  toast('Turen er vurdert med kalibreringen.', { type: 'ok' });
+}
+
+async function renderCamera() {
+  show('camera');
+  const settings = getSettings();
+  const video = $('#cam-video'), label = $('#cam-label'), nums = $('#cam-nums'), status = $('#cam-status'), log = $('#cam-log');
+  const calibInfo = () => {
+    const c = getCalib();
+    $('#cam-calib-status').innerHTML = c ? `${icon('check', 18)} Kalibrert${c.at ? ' ' + esc(date(c.at)) : ''}. Kalibrer på nytt hvis holderen er flyttet.` : `${icon('info', 18)} Ikke kalibrert ennå. Sett telefonen i holderen der den skal stå under kjøring, og trykk «Kalibrer».`;
+    $('#btn-cam-calib').lastChild.textContent = c ? 'Kalibrer på nytt' : 'Kalibrer';
+  };
+  calibInfo();
+  const forDrive = $('#cam-for-drive');
+  forDrive.hidden = !calibForDrive;
+  if (calibForDrive) {
+    const d = await getDrive(calibForDrive);
+    forDrive.textContent = `Kalibrerer for turen ${d ? date(d.startedAt) : ''}. Sett telefonen i holderen slik den sto under turen. Etterpå vurderes turen på nytt.`;
+  }
+  const on = $('#cameraOn'); on.checked = !!settings.cameraOn;
+  on.onchange = () => { saveSettings({ ...getSettings(), cameraOn: on.checked }); toast(on.checked ? 'Kameraet brukes under kjøring.' : 'Kameraet brukes ikke under kjøring.', { type: 'ok', ms: 2000 }); };
+  const recent = [];
+  let lastCls = null, run = 0;
+  const listen = () => {
+    if (camUnsub) camUnsub();
+    camUnsub = cam.onPose(pose => {
+      const c = getCalib();
+      const cls = classifyPose(pose, c);
+      label.textContent = c ? CLASS_LABEL[cls] : (pose ? 'Ser ansiktet' : CLASS_LABEL.none);
+      label.dataset.cls = c ? cls : (pose ? 'forward' : 'none');
+      nums.textContent = pose ? `Sidelengs ${Math.round(pose.yaw)}° · opp/ned ${Math.round(pose.pitch)}° · ${cam.state().fps.toFixed(0)} bilder/s` : '';
+      if (cls === lastCls) run++; else { lastCls = cls; run = 1; }
+      if (run === 2 && c && !['forward', 'other', 'none'].includes(cls)) {
+        recent.unshift({ cls, at: new Date() });
+        recent.length = Math.min(recent.length, 8);
+        log.innerHTML = recent.map(r => `<li><strong>${CLASS_LABEL[r.cls]}</strong><span class="muted small">${r.at.toLocaleTimeString('nb-NO')}</span></li>`).join('');
+      }
+    });
+  };
+  const startCam = async () => {
+    try {
+      status.textContent = 'Starter kameraet …';
+      await ensureCamera(video, t => { status.textContent = t; });
+      listen();
+      status.textContent = 'Kameraet er på. Bildene lagres ikke.';
+      $('#cam-stage').hidden = false;
+      $('#btn-cam-start').hidden = true; $('#btn-cam-stop').hidden = false;
+      calibInfo();
+      return true;
+    } catch (err) {
+      status.textContent = '';
+      infoDialog({ title: 'Kameraet startet ikke', text: err && err.name === 'NotAllowedError' ? 'Tilgang til kameraet ble avslått. Tillat kamera for appen i iPhone-innstillingene (Safari → Kamera), og prøv igjen.' : String(err && err.message || err) });
+      return false;
+    }
+  };
+  $('#btn-cam-start').onclick = startCam;
+  $('#btn-cam-stop').onclick = () => { cam.stopCamera(); if (camUnsub) camUnsub(); camUnsub = null; $('#cam-stage').hidden = true; $('#btn-cam-start').hidden = false; $('#btn-cam-stop').hidden = true; status.textContent = 'Kameraet er av.'; calibInfo(); };
+  $('#btn-cam-calib').onclick = async () => {
+    unlockSpeech();
+    if (!cam.state().running && !(await startCam())) return;
+    const c = await runCalibration();
+    calibInfo();
+    if (c && calibForDrive) {
+      const id = calibForDrive;
+      calibForDrive = null;
+      await applyCalibToDrive(id, c);
+      location.hash = '#/rapport/' + id;
+    }
+  };
+  if (cam.state().running) { await cam.attachVideo(video); listen(); $('#cam-stage').hidden = false; $('#btn-cam-start').hidden = true; $('#btn-cam-stop').hidden = false; status.textContent = 'Kameraet er på. Bildene lagres ikke.'; }
+  else { $('#cam-stage').hidden = true; $('#btn-cam-start').hidden = false; $('#btn-cam-stop').hidden = true; }
+}
+
+/* iPhone leser bare opp hvis den første opplesningen starter direkte fra et trykk. */
+function unlockSpeech() { if ('speechSynthesis' in window) speak(' '); }
+
+/* Kalibrering: fire blikk med nedtelling over hele skjermen. Instruksjonene leses opp,
+   fordi føreren ser i speilene og ikke på skjermen. Returnerer kalibreringen, eller null. */
+async function runCalibration() {
+  const overlay = $('#calib-overlay'), stepEl = $('#calib-step'), count = $('#calib-count'), progress = $('#calib-progress'), face = $('#calib-face');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  let cancelled = false;
+  $('#calib-cancel').onclick = () => { cancelled = true; };
+  overlay.hidden = false;
+  const offFace = cam.onPose(p => { face.textContent = p ? 'Kameraet ser ansiktet' : 'Kameraet ser ikke ansiktet – snu deg litt tilbake'; face.dataset.ok = p ? '1' : '0'; });
+  const byTarget = {};
+  try {
+    for (const [i, step] of CALIB_STEPS.entries()) {
+      progress.textContent = `Steg ${i + 1} av ${CALIB_STEPS.length}`;
+      stepEl.textContent = step.text;
+      speak(step.text);
+      for (let k = 3; k > 0; k--) { count.textContent = k; await wait(800); if (cancelled) break; }
+      if (cancelled) break;
+      count.textContent = 'Hold …';
+      vibrate(30);
+      const got = [];
+      const off = cam.onPose(p => { if (p) got.push(p); });
+      await wait(2200);
+      off();
+      byTarget[step.id] = got;
+    }
+  } finally { offFace(); overlay.hidden = true; }
+  if (cancelled) { stopSpeaking(); return null; }
+  vibrate([30, 60, 30]);
+  const c = calibrationFromSamples(byTarget);
+  if (c.ok) { c.at = new Date().toISOString(); saveCalib(c); speak('Ferdig. Kalibreringen er lagret.'); toast('Kalibreringen er lagret.', { type: 'ok' }); return c; }
+  speak('Kalibreringen ble ikke god nok.');
+  infoDialog({ title: 'Kalibreringen ble ikke god nok', text: c.problem === 'missing' ? 'Kameraet så ikke ansiktet lenge nok i ett eller flere trinn. Sjekk at ansiktet er godt synlig og at det er lyst nok.' : c.problem === 'close' ? 'Telefonen ser for liten forskjell mellom rett fram og et av speilene. Flytt holderen mer mot midten av bilen, og snu hodet tydelig mot speilet.' : 'Venstre og høyre speil ble ikke skilt fra hverandre. Prøv igjen, og snu hodet tydelig.' });
+  return null;
 }
 
 /* ---------- Kjørelogg ---------- */
@@ -527,6 +671,16 @@ function renderPrecheck() {
   renderDriverPicker();
   renderFocusChips();
   renderFocusSuggestions();
+  const camCheck = $('#check-camera');
+  camCheck.hidden = !getSettings().cameraOn;
+  const preCalib = $('#btn-pre-calib');
+  preCalib.hidden = true;
+  if (getSettings().cameraOn) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
+  preCalib.onclick = async () => {
+    unlockSpeech();
+    await runCalibration();
+    preCalib.lastChild.textContent = getCalib() ? 'Kalibrer på nytt' : 'Kalibrer nå';
+  };
   $('#precheck-error').textContent = '';
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
 
@@ -542,6 +696,18 @@ function renderPrecheck() {
       setCheck(gps, null, 'Venter på god nok nøyaktighet …');
     } catch (err) {
       setCheck(gps, false, err.code === 1 ? 'Posisjonstilgang avslått. Tillat posisjon for denne appen i Innstillinger.' : 'Fikk ikke posisjon. Gå ut i friluft og prøv igjen.');
+    }
+    if (getSettings().cameraOn) {
+      try {
+        await cam.startCamera($('#pre-video'));
+        await cam.loadModel(t => setCheck(camCheck, null, t));
+        cam.startLoop(8);
+        if (camUnsub) camUnsub();
+        let seen = 0, n = 0;
+        camUnsub = cam.onPose(p => { n++; if (p) seen++; if (n % 8 === 0) { const share = seen / 8; seen = 0; setCheck(camCheck, share > 0.6 ? true : null, share > 0.6 ? (getCalib() ? 'Ser føreren · kalibrert' : 'Ser føreren – men ikke kalibrert. Trykk «Kalibrer nå».') : 'Ser ikke ansiktet – juster holderen'); } });
+        preCalib.lastChild.textContent = getCalib() ? 'Kalibrer på nytt' : 'Kalibrer nå';
+        preCalib.hidden = false;
+      } catch (err) { setCheck(camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : 'Kameraet startet ikke'); }
     }
     btnPerm.hidden = true;
     $('#step-perm').dataset.state = 'done';
@@ -643,6 +809,7 @@ async function startRecording(replay = null) {
     appVersion: APP_VERSION,
     driver: replay ? '' : (settings.activeDriver || ''),
     focus: replay ? [] : (settings.focus || []),
+    calib: replay ? null : getCalib(),
     replay,
     onStatus: st => {
       if (st.replayDone) { finishRecording(); return; }
@@ -667,6 +834,20 @@ async function startRecording(replay = null) {
       warn.innerHTML = msgs.map(m => `<p class="notice">${esc(m)}</p>`).join('');
     }
   });
+  const camPill = $('#rec-cam'), recVideo = $('#rec-video');
+  camPill.hidden = true; recVideo.hidden = true;
+  if (!replay && settings.cameraOn && cam.state().running) {
+    await cam.attachVideo(recVideo);
+    recVideo.hidden = false; camPill.hidden = false;
+    if (camUnsub) camUnsub();
+    let seen = 0, n = 0;
+    camUnsub = cam.onPose(p => {
+      if (recorder) recorder.addHead(p);
+      n++; if (p) seen++;
+      if (n % 16 === 0) { const ok = seen / 16 > 0.5; camPill.textContent = ok ? 'Kamera: ser føreren' : 'Kamera: ser ikke ansiktet'; camPill.dataset.state = ok ? 'ok' : 'wait'; seen = 0; }
+    });
+    camPill.textContent = 'Kamera: på'; camPill.dataset.state = 'ok';
+  }
   try {
     await recorder.start();
     vibrate(80);
@@ -709,6 +890,8 @@ async function finishRecording() {
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
   const drive = await rec.stop();
+  if (camUnsub) { camUnsub(); camUnsub = null; }
+  cam.stopCamera();
   $('#record').classList.remove('busy');
   if (getSettings().autoSpeak) speakNext = drive.id;
   location.hash = '#/rapport/' + drive.id;
@@ -798,6 +981,11 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       startedAt: drive.startedAt, focus: drive.focus || [],
       sameRoute: routeRows,
       onSpeak: text => { if (!speak(text)) toast('Telefonen støtter ikke opplesning.', { type: 'error' }); },
+      hasCalib: !!getCalib(),
+      onCalibrate: async useSaved => {
+        if (useSaved && getCalib()) { await applyCalibToDrive(id, getCalib()); renderDriveReport(id, { keepScroll: true }); }
+        else { calibForDrive = id; location.hash = '#/kamera'; }
+      },
       feedbackHref: feedbackHref(r),
       gaps: drive.gaps || [], interrupted: !!drive.interrupted, factor: sens.factor, sensitivityLabel: sens.label,
       note: drive.note || '',
@@ -1054,7 +1242,10 @@ function route() {
   const h = location.hash || '#/';
   if (recorder && recorder.running && h !== '#/opptak') { location.hash = '#/opptak'; return; }
   if (stopPrecheck && h !== '#/sjekk') { stopPrecheck(); stopPrecheck = null; }
-  if (!h.startsWith('#/rapport/')) stopSpeaking();
+  if (!h.startsWith('#/rapport/') && h !== '#/kamera' && h !== '#/sjekk') stopSpeaking();
+  if (h !== '#/kamera') calibForDrive = null;
+  // Kameraet står bare på i kameratesten, før kjøring og under opptak
+  if (!['#/kamera', '#/sjekk', '#/opptak'].includes(h) && cam.state().running && !(recorder && recorder.running)) { cam.stopCamera(); if (camUnsub) { camUnsub(); camUnsub = null; } }
   if (h === '#/') renderHome();
   else if (h === '#/sjekk') renderPrecheck();
   else if (h === '#/opptak') { if (!recorder) location.hash = '#/'; }
@@ -1063,6 +1254,7 @@ function route() {
   else if (h === '#/logg') renderLog();
   else if (h === '#/faresteder') renderSpots();
   else if (h === '#/opplaering') renderPlan();
+  else if (h === '#/kamera') renderCamera();
   else if (h.startsWith('#/rapport/')) renderDriveReport(h.slice('#/rapport/'.length));
   else location.hash = '#/';
 }
@@ -1070,8 +1262,9 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
+  $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
   $('#btn-settings').onclick = () => { location.hash = '#/innstillinger'; };
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = () => { location.hash = '#/'; });

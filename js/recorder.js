@@ -71,6 +71,7 @@ export class Recorder {
     this.appVersion = opts.appVersion || null;
     this.driver = opts.driver || '';
     this.focus = Array.isArray(opts.focus) ? opts.focus.slice(0, 3) : [];
+    this.calib = opts.calib || null;
     this.replay = opts.replay || null;        // { data, speed } – utvikleralternativ: spill av demotur
     this.reset();
   }
@@ -78,7 +79,8 @@ export class Recorder {
   reset() {
     this.drive = null;
     this.t0 = 0;
-    this.buf = { loc: [], gyro: [], grav: [], acc: [] };
+    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [] };
+    this.headOk = 0; this.headN = 0;
     this.seq = 0;
     this.lastMotionT = -1;
     this.grav = null;
@@ -120,9 +122,10 @@ export class Recorder {
       demo: !!this.replay,
       driver: this.driver,
       focus: this.focus,
+      calib: this.calib || null,
       gaps: [],
       marks: [],
-      counts: { loc: 0, gyro: 0, grav: 0, acc: 0 },
+      counts: { loc: 0, gyro: 0, grav: 0, acc: 0, head: 0 },
       appVersion: 3
     };
     await putDrive(this.drive);
@@ -233,6 +236,15 @@ export class Recorder {
   }
 
   /* Ledsagerens merke: et tidspunkt å kommentere etterpå. Ingen tilbakemelding til føreren. */
+  /* Hodets retning fra kameraet (grader). pose = null når ansiktet ikke ses. */
+  addHead(pose) {
+    if (!this.running) return;
+    const t = this.now();
+    this.headN++;
+    if (pose) this.headOk++;
+    this.buf.head.push(pose ? { t, yaw: Math.round(pose.yaw * 10) / 10, pitch: Math.round(pose.pitch * 10) / 10, ok: true } : { t, ok: false });
+  }
+
   mark(cat = 'annet') {
     if (!this.running) return null;
     const t = this.now(), last = this.marks[this.marks.length - 1];
@@ -256,12 +268,13 @@ export class Recorder {
   async checkpoint() {
     if (!this.drive) return;
     const b = this.buf;
-    if (!b.loc.length && !b.gyro.length && !b.grav.length && !b.acc.length) return;
-    this.buf = { loc: [], gyro: [], grav: [], acc: [] };
+    if (!b.loc.length && !b.gyro.length && !b.grav.length && !b.acc.length && !b.head.length) return;
+    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [] };
     this.drive.counts.loc += b.loc.length;
     this.drive.counts.gyro += b.gyro.length;
     this.drive.counts.grav += b.grav.length;
     this.drive.counts.acc += b.acc.length;
+    this.drive.counts.head = (this.drive.counts.head || 0) + b.head.length;
     this.drive.marks = this.marks;
     this.drive.distanceM = this.distance;
     this.drive.duration = this.now();
@@ -308,7 +321,8 @@ export class Recorder {
       gpsFixes: d.gpsFixes, gpsHz: Math.round(d.gpsFixes / sec * 100) / 100,
       gpsMedianAcc: acc.length ? acc[Math.floor(acc.length / 2)] : null,
       wakeLock: d.wakeLock, standalone: d.standalone, replay: d.replay,
-      gaps: this.gaps.length, marks: this.marks.length, staleStartFixes: d.staleStartFixes || 0,
+      gaps: this.gaps.length, marks: this.marks.length,
+      camera: this.headN ? { samples: this.headN, faceShare: Math.round(this.headOk / this.headN * 100) / 100, hz: Math.round(this.headN / sec * 10) / 10 } : null, staleStartFixes: d.staleStartFixes || 0,
       userAgent: d.userAgent, appVersion: this.appVersion || null
     };
   }

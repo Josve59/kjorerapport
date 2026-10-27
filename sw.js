@@ -1,11 +1,12 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.7.8';
+const VERSION = 'v0.8.0';
 const CACHE = 'kjorerapport-' + VERSION;
+const ML_CACHE = 'kjorerapport-ml';   // ansiktsgjenkjenningen, beholdes mellom versjoner
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
-  './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js',
+  './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js', './js/camera.js', './js/facecam.js', './js/situations.js',
   './fonts/overpass-latin.woff2', './fonts/overpass-latin-ext.woff2',
   './vendor/leaflet/leaflet.js', './vendor/leaflet/leaflet.css',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'
@@ -43,6 +44,14 @@ self.addEventListener('fetch', e => {
   }
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (url.pathname.includes('/kamera/')) return;   // kamera-testversjonen har sin egen service worker
+  /* Ansiktsgjenkjenningen (rundt 13 MB) lastes først når kameraet brukes, og lagres da for bruk uten nett */
+  if (url.pathname.includes('/vendor/mediapipe/')) {
+    e.respondWith(caches.open(ML_CACHE).then(c => c.match(e.request).then(hit => hit || fetch(e.request).then(res => {
+      if (res.ok) c.put(e.request, res.clone());
+      return res;
+    }))));
+    return;
+  }
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }

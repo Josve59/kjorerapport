@@ -109,7 +109,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     startedAt: typeof meta.startedAt === 'string' && !isNaN(Date.parse(meta.startedAt)) ? meta.startedAt : new Date().toISOString(),
     endedAt: meta.endedAt || null,
     status: 'done',
-    imported: true,
+    imported: keepId ? !!meta.imported : true,   // gjenoppretting fra sikkerhetskopi beholder turen som ekte
     demo: !!meta.demo,
     interrupted: !!meta.interrupted,
     note: typeof meta.note === 'string' ? meta.note : '',

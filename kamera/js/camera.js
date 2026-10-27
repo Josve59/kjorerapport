@@ -136,6 +136,65 @@ export function detectGlances(samples, calib, { maxGap = 0.35, minDur = 0.2 } = 
   return merged.filter(g => g.n >= 2 || g.tEnd - g.t >= minDur).map(g => ({ cls: g.cls, t: g.t, tEnd: g.tEnd, dur: Math.max(g.tEnd - g.t, 0.125) }));
 }
 
+/* Blikket borte fra veien (v0.8.0): sammenhengende perioder der hodet tydelig ikke ser på veien foran,
+   i minst 30 km/t: speil, skulder, eller mer enn 15° unna rett fram (for eksempel ned mot telefonen).
+   Over 2 s regnes som risiko (dobbel ulykkesrisiko ifølge NHTSA).
+   Samkjøring med GPS: i svinger følger hodet veien, så perioder der bilen svinger mer enn 4 °/s telles
+   ikke. Perioder over 6 s er nesten alltid at føreren sitter annerledes, ikke at blikket er borte, og
+   telles heller ikke. Ansikt som forsvinner i under 0,6 s bryter ikke perioden, og ett enkelt bilde
+   rett fram regnes som støy. samples: rå hodedata (opptakstid), points: rapportens punkter (t relativt). */
+export function eyesOffRoad(samples, calib, { points = [], t0 = 0, minDur = 2, maxDur = 6, minKmh = 30, maxTurn = 4, offDeg = 15 } = {}) {
+  if (!calib || !calib.ok || points.length < 3) return [];
+  const s = samples.filter(x => Number.isFinite(x.t)).slice().sort((a, b) => a.t - b.t);
+  const drift = forwardDrift(s, calib);
+  // Svingrate fra GPS-sporet (°/s) ved hvert punkt
+  const R = Math.PI / 180, head = (a, b) => Math.atan2((b.lon - a.lon) * Math.cos(a.lat * R), b.lat - a.lat) / R;
+  const turn = points.map((p, i) => {
+    if (i === 0 || i === points.length - 1) return 0;
+    const a = points[i - 1], b = points[i + 1], dt = b.t - a.t;
+    if (!(dt > 0) || a.kmh < 10) return 0;
+    let d = head(p, b) - head(a, p);
+    if (d > 180) d -= 360; if (d < -180) d += 360;
+    return Math.abs(d) / (dt / 2);
+  });
+  const idxAt = t => {
+    let lo = 0, hi = points.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (points[mid].t < t) lo = mid + 1; else hi = mid; }
+    return lo;
+  };
+  const f = calib.forward;
+  const out = [];
+  let cur = null, fwdRun = 0;
+  const med = a => a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)];
+  const close = () => {
+    const dur = cur ? cur.tEnd - cur.t : 0;
+    if (cur && dur >= minDur && dur <= maxDur && med(cur.kmh) >= minKmh && med(cur.turn) <= maxTurn) {
+      const top = Object.entries(cur.cls).sort((a, b) => b[1] - a[1])[0][0];
+      const kmh = med(cur.kmh);
+      out.push({ t: cur.t, tEnd: cur.tEnd, dur, kmh, metres: kmh / 3.6 * dur, cls: top });
+    }
+    cur = null;
+  };
+  for (const x of s) {
+    const t = x.t - t0;
+    if (!x.ok) { if (cur && t - cur.tEnd > 0.6) close(); continue; }
+    const o = drift(x.t), p = { yaw: x.yaw - o.yaw, pitch: x.pitch - o.pitch };
+    const c = classifyPose(p, calib);
+    const off = c !== 'forward' && (c !== 'other' || Math.hypot(p.yaw - f.yaw, p.pitch - f.pitch) > offDeg);
+    if (!off) { fwdRun++; if (fwdRun >= 2) close(); continue; }
+    fwdRun = 0;
+    if (cur && t - cur.tEnd > 0.6) close();
+    if (!cur) cur = { t, tEnd: t, cls: {}, kmh: [], turn: [] };
+    cur.tEnd = t;
+    cur.cls[c] = (cur.cls[c] || 0) + 1;
+    const i = idxAt(t);
+    cur.kmh.push(points[i].kmh);
+    cur.turn.push(turn[i]);
+  }
+  close();
+  return out;
+}
+
 /* Vurdering mot turen. points: rapportens punkter (t relativt til start), t0: start i opptakstid.
    laneChanges: rapportens feltskifter. Returnerer tall og sjekker for rapporten. */
 export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChanges = [], markedLanes = [] } = {}) {
@@ -176,6 +235,7 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
     perMin: moving > 30 ? mirrors.length / (moving / 60) : 0,
     longestGap: longest, longestGapAt: longestAt - longest,
     lane, laneSource: marked.length ? 'marks' : 'sensors', start, calibrated: !!(calib && calib.ok),
-    drift: Math.round(forwardDrift(valid, calib).max * 10) / 10
+    drift: Math.round(forwardDrift(valid, calib).max * 10) / 10,
+    away: eyesOffRoad(valid, calib, { points, t0 })
   };
 }

@@ -128,6 +128,21 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.8.0 – camera in the main app, and data fusion
+
+**Camera moved into the main app.** Everything from the camera test version is now in Kjørerapport itself, off by default. It covers calibration from the checklist, spoken full-screen calibration, mirror and shoulder checks, marked lane changes, forward drift and «Kalibrer og vurder turen» afterwards. Turn it on under «Kamera: speil- og skulderblikk» on the home screen. The camera code now lives in `js/camera.js` and `js/facecam.js`, and the MediaPipe files moved to the shared `vendor/mediapipe/`. They are cached on first use in `kjorerapport-ml`, which is kept across versions. `kamera/` stays as a separate test app and will become the test bed for the road-facing camera.
+
+**Moving drives from the camera test app.** Each home-screen app on iPhone has its own storage, so this goes through a backup. In Kjøre Kamera: Innstillinger → «Ta kopi». In Kjørerapport: Innstillinger → «Gjenopprett», then answer yes to restoring the settings too (this brings the calibration). Restored drives are no longer flagged «importert», so they count in statistics.
+
+**Data fusion – «Situasjoner» (`js/situations.js`).** GPS, motion sensors, driver camera, companion marks and road data are combined into situations. Each situation has a time, a place, a severity (alvorlig / bør øves på / liten ting / bra) and the sources that saw it:
+- **Eyes off the road** (camera + GPS, `eyesOffRoad` in camera.js). A situation is 2–6 s with the head clearly away from the road ahead (mirror, shoulder, or more than 15° off), at 30 km/h or more, on a road turning less than 4 °/s. In curves the head follows the road, so turning stretches are skipped. Over 6 s is almost always posture or drift, not distraction. 2 s is the NHTSA limit for doubled crash risk. The 27 Oct drives gave 3 each, for example a 2.9 s look in the left mirror at 81 km/h (67 m).
+- **Harsh events with context.** Braking with eyes off the road in the 5 s before counts as serious, and so does a harsh event while speeding. Events inside roundabouts are labelled as such.
+- **Lane changes** (marked or detected) with mirror and shoulder checks, and the pull-out at the start.
+- **Speeding episodes** of 10 km/h or more over the limit (road data), unless already part of another situation.
+- Companion remarks within 10 s are attached.
+
+The report gets a «Situasjoner» card after the map. The most serious come first, the good ones are folded away, and tapping one zooms the map. «Kort fortalt» mentions the number of serious situations. New tests: `tests/situations.test.mjs`, plus an eyes-off-road test in `tests/camera.test.mjs`.
+
 ## What's new in 0.7.8 / k0.3.0 – undo, marked lane changes for the camera, forward drift
 
 Based on the 27 Oct 18:27 drive, where the companion marked all 10 lane changes. One was a double tap, and there was one stray «Annet».

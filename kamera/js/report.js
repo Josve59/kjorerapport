@@ -4,6 +4,7 @@ import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
 import { analyzeSpeeding, evaluateRoad } from './enrich.js';
 import { icon, MARK_CATS, FOCUS, isRemark } from './ui.js';
 import { driveLog, ROAD_LABEL, LIGHT_LABEL } from './log.js';
+import { buildSituations, situationSummary, SOURCE_LABEL, LEVEL_ORDER } from './situations.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
 const LABEL = {
@@ -119,6 +120,8 @@ export function renderReport(root, r, ctx = {}) {
   const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events), fromNvdb: true } : null;
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null) : null;
   const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
+  const sits = buildSituations(r, { camera: r.camera, marks, sp });
+  const sitSum = situationSummary(sits);
 
   // Datakvalitet: alt teknisk samlet ett sted
   const quality = [];
@@ -171,6 +174,7 @@ export function renderReport(root, r, ctx = {}) {
         ${tipsAll.map(t => `<li class="sum-work sum-${t.cat}">${icon('chev', 20)}<span>${esc(t.text)}</span></li>`).join('')}
         ${!positives.length && !tipsAll.length ? r.tips.map(t => `<li class="sum-good">${icon('check', 20)}<span>${esc(t.text)}</span></li>`).join('') : ''}
         ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.</span></li>` : ''}
+        ${sitSum.high ? `<li class="sum-work sum-brake">${icon('warn', 20)}<span><strong>${sitSum.high} ${sitSum.high === 1 ? 'alvorlig situasjon' : 'alvorlige situasjoner'}</strong> – se Situasjoner.</span></li>` : ''}
         ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket: ${Object.entries(marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {})).map(([c, n]) => `${MARK_CATS[c].label.toLowerCase()} ${n}`).join(', ')}.</span></li>` : ''}
       </ul>
     </section>
@@ -183,7 +187,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
 
     <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
+      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
     </nav>
 
 
@@ -211,6 +215,8 @@ export function renderReport(root, r, ctx = {}) {
       </ul>
       <p class="muted small">Trykk på et nummer i kartet for å se hendelsen. ${useReal ? 'Knip for å zoome, eller trykk «Utforsk kartet» for å flytte rundt.' : ''}</p>
     </section>
+
+    ${sits.length ? situationSection(sits, sitSum) : ''}
 
     <section class="card" id="score-section">
       <h2 class="card-title">${icon('chart')}Slik gikk det</h2>
@@ -501,6 +507,25 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
     out.push(res);
   }
   return out;
+}
+
+/* Samkjøring: det som skjedde, med alle kildene som så det (v0.8.0) */
+const SIT_ICON = { away: 'eye', event: 'warn', lane: 'shift', start: 'play', speed: 'speed' };
+const LEVEL_LABEL = { high: 'Alvorlig', medium: 'Bør øves på', low: 'Liten ting', ok: 'Bra' };
+function situationSection(sits, sum) {
+  const shown = sits.filter(s => s.level !== 'ok').sort((a, b) => (LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]) || (a.t - b.t));
+  const good = sits.filter(s => s.level === 'ok');
+  const item = s => `<li><button type="button" class="man-item sit-item" data-lat="${s.lat}" data-lon="${s.lon}">
+      <span class="man-ico sit-${s.level}">${icon(SIT_ICON[s.kind] || 'info', 20)}</span>
+      <span class="ev-text"><strong>${esc(s.title)}</strong><span class="muted small">${mss(s.t)} · ${LEVEL_LABEL[s.level]}</span><span class="sit-text">${esc(s.text)}</span>
+        <span class="src-chips">${s.sources.map(k => `<span class="src-chip">${SOURCE_LABEL[k]}</span>`).join('')}</span></span>
+      ${icon('chev', 18)}</button></li>`;
+  return `<section class="card" id="situation-section">
+      <h2 class="card-title">${icon('layers')}Situasjoner</h2>
+      <p class="muted small">GPS, bevegelse${sits.some(s => s.sources.includes('camera')) ? ', førerkamera' : ''}${sits.some(s => s.sources.includes('road')) ? ', veidata' : ''} og ledsagerens merker satt sammen.${sum.high ? ` ${sum.high} alvorlig${sum.high === 1 ? '' : 'e'}, ${sum.medium} å øve på.` : ''}</p>
+      ${shown.length ? `<ul class="man-list">${shown.map(item).join('')}</ul>` : '<p>Ingen situasjoner å øve på. Bra!</p>'}
+      ${good.length ? `<details class="adv"><summary>${good.length} ${good.length === 1 ? 'situasjon' : 'situasjoner'} gikk bra</summary><ul class="man-list">${good.map(item).join('')}</ul></details>` : ''}
+    </section>`;
 }
 
 function maneuverSection(r, road, log, marks, hasRoadData) {

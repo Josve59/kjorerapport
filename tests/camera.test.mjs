@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { poseFromMatrix, calibrationFromSamples, classifyPose, detectGlances, evaluateMirrors, forwardDrift } from '../kamera/js/camera.js';
+import { poseFromMatrix, calibrationFromSamples, classifyPose, detectGlances, evaluateMirrors, forwardDrift } from '../js/camera.js';
 
 const pts = (yaw, pitch, n = 10) => Array.from({ length: n }, () => ({ yaw: yaw + (Math.random() - 0.5), pitch: pitch + (Math.random() - 0.5) }));
 const calib = calibrationFromSamples({ forward: pts(0, 0), left: pts(-35, -3), right: pts(48, -2), rear: pts(22, 14) });
@@ -82,4 +82,15 @@ test('feltskifter merket av ledsager brukes, dobbelttrykk teller én gang', () =
   assert.equal(e.lane[1].mirror, true, 'bakspeil 10 s før');
   assert.equal(e.lane[1].shoulder, false);
   assert.equal(evaluateMirrors(s, calib, { points, laneChanges: [{ t: 10, tFrom: 9, tTo: 12, dir: 'venstre' }] }).laneSource, 'sensors');
+});
+
+test('blikket borte fra veien: bare over 2 s, i fart og på rett vei', async () => {
+  const { eyesOffRoad } = await import('../js/camera.js');
+  // 0,6 s speilblikk (ok), 2,5 s ned mot telefonen (pitch -30), og 2,5 s borte i 20 km/t (teller ikke)
+  const s = series(100, [[20, 0.6, -34, -3], [40, 2.5, 0, -30], [80, 2.5, 0, -30]]);
+  const pts = Array.from({ length: 101 }, (_, i) => ({ t: i, lat: 63.43 + i * 1.5e-4, lon: 10.39, kmh: i > 70 ? 20 : 60 }));
+  const a = eyesOffRoad(s, calib, { points: pts, t0: 0 });
+  assert.equal(a.length, 1, JSON.stringify(a));
+  assert.ok(Math.abs(a[0].t - 40) < 0.3 && a[0].dur >= 2.2);
+  assert.ok(a[0].metres > 35 && a[0].metres < 45);
 });

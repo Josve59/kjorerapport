@@ -646,6 +646,10 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .man-item > .ico:last-child { color: var(--muted); }
 .man-ico { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--bg); }
 .man-ico.ok { color: var(--good); } .man-ico.no { color: var(--turn); }
+.sit-high { color: #fff; background: var(--brake); } .sit-medium { color: var(--turn); } .sit-low { color: var(--muted); } .sit-ok { color: var(--good); }
+.sit-text { display: block; margin-top: 2px; }
+.src-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.src-chip { font-size: .75rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .man-verdict { font-size: .9rem; font-weight: 700; }
 .man-verdict.ok { color: var(--good); } .man-verdict.no { color: var(--turn); }
 details.gw { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 4px; }

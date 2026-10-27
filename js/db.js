@@ -76,9 +76,9 @@ export async function getRaw(driveId) {
   const idx = db.transaction('chunks').objectStore('chunks').index('driveId');
   const chunks = await reqToPromise(idx.getAll(driveId));
   chunks.sort((a, b) => a.seq - b.seq);
-  const raw = { loc: [], gyro: [], grav: [], acc: [] };
+  const raw = { loc: [], gyro: [], grav: [], acc: [], head: [] };
   for (const c of chunks) {
-    for (const k of ['loc', 'gyro', 'grav', 'acc']) if (c[k]) for (const s of c[k]) raw[k].push(s);
+    for (const k of ['loc', 'gyro', 'grav', 'acc', 'head']) if (c[k]) for (const s of c[k]) raw[k].push(s);
   }
   return raw;
 }
@@ -98,7 +98,8 @@ export async function importDrive(payload, { keepId = false } = {}) {
   const xyz = arr => (arr || []).map(g => ({ t: num(g.t), x: num(g.x), y: num(g.y), z: num(g.z) }));
   const raw = {
     loc: input.loc.map(p => ({ t: num(p.t), lat: num(p.lat), lon: num(p.lon), speed: num(p.speed), bearing: num(p.bearing), acc: num(p.acc) })),
-    gyro: xyz(input.gyro), grav: xyz(input.grav), acc: xyz(input.acc)
+    gyro: xyz(input.gyro), grav: xyz(input.grav), acc: xyz(input.acc),
+    head: (input.head || []).map(h => ({ t: num(h.t), yaw: num(h.yaw), pitch: num(h.pitch), ok: !!h.ok }))
   };
   const meta = payload && payload.drive ? payload.drive : {};
   const id = keepId && typeof meta.id === 'string' && meta.id ? meta.id : newId();
@@ -108,14 +109,15 @@ export async function importDrive(payload, { keepId = false } = {}) {
     startedAt: typeof meta.startedAt === 'string' && !isNaN(Date.parse(meta.startedAt)) ? meta.startedAt : new Date().toISOString(),
     endedAt: meta.endedAt || null,
     status: 'done',
-    imported: true,
+    imported: keepId ? !!meta.imported : true,   // gjenoppretting fra sikkerhetskopi beholder turen som ekte
     demo: !!meta.demo,
     interrupted: !!meta.interrupted,
     note: typeof meta.note === 'string' ? meta.note : '',
     gaps: Array.isArray(meta.gaps) ? meta.gaps : [],
     marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
     focus: Array.isArray(meta.focus) ? meta.focus.filter(f => typeof f === 'string').slice(0, 3) : [],
-    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length },
+    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length },
+    calib: meta.calib && typeof meta.calib === 'object' ? meta.calib : null,
     diag: meta.diag && typeof meta.diag === 'object' ? meta.diag : null,
     driver: typeof meta.driver === 'string' ? meta.driver.slice(0, 40) : '',
     appVersion: 3
@@ -132,7 +134,7 @@ export async function exportPayload(drive) {
   return {
     drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
       marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '',
-      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [] },
+      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], calib: drive.calib || null },
     input: raw
   };
 }

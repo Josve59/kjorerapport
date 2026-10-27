@@ -2,7 +2,7 @@
    Ingen bilder lagres eller sendes – bare hodets vinkler går videre til appen. */
 import { poseFromMatrix } from './camera.js';
 
-const BASE = new URL('../vendor/mediapipe/', import.meta.url).href;
+const BASE = new URL('../../vendor/mediapipe/', import.meta.url).href;   // delt med hovedappen
 let landmarker = null, loading = null, stream = null, video = null, timer = null, listeners = new Set();
 let lastPose = null, lastTs = 0, frames = 0, startedAt = 0;
 

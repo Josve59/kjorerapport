@@ -4,6 +4,7 @@ import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
 import { analyzeSpeeding, evaluateRoad } from './enrich.js';
 import { icon, MARK_CATS, FOCUS, isRemark } from './ui.js';
 import { driveLog, ROAD_LABEL, LIGHT_LABEL } from './log.js';
+import { buildSituations, situationSummary, SOURCE_LABEL, LEVEL_ORDER } from './situations.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
 const LABEL = {
@@ -119,6 +120,8 @@ export function renderReport(root, r, ctx = {}) {
   const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events), fromNvdb: true } : null;
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null) : null;
   const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
+  const sits = buildSituations(r, { camera: r.camera, marks, sp });
+  const sitSum = situationSummary(sits);
 
   // Datakvalitet: alt teknisk samlet ett sted
   const quality = [];
@@ -171,6 +174,7 @@ export function renderReport(root, r, ctx = {}) {
         ${tipsAll.map(t => `<li class="sum-work sum-${t.cat}">${icon('chev', 20)}<span>${esc(t.text)}</span></li>`).join('')}
         ${!positives.length && !tipsAll.length ? r.tips.map(t => `<li class="sum-good">${icon('check', 20)}<span>${esc(t.text)}</span></li>`).join('') : ''}
         ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.</span></li>` : ''}
+        ${sitSum.high ? `<li class="sum-work sum-brake">${icon('warn', 20)}<span><strong>${sitSum.high} ${sitSum.high === 1 ? 'alvorlig situasjon' : 'alvorlige situasjoner'}</strong> – se Situasjoner.</span></li>` : ''}
         ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket: ${Object.entries(marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {})).map(([c, n]) => `${MARK_CATS[c].label.toLowerCase()} ${n}`).join(', ')}.</span></li>` : ''}
       </ul>
     </section>
@@ -183,7 +187,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
 
     <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a><a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
+      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
     </nav>
 
 
@@ -211,6 +215,8 @@ export function renderReport(root, r, ctx = {}) {
       </ul>
       <p class="muted small">Trykk på et nummer i kartet for å se hendelsen. ${useReal ? 'Knip for å zoome, eller trykk «Utforsk kartet» for å flytte rundt.' : ''}</p>
     </section>
+
+    ${sits.length ? situationSection(sits, sitSum) : ''}
 
     <section class="card" id="score-section">
       <h2 class="card-title">${icon('chart')}Slik gikk det</h2>
@@ -263,6 +269,8 @@ export function renderReport(root, r, ctx = {}) {
     </section>
 
     ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}
+
+    ${r.camera ? cameraSection(r, ctx) : ''}
 
     ${marks.length ? `<section class="card" id="marks-section">
       <h2 class="card-title">${icon('flag')}Ledsagerens merker</h2>
@@ -387,6 +395,10 @@ export function renderReport(root, r, ctx = {}) {
   root.querySelectorAll('.route-table tr[data-id]').forEach(tr => { if (!tr.classList.contains('cur')) { tr.tabIndex = 0; tr.onclick = () => { location.hash = '#/rapport/' + tr.dataset.id; }; } });
   const printBtn = document.getElementById('btn-print');
   if (printBtn) printBtn.onclick = () => window.print();
+  const calibBtn = document.getElementById('btn-calib-drive');
+  if (calibBtn && ctx.onCalibrate) calibBtn.onclick = () => ctx.onCalibrate(false);
+  const useCalibBtn = document.getElementById('btn-use-calib');
+  if (useCalibBtn && ctx.onCalibrate) useCalibBtn.onclick = () => ctx.onCalibrate(true);
   // Fanelinje: marker seksjonen som er i bildet
   const links = [...root.querySelectorAll('.quicknav a')];
   if ('IntersectionObserver' in window && links.length) {
@@ -497,6 +509,25 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
   return out;
 }
 
+/* Samkjøring: det som skjedde, med alle kildene som så det (v0.8.0) */
+const SIT_ICON = { away: 'eye', event: 'warn', lane: 'shift', start: 'play', speed: 'speed' };
+const LEVEL_LABEL = { high: 'Alvorlig', medium: 'Bør øves på', low: 'Liten ting', ok: 'Bra' };
+function situationSection(sits, sum) {
+  const shown = sits.filter(s => s.level !== 'ok').sort((a, b) => (LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]) || (a.t - b.t));
+  const good = sits.filter(s => s.level === 'ok');
+  const item = s => `<li><button type="button" class="man-item sit-item" data-lat="${s.lat}" data-lon="${s.lon}">
+      <span class="man-ico sit-${s.level}">${icon(SIT_ICON[s.kind] || 'info', 20)}</span>
+      <span class="ev-text"><strong>${esc(s.title)}</strong><span class="muted small">${mss(s.t)} · ${LEVEL_LABEL[s.level]}</span><span class="sit-text">${esc(s.text)}</span>
+        <span class="src-chips">${s.sources.map(k => `<span class="src-chip">${SOURCE_LABEL[k]}</span>`).join('')}</span></span>
+      ${icon('chev', 18)}</button></li>`;
+  return `<section class="card" id="situation-section">
+      <h2 class="card-title">${icon('layers')}Situasjoner</h2>
+      <p class="muted small">GPS, bevegelse${sits.some(s => s.sources.includes('camera')) ? ', førerkamera' : ''}${sits.some(s => s.sources.includes('road')) ? ', veidata' : ''} og ledsagerens merker satt sammen.${sum.high ? ` ${sum.high} alvorlig${sum.high === 1 ? '' : 'e'}, ${sum.medium} å øve på.` : ''}</p>
+      ${shown.length ? `<ul class="man-list">${shown.map(item).join('')}</ul>` : '<p>Ingen situasjoner å øve på. Bra!</p>'}
+      ${good.length ? `<details class="adv"><summary>${good.length} ${good.length === 1 ? 'situasjon' : 'situasjoner'} gikk bra</summary><ul class="man-list">${good.map(item).join('')}</ul></details>` : ''}
+    </section>`;
+}
+
 function maneuverSection(r, road, log, marks, hasRoadData) {
   const man = r.maneuvers || { laneChanges: [], roundabouts: [] };
   const rbs = road && road.fromNvdb ? road.roundabouts : man.roundabouts;
@@ -540,6 +571,47 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
         <p class="muted small">Om dere måtte vike for trafikk, kan ikke appen vite. Lav fart inn mot krysset gir tid til å se.</p></details>` : ''}
       ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Veidata</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
       <p class="muted small">Feltskifter finnes i GPS-sporet (sideforflytning på 2,5–5 m) og bekreftes med gyroskopet. Under 45 km/t og der veien svinger ujevnt telles de ikke, så noen kan mangle.</p>
+    </section>`;
+}
+
+/* Kamera-testversjonen: speil- og skulderblikk fra hodets retning */
+const GLANCE_LABEL = { left: 'Venstre speil', right: 'Høyre speil', rear: 'Bakspeil', shoulderL: 'Skulder venstre', shoulderR: 'Skulder høyre' };
+function cameraSection(r, ctx = {}) {
+  const c = r.camera;
+  const T = Math.max(1, r.points.length ? r.points[r.points.length - 1].t : 1);
+  const cov = Math.round(c.coverage * 100);
+  if (!c.calibrated) return `<section class="card" id="camera-section">
+      <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Test</span></h2>
+      <p>Kameraet var på og så ansiktet ${cov} % av tiden, men det var ikke kalibrert. Hodets vinkler er lagret, så turen kan vurderes nå: sett telefonen i holderen akkurat der den sto under turen, og kalibrer.</p>
+      ${ctx.onCalibrate ? `<button type="button" class="btn primary" id="btn-calib-drive">${icon('target', 20)}Kalibrer og vurder turen</button>
+      ${ctx.hasCalib ? `<button type="button" class="btn secondary" id="btn-use-calib">Bruk kalibreringen jeg har</button><p class="muted small">Passer bare hvis holderen sto på samme sted.</p>` : ''}` : ''}
+    </section>`;
+  const W = 340, H = 64, x = t => (Math.max(0, Math.min(T, t)) / T * W).toFixed(1);
+  const rowY = { rear: 10, left: 22, right: 34, shoulderL: 46, shoulderR: 46 };
+  const ticks = c.glances.map(g => `<rect class="gl-${g.cls}" x="${x(g.t)}" y="${rowY[g.cls] - 4}" width="${Math.max(2, (g.dur / T) * W).toFixed(1)}" height="8" rx="1.5"/>`).join('');
+  const lanes = c.lane.map(l => `<path class="gl-lane ${l.mirror && l.shoulder ? 'ok' : 'no'}" d="M${x(l.t)} 54 l-4 8 h8 z"/>`).join('');
+  const gap = c.longestGap > 5 ? `<rect class="gl-gap" x="${x(c.longestGapAt)}" y="2" width="${Math.max(2, c.longestGap / T * W).toFixed(1)}" height="50"/>` : '';
+  const yes = (ok, txt) => `<span class="cam-chip ${ok ? 'ok' : 'no'}">${ok ? icon('check', 14) : '✕'} ${txt}</span>`;
+  const laneOk = c.lane.filter(l => l.mirror && l.shoulder).length;
+  const verdict = c.perMin >= 6 ? 'Hyppige speilblikk – bra!' : c.perMin >= 3 ? 'Jevnlige speilblikk. Prøv å sjekke speilene litt oftere.' : 'Få speilblikk registrert. Øv på å sjekke speilene hvert 5.–8. sekund.';
+  return `<section class="card" id="camera-section">
+      <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Test</span></h2>
+      <div class="cam-stats">
+        <div><strong>${n1(c.perMin)}</strong><span class="muted small">speilblikk per minutt</span></div>
+        <div><strong>${c.longestGap > 5 ? Math.round(c.longestGap) + ' s' : '–'}</strong><span class="muted small">lengste tid uten speil</span></div>
+        <div><strong>${c.lane.length ? `${laneOk} av ${c.lane.length}` : '–'}</strong><span class="muted small">feltskifter med speil og skulder</span></div>
+      </div>
+      <p>${verdict}</p>
+      <svg class="cam-timeline" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Tidslinje over blikk gjennom turen">
+        ${gap}<line x1="0" x2="${W}" y1="52" y2="52" class="gl-axis"/>${ticks}${lanes}
+      </svg>
+      <ul class="legend"><li><span class="dot gl-dot gl-rear"></span>Bakspeil</li><li><span class="dot gl-dot gl-left"></span>Venstre</li><li><span class="dot gl-dot gl-right"></span>Høyre</li><li><span class="dot gl-dot gl-shoulderL"></span>Skulder</li><li><span class="dot gl-dot gl-gap"></span>Lengste pause</li><li>▲ Feltskifte</li></ul>
+      <p class="muted small">${['left', 'right', 'rear', 'shoulderL', 'shoulderR'].filter(k => c.counts[k]).map(k => `${GLANCE_LABEL[k]} ${c.counts[k]}`).join(' · ') || 'Ingen blikk registrert'}</p>
+      ${c.start ? `<h3 class="mt">Igangkjøring</h3><p>${yes(c.start.mirror, 'Speil før start')} ${yes(c.start.shoulder, 'Skulderblikk venstre')}</p>` : ''}
+      ${c.lane.length ? `<h3 class="mt">Feltskifter</h3>${c.laneSource === 'marks' ? '<p class="muted small">Feltskiftene ledsageren merket. Speil 15–1 s før merket og skulderblikk 12–0 s før.</p>' : ''}<ul class="cam-lanes">${c.lane.map(l => `<li><span>${mss(l.t)} · ${l.dir ? 'til ' + esc(l.dir) : 'merket'}</span><span>${yes(l.mirror, 'Speil')} ${yes(l.shoulder, 'Skulder')}</span></li>`).join('')}</ul>` : ''}
+      <p class="muted small">Kameraet så ansiktet ${cov} % av tiden${cov < 70 ? ' – flytt holderen så ansiktet er bedre synlig' : ''}. Dette er en test: kameraet ser hodet, ikke øynene, så korte blikk med bare øynene blir ikke med. Bruk tallene som en pekepinn og snakk med ledsageren om dem.</p>
+      ${c.drift > 6 ? `<p class="notice">«Rett fram» flyttet seg ${Math.round(c.drift)}° i forhold til kalibreringen. Appen justerer for det, men kalibrer på nytt hvis holderen er flyttet.</p>` : ''}
+      ${ctx.onCalibrate ? '<button type="button" class="link" id="btn-calib-drive">Stemmer ikke speilene? Kalibrer på nytt for denne turen</button>' : ''}
     </section>`;
 }
 
