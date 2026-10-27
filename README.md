@@ -111,6 +111,21 @@ At the end:
 - **Overpass is self-hosted as one variable-weight file** (plus a Latin-extended file), which covers 400/700/800 and works offline.
 - **Font and icon files are the only third-party assets.** No scripts or styles are loaded from any CDN.
 
+## Camera test version (kamera/)
+
+A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ adds mirror and shoulder-check detection with the front camera. It installs as its own home-screen app («Kjøre Kamera») and keeps its own drives and settings, so the main app is untouched.
+
+- **How it works:** MediaPipe Face Landmarker runs on the phone (files in `kamera/vendor/mediapipe/`, about 13 MB, downloaded the first time the camera is used and then cached). Only head angles are stored, never images.
+- **Calibration:** the «Kameratest» screen records looking forward, at the left, right and rear mirror. It is saved per driver.
+- **Report:** «Speil og skulderblikk» shows mirror glances per minute, the longest stretch without a mirror glance, a timeline, and whether there was a mirror and shoulder check before each lane change and before driving off.
+- **Code:** `kamera/js/camera.js` (pure, tested in `tests/camera.test.mjs`), `kamera/js/facecam.js` (camera and model). The rest is a copy of the main app with its own database name, settings key, caches and manifest id.
+- **Limits:** it sees the head, not the eyes, so eye-only glances are missed. Sun glare, sunglasses and the phone position affect it. It uses more battery.
+
+## What's new in 0.7.1
+
+- Fix: the main app and the camera version share a web address, so each service worker now only clears its own caches.
+- The main service worker ignores everything under `kamera/`.
+
 ## What's new in 0.7.0
 
 - **Practice suggestions.** The app looks at the last five real drives for the selected driver and suggests up to three goals with a reason, for example «Bremsing: snitt 57 poeng på de 2 siste turene» or «Ingen mørkekjøring registrert ennå, og det er mørketid». Shown in the start card on the home screen and in step 1 before driving, with «Bruk forslagene».

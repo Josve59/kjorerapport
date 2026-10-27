@@ -14,9 +14,9 @@ jobs:
         with:
           node-version: 22
       - name: Syntakssjekk
-        run: for f in js/*.js sw.js; do node --check "$f"; done
+        run: for f in js/*.js sw.js kamera/js/*.js kamera/sw.js; do node --check "$f"; done
       - name: Enhetstester
         run: node --test tests/*.test.mjs
       - name: Alle filer i service workeren finnes
         run: |
-          node -e "const fs=require('fs');const m=fs.readFileSync('sw.js','utf8').match(/const ASSETS = \[([\s\S]*?)\];/)[1];const l=[...m.matchAll(/'([^']+)'/g)].map(x=>x[1]).filter(p=>p!=='./');const miss=l.filter(p=>!fs.existsSync(p));if(miss.length){console.error('Mangler:',miss);process.exit(1)}console.log(l.length+' filer OK')"
+          for d in . kamera; do (cd $d && node -e "const fs=require('fs');const m=fs.readFileSync('sw.js','utf8').match(/const ASSETS = \[([\s\S]*?)\];/)[1];const l=[...m.matchAll(/'([^']+)'/g)].map(x=>x[1]).filter(p=>p!=='./');const miss=l.filter(p=>!fs.existsSync(p));if(miss.length){console.error('Mangler:',miss);process.exit(1)}console.log(process.cwd()+': '+l.length+' filer OK')"); done

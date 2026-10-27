@@ -1,6 +1,6 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.7.0';
+const VERSION = 'v0.7.1';
 const CACHE = 'kjorerapport-' + VERSION;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
@@ -16,7 +16,7 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== TILE_CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('kjorerapport-v') && k !== CACHE)  /* kamera-testversjonen deler opprinnelse og har egne cacher */.map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('message', e => {
@@ -42,6 +42,7 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  if (url.pathname.includes('/kamera/')) return;   // kamera-testversjonen har sin egen service worker
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
