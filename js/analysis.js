@@ -95,6 +95,103 @@ function yawSeries(input, L, vs) {
   return { source: 'gps', yaw: smoothBy(L.map(p => p.t), raw, 1) };
 }
 
+/* Manøvrer (v0.6.0): rundkjøringer og feltskifter fra rotasjonen, uten nett.
+   yaw: rotasjon ved hvert GPS-punkt (rad/s). Fortegnet kalibreres mot GPS-retningen, så venstre er positiv. */
+export function detectManeuvers(L, vs, yaw) {
+  const n = L.length;
+  if (n < 10) return { laneChanges: [], roundabouts: [] };
+  // Fortegn: sammenlign med endring i GPS-retning (med klokka positiv)
+  let s = 0;
+  for (let i = 1; i < n - 1; i++) {
+    const a = L[i - 1].bearing, c = L[i + 1].bearing, dt = L[i + 1].t - L[i - 1].t;
+    if (!(Number.isFinite(a) && Number.isFinite(c) && dt > 0 && dt < 4 && vs[i] > 5)) continue;
+    let d = c - a; if (d > 180) d -= 360; if (d < -180) d += 360;
+    const br = d / dt * Math.PI / 180;
+    if (Math.abs(br) > 0.05) s += br * yaw[i];
+  }
+  const cw = s >= 0 ? 1 : -1;
+  const left = yaw.map(y => -cw * y);
+  const dts = L.map((p, i) => (i ? Math.min(L[i].t - L[i - 1].t, 3) : 0));
+  const deg = r => r * 180 / Math.PI;
+
+  // --- Rundkjøringer: høyre – venstre (≥ 40°) – høyre innen kort tid, lav fart, liten radius
+  const runs = [];
+  let cur = null;
+  for (let i = 0; i < n; i++) {
+    const turning = Math.abs(left[i]) > 0.06 && vs[i] > 1.5 && vs[i] < 15;
+    const sign = Math.sign(left[i]);
+    if (turning && cur && cur.sign === sign) { cur.to = i; cur.ang += left[i] * dts[i]; cur.rad.push(vs[i] / Math.abs(left[i])); }
+    else if (turning) { cur = { sign, from: i, to: i, ang: left[i] * dts[i], rad: [vs[i] / Math.abs(left[i])] }; runs.push(cur); }
+    else cur = null;
+  }
+  const med = a => { const b = a.slice().sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
+  const roundabouts = [];
+  for (let k = 1; k < runs.length - 1; k++) {
+    const l = runs[k];
+    if (l.sign <= 0 || deg(l.ang) < 40 || med(l.rad) > 30) continue;
+    const before = runs.slice(0, k).reverse().find(r => r.sign < 0 && L[l.from].t - L[r.to].t <= 6 && deg(-r.ang) >= 8);
+    const after = runs.slice(k + 1).find(r => r.sign < 0 && L[r.from].t - L[l.to].t <= 6 && deg(-r.ang) >= 8);
+    if (!before || !after) continue;
+    let net = 0; for (let i = before.from; i <= after.to; i++) net += left[i] * dts[i];
+    const mid = Math.round((l.from + l.to) / 2);
+    roundabouts.push({ t: L[mid].t, tFrom: L[before.from].t, tTo: L[after.to].t, lat: L[mid].lat, lon: L[mid].lon, net: Math.round(deg(net)), source: 'sensor' });
+  }
+
+  // --- Feltskifter: kort sideforflytning på 2,4–5,5 m med retningen tilbake som før, over 40 km/t
+  // Veiens egen krumning: retningen til et glattet GPS-spor (±6 s). Trekkes fra, så svinger og
+  // S-kurver i veien ikke ser ut som feltskifter. Igjen står kortvarige sideforflytninger.
+  const k0 = Math.PI / 180 * 6371000, cosL = Math.cos(L[0].lat * Math.PI / 180);
+  const X = L.map(p => (p.lon - L[0].lon) * k0 * cosL), Y = L.map(p => (p.lat - L[0].lat) * k0);
+  const SX = [], SY = [];
+  for (let i2 = 0; i2 < n; i2++) {
+    let sx = 0, sy = 0, c = 0;
+    for (let k = i2; k >= 0 && L[i2].t - L[k].t <= 6; k--) { sx += X[k]; sy += Y[k]; c++; }
+    for (let k = i2 + 1; k < n && L[k].t - L[i2].t <= 6; k++) { sx += X[k]; sy += Y[k]; c++; }
+    SX.push(sx / c); SY.push(sy / c);
+  }
+  const head = new Array(n).fill(NaN);
+  for (let i2 = 0; i2 < n; i2++) {
+    let a2 = i2, b2 = i2;
+    while (a2 > 0 && L[i2].t - L[a2].t < 3) a2--;
+    while (b2 < n - 1 && L[b2].t - L[i2].t < 3) b2++;
+    const dx = SX[b2] - SX[a2], dy = SY[b2] - SY[a2];
+    if (Math.hypot(dx, dy) > 10) head[i2] = Math.atan2(dx, dy);
+  }
+  const roadLeft = new Array(n).fill(0);
+  for (let i2 = 1; i2 < n - 1; i2++) {
+    if (!Number.isFinite(head[i2 - 1]) || !Number.isFinite(head[i2 + 1])) continue;
+    let d = head[i2 + 1] - head[i2 - 1];
+    if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+    const dt2 = L[i2 + 1].t - L[i2 - 1].t;
+    if (dt2 > 0 && dt2 < 6) roadLeft[i2] = -d / dt2;   // med klokka → venstre er negativ
+  }
+  const detr = left.map((v, i2) => v - roadLeft[i2]);
+  const laneChanges = [];
+  let i = 1;
+  while (i < n - 2) {
+    if (vs[i] < 12.5) { i++; continue; }
+    let best = null, theta = 0, y = 0, maxTh = 0, sharp = false;
+    for (let j = i; j < n && L[j].t - L[i].t <= 9; j++) {
+      if (vs[j] < 12.5) break;   // minst 45 km/t: under det er det oftest kjøring rundt parkerte biler
+      theta += detr[j] * dts[j];
+      y += vs[j] * theta * dts[j];
+      maxTh = Math.max(maxTh, Math.abs(theta));
+      if (Math.abs(left[j]) > 0.12) sharp = true;
+      const dur = L[j].t - L[i].t;
+      if (dur >= 2.5 && Math.abs(y) >= 2.6 && Math.abs(y) <= 5.5 && Math.abs(deg(theta)) < 2 && deg(maxTh) >= 2 && deg(maxTh) <= 15 && !sharp) {
+        best = { j, y };
+        break;
+      }
+    }
+    if (best) {
+      const mid = Math.round((i + best.j) / 2);
+      laneChanges.push({ t: L[mid].t, tFrom: L[i].t, tTo: L[best.j].t, dir: best.y > 0 ? 'venstre' : 'høyre', offset: Math.round(Math.abs(best.y) * 10) / 10, lat: L[mid].lat, lon: L[mid].lon, kmh: Math.round(vs[mid] * 3.6) });
+      i = best.j + 3;
+    } else i++;
+  }
+  return { laneChanges, roundabouts };
+}
+
 /* Holder-sjekk (v0.4.0): ser etter at telefonen har flyttet seg i holderen underveis.
    Tyngdekraftretningen i telefonens ramme tas som median over 5 s-vinduer. Et sprang over 12° mellom
    to vinduer betyr at telefonen ble flyttet (rystelser og svinger gir under 5°). Første og siste 30 s
@@ -285,6 +382,7 @@ export function analyze(input, opts = {}) {
   const { source, yaw } = yawSeries(input, L, vs);
   const alat = L.map((p, i) => vs[i] * Math.abs(yaw[i]));
   const holder = holderCheck(input.grav, L[0].t, L[L.length - 1].t);
+  const man = detectManeuvers(L, vs, yaw);
   let accFit = null;
   if (engine === 'v3') {
     // Har telefonen flyttet seg varig, tilpasses kjøreretningen separat før og etter hver forskyvning.
@@ -361,6 +459,10 @@ export function analyze(input, opts = {}) {
     engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2, corr: accFit.corr, segments: accFit.segments || 1 } : null, perKm, kmFactor,
     droppedPoints, cityAware: !!opts.cityAware, thresholds: th,
     holder: { ...holder, episodes: holder.episodes.map(e => ({ ...e, from: e.from - L[0].t, to: e.to - L[0].t })) },
+    maneuvers: {
+      laneChanges: man.laneChanges.map(m => ({ ...m, t: m.t - L[0].t, tFrom: m.tFrom - L[0].t, tTo: m.tTo - L[0].t })),
+      roundabouts: man.roundabouts.map(m => ({ ...m, t: m.t - L[0].t, tFrom: m.tFrom - L[0].t, tTo: m.tTo - L[0].t }))
+    },
     // Serier for hendelsesdetalj (m/s², rundet)
     series: { along: alongEv.map(v => Math.round(v * 100) / 100), lat: alat.map(v => Math.round(v * 100) / 100) }
   };

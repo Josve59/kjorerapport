@@ -26,8 +26,41 @@ const P = {
   chev: 'M9 5l7 7-7 7',
   sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
   sliders: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4',
-  wheel: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 14v7M10 12L3.5 9.5M14 12l6.5-2.5'
+  wheel: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 14v7M10 12L3.5 9.5M14 12l6.5-2.5',
+  mirror: 'M4 8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3zM12 14v5M9 19h6',
+  shoulder: 'M9 7a3 3 0 1 0 6 0 3 3 0 0 0-6 0zM5 21v-2a5 5 0 0 1 5-5h2M16 13l3 3-3 3M19 16h-6',
+  blink: 'M9 6l-6 6 6 6M15 6l6 6-6 6',
+  lane: 'M6 3v18M18 3v18M12 4v3M12 10v4M12 17v3',
+  book: 'M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11',
+  moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+  round: 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM12 2v5M12 17v5M2 12h5M17 12h5',
+  stop: 'M8 3h8l5 5v8l-5 5H8l-5-5V8zM8 12h8',
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4'
 };
+
+/* Ledsagerens hurtigknapper */
+export const MARK_CATS = {
+  speil: { label: 'Speil', icon: 'mirror' },
+  skulder: { label: 'Skulder', icon: 'shoulder' },
+  blink: { label: 'Blinklys', icon: 'blink' },
+  plass: { label: 'Plassering', icon: 'lane' },
+  fart: { label: 'Fart', icon: 'speed' },
+  annet: { label: 'Annet', icon: 'flag' }
+};
+
+/* Dagens øvingsmål (maks tre per tur) */
+export const FOCUS = [
+  { id: 'brake', label: 'Myk bremsing' },
+  { id: 'accel', label: 'Rolig akselerasjon' },
+  { id: 'turn', label: 'Svinger' },
+  { id: 'smooth', label: 'Jevn fart' },
+  { id: 'limits', label: 'Fartsgrenser' },
+  { id: 'roundabout', label: 'Rundkjøringer' },
+  { id: 'lane', label: 'Feltskifte' },
+  { id: 'junction', label: 'Kryss og vikeplikt' },
+  { id: 'mirror', label: 'Speil og skulderblikk' },
+  { id: 'dark', label: 'Mørkekjøring' }
+];
 
 export function icon(name, size = 22, cls = '') {
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${P[name] || ''}"/></svg>`;

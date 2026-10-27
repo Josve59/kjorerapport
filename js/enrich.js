@@ -4,7 +4,12 @@
    Alt her er av som standard og slås på i innstillinger. Resultatet lagres på turen,
    så rapporten viser det også uten nett senere. */
 
-const NVDB = 'https://nvdbapiles.atlas.vegvesen.no/vegobjekter/api/v4/vegobjekter/105';
+const NVDB_BASE = 'https://nvdbapiles.atlas.vegvesen.no/vegobjekter/api/v4/vegobjekter';
+const NVDB = NVDB_BASE + '/105';
+// Skiltplate (96) med skiltnummer 204 Stopp / 202 Vikeplikt, og vegkryss (37) av typen rundkjøring
+const SIGN_STOP = { type: 96, filter: '5530=7643' };
+const SIGN_GIVEWAY = { type: 96, filter: '5530=7642' };
+const ROUNDABOUT = { type: 37, filter: '1114=3136' };
 const KARTVERKET = 'https://ws.geonorge.no/adresser/v1/punktsok';
 const CLIENT = 'Kjorerapport PWA (github.com/Josve59/kjorerapport)';
 const MATCH_M = 25;            // maks avstand fra GPS-punkt til fartsgrensestrekning
@@ -198,6 +203,113 @@ export async function fetchPlaceNames(coords, signal) {
   return out;
 }
 
+/* "POINT Z (lat lon z)" eller "POINT(lat lon)" → {lat, lon} (srid 4326 gir lat først). */
+export function parsePoint(wkt) {
+  const nums = String(wkt || '').match(/-?\d+(?:\.\d+)?/g);
+  if (!nums || nums.length < 2) return null;
+  const lat = Number(nums[0]), lon = Number(nums[1]);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+/* Henter punktobjekter av én type langs ruten. */
+async function fetchPoints(points, spec, withProps, signal) {
+  const boxes = mergeBoxes(routeChunks(points));
+  if (boxes.length > MAX_CHUNKS) throw new Error('Turen er for lang til å hente veidata.');
+  const out = [], seen = new Set();
+  await pool(boxes, 4, async b => {
+    const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
+    let url = `${NVDB_BASE}/${spec.type}?kartutsnitt=${box}&srid=4326&inkluder=geometri${withProps ? ',egenskaper' : ''}&egenskap=${encodeURIComponent(spec.filter)}&antall=500`;
+    for (let page = 0; page < 5 && url; page++) {
+      const data = await nvdbPage(url, signal);
+      for (const o of data.objekter || []) {
+        if (seen.has(o.id)) continue;
+        seen.add(o.id);
+        const pt = o.geometri ? parsePoint(o.geometri.wkt) : null;
+        if (!pt) continue;
+        const props = {};
+        for (const e of o.egenskaper || []) props[e.id] = e.verdi;
+        out.push({ ...pt, props });
+      }
+      const md = data.metadata || {};
+      url = md.returnert && md.returnert >= (md.sidestørrelse || 500) && md.neste && md.neste.href ? md.neste.href : null;
+    }
+  });
+  return out;
+}
+
+/* Kjører oppgaver med begrenset antall samtidige kall. */
+async function pool(items, size, fn) {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(size, items.length) }, async () => {
+    while (next < items.length) { const it = items[next++]; await fn(it); }
+  });
+  await Promise.all(workers);
+}
+
+export async function fetchRoadData(points, signal) {
+  const [stops, giveway, rb] = await Promise.all([
+    fetchPoints(points, SIGN_STOP, false, signal),
+    fetchPoints(points, SIGN_GIVEWAY, false, signal),
+    fetchPoints(points, ROUNDABOUT, true, signal)
+  ]);
+  const r5 = v => Math.round(v * 1e5) / 1e5;
+  return {
+    stops: stops.map(p => ({ lat: r5(p.lat), lon: r5(p.lon) })),
+    giveway: giveway.map(p => ({ lat: r5(p.lat), lon: r5(p.lon) })),
+    roundabouts: rb.map(p => ({ lat: r5(p.lat), lon: r5(p.lon), d: Number(p.props[1791]) || 25, name: p.props[1073] || '' }))
+  };
+}
+
+/* Vurderer veidata mot ruten. points: [{t, lat, lon, kmh}], events: rapportens hendelser.
+   - Stoppskilt: bare skilt bilen selv stoppet/bremset ned ved (laveste fart under 15 km/t innen ±40 m),
+     ellers er det trolig skiltet til en sidevei. Helt stopp = under 3 km/t.
+   - Vikeplikt: samme logikk med 30 km/t, bare til informasjon (om det var trafikk kan ikke appen vite).
+   - Rundkjøringer: ruten innenfor diameter/2 + 15 m. */
+export function evaluateRoad(points, road, events = []) {
+  const out = { stops: [], giveway: [], roundabouts: [] };
+  if (!road || points.length < 2) return out;
+  const cum = [0];
+  for (let i = 1; i < points.length; i++) cum.push(cum[i - 1] + metres(points[i - 1], points[i]));
+  const nearest = p => {
+    let bi = -1, bd = Infinity;
+    for (let i = 0; i < points.length; i++) { const d = metres(points[i], p); if (d < bd) { bd = d; bi = i; } }
+    return { i: bi, d: bd };
+  };
+  const window = (i, m) => { let a = i, b = i; while (a > 0 && cum[i] - cum[a - 1] <= m) a--; while (b < points.length - 1 && cum[b + 1] - cum[i] <= m) b++; return [a, b]; };
+  const minIn = (a, b) => { let m = Infinity, mi = a; for (let k = a; k <= b; k++) if (points[k].kmh < m) { m = points[k].kmh; mi = k; } return { m, mi }; };
+  for (const s of road.stops || []) {
+    const { i, d } = nearest(s);
+    if (d > 20) continue;
+    const [a, b] = window(i, 40);
+    const { m, mi } = minIn(a, b);
+    if (m >= 15) continue;
+    out.stops.push({ t: points[mi].t, lat: s.lat, lon: s.lon, minKmh: Math.round(m), full: m < 3 });
+  }
+  for (const s of road.giveway || []) {
+    const { i, d } = nearest(s);
+    if (d > 15) continue;
+    const [a, b] = window(i, 30);
+    const { m, mi } = minIn(a, b);
+    if (m >= 30) continue;
+    const [a2] = window(mi, 50);
+    out.giveway.push({ t: points[mi].t, lat: s.lat, lon: s.lon, minKmh: Math.round(m), approachKmh: Math.round(points[a2].kmh) });
+  }
+  // Slå sammen vikepliktskilt som hører til samme kryss (innen 10 s)
+  out.giveway.sort((x, y) => x.t - y.t);
+  out.giveway = out.giveway.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 10);
+  for (const rb of road.roundabouts || []) {
+    const r = Math.max(5, rb.d / 2) + 15;
+    const inside = [];
+    for (let k = 0; k < points.length; k++) if (metres(points[k], rb) <= r) inside.push(k);
+    if (!inside.length) continue;
+    const tFrom = points[inside[0]].t, tTo = points[inside[inside.length - 1]].t;
+    const ev = events.filter(e => e.t >= tFrom - 3 && e.t <= tTo + 3);
+    out.roundabouts.push({ t: (tFrom + tTo) / 2, tFrom, tTo, lat: rb.lat, lon: rb.lon, d: rb.d, name: rb.name, events: ev.map(e => e.n), source: 'nvdb' });
+  }
+  out.roundabouts.sort((x, y) => x.t - y.t);
+  return out;
+}
+
 /* Henter det som er slått på og mangler, og returnerer et enrich-objekt som lagres på turen. */
 export async function enrichDrive(r, marks, wants, existing, onProgress = () => {}) {
   const enrich = { version: 1, ...(existing || {}) };
@@ -206,6 +318,11 @@ export async function enrichDrive(r, marks, wants, existing, onProgress = () => 
     const segs = await fetchSpeedLimitSegments(r.points, p => onProgress(`Henter fartsgrenser fra Statens vegvesen … ${Math.round(p * 100)} %`));
     enrich.limits = smoothBlips(fillGaps(matchLimits(r.points, segs))).map(v => (Number.isFinite(v) ? v : null));
     enrich.limitsFetchedAt = new Date().toISOString();
+  }
+  if (wants.limits && !enrich.road) {
+    onProgress('Henter skilt og rundkjøringer fra Statens vegvesen …');
+    enrich.road = await fetchRoadData(r.points);
+    enrich.roadFetchedAt = new Date().toISOString();
   }
   if (wants.names && !enrich.names) {
     onProgress('Henter stedsnavn fra Kartverket …');

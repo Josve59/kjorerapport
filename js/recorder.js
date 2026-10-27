@@ -70,6 +70,7 @@ export class Recorder {
     this.sensitivity = opts.sensitivity || 'normal';
     this.appVersion = opts.appVersion || null;
     this.driver = opts.driver || '';
+    this.focus = Array.isArray(opts.focus) ? opts.focus.slice(0, 3) : [];
     this.replay = opts.replay || null;        // { data, speed } – utvikleralternativ: spill av demotur
     this.reset();
   }
@@ -118,6 +119,7 @@ export class Recorder {
       sensitivity: this.sensitivity,
       demo: !!this.replay,
       driver: this.driver,
+      focus: this.focus,
       gaps: [],
       marks: [],
       counts: { loc: 0, gyro: 0, grav: 0, acc: 0 },
@@ -231,9 +233,9 @@ export class Recorder {
   }
 
   /* Ledsagerens merke: et tidspunkt å kommentere etterpå. Ingen tilbakemelding til føreren. */
-  mark() {
+  mark(cat = 'annet') {
     if (!this.running) return null;
-    const m = { t: this.now(), note: '' };
+    const m = { t: this.now(), note: '', cat };
     this.marks.push(m);
     this.drive.marks = this.marks;
     this.emit();
@@ -314,6 +316,7 @@ export class Recorder {
       wakeLockFailed: this.wakeLockFailed,
       lastCheckpoint: this.lastCheckpoint,
       marks: this.marks.length,
+      markCats: this.marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {}),
       returnedFromGap: this.returnedFromGap || null
     });
     this.returnedFromGap = null;
