@@ -95,6 +95,41 @@ function yawSeries(input, L, vs) {
   return { source: 'gps', yaw: smoothBy(L.map(p => p.t), raw, 1) };
 }
 
+/* Sideforflytning i GPS-sporet rundt et mulig feltskifte (v0.7.3). Sporet ±10 s legges i en akse
+   langs kjøreretningen, veien tilpasses med et tredjegradspolynom, og et trinn etter manøveren
+   måler hvor langt bilen flyttet seg sidelengs. Positiv = til venstre. rms = hvor godt veien passer. */
+export function gpsLateralStep(L, tFrom, tTo, pad = 10) {
+  const pts = L.filter(p => p.t >= tFrom - pad && p.t <= tTo + pad);
+  if (pts.length < 10) return null;
+  const k = Math.PI / 180 * 6371000, c = Math.cos(pts[0].lat * Math.PI / 180);
+  const X = pts.map(p => (p.lon - pts[0].lon) * k * c), Y = pts.map(p => (p.lat - pts[0].lat) * k);
+  const ang = Math.atan2(Y[Y.length - 1], X[X.length - 1]);
+  const u = X.map((x, i) => x * Math.cos(ang) + Y[i] * Math.sin(ang));
+  const w = X.map((x, i) => -x * Math.sin(ang) + Y[i] * Math.cos(ang));
+  const len = u[u.length - 1] || 1;
+  const rows = [], b = [];
+  pts.forEach((p, i) => {
+    if (p.t > tFrom && p.t < tTo) return;   // selve manøveren er med i trinnet, ikke i tilpasningen
+    const s = u[i] / len;
+    rows.push([1, s, s * s, s * s * s, p.t >= tTo ? 1 : 0]);
+    b.push(w[i]);
+  });
+  if (rows.length < 8) return null;
+  // Minste kvadraters metode via normallikningene (5 × 5)
+  const m = 5, M = Array.from({ length: m }, () => new Array(m + 1).fill(0));
+  rows.forEach((r, q) => { for (let i = 0; i < m; i++) { for (let j = 0; j < m; j++) M[i][j] += r[i] * r[j]; M[i][m] += r[i] * b[q]; } });
+  for (let i = 0; i < m; i++) {
+    let piv = i;
+    for (let q = i + 1; q < m; q++) if (Math.abs(M[q][i]) > Math.abs(M[piv][i])) piv = q;
+    [M[i], M[piv]] = [M[piv], M[i]];
+    if (Math.abs(M[i][i]) < 1e-9) return null;
+    for (let q = 0; q < m; q++) if (q !== i) { const f = M[q][i] / M[i][i]; for (let j = i; j <= m; j++) M[q][j] -= f * M[i][j]; }
+  }
+  const coef = M.map((row, i) => row[m] / M[i][i]);
+  const rms = Math.sqrt(rows.reduce((a, r, q) => a + (r.reduce((t, v, j) => t + v * coef[j], 0) - b[q]) ** 2, 0) / rows.length);
+  return { step: coef[4], rms };
+}
+
 /* Manøvrer (v0.6.0): rundkjøringer og feltskifter fra rotasjonen, uten nett.
    yaw: rotasjon ved hvert GPS-punkt (rad/s). Fortegnet kalibreres mot GPS-retningen, så venstre er positiv. */
 export function detectManeuvers(L, vs, yaw) {
@@ -183,9 +218,32 @@ export function detectManeuvers(L, vs, yaw) {
         break;
       }
     }
+    // v0.7.3: to sjekker mot falske feltskifter i svinger og ved slingring.
+    // 1) Et feltskifte er en S: rotasjonen går like mye begge veier, i riktig rekkefølge.
+    //    Ved inngang og utgang av svinger finnes bare den ene halvdelen.
+    // 2) GPS-sporet må vise en sideforflytning på 1,5–7 m til samme side, på en vei som passer godt.
+    // 3) Veien svinger til sammen mindre enn 20° i løpet av manøveren ±8 s. I svingete partier er det for usikkert.
+    if (best) {
+      let e0 = i, e1 = best.j, road = 0;
+      while (e0 > 0 && L[i].t - L[e0].t < 8) e0--;
+      while (e1 < n - 1 && L[e1].t - L[best.j].t < 8) e1++;
+      for (let q = e0; q <= e1; q++) road += Math.abs(roadLeft[q]) * dts[q];   // svinger begge veier teller
+      if (Math.abs(deg(road)) > 20) best = null;
+    }
+    if (best) {
+      let pI = i, nI = i;
+      for (let q = i; q <= best.j; q++) { if (left[q] > left[pI]) pI = q; if (left[q] < left[nI]) nI = q; }
+      const P = left[pI], N = -left[nI];
+      const toLeft = best.y > 0;
+      const sCurve = P > 0 && N > 0 && Math.min(P, N) >= 0.5 * Math.max(P, N) && (toLeft ? pI < nI : nI < pI);
+      const g = sCurve ? gpsLateralStep(L, L[i].t, L[best.j].t) : null;
+      const shift = g ? (toLeft ? g.step : -g.step) : NaN;
+      if (!(g && g.rms <= 1.5 && shift >= 1.5 && shift <= 7)) best = null;
+      else best.shift = Math.round(shift * 10) / 10;
+    }
     if (best) {
       const mid = Math.round((i + best.j) / 2);
-      laneChanges.push({ t: L[mid].t, tFrom: L[i].t, tTo: L[best.j].t, dir: best.y > 0 ? 'venstre' : 'høyre', offset: Math.round(Math.abs(best.y) * 10) / 10, lat: L[mid].lat, lon: L[mid].lon, kmh: Math.round(vs[mid] * 3.6) });
+      laneChanges.push({ t: L[mid].t, tFrom: L[i].t, tTo: L[best.j].t, dir: best.y > 0 ? 'venstre' : 'høyre', offset: Math.round(Math.abs(best.y) * 10) / 10, lat: L[mid].lat, lon: L[mid].lon, kmh: Math.round(vs[mid] * 3.6), shift: best.shift });
       i = best.j + 3;
     } else i++;
   }

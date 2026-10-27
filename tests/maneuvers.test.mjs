@@ -53,3 +53,30 @@ test('demoturen har ingen falske feltskifter', () => {
   const r = analyze(makeDemo());
   assert.equal(r.maneuvers.laneChanges.length, 0);
 });
+
+test('GPS-sporet: sideforflytning måles i riktig retning', async () => {
+  const { gpsLateralStep } = await import('../js/analysis.js');
+  const d = synth([['drive', 30, 19.4], ['lane', 4, 1], ['drive', 30, 19.4]]);
+  const L = d.loc;
+  const tMid = L[Math.floor(L.length / 2)].t;
+  const g = gpsLateralStep(L, 30, 34.5);
+  assert.ok(g && g.step > 2.8 && g.step < 4.2, JSON.stringify(g));
+  assert.ok(g.rms < 0.5);
+  assert.ok(tMid > 0);
+});
+
+test('S-bevegelse uten sideforflytning i GPS-sporet er ikke et feltskifte (slingring, gyro-støy)', () => {
+  const d = synth([['drive', 30, 19.4], ['lane', 4, 1], ['drive', 30, 19.4]]);
+  // GPS-sporet går rett fram i samme felt hele tiden; bare gyroskopet ser en S
+  for (const p of d.loc) { p.lat = 63.43; p.bearing = 90; }
+  const r = analyze(d);
+  assert.equal(r.maneuvers.laneChanges.length, 0, JSON.stringify(r.maneuvers.laneChanges));
+});
+
+test('svingete vei i 60 km/t gir ingen feltskifter', () => {
+  const v = 16.7;
+  const d = synth([['drive', 20, v], ['turn', 25, 0.05], ['drive', 6, v], ['turn', -35, 0.06], ['drive', 4, v], ['turn', 20, 0.04],
+    ['drive', 8, v], ['turn', -15, 0.03], ['drive', 5, v], ['turn', 30, 0.05], ['drive', 20, v]]);
+  const r = analyze(d);
+  assert.equal(r.maneuvers.laneChanges.length, 0, JSON.stringify(r.maneuvers.laneChanges));
+});

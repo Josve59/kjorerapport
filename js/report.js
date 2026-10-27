@@ -519,7 +519,7 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
         <ul class="gw-list">${gw.map(g => `<li><button type="button" class="man-item small" data-lat="${g.lat}" data-lon="${g.lon}"><span>${mss(g.t)}</span><span>${kmh(g.approachKmh)} → ${kmh(g.minKmh)}</span>${icon('chev', 16)}</button></li>`).join('')}</ul>
         <p class="muted small">Om dere måtte vike for trafikk, kan ikke appen vite. Lav fart inn mot krysset gir tid til å se.</p></details>` : ''}
       ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Veidata</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
-      <p class="muted small">Feltskifter er beregnet fra sensorene og kan av og til forveksles med kjøring rundt hindringer.</p>
+      <p class="muted small">Feltskifter måles med gyroskopet og bekreftes med GPS-sporet. I svingete partier og under 45 km/t telles de ikke, så noen kan mangle.</p>
     </section>`;
 }
 

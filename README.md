@@ -128,6 +128,16 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.7.4 / k0.2.1 – fewer false lane changes
+
+The 27 October drive (13 km, curvy road) showed 19 lane changes; the driver made only a few. Most were curve entries and exits where the road-curvature estimate from GPS lags the gyroscope, leaving half an S that the integrator read as a lane change. A candidate now has to pass three extra checks:
+
+1. **S-shape in the gyroscope**: rotation both ways, the smaller lobe at least half the larger, in the order that matches the direction.
+2. **GPS confirms the shift**: the track ±10 s is fitted with a cubic road line plus a step; the car must have moved 1.5–7 m sideways to the same side, with the road fitting within 1.5 m RMS (`gpsLateralStep` in analysis.js).
+3. **Not on a curvy stretch**: the road turns less than 20° in total (both ways counted) within ±8 s.
+
+Result: 27 Oct drive 19 → 2 (11:06 right, 12:11 left), 24 Oct drive 6 → 0. Three new tests cover a gyro S with no GPS shift, a curvy road at 60 km/h, and the GPS step measurement; all three fail with the old method. Cached analyses are invalidated so old drives are re-analysed. Lane changes below 45 km/h and in curves are not counted, so some real ones can be missed.
+
 ## What's new in 0.7.3 / k0.2.0
 
 - Camera version: calibration is easy to find. «Kalibrer nå» sits in the camera row of the pre-drive checklist, the home card turns orange with «Ikke kalibrert» when the camera is on but not calibrated, and the camera screen shows «Kalibrer» at the top (it starts the camera itself).
