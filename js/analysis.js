@@ -50,31 +50,17 @@ function lowerBound(arr, x) {
   return lo;
 }
 
-/* Turning rate (rad/s) at each GPS point. Gyro projected on gravity = rotation around
-   the vertical axis, so it works however the phone is mounted. Falls back to GPS heading. */
-function yawSeries(input, L, vs) {
-  const gyro = input.gyro.slice().sort((a, b) => a.t - b.t);
-  const grav = input.grav.slice().sort((a, b) => a.t - b.t);
-  if (gyro.length > 50 && grav.length > 10) {
-    const yt = [], yv = [];
-    let j = 0;
-    for (const g of gyro) {
-      while (j < grav.length - 1 && grav[j + 1].t <= g.t) j++;
-      const q = grav[j];
-      const m = Math.hypot(q.x, q.y, q.z) || 1;
-      yt.push(g.t);
-      yv.push((g.x * q.x + g.y * q.y + g.z * q.z) / m);
-    }
-    let maxAbs = 0;
-    for (const v of yv) maxAbs = Math.max(maxAbs, Math.abs(v));
-    const scale = maxAbs > 20 ? Math.PI / 180 : 1;           // deg/s guard
-    const pre = [0];
-    for (const v of yv) pre.push(pre[pre.length - 1] + v * scale);
-    return { source: 'gyro', yaw: L.map(p => {
-      const a = lowerBound(yt, p.t - 0.75), b = lowerBound(yt, p.t + 0.75);
-      return b > a ? (pre[b] - pre[a]) / (b - a) : 0;
-    }) };
-  }
+/* Gyroskopets akser (v0.7.5). Standarden sier alpha = rotasjon om z, beta = om x, gamma = om y, og
+   opptakeren lagrer slik: { x: beta, y: gamma, z: alpha }. iPhone (WebKit) gir i praksis alpha = om x,
+   beta = om y og gamma = om z. Begge tolkningene prøves på hver tur, og den som følger GPS-retningen
+   best brukes. Da blir også gamle turer riktige. */
+const GYRO_AXES = {
+  standard: g => g,
+  webkit: g => ({ t: g.t, x: g.z, y: g.x, z: g.y })
+};
+
+/* Svingrate fra GPS-retningen (rad/s, med klokka positiv) ved hvert GPS-punkt. */
+function gpsYawRate(L, vs) {
   const n = L.length, raw = new Array(n).fill(0);
   const unwrapped = new Array(n).fill(NaN);
   let prev = NaN, offset = 0;
@@ -92,7 +78,52 @@ function yawSeries(input, L, vs) {
     const a = unwrapped[i - 1], c = unwrapped[i + 1], dt = L[i + 1].t - L[i - 1].t;
     if (Number.isFinite(a) && Number.isFinite(c) && dt > 0 && dt < 6) raw[i] = (c - a) / dt * Math.PI / 180;
   }
-  return { source: 'gps', yaw: smoothBy(L.map(p => p.t), raw, 1) };
+  return smoothBy(L.map(p => p.t), raw, 1);
+}
+
+/* Gyroskopet projisert på tyngdekraften = rotasjon om loddlinjen, snittet over ±0,75 s rundt hvert GPS-punkt. */
+function projectGyro(gyro, grav, L) {
+  const yt = [], yv = [];
+  let j = 0;
+  for (const g of gyro) {
+    while (j < grav.length - 1 && grav[j + 1].t <= g.t) j++;
+    const q = grav[j];
+    const m = Math.hypot(q.x, q.y, q.z) || 1;
+    yt.push(g.t);
+    yv.push((g.x * q.x + g.y * q.y + g.z * q.z) / m);
+  }
+  let maxAbs = 0;
+  for (const v of yv) maxAbs = Math.max(maxAbs, Math.abs(v));
+  const scale = maxAbs > 20 ? Math.PI / 180 : 1;           // deg/s guard
+  const pre = [0];
+  for (const v of yv) pre.push(pre[pre.length - 1] + v * scale);
+  return L.map(p => {
+    const a = lowerBound(yt, p.t - 0.75), b = lowerBound(yt, p.t + 0.75);
+    return b > a ? (pre[b] - pre[a]) / (b - a) : 0;
+  });
+}
+
+/* Turning rate (rad/s) at each GPS point. Gyro projected on gravity = rotation around
+   the vertical axis, so it works however the phone is mounted. Falls back to GPS heading. */
+function yawSeries(input, L, vs) {
+  const gpsYaw = gpsYawRate(L, vs);
+  const gyro = input.gyro.slice().sort((a, b) => a.t - b.t);
+  const grav = input.grav.slice().sort((a, b) => a.t - b.t);
+  if (gyro.length > 50 && grav.length > 10) {
+    const corr = y => {
+      let sxy = 0, sxx = 0, syy = 0;
+      for (let i = 0; i < L.length; i++) if (vs[i] > 5) { sxy += y[i] * gpsYaw[i]; sxx += y[i] * y[i]; syy += gpsYaw[i] * gpsYaw[i]; }
+      return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : 0;
+    };
+    let best = null;
+    for (const [axes, map] of Object.entries(GYRO_AXES)) {
+      const yaw = projectGyro(axes === 'standard' ? gyro : gyro.map(map), grav, L);
+      const c = Math.abs(corr(yaw));
+      if (!best || c > best.corr + 0.05) best = { axes, yaw, corr: c };   // standard vinner ved nesten likt
+    }
+    return { source: 'gyro', yaw: best.yaw, axes: best.axes, axesCorr: Math.round(best.corr * 100) / 100 };
+  }
+  return { source: 'gps', yaw: gpsYaw };
 }
 
 /* Sideforflytning i GPS-sporet rundt et mulig feltskifte (v0.7.3). Sporet ±10 s legges i en akse
@@ -201,52 +232,59 @@ export function detectManeuvers(L, vs, yaw) {
     if (dt2 > 0 && dt2 < 6) roadLeft[i2] = -d / dt2;   // med klokka → venstre er negativ
   }
   const detr = left.map((v, i2) => v - roadLeft[i2]);
-  const laneChanges = [];
-  let i = 1;
-  while (i < n - 2) {
-    if (vs[i] < 12.5) { i++; continue; }
-    let best = null, theta = 0, y = 0, maxTh = 0, sharp = false;
-    for (let j = i; j < n && L[j].t - L[i].t <= 9; j++) {
-      if (vs[j] < 12.5) break;   // minst 45 km/t: under det er det oftest kjøring rundt parkerte biler
-      theta += detr[j] * dts[j];
-      y += vs[j] * theta * dts[j];
-      maxTh = Math.max(maxTh, Math.abs(theta));
-      if (Math.abs(left[j]) > 0.12) sharp = true;
-      const dur = L[j].t - L[i].t;
-      if (dur >= 2.5 && Math.abs(y) >= 2.6 && Math.abs(y) <= 5.5 && Math.abs(deg(theta)) < 2 && deg(maxTh) >= 2 && deg(maxTh) <= 15 && !sharp) {
-        best = { j, y };
-        break;
-      }
+  // --- Feltskifter (v0.7.5): GPS-sporet først, gyroskopet bekrefter.
+  // 1) Let etter et rent sidetrinn på 2,5–5 m i GPS-sporet over 4–8 s, i minst 45 km/t hele veien ±10 s
+  //    (veien tilpasses med et tredjegradspolynom, så jevne svinger går greit).
+  //    Svingraten langs veien må være jevn (standardavvik under 0,8 °/s) i hele vinduet.
+  // 2) Gyroskopet må vise sideforflytning til samme side, minst 1,5 m. Retningsavdrift i vinduet trekkes
+  //    fra først, fordi et feltskifte ender i samme retning som det startet.
+  // Under 45 km/t telles ikke feltskifter: der er det oftest kjøring rundt parkerte biler.
+  const fast = vs.map(v => v >= 12.5);
+  const gyroShift = (a, b) => {
+    let tot = 0, T = 0;
+    for (let q = a + 1; q <= b; q++) { tot += detr[q] * dts[q]; T += dts[q]; }
+    const mean = T > 0 ? tot / T : 0;
+    let th = 0, y = 0;
+    for (let q = a + 1; q <= b; q++) { th += (detr[q] - mean) * dts[q]; y += vs[q] * th * dts[q]; }
+    return y;
+  };
+  const cands = [];
+  for (let i = 0; i < n; i++) {
+    for (const len of [4, 5, 6, 7, 8]) {
+      let j = i;
+      while (j < n - 1 && L[j].t - L[i].t < len) j++;
+      if (L[j].t - L[i].t < len - 0.5) break;
+      let a = i, b = j;
+      while (a > 0 && L[i].t - L[a - 1].t <= 10) a--;
+      while (b < n - 1 && L[b + 1].t - L[j].t <= 10) b++;
+      if (b - a < 16 || L[a].t > L[i].t - 9 || L[b].t < L[j].t + 9) continue;
+      let ok = true, rs = 0, rss = 0;
+      for (let q = a; q <= b && ok; q++) { ok = fast[q]; rs += roadLeft[q]; rss += roadLeft[q] * roadLeft[q]; }
+      if (!ok) continue;
+      // Jevn sving er greit, men der svingen strammer seg til eller slipper opp, ser GPS-sporet ut som et sidetrinn
+      const k = b - a + 1;
+      if (deg(Math.sqrt(Math.max(0, rss / k - (rs / k) ** 2))) > 0.8) continue;
+      const g = gpsLateralStep(L, L[i].t, L[j].t);
+      if (!g || g.rms > 0.35 || Math.abs(g.step) < 2.5 || Math.abs(g.step) > 5) continue;
+      let ga = i, gb = j;
+      while (ga > 0 && L[i].t - L[ga - 1].t <= 1) ga--;
+      while (gb < n - 1 && L[gb + 1].t - L[j].t <= 1) gb++;
+      const gy = gyroShift(ga, gb);
+      if (Math.sign(gy) !== Math.sign(g.step) || Math.abs(gy) < 1.5) continue;
+      cands.push({ i, j, step: g.step, gy, q: Math.abs(g.step) / (g.rms + 0.1) });
     }
-    // v0.7.3: to sjekker mot falske feltskifter i svinger og ved slingring.
-    // 1) Et feltskifte er en S: rotasjonen går like mye begge veier, i riktig rekkefølge.
-    //    Ved inngang og utgang av svinger finnes bare den ene halvdelen.
-    // 2) GPS-sporet må vise en sideforflytning på 1,5–7 m til samme side, på en vei som passer godt.
-    // 3) Veien svinger til sammen mindre enn 20° i løpet av manøveren ±8 s. I svingete partier er det for usikkert.
-    if (best) {
-      let e0 = i, e1 = best.j, road = 0;
-      while (e0 > 0 && L[i].t - L[e0].t < 8) e0--;
-      while (e1 < n - 1 && L[e1].t - L[best.j].t < 8) e1++;
-      for (let q = e0; q <= e1; q++) road += Math.abs(roadLeft[q]) * dts[q];   // svinger begge veier teller
-      if (Math.abs(deg(road)) > 20) best = null;
-    }
-    if (best) {
-      let pI = i, nI = i;
-      for (let q = i; q <= best.j; q++) { if (left[q] > left[pI]) pI = q; if (left[q] < left[nI]) nI = q; }
-      const P = left[pI], N = -left[nI];
-      const toLeft = best.y > 0;
-      const sCurve = P > 0 && N > 0 && Math.min(P, N) >= 0.5 * Math.max(P, N) && (toLeft ? pI < nI : nI < pI);
-      const g = sCurve ? gpsLateralStep(L, L[i].t, L[best.j].t) : null;
-      const shift = g ? (toLeft ? g.step : -g.step) : NaN;
-      if (!(g && g.rms <= 1.5 && shift >= 1.5 && shift <= 7)) best = null;
-      else best.shift = Math.round(shift * 10) / 10;
-    }
-    if (best) {
-      const mid = Math.round((i + best.j) / 2);
-      laneChanges.push({ t: L[mid].t, tFrom: L[i].t, tTo: L[best.j].t, dir: best.y > 0 ? 'venstre' : 'høyre', offset: Math.round(Math.abs(best.y) * 10) / 10, lat: L[mid].lat, lon: L[mid].lon, kmh: Math.round(vs[mid] * 3.6), shift: best.shift });
-      i = best.j + 3;
-    } else i++;
   }
+  // Beste kandidat per sted: ingen to feltskifter med midtpunkt nærmere enn 20 s
+  cands.sort((x, y) => y.q - x.q);
+  const picked = [];
+  const midT = c => (L[c.i].t + L[c.j].t) / 2;
+  for (const c of cands) if (!picked.some(p => Math.abs(midT(p) - midT(c)) < 20)) picked.push(c);
+  picked.sort((x, y) => x.i - y.i);
+  const laneChanges = picked.map(c => {
+    const mid = Math.round((c.i + c.j) / 2);
+    return { t: L[mid].t, tFrom: L[c.i].t, tTo: L[c.j].t, dir: c.step > 0 ? 'venstre' : 'høyre', offset: Math.round(Math.abs(c.step) * 10) / 10,
+      lat: L[mid].lat, lon: L[mid].lon, kmh: Math.round(vs[mid] * 3.6), gyro: Math.round(Math.abs(c.gy) * 10) / 10 };
+  });
   return { laneChanges, roundabouts };
 }
 
@@ -437,7 +475,7 @@ export function analyze(input, opts = {}) {
   const engine = opts.engine === 'v3' ? 'v3' : 'v1';
   const perKm = !!opts.perKm;
   const { L, vs, along, droppedPoints } = prepareTrack(input);
-  const { source, yaw } = yawSeries(input, L, vs);
+  const { source, yaw, axes: gyroAxes, axesCorr } = yawSeries(input, L, vs);
   const alat = L.map((p, i) => vs[i] * Math.abs(yaw[i]));
   const holder = holderCheck(input.grav, L[0].t, L[L.length - 1].t);
   const man = detectManeuvers(L, vs, yaw);
@@ -513,7 +551,7 @@ export function analyze(input, opts = {}) {
       km: dist / 1000, duration: L[L.length - 1].t - L[0].t, moving,
       maxKmh: maxV * 3.6, avgKmh: moving > 0 ? dist / moving * 3.6 : 0, stops, rms
     },
-    counts: c, scores, overall, tips: makeTips(c, scores), source,
+    counts: c, scores, overall, tips: makeTips(c, scores), source, gyroAxes, axesCorr,
     engine, alongSource: accFit ? 'acc' : 'gps', accFit: accFit ? { r2: accFit.r2, corr: accFit.corr, segments: accFit.segments || 1 } : null, perKm, kmFactor,
     droppedPoints, cityAware: !!opts.cityAware, thresholds: th,
     holder: { ...holder, episodes: holder.episodes.map(e => ({ ...e, from: e.from - L[0].t, to: e.to - L[0].t })) },

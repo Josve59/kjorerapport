@@ -80,3 +80,21 @@ test('svingete vei i 60 km/t gir ingen feltskifter', () => {
   const r = analyze(d);
   assert.equal(r.maneuvers.laneChanges.length, 0, JSON.stringify(r.maneuvers.laneChanges));
 });
+
+test('feltskifte midt i en slak sving i 80 km/t oppdages', () => {
+  const r = analyze(synth([['drive', 20, 22], ['turn', 20, 0.02], ['lane', 5, -1], ['turn', 20, 0.02], ['drive', 20, 22]]));
+  const lc = r.maneuvers.laneChanges;
+  assert.equal(lc.length, 1, JSON.stringify(lc));
+  assert.equal(lc[0].dir, 'høyre');
+});
+
+test('gyroskopets akser fra iPhone (alpha om x) gjenkjennes automatisk', () => {
+  const d = synth([['drive', 20, 12], ['turn', 90, 0.15], ['drive', 20, 12], ['turn', -90, 0.15], ['drive', 20, 12]]);
+  const standard = analyze(d);
+  // iPhone lagres som { x: beta, y: gamma, z: alpha } der alpha egentlig er om x osv.
+  const webkit = analyze({ ...d, gyro: d.gyro.map(g => ({ t: g.t, x: g.y, y: g.z, z: g.x })) });
+  assert.equal(standard.gyroAxes, 'standard');
+  assert.equal(webkit.gyroAxes, 'webkit');
+  assert.equal(webkit.scores.turn, standard.scores.turn);
+  assert.equal(webkit.events.length, standard.events.length);
+});

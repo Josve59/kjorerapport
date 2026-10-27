@@ -1,6 +1,6 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.7.4';
+const VERSION = 'v0.7.5';
 const CACHE = 'kjorerapport-' + VERSION;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',

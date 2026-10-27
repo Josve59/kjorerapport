@@ -128,6 +128,19 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.7.5 / k0.2.2 – iPhone gyroscope axes, GPS-first lane changes
+
+**Gyroscope axes on iPhone.** The recorder stores `rotationRate` per the spec (alpha about z, beta about x, gamma about y). On iPhone (WebKit) alpha is in practice about x, beta about y and gamma about z. With the phone fairly upright (camera facing the driver) the projected yaw was almost zero: gyro vs GPS turning slope 0.02–0.10 on the two 27 Oct drives (0.33 on 24 Oct). `yawSeries` now tries both axis orders on every drive and keeps the one that follows the GPS heading best (`result.gyroAxes`, `result.axesCorr`). Slope is now 0.96–1.02. This fixes old drives too. Turn events, roundabouts and lane changes change accordingly; braking and acceleration don't use the gyroscope and are unchanged.
+
+**Lane changes: GPS first, gyroscope confirms.** At highway speed a lane change is only about 1 °/s of rotation, which got lost in gyro noise and road curvature. The marked lane change on 27 Oct (12:04–12:10, 77 km/h, in a long gentle right-hander) was clearly visible in the GPS track (3.2–3.5 m right, fit RMS 0.1 m). New method:
+
+1. Scan 4–8 s windows for a clean sideways step of 2.5–5 m in the GPS track (cubic road line ± step, RMS ≤ 0.35 m), at ≥ 45 km/h for the whole window ±10 s.
+2. The road's turning rate must be steady (std ≤ 0.8 °/s). Gentle curves are fine. Curves that tighten or open up are not.
+3. The gyroscope, with heading drift in the window removed, must show ≥ 1.5 m sideways to the same side.
+4. Best candidate per 20 s.
+
+Results: 27 Oct 17:46 → 10:29 left, 12:04 right (the marked one). 27 Oct 17:07 → 2. 24 Oct → 6, mostly right-hand merges at 77–90 km/h (2+1 road?). New tests: lane change in a gentle curve at 80 km/h, and automatic recognition of iPhone axes.
+
 ## What's new in 0.7.4 / k0.2.1 – fewer false lane changes
 
 The 27 October drive (13 km, curvy road) showed 19 lane changes; the driver made only a few. Most were curve entries and exits where the road-curvature estimate from GPS lags the gyroscope, leaving half an S that the integrator read as a lane change. A candidate now has to pass three extra checks:
