@@ -52,6 +52,7 @@
     <div class="chips" id="driver-chips" role="group" aria-label="Vis turer for" hidden></div>
     <section id="last-drive" hidden></section>
     <section class="tiles" id="summary" hidden></section>
+    <section id="log-card" hidden></section>
     <section class="card" id="goals" hidden></section>
     <section class="card" id="trend"></section>
     <section id="drive-section">
@@ -77,6 +78,8 @@
           <label class="driver-pick">Hvem kjører?
             <select id="driver-select" aria-label="Velg fører"></select>
           </label>
+          <p class="focus-title">Hva øver dere på i dag? <span class="muted small">(velg opptil tre)</span></p>
+          <div class="chips wrap" id="focus-chips" role="group" aria-label="Dagens øvingsmål"></div>
         </div>
       </li>
       <li class="flow-step" id="step-perm" data-state="active">
@@ -123,9 +126,9 @@
     </div>
     <div id="rec-warn" aria-live="polite"></div>
     <div class="mark-wrap">
-      <button type="button" class="btn-mark" id="btn-mark" aria-label="Merk dette tidspunktet"><span data-icon="flag"></span>Merk</button>
+      <p class="mark-help">Ledsager: trykk på det dere skal snakke om etterpå</p>
+      <div class="mark-grid" id="mark-grid" role="group" aria-label="Merk for ledsager"></div>
       <p class="muted small" id="rec-marks" aria-live="polite"></p>
-      <p class="muted small">Ledsager: trykk «Merk» når du ser noe å snakke om etterpå. Føreren får ingen beskjed.</p>
     </div>
     <button type="button" class="stop" id="btn-stop" aria-label="Stopp (hold inne i ett sekund)">
       <span class="progress" aria-hidden="true"></span>
@@ -142,6 +145,16 @@
       <span class="appbar-actions" id="report-actions"></span>
     </header>
     <div id="report-root"></div>
+  </section>
+
+  <!-- Kjørelogg -->
+  <section id="log" class="screen" hidden>
+    <header class="appbar">
+      <button type="button" class="btn-back icon-btn" aria-label="Til hjem" data-icon="back"></button>
+      <h1>Kjørelogg</h1>
+      <span class="appbar-actions"><button type="button" class="icon-btn" id="btn-log-csv" aria-label="Eksporter loggen som regneark" data-icon="download"></button></span>
+    </header>
+    <div id="log-root"></div>
   </section>
 
   <!-- Innstillinger -->
@@ -204,9 +217,21 @@
       <p class="muted small">Når disse er på, sendes rutens posisjoner til tjenestene når en rapport åpnes med nett. Ingenting annet sendes. Svarene lagres på telefonen, så rapporten virker uten nett etterpå.</p>
       <div class="toggle-list">
         <label class="toggle"><span><strong>Kart</strong><br><span class="muted small">Kartbakgrunn fra Kartverket. Av: ruten tegnes uten kart.</span></span><input type="checkbox" class="switch" id="netMap"></label>
-        <label class="toggle"><span><strong>Fartsgrenser</strong><br><span class="muted small">Fra Statens vegvesen (NVDB). Viser tid over grensen.</span></span><input type="checkbox" class="switch" id="netLimits"></label>
+        <label class="toggle"><span><strong>Veidata</strong><br><span class="muted small">Fra Statens vegvesen (NVDB): fartsgrenser, stoppskilt, vikeplikt og rundkjøringer.</span></span><input type="checkbox" class="switch" id="netLimits"></label>
         <label class="toggle"><span><strong>Stedsnavn</strong><br><span class="muted small">Gatenavn på hendelser og merker, fra Kartverket.</span></span><input type="checkbox" class="switch" id="netNames"></label>
       </div>
+    </section>
+
+    <h2 class="group-title"><span data-icon="bell"></span>Påminnelse i bilen</h2>
+    <section class="card">
+      <p>iPhone kan minne deg på appen når telefonen kobler seg til bilens Bluetooth. Det settes opp én gang i appen <strong>Snarveier</strong>:</p>
+      <ol class="steps-list">
+        <li><span class="step-num">1</span><span>Åpne <strong>Snarveier</strong>, velg <strong>Automatisering</strong> nederst og trykk <strong>+</strong>.</span></li>
+        <li><span class="step-num">2</span><span>Velg <strong>Bluetooth</strong>, velg bilen din og <strong>Kjør umiddelbart</strong>.</span></li>
+        <li><span class="step-num">3</span><span>Legg til handlingen <strong>Vis varsel</strong> med teksten «Husk Kjørerapport – fest telefonen i holderen».</span></li>
+        <li><span class="step-num">4</span><span>Trykk <strong>Ferdig</strong>. Neste gang du setter deg i bilen, kommer varselet, og du åpner appen fra Hjem-skjermen.</span></li>
+      </ol>
+      <p class="muted small">Bruk ikke «Åpne URL»: den åpner Safari, og der ligger ikke turene dine. Appen på Hjem-skjermen har sin egen lagring.</p>
     </section>
 
     <h2 class="group-title"><span data-icon="sun"></span>Utseende</h2>
@@ -246,7 +271,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.5.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.6.0</p>
   </section>
 
 </main>
