@@ -120,7 +120,7 @@ export function renderReport(root, r, ctx = {}) {
   const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events), fromNvdb: true } : null;
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null) : null;
   const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
-  const sits = buildSituations(r, { camera: r.camera, marks, sp, road: r.road || null });
+  const sits = buildSituations(r, { camera: r.camera, marks, sp, nvdb: road, road: r.road || null });
   const sitSum = situationSummary(sits);
 
   // Datakvalitet: alt teknisk samlet ett sted
@@ -529,6 +529,22 @@ function situationSection(sits, sum) {
     </section>`;
 }
 
+/* Langs vegen (veidata v2): gangfelt, fartsdempere, lyskryss og skilt som turen passerte */
+function alongRoad(road) {
+  const c = road.crossings || [], b = road.bumps || [], s = road.signals || [], g = road.signs || [];
+  if (!c.length && !b.length && !s.length && !g.length) return '';
+  const avg = a => Math.round(a.reduce((t, x) => t + x.kmh, 0) / a.length);
+  const fastC = c.filter(x => x.kmh >= 45).length, fastB = b.filter(x => x.kmh > 35).length;
+  const rows = [
+    c.length ? `<li><strong>Gangfelt:</strong> ${c.length} passert, snitt ${avg(c)} km/t${fastC ? `, ${fastC} i 45 km/t eller mer` : ''}.</li>` : '',
+    b.length ? `<li><strong>Fartsdempere:</strong> ${b.length}, snitt ${avg(b)} km/t${fastB ? `, ${fastB} over 35 km/t` : ''}.</li>` : '',
+    s.length ? `<li><strong>Lyskryss:</strong> ${s.length}${s.filter(x => x.stopped).length ? `, stoppet ved ${s.filter(x => x.stopped).length}` : ''}.</li>` : '',
+    g.filter(x => x.kind === 'barn').length ? `<li><strong>Skiltet Barn:</strong> ${g.filter(x => x.kind === 'barn').map(x => `høyst ${x.maxKmh} km/t etter skiltet`).join(', ')}.</li>` : '',
+    g.filter(x => x.kind !== 'barn').length ? `<li><strong>Farlig sving:</strong> ${g.filter(x => x.kind !== 'barn').map(x => `${x.kmh} km/t ved skiltet${x.events.length ? ', brå hendelse etterpå' : ''}`).join(', ')}.</li>` : ''
+  ].join('');
+  return `<h3 class="mt">Langs vegen</h3><ul class="along-list">${rows}</ul><p class="muted small">Fra Statens vegvesen (NVDB). Skilt teller bare når de sto på høyre side av bilen.</p>`;
+}
+
 function maneuverSection(r, road, log, marks, hasRoadData) {
   const man = r.maneuvers || { laneChanges: [], roundabouts: [] };
   const rbs = road && road.fromNvdb ? road.roundabouts : man.roundabouts;
@@ -567,6 +583,7 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
           <span class="man-ico ${it.ok ? 'ok' : 'no'}">${icon(it.ico, 20)}</span>
           <span class="ev-text"><strong>${esc(it.title)}</strong><span class="muted small">${esc(it.sub)}</span><span class="man-verdict ${it.ok ? 'ok' : 'no'}">${esc(it.verdict)}</span></span>
           ${icon('chev', 18)}</button></li>`).join('')}</ul>` : '<p class="muted">Ingen rundkjøringer, feltskifter eller stoppskilt funnet på turen.</p>'}
+      ${road && road.crossings ? alongRoad(road) : ''}
       ${gw.length ? `<details class="gw"><summary><span><strong>Vikeplikt:</strong> ${gw.length} ${gw.length === 1 ? 'kryss' : 'kryss'} der dere bremset ned · snitt ${kmh(avgIn)} inn</span></summary>
         <ul class="gw-list">${gw.map(g => `<li><button type="button" class="man-item small" data-lat="${g.lat}" data-lon="${g.lon}"><span>${mss(g.t)}</span><span>${kmh(g.approachKmh)} → ${kmh(g.minKmh)}</span>${icon('chev', 16)}</button></li>`).join('')}</ul>
         <p class="muted small">Om dere måtte vike for trafikk, kan ikke appen vite. Lav fart inn mot krysset gir tid til å se.</p></details>` : ''}

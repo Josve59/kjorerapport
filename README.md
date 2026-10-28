@@ -128,6 +128,30 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.0 / k0.6.1 – more road data from NVDB
+
+Recognising signs with the camera was rejected for now. With 1.5 s road looks every 8–25 s the camera would catch only about 1 in 3 signs, and it would need a European sign model. NVDB already knows every sign and object along the road, with 100 % coverage, at night and in snow. Road data v2 (`enrich.road.v = 2`, «Veidata» setting) also fetches:
+
+| What | NVDB | Rule |
+|---|---|---|
+| Crossings | type 174 (line, midpoint) | passed within 15 m. Speed at the crossing and 40 m before. Duplicates per direction within 4 s merged |
+| Speed bumps | type 103 (`1156` type) | within 10 m. Speed at the bump and 50 m before |
+| Traffic lights | type 89, only `1273` Bruksområde = Vegkryss/Gangfelt, or no use stated and a point | within 35 m, and for lines the direction must be within 35° of ours (not a road under or over). Lane-control signals over the motorway are excluded |
+| Signs | type 96 sign plates `5530` = 142 Barn (7633), 100.1/100.2 Farlig sving (7601/7602) | only when the sign stands on **our right** (right-hand traffic), so signs for oncoming traffic are ignored. Max speed in the 150 m (Barn) or 250 m (curve) after it, and events in that stretch |
+
+The NVDB filter with several values must be parenthesised: `(5530=7633 OR 5530=7601 OR 5530=7602)`. Without parentheses the request is rejected. Only objects within 25–60 m of the route are stored (about 5–6 kB per drive). Old drives fetch v2 the next time the report is opened online.
+
+**Fusion (`situations.js`, new `nvdb` input):**
+- **Place.** «ved lyskryss», «ved gangfelt», «rett før fartsdemper», «etter skiltet Barn/Farlig sving» are added to harsh events and eyes-off-road. Eyes off the road at a light or crossing counts as serious. Braking right before a bump adds «Brems tidligere og mykere». A light only counts as context if speed dropped below 65 km/h (otherwise it is probably a signal on another road).
+- **New situations:**
+  - Crossing at 45 km/h or more (small thing), and serious when the road camera saw people within 3 s and speed was over 30 km/h (`roadSummary.people` in the test app).
+  - Speed bump at over 35 km/h, «bør øves på» over 45.
+  - Barn sign with over 40 km/h in the next 150 m.
+  - Harsh event after a Farlig sving sign.
+- The report gets «Langs vegen» in «Veier og manøvrer»: crossings, speed bumps, lights and signs with speeds.
+
+Tested against live NVDB on the 27 Oct drives. 17:46: 21 crossings, 9 bumps, 3 lights, 1 Barn, 1 Farlig sving. 18:27: 20 crossings, 1 bump, 6 lights. 83 tests.
+
 ## What's new in k0.6.0 (camera test app) / 0.8.2 – optimised switching, lane lines
 
 Built on the camera test from the iPhone (27 Oct). Both cameras at once is not possible. A switch takes 0.62 s to the first frame and 0.84 s to settled exposure, very consistently. Before building, the strategies were simulated on the two calibrated drives by removing driver-camera data when a plan would have looked at the road:

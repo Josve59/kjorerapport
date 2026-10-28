@@ -57,3 +57,28 @@ test('fartsovertredelser: episoder, sekunder og poeng', () => {
 test('enkeltpunkt som avviker fra like naboer jevnes ut', () => {
   assert.deepEqual(smoothBlips([50, 30, 50, 50, 60, 60, 30, 30]), [50, 50, 50, 50, 60, 60, 30, 30]);
 });
+
+test('veidata v2: gangfelt, fartsdempere, lyskryss og skilt langs ruten', async () => {
+  const { evaluateRoad, signKind } = await import('../js/enrich.js');
+  // Rett vei nordover, 1 punkt per sekund, 10 m/s (36 km/t); 55 km/t mellom 40 og 50 s
+  const lat0 = 63.43, lon0 = 10.39, mLat = 111320;
+  const points = []; let y = 0;
+  for (let t = 0; t <= 100; t++) { const kmh = t >= 40 && t <= 50 ? 55 : 36; if (t) y += kmh / 3.6; points.push({ t, lat: lat0 + y / mLat, lon: lon0, kmh }); }
+  const at = (m, east = 0) => ({ lat: lat0 + m / mLat, lon: lon0 + east / (mLat * Math.cos(lat0 * Math.PI / 180)) });
+  const road = {
+    crossings: [at(100), at(103), at(500)],                       // to objekter for samme gangfelt + ett i 55 km/t
+    bumps: [{ ...at(800), type: 'Fartshump' }],
+    signals: [{ ...at(900), dir: 0 }, { ...at(300, 8), dir: 90 }], // langs vegen / tvers over (bro)
+    signs: [{ ...at(200, 6), kind: 'barn' }, { ...at(600, -6), kind: 'barn' }]   // høyre side / venstre side
+  };
+  const r = evaluateRoad(points, road, []);
+  assert.equal(r.crossings.length, 2, 'samme gangfelt i begge retninger teller én gang');
+  assert.equal(r.crossings[1].kmh, 55);
+  assert.equal(r.bumps.length, 1);
+  assert.equal(r.signals.length, 1, 'signalanlegg på tvers (bro) tas ikke med');
+  assert.equal(r.signs.length, 1, 'skilt på venstre side gjelder motgående');
+  assert.equal(r.signs[0].kind, 'barn');
+  assert.equal(signKind('142 - Barn'), 'barn');
+  assert.equal(signKind('100.2 - Farlig sving, til venstre'), 'svingV');
+  assert.equal(signKind('516 - Gangfelt'), null);
+});

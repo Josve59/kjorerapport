@@ -66,3 +66,24 @@ test('samkjøring med veikameraet: kort avstand og bremsing nær bilen foran', (
   assert.equal(lane.level, 'low', 'ukjent er ikke en feil');
   assert.match(lane.text, /så veien akkurat da/);
 });
+
+test('samkjøring med veidata: gangfelt, fartsdemper, lyskryss og skiltet Barn', () => {
+  const nvdb = {
+    crossings: [{ t: 60, kmh: 48 }, { t: 130, kmh: 35 }],
+    bumps: [{ t: 103, kmh: 42, approachKmh: 44, type: 'Fartshump' }],
+    signals: [{ t: 200, tFrom: 194, tTo: 204 }],
+    signs: [{ t: 230, tTo: 245, kind: 'barn', kmh: 45, maxKmh: 52, events: [] }]
+  };
+  const road = { close: [], follow: [], people: [129.5] };
+  const s = buildSituations(r, { camera, road, nvdb });
+  const brake = s.find(x => x.event === 'brake');
+  assert.match(brake.text, /rett før fartsdemper/);
+  assert.match(brake.text, /Brems tidligere/);
+  assert.match(s.find(x => x.event === 'turn').text, /i rundkjøring/, 'rundkjøring vinner over lyskryss');
+  const cr = s.filter(x => x.kind === 'crossing');
+  assert.equal(cr.length, 2);
+  assert.equal(cr[0].level, 'low');
+  assert.equal(cr[1].level, 'high', 'folk ved gangfeltet');
+  assert.equal(s.find(x => x.kind === 'bump').level, 'low');
+  assert.equal(s.find(x => x.kind === 'sign').level, 'medium');
+});

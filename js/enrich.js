@@ -10,6 +10,12 @@ const NVDB = NVDB_BASE + '/105';
 const SIGN_STOP = { type: 96, filter: '5530=7643' };
 const SIGN_GIVEWAY = { type: 96, filter: '5530=7642' };
 const ROUNDABOUT = { type: 37, filter: '1114=3136' };
+// v0.9.0: flere skilt og punkter langs veien (koder fra NVDB-datakatalogen, okt. 2026)
+// Skiltplate 142 Barn (7633), 100.1/100.2 Farlig sving til høyre/venstre (7601/7602). OR må stå i parentes.
+const SIGNS = { type: 96, filter: '(5530=7633 OR 5530=7601 OR 5530=7602)' };
+const CROSSING = { type: 174 };   // gangfelt (selve feltet, linje over vegen)
+const BUMP = { type: 103 };       // fartsdemper (fartshump, -pute osv.)
+const SIGNAL = { type: 89 };      // signalanlegg (lyskryss), strekning
 const KARTVERKET = 'https://ws.geonorge.no/adresser/v1/punktsok';
 const CLIENT = 'Kjorerapport PWA (github.com/Josve59/kjorerapport)';
 const MATCH_M = 25;            // maks avstand fra GPS-punkt til fartsgrensestrekning
@@ -218,17 +224,28 @@ async function fetchPoints(points, spec, withProps, signal) {
   const out = [], seen = new Set();
   await pool(boxes, 4, async b => {
     const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
-    let url = `${NVDB_BASE}/${spec.type}?kartutsnitt=${box}&srid=4326&inkluder=geometri${withProps ? ',egenskaper' : ''}&egenskap=${encodeURIComponent(spec.filter)}&antall=500`;
+    let url = `${NVDB_BASE}/${spec.type}?kartutsnitt=${box}&srid=4326&inkluder=geometri${withProps ? ',egenskaper' : ''}${spec.filter ? '&egenskap=' + encodeURIComponent(spec.filter) : ''}&antall=500`;
     for (let page = 0; page < 5 && url; page++) {
       const data = await nvdbPage(url, signal);
       for (const o of data.objekter || []) {
         if (seen.has(o.id)) continue;
         seen.add(o.id);
-        const pt = o.geometri ? parsePoint(o.geometri.wkt) : null;
+        // Punkt, eller midten av en linje (gangfelt og signalanlegg er linjer)
+        const wkt = o.geometri ? o.geometri.wkt : '';
+        let pt = null;
+        if (/^\s*LINESTRING/i.test(wkt)) {
+          const l = parseWkt(wkt);
+          if (l.length) {
+            pt = { lat: l.reduce((a, q) => a + q.lat, 0) / l.length, lon: l.reduce((a, q) => a + q.lon, 0) / l.length, line: true };
+            const a = l[0], b = l[l.length - 1];   // retning langs linjen (grader fra nord)
+            if (l.length > 1) pt.dir = (Math.atan2((b.lon - a.lon) * Math.cos(a.lat * Math.PI / 180), b.lat - a.lat) * 180 / Math.PI + 360) % 360;
+          }
+        }
+        else pt = parsePoint(wkt);
         if (!pt) continue;
         const props = {};
         for (const e of o.egenskaper || []) props[e.id] = e.verdi;
-        out.push({ ...pt, props });
+        out.push({ ...pt, props });   // pt kan ha dir for linjer
       }
       const md = data.metadata || {};
       url = md.returnert && md.returnert >= (md.sidestørrelse || 500) && md.neste && md.neste.href ? md.neste.href : null;
@@ -246,17 +263,46 @@ async function pool(items, size, fn) {
   await Promise.all(workers);
 }
 
+/* Skiltnummer-tekst fra NVDB («142 - Barn») → kort type */
+export function signKind(text) {
+  const t = String(text || '');
+  if (t.startsWith('142')) return 'barn';
+  if (t.startsWith('100.1')) return 'svingH';
+  if (t.startsWith('100.2')) return 'svingV';
+  return null;
+}
+
+/* Bare det som ligger nær ruten tas vare på (et bykart har hundrevis av gangfelt). */
+export function nearRoute(points, items, maxM = 40) {
+  const step = Math.max(1, Math.floor(points.length / 1500));
+  const sample = points.filter((_, i) => i % step === 0);
+  return items.filter(it => sample.some(p => Math.abs(p.lat - it.lat) < 0.001 && metres(p, it) <= maxM));
+}
+
 export async function fetchRoadData(points, signal) {
-  const [stops, giveway, rb] = await Promise.all([
+  const [stops, giveway, rb, signs, crossings, bumps, signals] = await Promise.all([
     fetchPoints(points, SIGN_STOP, false, signal),
     fetchPoints(points, SIGN_GIVEWAY, false, signal),
-    fetchPoints(points, ROUNDABOUT, true, signal)
+    fetchPoints(points, ROUNDABOUT, true, signal),
+    fetchPoints(points, SIGNS, true, signal),
+    fetchPoints(points, CROSSING, false, signal),
+    fetchPoints(points, BUMP, true, signal),
+    fetchPoints(points, SIGNAL, true, signal)
   ]);
   const r5 = v => Math.round(v * 1e5) / 1e5;
+  const pt = p => ({ lat: r5(p.lat), lon: r5(p.lon) });
   return {
-    stops: stops.map(p => ({ lat: r5(p.lat), lon: r5(p.lon) })),
-    giveway: giveway.map(p => ({ lat: r5(p.lat), lon: r5(p.lon) })),
-    roundabouts: rb.map(p => ({ lat: r5(p.lat), lon: r5(p.lon), d: Number(p.props[1791]) || 25, name: p.props[1073] || '' }))
+    v: 2,
+    stops: stops.map(pt),
+    giveway: giveway.map(pt),
+    roundabouts: rb.map(p => ({ ...pt(p), d: Number(p.props[1791]) || 25, name: p.props[1073] || '' })),
+    signs: nearRoute(points, signs.map(p => ({ ...pt(p), kind: signKind(p.props[5530]) })).filter(x => x.kind)),
+    crossings: nearRoute(points, crossings.map(pt), 25),
+    bumps: nearRoute(points, bumps.map(p => ({ ...pt(p), type: p.props[1156] || '' })), 20),
+    // Signalanlegg: bare lyskryss og lysregulerte gangfelt (bruksområde 1273). Uten bruksområde tas bare punkter med;
+    // linjer uten bruksområde er ofte kjørefeltsignaler over motorvegen.
+    signals: nearRoute(points, signals.filter(p => ['Vegkryss', 'Gangfelt'].includes(p.props[1273]) || (!p.props[1273] && !p.line))
+      .map(p => ({ ...pt(p), dir: Number.isFinite(p.dir) ? Math.round(p.dir) : null })), 60)
   };
 }
 
@@ -307,6 +353,50 @@ export function evaluateRoad(points, road, events = []) {
     out.roundabouts.push({ t: (tFrom + tTo) / 2, tFrom, tTo, lat: rb.lat, lon: rb.lon, d: rb.d, name: rb.name, events: ev.map(e => e.n), source: 'nvdb' });
   }
   out.roundabouts.sort((x, y) => x.t - y.t);
+
+  // v0.9.0 – gangfelt, fartsdempere, lyskryss og skilt (barn, farlig sving)
+  const along = (i, m) => { let b = i; while (b < points.length - 1 && cum[b + 1] - cum[i] <= m) b++; return b; };
+  const before = (i, m) => { let a = i; while (a > 0 && cum[i] - cum[a - 1] <= m) a--; return a; };
+  out.crossings = []; out.bumps = []; out.signals = []; out.signs = [];
+  for (const c of road.crossings || []) {
+    const { i, d } = nearest(c);
+    if (d > 15 || points[i].kmh < 5) continue;
+    out.crossings.push({ t: points[i].t, lat: c.lat, lon: c.lon, kmh: Math.round(points[i].kmh), approachKmh: Math.round(points[before(i, 40)].kmh) });
+  }
+  for (const b of road.bumps || []) {
+    const { i, d } = nearest(b);
+    if (d > 10 || points[i].kmh < 3) continue;
+    out.bumps.push({ t: points[i].t, lat: b.lat, lon: b.lon, kmh: Math.round(points[i].kmh), approachKmh: Math.round(points[before(i, 50)].kmh), type: b.type || '' });
+  }
+  const headingAt = i => { const p0 = points[Math.max(0, i - 1)], p1 = points[Math.min(points.length - 1, i + 1)], k = Math.cos(p0.lat * Math.PI / 180); return (Math.atan2((p1.lon - p0.lon) * k, p1.lat - p0.lat) * 180 / Math.PI + 360) % 360; };
+  for (const sg of road.signals || []) {
+    const { i, d } = nearest(sg);
+    if (d > 35) continue;
+    // Signalanlegget må ligge langs vegen vi kjører (ikke en veg under eller over): retning innen 35°, begge veier
+    if (Number.isFinite(sg.dir)) { const diff = Math.abs(((headingAt(i) - sg.dir) % 180 + 180) % 180); if (Math.min(diff, 180 - diff) > 35) continue; }
+    const a = before(i, 60), b = along(i, 30);
+    const { m } = minIn(a, b);
+    out.signals.push({ t: points[i].t, tFrom: points[a].t, tTo: points[b].t, lat: sg.lat, lon: sg.lon, minKmh: Math.round(m), stopped: m < 3, kmh: Math.round(points[i].kmh) });
+  }
+  for (const sg of road.signs || []) {
+    const { i, d } = nearest(sg);
+    if (d > 25 || i <= 0 || i >= points.length - 1 || points[i].kmh < 5) continue;
+    // Skiltet gjelder den som har det på høyre side (høyretrafikk)
+    const p0 = points[i - 1], p1 = points[i + 1], k = Math.cos(sg.lat * Math.PI / 180);
+    const hx = (p1.lon - p0.lon) * k, hy = p1.lat - p0.lat, vx = (sg.lon - points[i].lon) * k, vy = sg.lat - points[i].lat;
+    if (hx * vy - hy * vx >= 0) continue;   // til venstre: gjelder motgående trafikk
+    const zone = sg.kind === 'barn' ? 150 : 250;
+    const e = along(i, zone);
+    let maxKmh = 0; for (let q = i; q <= e; q++) maxKmh = Math.max(maxKmh, points[q].kmh);
+    out.signs.push({ t: points[i].t, tTo: points[e].t, lat: sg.lat, lon: sg.lon, kind: sg.kind, kmh: Math.round(points[i].kmh), maxKmh: Math.round(maxKmh),
+      events: events.filter(ev => ev.t >= points[i].t && ev.t <= points[e].t).map(ev => ev.n) });
+  }
+  for (const k of ['crossings', 'bumps', 'signals', 'signs']) out[k].sort((x, y) => x.t - y.t);
+  // NVDB har ofte ett gangfelt og én fartsdemper per kjøreretning: det samme stedet innen 4 s er ett
+  out.crossings = out.crossings.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 4);
+  out.bumps = out.bumps.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 4);
+  // Samme lyskryss kan ha flere signalstrekninger: slå sammen innen 15 s
+  out.signals = out.signals.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 15);
   return out;
 }
 
@@ -319,7 +409,7 @@ export async function enrichDrive(r, marks, wants, existing, onProgress = () => 
     enrich.limits = smoothBlips(fillGaps(matchLimits(r.points, segs))).map(v => (Number.isFinite(v) ? v : null));
     enrich.limitsFetchedAt = new Date().toISOString();
   }
-  if (wants.limits && !enrich.road) {
+  if (wants.limits && (!enrich.road || enrich.road.v !== 2)) {   // v2: flere skilt, gangfelt, fartsdempere, lyskryss
     onProgress('Henter skilt og rundkjøringer fra Statens vegvesen …');
     enrich.road = await fetchRoadData(r.points);
     enrich.roadFetchedAt = new Date().toISOString();

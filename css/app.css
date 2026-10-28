@@ -782,3 +782,6 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 
 .cam-chip.unk { color: var(--muted); border-color: var(--line); }
 .gl-lane.unk { fill: var(--muted); }
+
+.along-list { padding-left: 18px; margin: 6px 0; }
+.along-list li { margin-bottom: 4px; }

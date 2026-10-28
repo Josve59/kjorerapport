@@ -11,7 +11,7 @@ import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.8.2';
+export const APP_VERSION = '0.9.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -970,7 +970,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       routeRows.sort((a, b) => a.ts - b.ts);
     }
     const wants = { limits: !!settings.netLimits, names: !!settings.netNames };
-    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.names && !(drive.enrich && drive.enrich.names));
+    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === 2)) || (wants.names && !(drive.enrich && drive.enrich.names));   // road v2: gangfelt, fartsdempere, lyskryss, skilt
     const draw = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
       title: 'Kjørerapport', subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),

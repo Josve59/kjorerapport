@@ -13,7 +13,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.0';
+export const APP_VERSION = 'k0.6.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -102,7 +102,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|14k1`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k1`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -1113,7 +1113,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       routeRows.sort((a, b) => a.ts - b.ts);
     }
     const wants = { limits: !!settings.netLimits, names: !!settings.netNames };
-    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.names && !(drive.enrich && drive.enrich.names));
+    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === 2)) || (wants.names && !(drive.enrich && drive.enrich.names));   // road v2: gangfelt, fartsdempere, lyskryss, skilt
     const draw = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
       title: 'Kjørerapport', subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),

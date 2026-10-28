@@ -794,3 +794,6 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .road-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 12px; }
 .road-stats div { background: var(--bg); border-radius: 12px; padding: 10px; text-align: center; }
 .road-stats strong { display: block; font-size: 1.3rem; }
+
+.along-list { padding-left: 18px; margin: 6px 0; }
+.along-list li { margin-bottom: 4px; }

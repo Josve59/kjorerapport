@@ -77,6 +77,7 @@ export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1
     medianDist: follow.length ? Math.round(med(follow.map(x => x.lead.dist))) : null,
     followShare: s.length ? follow.length / s.length : 0,
     maxCars: Math.max(0, ...s.map(x => x.cars || 0)), peopleSeen: s.filter(x => x.people > 0).length,
+    people: s.filter(x => x.people > 0).slice(0, 1000).map(x => Math.round(x.t * 10) / 10),   // tider med folk i bildet (samkjøring med gangfelt)
     lane: laneStats(s),
     close: episodes,
     // Bare tall (lagres i databasen sammen med analysen)
