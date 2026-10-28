@@ -128,6 +128,10 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.1 / k0.6.2 – road data and place names on by default
+
+- «Veidata» (NVDB) and «Stedsnavn» (Kartverket) are now on by default, so a new user (for example a driving instructor testing the app) gets the full report without changing settings. They can still be turned off under Innstillinger → Kart og nettjenester. Anyone who already turned them off keeps that choice. The privacy page says the same.
+
 ## What's new in 0.9.0 / k0.6.1 – more road data from NVDB
 
 Recognising signs with the camera was rejected for now. With 1.5 s road looks every 8–25 s the camera would catch only about 1 in 3 signs, and it would need a European sign model. NVDB already knows every sign and object along the road, with 100 % coverage, at night and in snow. Road data v2 (`enrich.road.v = 2`, «Veidata» setting) also fetches:

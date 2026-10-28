@@ -11,7 +11,7 @@ import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.0';
+export const APP_VERSION = '0.9.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -969,7 +969,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       }
       routeRows.sort((a, b) => a.ts - b.ts);
     }
-    const wants = { limits: !!settings.netLimits, names: !!settings.netNames };
+    const wants = { limits: settings.netLimits !== false, names: settings.netNames !== false };   // på som standard
     const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === 2)) || (wants.names && !(drive.enrich && drive.enrich.names));   // road v2: gangfelt, fartsdempere, lyskryss, skilt
     const draw = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
@@ -1072,7 +1072,7 @@ async function renderSettings() {
   });
   ['netLimits', 'netNames'].forEach(key => {
     const el = $('#' + key);
-    el.checked = !!settings[key];
+    el.checked = settings[key] !== false;
     el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
   // Kart og by-tilpasset jevn fart er på som standard
