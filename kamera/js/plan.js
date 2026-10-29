@@ -4,9 +4,11 @@
    av speil- og skulderblikkene, mot 61–79 % med lange veiperioder. Alt her er rene funksjoner, så det kan
    testes i Node. Tider i sekunder. */
 
-export const LOOK = 1.5;          // et veiblikk: så lenge veikameraet faktisk gir bilder
+export const LOOK = 1.5;          // et veiblikk: så lenge veikameraet faktisk gir brukbare bilder
+export const LOOK_LONG = 2.5;     // rett vei i jevn fart, når veikameraet har sett noe nyttig: flere bilder per bytte
 export const SWITCH = 0.85;       // målt byttetid (første bilde + lys innstilt), iPhone, 27. okt.
 const MIN_FRONT = 5, MAX_FRONT = 26;   // førerkameraet minst ~60 % av tiden, veikameraet minst ~5 %
+const DARK_LUM = 40;              // snittlysstyrke (0–255) der veikameraet nesten ikke finner noe
 
 /* Førerprofil fra de siste turene (opptil 5) for samme fører. results: [{ camera, road, stats }].
    Andelene glattes (Beta(1,1)), så få feltskifter ikke gir bastante tall. */
@@ -53,37 +55,95 @@ export function planShares(front) {
   return { front: front / cycle, road: LOOK / cycle, blind: 2 * SWITCH / cycle };
 }
 
-/* Planleggeren: kalles flere ganger i sekundet med det sensorene vet nå.
-   s: { now, kmh, yaw (°/s, rotasjon om loddlinjen), hacc (m/s², vannrett akselerasjon), facing, switching,
-        lastLead: { headway, at } | null }
-   Returnerer { want: 'user' | 'environment', reason }. Statistikk over veiblikk og grunner samles i .stats. */
+/* Planleggeren: kalles flere ganger i sekundet med det sensorene vet nå, også mens kameraet bytter.
+   s: { now, kmh, yaw (°/s, rotasjon om loddlinjen), hacc (m/s², vannrett akselerasjon), facing,
+        switching (true til kameraet gir brukbare bilder: bytte + lyset innstilt), lastLead: { headway, at } | null }
+   Returnerer { want: 'user' | 'environment', reason }. Statistikk over veiblikk og grunner samles i .stats.
+   fn.road(sample) skal kalles for hvert bilde fra veikameraet ({ lead, cars, people, lane, lum }).
+
+   Hva som styrer (k0.6.3, etter turene 29. okt.):
+   - Førerkameraet i svinger, rundkjøringer og inn mot kryss (farten faller under 50 km/t), og de første
+     8 s etter igangkjøring: der skjer speil- og skulderblikkene.
+   - Veiblikk på rett vei i jevn fart, der plassering og avstand kan måles. Plassering og avstand endrer seg
+     sakte, så stikkprøver holder. Over 60 km/t og når forrige blikk så noe: lengre blikk (2,5 s).
+   - Ser veikameraet ingenting (mørkt, eller ingen linjer og biler), blir det færre veiblikk, så føreren
+     ikke mister blikk for ingenting. Et mørkt blikk avsluttes tidlig. */
 export function createPlanner(settings) {
-  let phase = 'user', since = -Infinity, lastTurn = -Infinity, lastLookEnd = -Infinity, reason = 'start';
-  const stats = { looks: 0, byReason: {}, front: 0, road: 0, blind: 0, last: null };
-  const startLook = (now, why) => { phase = 'environment'; since = now; reason = why; stats.looks++; stats.byReason[why] = (stats.byReason[why] || 0) + 1; };
+  let phase = 'user', since = -Infinity, lastTurn = -Infinity, lastLookEnd = -Infinity, lastSlow = -Infinity, holdUntil = -Infinity;
+  let reason = 'start', lookLen = LOOK, look = null;
+  const hist = [];     // fart siste 5 s
+  const recent = [];   // de siste veiblikkene: { useful, dark }
+  const stats = { looks: 0, byReason: {}, holds: {}, front: 0, road: 0, blind: 0, last: null, useful: 0, dark: 0 };
+  const startLook = (now, why, long = false) => {
+    phase = 'environment'; since = now; reason = why; lookLen = long ? LOOK_LONG : LOOK; look = { n: 0, useful: false, darkN: 0 };
+    stats.looks++; stats.byReason[why] = (stats.byReason[why] || 0) + 1;
+  };
+  const endLook = (now, why) => {
+    phase = 'user'; since = now; lastLookEnd = now; reason = why;
+    if (look && look.n) {
+      const q = { useful: look.useful, dark: !look.useful && look.darkN >= look.n / 2 };
+      recent.push(q); if (recent.length > 4) recent.shift();
+      if (q.useful) stats.useful++; if (q.dark) stats.dark++;
+    }
+    look = null;
+  };
+  const hold = (why, now, until) => { if (now >= holdUntil || reason !== why) stats.holds[why] = (stats.holds[why] || 0) + 1; holdUntil = Math.max(holdUntil, until); reason = why; };
+  // Hvor nyttig veikameraet har vært: mørkt de 3 siste blikkene → sjeldnere, ingenting de 4 siste → litt sjeldnere
+  const quality = () => {
+    const last = n => recent.length >= n ? recent.slice(-n) : null;
+    const d = last(3), u = last(4);
+    if (d && d.every(q => q.dark)) return { factor: 3, cap: 60, dark: true };
+    if (u && u.every(q => !q.useful)) return { factor: 1.6, cap: 40, dark: false };
+    return { factor: 1, cap: MAX_FRONT, dark: false };
+  };
   const fn = s => {
     const { now, kmh = NaN, yaw = 0, hacc = 0, facing = phase, switching = false, lastLead = null } = s;
     if (since === -Infinity) since = now;
-    // Tid telles fra kameraet faktisk viser bildet
+    // Tid telles fra kameraet faktisk gir brukbare bilder
     if (switching || facing !== phase) since = Math.max(since, now);
     if (stats.last !== null) { const dt = Math.min(now - stats.last, 1); if (switching) stats.blind += dt; else if (facing === 'user') stats.front += dt; else stats.road += dt; }
     stats.last = now;
     const turning = Math.abs(yaw) > 6;
     if (turning) lastTurn = now;
     const slow = !(kmh >= 15);
+    if (slow) lastSlow = now;
+    if (Number.isFinite(kmh)) { hist.push({ now, kmh }); while (hist.length && now - hist[0].now > 5) hist.shift(); }
+    // Inn mot kryss eller rundkjøring: farten faller jevnt (ikke bråbrems) under 50 km/t
+    const before = hist.find(h => now - h.now <= 4);
+    const slowing = before && kmh < 50 && before.kmh - kmh >= 8 && hacc <= 3;
     if (phase === 'environment') {
-      if (slow || turning || now - since >= LOOK) { phase = 'user'; since = now; lastLookEnd = now; reason = slow ? 'lav fart' : turning ? 'sving' : 'veiblikk ferdig'; }
+      const q = quality();
+      const darkNow = look && look.n >= 3 && !look.useful && look.darkN === look.n;
+      if (slow || turning || slowing || darkNow || now - since >= lookLen) endLook(now, slow ? 'lav fart' : turning ? 'sving' : slowing ? 'kryss nærmer seg' : darkNow ? 'mørkt' : 'veiblikk ferdig');
+      else if (q.dark && look && look.n >= 3 && !look.useful) endLook(now, 'mørkt');
       return { want: phase, reason };
     }
     if (slow) { reason = 'lav fart'; return { want: 'user', reason }; }
-    // Kraftig vannrett akselerasjon uten sving = nedbremsing (eller kraftig gass): se veien med en gang
-    if (hacc > 3 && !turning && kmh >= 20 && now - lastLookEnd > 3) { startLook(now, 'nedbremsing'); return { want: phase, reason }; }
+    const q = quality();
+    // Kraftig vannrett akselerasjon uten sving = nedbremsing (eller kraftig gass): se veien med en gang (ikke i mørke)
+    if (hacc > 3 && !turning && kmh >= 20 && now - lastLookEnd > 3 && !q.dark) { startLook(now, 'nedbremsing'); return { want: phase, reason }; }
     if (turning || now - lastTurn < 3) { reason = 'sving'; return { want: 'user', reason }; }
-    let interval = kmh >= 50 ? settings.fast : settings.city;
-    if (lastLead && lastLead.headway < 1.5 && now - lastLead.at < 30) interval = Math.min(interval, 5);
-    if (now - Math.max(since, lastLookEnd) >= interval) { startLook(now, lastLead && lastLead.headway < 1.5 && interval === 5 ? 'bil nær foran' : 'veiblikk'); return { want: phase, reason }; }
+    if (now - lastSlow < 8) { hold('igangkjøring', now, lastSlow + 8); return { want: 'user', reason }; }
+    if (slowing) hold('kryss nærmer seg', now, now + 4);
+    if (now < holdUntil) return { want: 'user', reason };
+    let interval = Math.min(q.cap, (kmh >= 50 ? settings.fast : settings.city) * q.factor);
+    const near = lastLead && lastLead.headway < 1.5 && now - lastLead.at < 30;
+    if (near) interval = Math.min(interval, 5);
+    if (now - Math.max(since, lastLookEnd) >= interval) {
+      const last = recent[recent.length - 1];
+      const long = kmh >= 60 && now - lastTurn > 10 && !q.dark && (!last || last.useful);
+      startLook(now, near && interval === 5 ? 'bil nær foran' : 'veiblikk', long);
+      return { want: phase, reason };
+    }
     reason = 'fører';
     return { want: 'user', reason };
+  };
+  // Hvert bilde fra veikameraet: så det noe (bil, folk, feltlinje), og var det mørkt?
+  fn.road = r => {
+    if (!look || !r) return;
+    look.n++;
+    if (r.lead || r.cars > 0 || r.people > 0 || (r.lane && (r.lane.l || r.lane.r))) look.useful = true;
+    if (Number.isFinite(r.lum) && r.lum < DARK_LUM) look.darkN++;
   };
   fn.stats = stats;
   fn.settings = settings;

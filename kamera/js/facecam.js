@@ -11,12 +11,15 @@ let stream = null, video = null, timer = null, facing = 'user', switching = fals
 const listeners = new Set(), roadListeners = new Set();
 let lastPose = null, lastRoad = null, lastTs = 0, frames = 0, startedAt = 0, schedule = null;
 let settleUntil = 0;   // bilder rett etter et bytte er for mørke (lyset stiller seg inn) og brukes ikke
+let settleLum = null, settleStable = 0;   // veikameraet: vent til lysstyrken er stabil (i mørke tar det lenger tid)
+let firstAfterSwitch = false;   // første analyse etter et bytte er treg (modellen starter på nytt) og telles ikke i farten
 let fpsWanted = 8, fpsNow = 8;
 const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0 };   // glattet tid per analyse
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
 const switchLog = [];   // byttetider (ms) denne økten
 
 export const state = () => ({ loaded: !!landmarker, roadLoaded: !!detector, running: !!stream, facing, switching,
+  ready: !!stream && !switching && performance.now() >= settleUntil,   // gir brukbare bilder nå
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, fpsNow, lastPose, lastRoad, video, switches: switchLog.slice(),
   perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10 } });
 
@@ -110,7 +113,9 @@ export async function switchTo(mode) {
     facing = mode;
     if (video) await show(video);
     if (video) await nextFrame(video);
-    settleUntil = performance.now() + 250;
+    // Førerkameraet: fast 250 ms. Veikameraet: til lysstyrken er stabil, høyst 1,5 s (se tick)
+    settleUntil = performance.now() + (mode === 'environment' ? 1500 : 250);
+    settleLum = null; settleStable = 0; firstAfterSwitch = true;
     const ms = Math.round(performance.now() - t0);
     switchLog.push(ms);
     if (switchLog.length > 200) switchLog.shift();
@@ -136,7 +141,7 @@ export function startLoop(fps = 8) {
   if (timer) return;
   fpsWanted = fps; fpsNow = fps;
   frames = 0; startedAt = performance.now();
-  const ema = (k, v) => { perf[k] = perf[k] ? perf[k] * 0.9 + v * 0.1 : v; };
+  const ema = (k, v) => { if (firstAfterSwitch) return; perf[k] = perf[k] ? perf[k] * 0.9 + v * 0.1 : v; };
   /* Blir telefonen treg (varm, eller for mye å gjøre), går vi ned til 5 bilder i sekundet.
      Tilbake til full fart når analysene igjen er raske i 20 s. */
   const adapt = () => {
@@ -147,12 +152,22 @@ export function startLoop(fps = 8) {
   };
   const tick = () => {
     timer = setTimeout(tick, 1000 / fpsNow);
-    if (schedule && !switching) {
+    // Planen spørres også mens kameraet bytter, så den vet at veiblikket ikke har begynt ennå (k0.6.3:
+    // før ble byttetiden regnet med i veiblikket, og veikameraet fikk bare 0,4 s med bilder per blikk)
+    if (schedule) {
       const want = schedule();
-      if (want && want !== facing) { switchTo(want).catch(() => {}); return; }
+      if (!switching && want && want !== facing) { switchTo(want).catch(() => {}); return; }
     }
     if (switching || !video || video.readyState < 2 || video.videoWidth === 0) return;
-    if (performance.now() < settleUntil) return;
+    if (performance.now() < settleUntil) {
+      if (facing !== 'environment') return;
+      // Lyset er innstilt når to bilder på rad har nesten samme lysstyrke
+      const l = luminance(video);
+      settleStable = settleLum !== null && Math.abs(l - settleLum) <= Math.max(2, settleLum * 0.04) ? settleStable + 1 : 0;
+      settleLum = l;
+      if (settleStable < 2) return;
+      settleUntil = performance.now();
+    }
     let ts = performance.now();
     if (ts <= lastTs) ts = lastTs + 1;
     lastTs = ts;
@@ -165,7 +180,7 @@ export function startLoop(fps = 8) {
         const m = res && res.facialTransformationMatrixes && res.facialTransformationMatrixes[0];
         pose = m ? poseFromMatrix(m.data) : null;
       } catch { pose = null; }
-      ema('faceMs', performance.now() - t1); adapt();
+      ema('faceMs', performance.now() - t1); adapt(); firstAfterSwitch = false;
       frames++;
       lastPose = pose;
       for (const fn of listeners) fn(pose, ts);
@@ -187,13 +202,17 @@ export function startLoop(fps = 8) {
           const W = 160, H = Math.round(160 * video.videoHeight / video.videoWidth);
           if (!laneCanvas || laneCanvas.height !== H) { laneCanvas = document.createElement('canvas'); laneCanvas.width = W; laneCanvas.height = H; laneCtx = laneCanvas.getContext('2d', { willReadFrequently: true }); }
           laneCtx.drawImage(video, 0, 0, W, H);
-          const ln = detectLanes(toGray(laneCtx.getImageData(0, 0, W, H).data, W, H), W, H);
+          const gray = toGray(laneCtx.getImageData(0, 0, W, H).data, W, H);
+          // Lysstyrke 0–255 (snitt): forteller om veikameraet ser noe i det hele tatt (mørke, refleks i ruta)
+          let sum = 0; for (let i = 0; i < gray.length; i++) sum += gray[i];
+          road.lum = Math.round(sum / gray.length);
+          const ln = detectLanes(gray, W, H);
           road.lane = { l: !!ln.left, r: !!ln.right, offset: ln.offset };
           if (laneOverlay) drawLanes(laneOverlay, ln, W, H);
         } catch { /* ingen feltlinjer */ }
         ema('laneMs', performance.now() - t2);
       }
-      adapt();
+      adapt(); firstAfterSwitch = false;
       frames++;
       lastRoad = road;
       if (road) for (const fn of roadListeners) fn(road, ts);

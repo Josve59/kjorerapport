@@ -101,7 +101,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     gyro: xyz(input.gyro), grav: xyz(input.grav), acc: xyz(input.acc),
     head: (input.head || []).map(h => ({ t: num(h.t), yaw: num(h.yaw), pitch: num(h.pitch), ok: !!h.ok })),
     road: (input.road || []).map(r => ({ t: num(r.t), cars: num(r.cars) || 0, people: num(r.people) || 0, lead: r.lead && Number.isFinite(num(r.lead.dist)) ? { cls: String(r.lead.cls || 'car'), dist: num(r.lead.dist), wpx: num(r.lead.wpx) } : null,
-      lane: r.lane ? { l: !!r.lane.l, r: !!r.lane.r, offset: Number.isFinite(num(r.lane.offset)) ? num(r.lane.offset) : null } : null }))
+      lane: r.lane ? { l: !!r.lane.l, r: !!r.lane.r, offset: Number.isFinite(num(r.lane.offset)) ? num(r.lane.offset) : null } : null, lum: Number.isFinite(num(r.lum)) ? num(r.lum) : null }))
   };
   const meta = payload && payload.drive ? payload.drive : {};
   const id = keepId && typeof meta.id === 'string' && meta.id ? meta.id : newId();

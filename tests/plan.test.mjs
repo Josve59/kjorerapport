@@ -1,14 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { driverProfile, planSettings, planShares, createPlanner, SWITCH, LOOK } from '../kamera/js/plan.js';
+import { driverProfile, planSettings, planShares, createPlanner, SWITCH, LOOK, LOOK_LONG } from '../kamera/js/plan.js';
 
-/* Kjører planleggeren mot et kamera som bruker SWITCH sekunder på hvert bytte. drive(t) gir { kmh, yaw, hacc }. */
-function run(planner, seconds, drive) {
+/* Kjører planleggeren mot et kamera som bruker SWITCH sekunder på hvert bytte. drive(t) gir { kmh, yaw, hacc }.
+   roadFrame(t) gir bildet veikameraet ser (8 bilder i sekundet), eller null. */
+function run(planner, seconds, drive, roadFrame = null) {
   let facing = 'user', switchUntil = -1, target = 'user';
   const log = [];
   for (let now = 0; now <= seconds; now += 0.125) {
     const switching = now < switchUntil;
     if (!switching && facing !== target) facing = target;
+    if (!switching && facing === 'environment' && roadFrame) planner.road(roadFrame(now));
     const { want, reason } = planner({ now, ...drive(now), facing, switching });
     if (!switching && want !== facing && want !== target) { target = want; switchUntil = now + SWITCH; }
     log.push({ now, facing: switching ? 'blind' : facing, reason });
@@ -41,8 +43,40 @@ test('plan: korte veiblikk i jevn fart, aldri i sving, med en gang ved nedbremsi
   assert.equal(p.stats.byReason['nedbremsing'], 1);
   assert.ok(['environment', 'blind'].includes(roadAt(85)), 'ser veien rett etter nedbremsingen');
   assert.ok(log.filter(x => x.now > 92).every(x => x.facing !== 'environment'), 'stille: bare fører');
+  // 70 km/t på rett vei: lange veiblikk (2,5 s), regnet fra veikameraet gir bilder, ikke fra byttet startet
+  const runs = []; let cur = 0;
+  for (const x of log.filter(x => x.now < 58)) { if (x.facing === 'environment') cur += 0.125; else if (cur) { runs.push(cur); cur = 0; } }
+  assert.ok(runs.length >= 3 && runs.every(v => v >= LOOK_LONG - 0.2 && v <= LOOK_LONG + 0.3), 'hvert veiblikk varer ca. 2,5 s: ' + runs.join(', '));
+});
+
+test('plan: korte veiblikk i by, og veiblikket regnes fra første brukbare bilde', () => {
+  const p = createPlanner(planSettings());
+  const log = run(p, 120, () => ({ kmh: 40, yaw: 0, hacc: 0 }));
   const road = log.filter(x => x.facing === 'environment').length * 0.125, look = road / (p.stats.looks || 1);
-  assert.ok(look >= LOOK - 0.2 && look <= LOOK + 0.3, 'hvert veiblikk varer ca. 1,5 s: ' + look);
+  assert.ok(look >= LOOK - 0.2 && look <= LOOK + 0.3, 'hvert veiblikk varer ca. 1,5 s med bilder: ' + look);
+  assert.ok(p.stats.blind > 0, 'byttetiden telles som blind');
+});
+
+test('plan: førerkameraet inn mot kryss og ved igangkjøring', () => {
+  const p = createPlanner(planSettings({ focus: ['limits'] }));   // veiblikk hvert 6.–8. s
+  // 0–30 s 60 km/t, 30–36 s farten faller jevnt til 30 km/t, 36–40 s stille (rødt lys), så 40 km/t
+  const kmh = t => t < 30 ? 60 : t < 36 ? 60 - (t - 30) * 5 : t < 40 ? 0 : 40;
+  const log = run(p, 70, t => ({ kmh: kmh(t), yaw: 0, hacc: 0 }));
+  assert.ok(log.filter(x => x.now >= 32 && x.now < 36).every(x => x.facing !== 'environment'), 'ingen veiblikk mens farten faller inn mot krysset');
+  assert.ok(log.filter(x => x.now >= 40 && x.now < 47.9).every(x => x.facing !== 'environment'), 'ingen veiblikk de første 8 s etter igangkjøring');
+  assert.ok(p.stats.holds['kryss nærmer seg'] >= 1 && p.stats.holds['igangkjøring'] >= 1, JSON.stringify(p.stats.holds));
+  assert.ok(log.some(x => x.now > 50 && x.facing === 'environment'), 'veiblikk igjen etterpå');
+});
+
+test('plan: ser veikameraet ingenting i mørket, blir det færre og kortere veiblikk', () => {
+  const lightP = createPlanner(planSettings()), darkP = createPlanner(planSettings());
+  const drive = () => ({ kmh: 70, yaw: 0, hacc: 0 });
+  run(lightP, 300, drive, () => ({ cars: 1, people: 0, lead: null, lane: { l: true, r: true, offset: 0 }, lum: 120 }));
+  const log = run(darkP, 300, drive, () => ({ cars: 0, people: 0, lead: null, lane: { l: false, r: false, offset: null }, lum: 12 }));
+  assert.ok(darkP.stats.dark >= 3 && lightP.stats.dark === 0);
+  assert.ok(darkP.stats.looks < lightP.stats.looks * 0.6, `mørkt ${darkP.stats.looks} mot lyst ${lightP.stats.looks} veiblikk`);
+  assert.ok(darkP.stats.road < lightP.stats.road / 3, 'mye mindre veikameratid i mørket');
+  assert.ok(log.filter(x => x.reason === 'mørkt').length > 0, 'mørke veiblikk avsluttes tidlig');
 });
 
 test('plan: bil nær foran gir oftere veiblikk', () => {

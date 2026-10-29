@@ -128,6 +128,16 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.6.3 – camera switching fixed after the first switching drives (29 Oct)
+
+Two drives in the evening with «Bytt» (7 and 24 min) showed:
+
+- **Each road look gave only 0.4 s of road frames, but cost the driver camera 2.7 s.** The look length was counted from the moment the switch started, because the planner was not asked while the camera was switching. It is now asked on every tick, and a look is counted from the first usable road frame. The road camera waits until the exposure is stable (two frames with almost the same brightness, at most 1.5 s), since it takes longer to settle in the dark. A look now gives 1.5 s of frames (2.5 s on straight roads above 60 km/h when the last look saw something).
+- **The road camera saw nothing in 285 frames: no cars, no lane lines.** Both drives were after dark, with screen reflections in the windscreen. Each road frame now stores its brightness (`lum`, 0–255). If the last 3 looks were dark and found nothing, looks become 3× rarer, and a dark look ends after 3 frames. The report says when the road camera found nothing.
+- **Situation-based plan:** the driver camera stays on while turning and for 3 s after (as before). New: it also stays on when the speed falls steadily below 50 km/h towards a junction or roundabout, and for the first 8 s after moving off from a stop. Simulated on the 27 Oct drives (full driver camera data): standard keeps 87–90 % of mirror and shoulder glances (was 84–85 %) with the same road time.
+- The first analysis after a switch is slow and no longer counts towards «telefonen ble treg».
+- The old calibration from 27 Oct still fitted at highway speed (within 2–3°). The many «other» poses on the first drive were the driver looking down to the right (screen or phone), not a calibration error.
+
 ## What's new in 0.9.1 / k0.6.2 – road data and place names on by default
 
 - «Veidata» (NVDB) and «Stedsnavn» (Kartverket) are now on by default, so a new user (for example a driving instructor testing the app) gets the full report without changing settings. They can still be turned off under Innstillinger → Kart og nettjenester. Anyone who already turned them off keeps that choice. The privacy page says the same.

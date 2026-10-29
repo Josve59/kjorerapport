@@ -78,6 +78,10 @@ export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1
     followShare: s.length ? follow.length / s.length : 0,
     maxCars: Math.max(0, ...s.map(x => x.cars || 0)), peopleSeen: s.filter(x => x.people > 0).length,
     people: s.filter(x => x.people > 0).slice(0, 1000).map(x => Math.round(x.t * 10) / 10),   // tider med folk i bildet (samkjøring med gangfelt)
+    // Så veikameraet noe? Andel bilder med bil, folk eller feltlinje, og andel mørke bilder (k0.6.3)
+    seenShare: Math.round(s.filter(x => x.lead || x.cars > 0 || x.people > 0 || (x.lane && (x.lane.l || x.lane.r))).length / s.length * 100) / 100,
+    darkShare: s.some(x => Number.isFinite(x.lum)) ? Math.round(s.filter(x => Number.isFinite(x.lum) && x.lum < 40).length / s.filter(x => Number.isFinite(x.lum)).length * 100) / 100 : null,
+    medianLum: s.some(x => Number.isFinite(x.lum)) ? med(s.filter(x => Number.isFinite(x.lum)).map(x => x.lum)) : null,
     lane: laneStats(s),
     close: episodes,
     // Bare tall (lagres i databasen sammen med analysen)

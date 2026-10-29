@@ -599,10 +599,14 @@ function roadSection(r, ctx = {}) {
   const rd = r.road, cp = ctx.cameraPlan || null, ln = rd.lane || null;
   const pc = v => Math.round(v * 100) + ' %';
   const REASON = { veiblikk: 'jevne veiblikk', nedbremsing: 'ved nedbremsing', 'bil nær foran': 'bil nær foran' };
+  const HOLD = { 'kryss nærmer seg': 'inn mot kryss', igangkjøring: 'ved igangkjøring' };
+  const holds = cp && cp.holds ? Object.entries(cp.holds).filter(([, n]) => n > 0) : [];
+  const blindRoad = rd.seenShare === 0 && rd.samples >= 10;
   const cov = Math.round(rd.coverage * 100);
   const cam = r.camera;
   return `<section class="card" id="road-section">
       <h2 class="card-title">${icon('layers')}Veien foran <span class="beta-tag">Test</span></h2>
+      ${blindRoad ? `<p class="notice">Veikameraet fant verken biler eller feltlinjer i ${rd.samples} bilder.${rd.darkShare !== null && rd.darkShare >= 0.5 ? ' Bildene var mørke: om kvelden ser bakkameraet lite gjennom frontruta, og refleks fra skjermer inne i bilen gjør det verre.' : rd.darkShare === null ? ' Var det mørkt? Om kvelden ser bakkameraet lite gjennom frontruta.' : ' Sjekk at bakkameraet ser fram gjennom frontruta og ikke er dekket.'} Prøv veikameraet i dagslys.</p>` : ''}
       <div class="road-stats">
         <div><strong>${rd.medianHeadway !== null ? n1(rd.medianHeadway) + ' s' : '–'}</strong><span class="muted small">vanlig avstand i tid</span></div>
         <div><strong>${rd.medianDist !== null ? rd.medianDist + ' m' : '–'}</strong><span class="muted small">vanlig avstand</span></div>
@@ -613,7 +617,7 @@ function roadSection(r, ctx = {}) {
       <p>${ln.medianOffset !== null ? `Bilen lå typisk ${Math.abs(ln.medianOffset).toFixed(2).replace('.', ',')} m ${ln.medianOffset > 0.05 ? 'til høyre for' : ln.medianOffset < -0.05 ? 'til venstre for' : 'fra'} midten av feltet, og varierte rundt ${ln.spread.toFixed(2).replace('.', ',')} m.${ln.nearEdge ? ` Nær en feltlinje i ${ln.nearEdge} bilder.` : ''}` : 'For få bilder med begge feltlinjene til å si noe om plasseringen.'}</p>
       <p class="muted small">Begge feltlinjene ble funnet i ${pc(ln.share)} av veibildene i minst 40 km/t. Forutsetter at telefonen står midt i bilen; står den til siden, forskyves tallene.</p>` : ''}
       ${cp && cp.share ? `<h3 class="mt">Kameratid</h3>
-      <p>Førerkameraet så føreren ${pc(cp.share.front)} av tiden, veikameraet veien ${pc(cp.share.road)}, og ${pc(cp.share.blind)} gikk med til bytting (snitt ${cp.switchAvg ?? '–'} ms). ${cp.looks} veiblikk: ${Object.entries(cp.byReason || {}).map(([k, n]) => `${n} ${REASON[k] || k}`).join(', ') || 'ingen'}. Ingen veiblikk i svinger eller under 15 km/t.</p>
+      <p>Førerkameraet så føreren ${pc(cp.share.front)} av tiden, veikameraet veien ${pc(cp.share.road)}, og ${pc(cp.share.blind)} gikk med til bytting (snitt ${cp.switchAvg ?? '–'} ms). ${cp.looks} veiblikk: ${Object.entries(cp.byReason || {}).map(([k, n]) => `${n} ${REASON[k] || k}`).join(', ') || 'ingen'}. Ingen veiblikk i svinger eller under 15 km/t${holds.length ? `, og førerkameraet ble holdt på ${holds.map(([k, n]) => `${n} ${n === 1 ? "gang" : "ganger"} ${HOLD[k] || k}`).join(' og ')}` : ''}.${Number.isFinite(cp.darkLooks) && cp.darkLooks ? ` ${cp.darkLooks} veiblikk var for mørke, så veien ble sjekket sjeldnere.` : ''}</p>
       ${cp.settings && cp.settings.reasons && cp.settings.reasons.length ? `<p class="muted small">${cp.settings.reasons.map(esc).join('. ')}.</p>` : ''}
       ${cp.perf && cp.perf.drops ? `<p class="notice">Telefonen ble treg ${cp.perf.drops} ${cp.perf.drops === 1 ? 'gang' : 'ganger'} (varm?), og kameraet gikk ned til 5 bilder i sekundet. Unngå direkte sol, og ha lader i.</p>` : ''}` : ''}
       <p class="muted small">Veikameraet så veien ${cov} % av tiden${cam && cam.frontShare !== undefined ? `, førerkameraet føreren ${Math.round(cam.frontShare * 100)} %` : ''}. Opptil ${rd.maxCars} biler i bildet samtidig${rd.peopleSeen ? `, folk eller syklister i ${rd.peopleSeen} bilder` : ''}. Avstanden anslås ut fra hvor bred bilen ser ut og kan bomme med 20–30 %. Mellom bildene fra veikameraet antas avstanden å være den samme, så lenge farten var nesten lik.</p>

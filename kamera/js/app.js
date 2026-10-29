@@ -13,7 +13,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.2';
+export const APP_VERSION = 'k0.6.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -102,7 +102,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k1`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k2`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -348,7 +348,7 @@ function cameraPlan(settings) {
   return () => {
     const st = cam.state(), r = recorder;
     const kmh = r && Number.isFinite(r.speed) ? r.speed * 3.6 : liveKmh;
-    return planner({ now: performance.now() / 1000, kmh, yaw: r ? r.liveYaw : 0, hacc: r ? r.liveHacc : 0, facing: st.facing, switching: st.switching, lastLead }).want;
+    return planner({ now: performance.now() / 1000, kmh, yaw: r ? r.liveYaw : 0, hacc: r ? r.liveHacc : 0, facing: st.facing, switching: !st.ready, lastLead }).want;
   };
 }
 /* Det som lagres med turen om kameratiden: plan, fordeling, grunner for veiblikk og hvor rask telefonen var. */
@@ -358,7 +358,7 @@ function cameraInfo() {
   const info = { mode: roadModeNow, switchAvg: sw.length ? Math.round(sw.reduce((a, b) => a + b, 0) / sw.length) : null, switches: sw.length, perf: st.perf };
   if (planner) {
     const p = planner.stats, tot = p.front + p.road + p.blind || 1;
-    Object.assign(info, { settings: planner.settings, looks: p.looks, byReason: p.byReason,
+    Object.assign(info, { settings: planner.settings, looks: p.looks, byReason: p.byReason, holds: p.holds, usefulLooks: p.useful, darkLooks: p.dark,
       share: { front: Math.round(p.front / tot * 100) / 100, road: Math.round(p.road / tot * 100) / 100, blind: Math.round(p.blind / tot * 100) / 100 } });
   }
   return info;
@@ -967,6 +967,7 @@ async function startRecording(replay = null) {
       let lastRoad = null;
       roadUnsub = cam.onRoad(r => {
         if (recorder) recorder.addRoad(r);
+        if (planner) planner.road(r);   // så veikameraet noe? Styrer hvor ofte veien sjekkes
         lastRoad = r;
         const kmh = recorder && Number.isFinite(recorder.speed) ? recorder.speed * 3.6 : NaN;
         if (r.lead && kmh >= 30) lastLead = { headway: r.lead.dist / (kmh / 3.6), at: performance.now() / 1000 };
