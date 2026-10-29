@@ -66,6 +66,8 @@ export function planShares(front) {
      8 s etter igangkjøring: der skjer speil- og skulderblikkene.
    - Veiblikk på rett vei i jevn fart, der plassering og avstand kan måles. Plassering og avstand endrer seg
      sakte, så stikkprøver holder. Over 60 km/t og når forrige blikk så noe: lengre blikk (2,5 s).
+   - Ser førerkameraet et blikk i sidespeilet eller over skulderen, blir det på føreren i 8 s (k0.6.5):
+     et feltskifte kommer trolig, og skulderblikket skal med.
    - I mørket ser veikameraet like ofte (k0.6.4: mye av øvingen i Norge skjer i mørket). Bare i lyse bilder
      der det ikke finnes noe å se (kameraet dekket, feil vei) blir det litt færre veiblikk. */
 export function createPlanner(settings) {
@@ -87,7 +89,7 @@ export function createPlanner(settings) {
     }
     look = null;
   };
-  const hold = (why, now, until) => { if (now >= holdUntil || reason !== why) stats.holds[why] = (stats.holds[why] || 0) + 1; holdUntil = Math.max(holdUntil, until); reason = why; };
+  const hold = (why, now, until) => { if (now >= holdUntil) stats.holds[why] = (stats.holds[why] || 0) + 1; holdUntil = Math.max(holdUntil, until); reason = why; };
   // Hvor nyttig veikameraet har vært: ingenting i de 4 siste lyse blikkene → litt sjeldnere. Mørke blikk teller ikke.
   const quality = () => {
     const u = recent.length >= 4 ? recent.slice(-4) : null;
@@ -133,11 +135,17 @@ export function createPlanner(settings) {
     reason = 'fører';
     return { want: 'user', reason };
   };
+  // Førerkameraet så et blikk i sidespeilet eller over skulderen: et feltskifte eller en sving kommer trolig.
+  // Bli på føreren i 8 s, så resten av sjekken (og skulderblikket) blir med (k0.6.5).
+  fn.glance = (now, cls) => {
+    if (!['left', 'right', 'shoulderL', 'shoulderR'].includes(cls)) return;
+    if (phase === 'user') hold('speilblikk', now, now + 8);
+  };
   // Hvert bilde fra veikameraet: så det noe (bil, folk, feltlinje), og var det mørkt?
   fn.road = r => {
     if (!look || !r) return;
     look.n++;
-    if (r.lead || r.cars > 0 || r.people > 0 || (r.lane && (r.lane.l || r.lane.r))) look.useful = true;
+    if ((r.lead && r.lead.src !== 'baklys') || r.cars > 0 || r.people > 0 || (r.lane && (r.lane.l || r.lane.r))) look.useful = true;
     if (Number.isFinite(r.lum) && r.lum < DARK_LUM) look.darkN++;
   };
   fn.stats = stats;

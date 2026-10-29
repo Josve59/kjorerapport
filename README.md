@@ -128,6 +128,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.6.5 – after the 40-minute night drive (29 Oct, 24 marked lane changes)
+
+- **False taillight pairs:** all 416 «cars in front» came from the taillight search. They gave a median headway of 0.5 s on the motorway, which is not true, and triggered 107 extra road looks («bil nær foran»). The driver camera then saw the driver only 66 % of the time. The taillight search now rejects cluttered frames (more than 8 red lights), pairs with a third light between them, large blurry spots, and distances under 4 m. Taillight leads are still stored, but **not used** for distance, «for nær» or planning until test snapshots show that they are right.
+- **The object detector found 0 cars in 2994 frames,** including 886 frames that were not dark. Each road frame now stores the best vehicle score, even below the threshold (`best`). The detector runs at 0.15 and counts from 0.35. The road frame size is stored (`cameraPlan.roadSize`), so a portrait image is visible. Test snapshots are needed to see what the camera actually sees.
+- **Lane changes were nearly all «?»:** each road look took the driver camera away for 3.8 s (1.2 s to the first road frame, 1.4 s of road, 1.0 s back), every ~10 s. New: a glance at a side mirror or over the shoulder keeps the driver camera on for 8 s, because a lane change is probably coming. Simulated on the 27 Oct drives (full driver data): glances kept 96–97 % (was 87–90 %), lane-change checks the same as with full data 67–75 % (was 25–56 %). Live classification uses the calibration with a slowly following «forward».
+- Driver camera settle after a switch back: 250 → 120 ms.
+
 ## What's new in k0.6.4 – road camera in the dark
 
 Much of the practice driving in Norway happens in the dark, so the road camera keeps looking at night (k0.6.3 made looks 3× rarer in the dark; that is removed). Only bright frames with nothing to see (camera covered) make looks a little rarer. To make the dark frames useful:

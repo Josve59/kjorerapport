@@ -13,7 +13,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.4';
+export const APP_VERSION = 'k0.6.5';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -102,7 +102,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k3`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k4`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -351,11 +351,20 @@ function cameraPlan(settings) {
     return planner({ now: performance.now() / 1000, kmh, yaw: r ? r.liveYaw : 0, hacc: r ? r.liveHacc : 0, facing: st.facing, switching: !st.ready, lastLead }).want;
   };
 }
+/* Speilblikk til planen: førerkameraet klassifiserer hodet mot kalibreringen. «Rett fram» kan ha flyttet seg
+   litt siden kalibreringen, så det følges med et sakte glidende snitt av hodestillinger nær rett fram. */
+let liveCalib = null, liveOff = { yaw: 0, pitch: 0 };
+function glanceToPlan(p) {
+  if (!planner || !liveCalib || !p || !Number.isFinite(p.yaw)) return;
+  const f = liveCalib.forward, dy = p.yaw - f.yaw - liveOff.yaw, dp = p.pitch - f.pitch - liveOff.pitch;
+  if (Math.hypot(dy, dp) < 10) { liveOff.yaw += dy * 0.01; liveOff.pitch += dp * 0.01; }
+  planner.glance(performance.now() / 1000, classifyPose({ yaw: p.yaw - liveOff.yaw, pitch: p.pitch - liveOff.pitch }, liveCalib));
+}
 /* Det som lagres med turen om kameratiden: plan, fordeling, grunner for veiblikk og hvor rask telefonen var. */
 function cameraInfo() {
   if (roadModeNow === 'off') return null;
   const st = cam.state(), sw = st.switches;
-  const info = { mode: roadModeNow, switchAvg: sw.length ? Math.round(sw.reduce((a, b) => a + b, 0) / sw.length) : null, switches: sw.length, perf: st.perf };
+  const info = { mode: roadModeNow, switchAvg: sw.length ? Math.round(sw.reduce((a, b) => a + b, 0) / sw.length) : null, switches: sw.length, perf: st.perf, roadSize: st.roadSize };
   if (planner) {
     const p = planner.stats, tot = p.front + p.road + p.blind || 1;
     Object.assign(info, { settings: planner.settings, looks: p.looks, byReason: p.byReason, holds: p.holds, usefulLooks: p.useful, darkLooks: p.dark,
@@ -958,12 +967,14 @@ async function startRecording(replay = null) {
     let seen = 0, n = 0;
     camUnsub = cam.onPose(p => {
       if (recorder) recorder.addHead(p);
+      glanceToPlan(p);
       n++; if (p) seen++;
       if (n % 16 === 0) { const ok = seen / 16 > 0.5; camPill.textContent = ok ? 'Kamera: ser føreren' : 'Kamera: ser ikke ansiktet'; camPill.dataset.state = ok ? 'ok' : 'wait'; seen = 0; }
     });
     camPill.textContent = 'Kamera: på'; camPill.dataset.state = 'ok';
     const mode = settings.roadMode || 'off';
     roadModeNow = mode; planner = null;
+    liveCalib = getCalib(); liveOff = { yaw: 0, pitch: 0 };
     if (mode !== 'off') {
       let lastRoad = null, lastRoadAt = 0, lookFrames = 0;
       roadUnsub = cam.onRoad(r => {
@@ -976,7 +987,10 @@ async function startRecording(replay = null) {
         if (planner) planner.road(r);   // så veikameraet noe? Styrer hvor ofte veien sjekkes
         lastRoad = r;
         const kmh = recorder && Number.isFinite(recorder.speed) ? recorder.speed * 3.6 : NaN;
-        if (r.lead && kmh >= 30) lastLead = { headway: r.lead.dist / (kmh / 3.6), at: performance.now() / 1000 };
+        // Falske baklys-par ga «bil nær foran» hele tiden: 107 ekstra veiblikk på turen 29. okt. kl. 19.46.
+        // k0.6.5: baklys brukes ikke her før testbilder viser at de treffer
+        const sure = r.lead && r.lead.src !== 'baklys';
+        if (sure && kmh >= 30) lastLead = { headway: r.lead.dist / (kmh / 3.6), at: performance.now() / 1000 };
       });
       if (mode === 'road') cam.switchTo('environment').catch(() => {});
       else {

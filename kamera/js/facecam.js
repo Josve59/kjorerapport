@@ -16,12 +16,13 @@ let firstAfterSwitch = false;   // første analyse etter et bytte er treg (model
 let fpsWanted = 8, fpsNow = 8;
 const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0 };   // glattet tid per analyse
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
-let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null;
+let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
 const switchLog = [];   // byttetider (ms) denne økten
 
 export const state = () => ({ loaded: !!landmarker, roadLoaded: !!detector, running: !!stream, facing, switching,
   ready: !!stream && !switching && performance.now() >= settleUntil,   // gir brukbare bilder nå
+  roadSize,   // bildestørrelse fra veikameraet (stående bilde = telefonen står på høykant)
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, fpsNow, lastPose, lastRoad, video, switches: switchLog.slice(),
   perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10 } });
 
@@ -62,7 +63,7 @@ export function loadRoadModel(onStatus = () => {}) {
     const { ObjectDetector } = await vision();
     const opts = delegate => ({
       baseOptions: { modelAssetPath: BASE + 'efficientdet_lite0.tflite', delegate },
-      runningMode: 'VIDEO', scoreThreshold: 0.35, maxResults: 12,
+      runningMode: 'VIDEO', scoreThreshold: 0.15, maxResults: 12,   // road.js teller bare fra 0,35
       categoryAllowlist: ['car', 'truck', 'bus', 'motorcycle', 'bicycle', 'person']
     });
     try { detector = await ObjectDetector.createFromOptions(fileset, opts('GPU')); }
@@ -115,8 +116,9 @@ export async function switchTo(mode) {
     facing = mode;
     if (video) await show(video);
     if (video) await nextFrame(video);
-    // Førerkameraet: fast 250 ms. Veikameraet: til lysstyrken er stabil, høyst 1,5 s (se tick)
-    settleUntil = performance.now() + (mode === 'environment' ? 1500 : 250);
+    // Førerkameraet: fast 120 ms (ansiktsgjenkjenningen tåler lys som ikke er helt innstilt).
+    // Veikameraet: til lysstyrken er stabil, høyst 1,5 s (se tick)
+    settleUntil = performance.now() + (mode === 'environment' ? 1500 : 120);
     settleLum = null; settleStable = 0; firstAfterSwitch = true;
     const ms = Math.round(performance.now() - t0);
     switchLog.push(ms);
@@ -191,6 +193,7 @@ export function startLoop(fps = 8) {
       let road = null;
       // Nattmodus (k0.6.4): bilgjenkjenningen får et lysere bilde, og baklysene letes etter i tillegg
       const dark = lastLum !== null && lastLum < NIGHT_LUM;
+      roadSize = `${video.videoWidth}x${video.videoHeight}`;
       const t1 = performance.now();
       try {
         const src = dark ? brightFrame(video) : video;
@@ -227,7 +230,6 @@ export function startLoop(fps = 8) {
             road.night = true;
             road.tail = tl.pairs;
             if (!road.lead && tl.lead) road.lead = tl.lead;
-            road.cars = Math.max(road.cars, tl.pairs);
           } catch { /* ingen baklys */ }
         }
       }

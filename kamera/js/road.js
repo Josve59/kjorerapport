@@ -15,10 +15,13 @@ export function focalPx(w, h, fovDeg = 66) {
 
 /* Én bildeanalyse → tall. dets: [{ cls, score, x, y, w, h }] i piksler. Bilen foran: et kjøretøy midt i
    bildet (sentrum innenfor midtre 30 %) med underkanten i nedre del (på veien, ikke på en bro), den bredeste. */
-export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80 } = {}) {
+export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minScore = 0.35 } = {}) {
   const f = focalPx(w, h, fovDeg);
-  let lead = null, cars = 0, people = 0;
+  let lead = null, cars = 0, people = 0, best = 0;
   for (const d of dets) {
+    // Beste bil-score også under grensen (k0.6.5): viser om gjenkjenningen var nær ved å se noe (mørke, refleks)
+    if (VEHICLE_WIDTH[d.cls] && d.score > best) best = d.score;
+    if (d.score < minScore) continue;
     if (VEHICLE_WIDTH[d.cls]) {
       cars++;
       const cx = d.x + d.w / 2, bottom = d.y + d.h;
@@ -28,7 +31,7 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80 } = {}
       if (!lead || d.w > lead.wpx) lead = { cls: d.cls, dist: Math.round(dist * 10) / 10, wpx: Math.round(d.w), score: Math.round(d.score * 100) / 100 };
     } else if (PEOPLE.includes(d.cls)) people++;
   }
-  return { lead, cars, people };
+  return { lead, cars, people, best: Math.round(best * 100) / 100 };
 }
 
 /* Bilen foran i mørket (k0.6.4): baklysene. Bilgjenkjenningen (lært på dagsbilder) ser lite om natten, men to
@@ -72,16 +75,23 @@ export function detectTaillights(rgba, w, h, { fovDeg = 66, maxDist = 80 } = {})
   // Par: samme høyde, lik størrelse, passe avstand
   const f = focalPx(w, h, fovDeg);
   let lead = null, pairs = 0;
+  // Mange røde lys (bykjøring, kø i flere felt): parene blir tvetydige, og avstanden blir for kort fordi lys fra
+  // to biler pares. Turen 29. okt. kl. 19.46: median 0,5 s tidsluke på motorvei, som ikke stemmer (k0.6.5).
+  if (blobs.length > 8) return { lead: null, pairs: Math.floor(blobs.length / 2), cluttered: true };
   for (let i = 0; i < blobs.length; i++) for (let j = i + 1; j < blobs.length; j++) {
     const a = blobs[i], b = blobs[j];
     const dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y), s = (a.size + b.size) / 2;
     if (dy > Math.max(2, 0.6 * s) || Math.max(a.n, b.n) > 3 * Math.min(a.n, b.n) || dx < 1.5 * s || dx > w * 0.6) continue;
     pairs++;
+    // Et tredje lys mellom dem i samme høyde: to biler side om side, ikke én bil
+    if (blobs.some((c, k) => k !== i && k !== j && c.x > Math.min(a.x, b.x) && c.x < Math.max(a.x, b.x) && Math.abs(c.y - (a.y + b.y) / 2) < Math.max(2, s))) continue;
+    // Lysene er små i forhold til avstanden mellom dem (rundt 0,2 m mot 1,45 m); store, uskarpe flekker er glare
+    if (s > 0.6 * dx) continue;
     const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
     // Bilen foran: midt i bildet, og lysene rundt horisonten eller litt under (ikke gatelys, ikke panseret)
     if (cx < w * 0.35 || cx > w * 0.65 || cy < h * 0.35 || cy > h * 0.8) continue;
     const dist = TAIL_SEP * f / dx;
-    if (dist > maxDist) continue;
+    if (dist > maxDist || dist < 4) continue;
     if (!lead || dx > lead.wpx) lead = { cls: 'car', dist: Math.round(dist * 10) / 10, wpx: Math.round(dx), score: 0.5, src: 'baklys' };
   }
   return { lead, pairs };
@@ -105,10 +115,12 @@ export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1
   let seen = 0;
   for (let i = 1; i < s.length; i++) { const dt = s[i].t - s[i - 1].t; if (dt < 1) seen += dt; }
   const follow = [];
+  // Baklys (mørke) brukes ikke til avstand ennå (k0.6.5): på turen 29. okt. kl. 19.46 ga de 0,5 s tidsluke på
+  // motorvei, som ikke stemmer. De lagres og telles, og tas i bruk når testbilder viser at de treffer.
   for (const x of s) {
     const kmh = kmhAt(points, x.t);
     x.kmh = kmh;
-    if (x.lead && kmh >= 30) { x.headway = x.lead.dist / (kmh / 3.6); follow.push(x); }
+    if (x.lead && x.lead.src !== 'baklys' && kmh >= 30) { x.headway = x.lead.dist / (kmh / 3.6); follow.push(x); }
   }
   const med = a => { const b = a.slice().sort((p, q) => p - q); return b.length ? b[Math.floor(b.length / 2)] : NaN; };
   // Kort avstand: tidsluke under closeSec i minst minKmh, sammenhengende (med bro over korte hull)
@@ -135,7 +147,7 @@ export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1
     maxCars: Math.max(0, ...s.map(x => x.cars || 0)), peopleSeen: s.filter(x => x.people > 0).length,
     people: s.filter(x => x.people > 0).slice(0, 1000).map(x => Math.round(x.t * 10) / 10),   // tider med folk i bildet (samkjøring med gangfelt)
     // Så veikameraet noe? Andel bilder med bil, folk eller feltlinje, og andel mørke bilder (k0.6.3)
-    seenShare: Math.round(s.filter(x => x.lead || x.cars > 0 || x.people > 0 || (x.lane && (x.lane.l || x.lane.r))).length / s.length * 100) / 100,
+    seenShare: Math.round(s.filter(x => (x.lead && x.lead.src !== 'baklys') || x.cars > 0 || x.people > 0 || (x.lane && (x.lane.l || x.lane.r))).length / s.length * 100) / 100,
     darkShare: s.some(x => Number.isFinite(x.lum)) ? Math.round(s.filter(x => Number.isFinite(x.lum) && x.lum < 40).length / s.filter(x => Number.isFinite(x.lum)).length * 100) / 100 : null,
     tailLeads: s.filter(x => x.lead && x.lead.src === 'baklys').length,   // bilen foran funnet med baklysene (mørke)
     medianLum: s.some(x => Number.isFinite(x.lum)) ? med(s.filter(x => Number.isFinite(x.lum)).map(x => x.lum)) : null,

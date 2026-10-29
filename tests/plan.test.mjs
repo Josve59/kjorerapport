@@ -85,3 +85,21 @@ test('plan: bil nær foran gir oftere veiblikk', () => {
   assert.ok(p.stats.byReason['bil nær foran'] >= 4, JSON.stringify(p.stats.byReason));
   assert.ok(log.length > 0);
 });
+
+test('plan: speilblikk holder førerkameraet i 8 s (feltskifte på vei)', () => {
+  const p = createPlanner(planSettings({ focus: ['limits'] }));   // veiblikk hvert 6. s i 70 km/t
+  let facing = 'user', switchUntil = -1, target = 'user';
+  const log = [];
+  for (let now = 0; now <= 60; now += 0.125) {
+    const switching = now < switchUntil;
+    if (!switching && facing !== target) facing = target;
+    if (!switching && facing === 'user' && now >= 20 && now < 20.5) p.glance(now, 'left');   // blikk i venstre speil
+    if (!switching && facing === 'user' && now >= 40 && now < 40.5) p.glance(now, 'rear');   // bakspeil: rutine, ingen hold
+    const { want } = p({ now, kmh: 70, yaw: 0, hacc: 0, facing, switching });
+    if (!switching && want !== facing && want !== target) { target = want; switchUntil = now + SWITCH; }
+    log.push({ now, facing: switching ? 'blind' : facing });
+  }
+  assert.ok(log.filter(x => x.now >= 20.5 && x.now < 28).every(x => x.facing === 'user'), 'førerkameraet holdes etter speilblikket');
+  assert.equal(p.stats.holds['speilblikk'], 1);
+  assert.ok(log.some(x => x.now > 41 && x.now < 50 && x.facing === 'environment'), 'bakspeil gir ikke hold');
+});

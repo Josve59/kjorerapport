@@ -599,7 +599,7 @@ function roadSection(r, ctx = {}) {
   const rd = r.road, cp = ctx.cameraPlan || null, ln = rd.lane || null;
   const pc = v => Math.round(v * 100) + ' %';
   const REASON = { veiblikk: 'jevne veiblikk', nedbremsing: 'ved nedbremsing', 'bil nær foran': 'bil nær foran' };
-  const HOLD = { 'kryss nærmer seg': 'inn mot kryss', igangkjøring: 'ved igangkjøring' };
+  const HOLD = { 'kryss nærmer seg': 'inn mot kryss', igangkjøring: 'ved igangkjøring', speilblikk: 'etter speilblikk' };
   const holds = cp && cp.holds ? Object.entries(cp.holds).filter(([, n]) => n > 0) : [];
   const blindRoad = rd.seenShare === 0 && rd.samples >= 10;
   const cov = Math.round(rd.coverage * 100);
@@ -607,7 +607,7 @@ function roadSection(r, ctx = {}) {
   return `<section class="card" id="road-section">
       <h2 class="card-title">${icon('layers')}Veien foran <span class="beta-tag">Test</span></h2>
       ${blindRoad ? `<p class="notice">Veikameraet fant verken biler eller feltlinjer i ${rd.samples} bilder.${rd.darkShare === null || rd.darkShare >= 0.5 ? `${rd.darkShare === null ? ' Var det mørkt?' : ' Bildene var mørke.'} Sett telefonen så nær frontruta som mulig og demp skjermen i bilen: refleks i ruta er det største problemet om kvelden.` : ' Sjekk at bakkameraet ser fram gjennom frontruta og ikke er dekket.'}</p>` : ''}
-      ${!blindRoad && rd.darkShare !== null && rd.darkShare >= 0.5 ? `<p class="muted small">Kjørt i mørket (${pc(rd.darkShare)} av veibildene). Bilen foran ble funnet med baklysene i ${rd.tailLeads || 0} bilder, og feltlinjene i lyset fra frontlyktene.</p>` : ''}
+      ${!blindRoad && rd.darkShare !== null && rd.darkShare >= 0.5 ? `<p class="muted small">Kjørt i mørket (${pc(rd.darkShare)} av veibildene). Baklys-par ble funnet i ${rd.tailLeads || 0} bilder. De brukes ikke til avstand ennå: de må først sjekkes mot testbilder.</p>` : ''}
       <div class="road-stats">
         <div><strong>${rd.medianHeadway !== null ? n1(rd.medianHeadway) + ' s' : '–'}</strong><span class="muted small">vanlig avstand i tid</span></div>
         <div><strong>${rd.medianDist !== null ? rd.medianDist + ' m' : '–'}</strong><span class="muted small">vanlig avstand</span></div>

@@ -65,3 +65,22 @@ test('veikamera i mørket: baklysene gir bilen foran og avstanden', () => {
   const two = detectTaillights(nightFrame([[160 - far / 2, 120, 2], [160 + far / 2, 120, 2], [160 - near / 2, 170, 4], [160 + near / 2, 170, 4]]), w, h);
   assert.ok(two.lead && Math.abs(two.lead.dist - 10) < 1.2, JSON.stringify(two));
 });
+
+test('veikamera i mørket: mange lys, lys mellom paret og store flekker gir ingen bil foran', () => {
+  const w = 320, h = 240, f = focalPx(w, h);
+  const sep = TAIL_SEP * f / 15;
+  // Tredje lys mellom: to biler side om side
+  assert.equal(detectTaillights(nightFrame([[160 - sep / 2, 150, 3], [160, 150, 3], [160 + sep / 2, 150, 3]]), w, h).lead, null);
+  // Mange lys (kø i flere felt): tvetydig
+  const many = [];
+  for (let k = 0; k < 10; k++) many.push([20 + k * 30, 150 + (k % 2) * 25, 2]);
+  const r = detectTaillights(nightFrame(many), w, h);
+  assert.equal(r.lead, null); assert.ok(r.cluttered);
+  // Store, uskarpe flekker tett sammen (glare): ingen bil
+  assert.equal(detectTaillights(nightFrame([[150, 150, 9], [176, 150, 9]]), w, h).lead, null);
+});
+
+test('veikamera: beste bil-score lagres også under grensen, men telles ikke', () => {
+  const r = processDetections([{ cls: 'car', score: 0.22, x: 300, y: 300, w: 60, h: 50 }], 640, 480);
+  assert.equal(r.cars, 0); assert.equal(r.lead, null); assert.equal(r.best, 0.22);
+});
