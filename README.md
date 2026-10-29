@@ -128,6 +128,16 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.6.4 – road camera in the dark
+
+Much of the practice driving in Norway happens in the dark, so the road camera keeps looking at night (k0.6.3 made looks 3× rarer in the dark; that is removed). Only bright frames with nothing to see (camera covered) make looks a little rarer. To make the dark frames useful:
+
+- **Lane lines:** when the analysis area is dark (mean below 60), the contrast is stretched first (5th percentile → 30, 99th → 230), so lines lit by the headlights reach the thresholds. Tested on real night photos from Wikimedia Commons and on darkened day frames.
+- **Car in front: taillights.** The object detector (trained on day images) finds little at night. `detectTaillights` in `road.js` finds pairs of red lights at the same height near the horizon in the middle of the image. The threshold follows the brightest red in the frame. Distance = 1.45 m × focal length / spacing. It found the car in a close night photo where the detector found nothing.
+- **Brighter frame for the detector** at night (canvas filter, or a gamma table where filters are missing). This found an extra car in the night windscreen photo.
+- **Optional test snapshots** (camera screen, off by default): one 96×72 greyscale JPEG per road look, stored in the road sample and included in the export, so the night detection can be tuned on real frames from the phone.
+- The report gives advice for dark drives: put the phone as close to the windscreen as possible and dim the car's screen, because reflections in the glass are the biggest problem.
+
 ## What's new in k0.6.3 – camera switching fixed after the first switching drives (29 Oct)
 
 Two drives in the evening with «Bytt» (7 and 24 min) showed:

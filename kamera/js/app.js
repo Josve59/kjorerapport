@@ -13,7 +13,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.3';
+export const APP_VERSION = 'k0.6.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -102,7 +102,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k2`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k3`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -398,13 +398,14 @@ async function renderCamera() {
   // Veikamera (test)
   const roadHelp = {
     off: 'Bare førerkameraet.',
-    switch: 'Bytter etter farten: under 15 km/t bare fører, i by 6 s fører og 2 s vei, over 50 km/t 4 s fører og 3 s vei. Samkjøringen tar høyde for hullene.',
+    switch: 'Bytter etter situasjonen: føreren i svinger, inn mot kryss og de første sekundene etter igangkjøring. Korte veiblikk i by, lengre på rett vei. Like ofte i mørket, med baklys og feltlinjer i lyset fra frontlyktene. Samkjøringen tar høyde for hullene.',
     road: 'Bare veikameraet under kjøring. Speil og skulderblikk blir ikke målt.'
   };
   document.querySelectorAll('input[name=roadMode]').forEach(r => {
     r.checked = r.value === (getSettings().roadMode || 'off');
     r.onchange = () => { saveSettings({ ...getSettings(), roadMode: r.value }); $('#road-mode-help').textContent = roadHelp[r.value]; };
   });
+  { const el = $('#roadThumbs'); el.checked = !!getSettings().roadThumbs; el.onchange = () => saveSettings({ ...getSettings(), roadThumbs: el.checked }); }
   $('#road-mode-help').textContent = roadHelp[getSettings().roadMode || 'off'];
   const prevTest = getSettings().dualTest;
   if (prevTest) { $('#dual-result').innerHTML = dualTestHtml(prevTest); $('#btn-dual-share').hidden = false; }
@@ -964,8 +965,13 @@ async function startRecording(replay = null) {
     const mode = settings.roadMode || 'off';
     roadModeNow = mode; planner = null;
     if (mode !== 'off') {
-      let lastRoad = null;
+      let lastRoad = null, lastRoadAt = 0, lookFrames = 0;
       roadUnsub = cam.onRoad(r => {
+        // Testbilder (valgfritt): ett lite svart-hvitt bilde per veiblikk, fra 4. bilde (lyset innstilt)
+        const nowS = performance.now() / 1000;
+        lookFrames = nowS - lastRoadAt > 1.2 ? 1 : lookFrames + 1;
+        lastRoadAt = nowS;
+        if (settings.roadThumbs && lookFrames === 4) { const img = cam.snapshot(); if (img) r.img = img; }
         if (recorder) recorder.addRoad(r);
         if (planner) planner.road(r);   // så veikameraet noe? Styrer hvor ofte veien sjekkes
         lastRoad = r;

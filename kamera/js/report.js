@@ -606,7 +606,8 @@ function roadSection(r, ctx = {}) {
   const cam = r.camera;
   return `<section class="card" id="road-section">
       <h2 class="card-title">${icon('layers')}Veien foran <span class="beta-tag">Test</span></h2>
-      ${blindRoad ? `<p class="notice">Veikameraet fant verken biler eller feltlinjer i ${rd.samples} bilder.${rd.darkShare !== null && rd.darkShare >= 0.5 ? ' Bildene var mørke: om kvelden ser bakkameraet lite gjennom frontruta, og refleks fra skjermer inne i bilen gjør det verre.' : rd.darkShare === null ? ' Var det mørkt? Om kvelden ser bakkameraet lite gjennom frontruta.' : ' Sjekk at bakkameraet ser fram gjennom frontruta og ikke er dekket.'} Prøv veikameraet i dagslys.</p>` : ''}
+      ${blindRoad ? `<p class="notice">Veikameraet fant verken biler eller feltlinjer i ${rd.samples} bilder.${rd.darkShare === null || rd.darkShare >= 0.5 ? `${rd.darkShare === null ? ' Var det mørkt?' : ' Bildene var mørke.'} Sett telefonen så nær frontruta som mulig og demp skjermen i bilen: refleks i ruta er det største problemet om kvelden.` : ' Sjekk at bakkameraet ser fram gjennom frontruta og ikke er dekket.'}</p>` : ''}
+      ${!blindRoad && rd.darkShare !== null && rd.darkShare >= 0.5 ? `<p class="muted small">Kjørt i mørket (${pc(rd.darkShare)} av veibildene). Bilen foran ble funnet med baklysene i ${rd.tailLeads || 0} bilder, og feltlinjene i lyset fra frontlyktene.</p>` : ''}
       <div class="road-stats">
         <div><strong>${rd.medianHeadway !== null ? n1(rd.medianHeadway) + ' s' : '–'}</strong><span class="muted small">vanlig avstand i tid</span></div>
         <div><strong>${rd.medianDist !== null ? rd.medianDist + ' m' : '–'}</strong><span class="muted small">vanlig avstand</span></div>

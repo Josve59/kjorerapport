@@ -2,7 +2,8 @@
    1) i nedre del av bildet letes det etter lyse striper (lysere enn omgivelsene, passe brede) rad for rad,
    2) en rett linje tilpasses på hver side med RANSAC (tåler støy fra biler, skilt og skygger),
    3) avstanden mellom linjene nederst i bildet gir skalaen (et kjørefelt er rundt 3,25 m i Norge).
-   Virker best på merket vei i dagslys. Mørke, snø, regn og slitte linjer gir ofte ingen treff.
+   Virker best på merket vei i dagslys. I mørke bilder strekkes kontrasten først (k0.6.4), så linjer i lyset
+   fra frontlyktene blir med. Snø, regn og slitte linjer gir ofte ingen treff.
    Ren funksjon på gråtonebilde, så den kan testes i Node. Ingen bilder lagres. */
 
 export const LANE_WIDTH = 3.25;
@@ -12,6 +13,8 @@ export const LANE_WIDTH = 3.25;
    (positiv = til høyre, forutsatt at kameraet står midt i bilen), width = feltbredde i piksler nederst. */
 export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, seed = 7 } = {}) {
   const y0 = Math.floor(h * top), y1 = Math.floor(h * bottom);
+  const night = stretchDark(gray, w, y0, y1);
+  if (night) gray = night;
   const minW = Math.max(1, Math.round(w * 0.006)), maxW = Math.max(3, Math.round(w * 0.08));
   const pts = [];
   for (let y = y0; y <= y1; y += 1) {
@@ -83,7 +86,22 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, seed = 7 } =
     if (width > w * 0.25) offset = Math.round(((w / 2) - (left.xBottom + right.xBottom) / 2) / width * LANE_WIDTH * 100) / 100;
     else width = null;
   }
-  return { left, right, offset, width, points: pts.length };
+  return { left, right, offset, width, points: pts.length, night: !!night };
+}
+
+/* Mørkt analyseområde (snitt under 60): strekk lysstyrken så de 5 % mørkeste blir 30 og de 1 % lyseste 230.
+   Returnerer et nytt bilde, eller null når bildet er lyst nok eller helt uten kontrast (ingenting å se). */
+function stretchDark(gray, w, y0, y1) {
+  const hist = new Uint32Array(256);
+  let n = 0, sum = 0;
+  for (let i = y0 * w; i < (y1 + 1) * w && i < gray.length; i++) { hist[gray[i]]++; sum += gray[i]; n++; }
+  if (!n || sum / n >= 60) return null;
+  const pct = q => { let c = 0; for (let v = 0; v < 256; v++) { c += hist[v]; if (c >= q * n) return v; } return 255; };
+  const lo = pct(0.05), hi = pct(0.99);
+  if (hi - lo < 20) return null;
+  const k = 200 / (hi - lo), out = new Uint8Array(gray.length);
+  for (let i = 0; i < gray.length; i++) out[i] = Math.max(0, Math.min(255, Math.round((gray[i] - lo) * k + 30)));
+  return out;
 }
 
 /* RGBA (fra canvas) → gråtoner */

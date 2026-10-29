@@ -68,15 +68,15 @@ test('plan: førerkameraet inn mot kryss og ved igangkjøring', () => {
   assert.ok(log.some(x => x.now > 50 && x.facing === 'environment'), 'veiblikk igjen etterpå');
 });
 
-test('plan: ser veikameraet ingenting i mørket, blir det færre og kortere veiblikk', () => {
-  const lightP = createPlanner(planSettings()), darkP = createPlanner(planSettings());
+test('plan: i mørket ser veikameraet like ofte; bare lyse blikk uten noe å se gir færre', () => {
+  const lightP = createPlanner(planSettings()), darkP = createPlanner(planSettings()), emptyP = createPlanner(planSettings());
   const drive = () => ({ kmh: 70, yaw: 0, hacc: 0 });
   run(lightP, 300, drive, () => ({ cars: 1, people: 0, lead: null, lane: { l: true, r: true, offset: 0 }, lum: 120 }));
-  const log = run(darkP, 300, drive, () => ({ cars: 0, people: 0, lead: null, lane: { l: false, r: false, offset: null }, lum: 12 }));
+  run(darkP, 300, drive, () => ({ cars: 0, people: 0, lead: null, lane: { l: false, r: false, offset: null }, lum: 12 }));
+  run(emptyP, 300, drive, () => ({ cars: 0, people: 0, lead: null, lane: { l: false, r: false, offset: null }, lum: 120 }));
   assert.ok(darkP.stats.dark >= 3 && lightP.stats.dark === 0);
-  assert.ok(darkP.stats.looks < lightP.stats.looks * 0.6, `mørkt ${darkP.stats.looks} mot lyst ${lightP.stats.looks} veiblikk`);
-  assert.ok(darkP.stats.road < lightP.stats.road / 3, 'mye mindre veikameratid i mørket');
-  assert.ok(log.filter(x => x.reason === 'mørkt').length > 0, 'mørke veiblikk avsluttes tidlig');
+  assert.ok(darkP.stats.looks >= lightP.stats.looks, `mørkt ${darkP.stats.looks} mot lyst ${lightP.stats.looks} veiblikk`);
+  assert.ok(emptyP.stats.looks < lightP.stats.looks, `tomt ${emptyP.stats.looks} mot lyst ${lightP.stats.looks}`);
 });
 
 test('plan: bil nær foran gir oftere veiblikk', () => {

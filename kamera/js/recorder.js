@@ -267,8 +267,8 @@ export class Recorder {
     if (!this.running) return;
     this.roadN++;
     if (r.lead) this.roadLead++;
-    this.buf.road.push({ t: this.now(), cars: r.cars, people: r.people, lead: r.lead ? { cls: r.lead.cls, dist: r.lead.dist, wpx: r.lead.wpx } : null,
-      lane: r.lane ? { l: r.lane.l, r: r.lane.r, offset: r.lane.offset } : null, lum: Number.isFinite(r.lum) ? r.lum : null });
+    this.buf.road.push({ t: this.now(), cars: r.cars, people: r.people, lead: r.lead ? { cls: r.lead.cls, dist: r.lead.dist, wpx: r.lead.wpx, ...(r.lead.src ? { src: r.lead.src } : {}) } : null,
+      lane: r.lane ? { l: r.lane.l, r: r.lane.r, offset: r.lane.offset } : null, lum: Number.isFinite(r.lum) ? r.lum : null, ...(r.night ? { night: true } : {}), ...(typeof r.img === 'string' ? { img: r.img } : {}) });
   }
 
   mark(cat = 'annet') {

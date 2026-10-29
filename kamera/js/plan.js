@@ -8,7 +8,7 @@ export const LOOK = 1.5;          // et veiblikk: så lenge veikameraet faktisk 
 export const LOOK_LONG = 2.5;     // rett vei i jevn fart, når veikameraet har sett noe nyttig: flere bilder per bytte
 export const SWITCH = 0.85;       // målt byttetid (første bilde + lys innstilt), iPhone, 27. okt.
 const MIN_FRONT = 5, MAX_FRONT = 26;   // førerkameraet minst ~60 % av tiden, veikameraet minst ~5 %
-const DARK_LUM = 40;              // snittlysstyrke (0–255) der veikameraet nesten ikke finner noe
+const DARK_LUM = 40;              // snittlysstyrke (0–255) for et mørkt bilde (natt)
 
 /* Førerprofil fra de siste turene (opptil 5) for samme fører. results: [{ camera, road, stats }].
    Andelene glattes (Beta(1,1)), så få feltskifter ikke gir bastante tall. */
@@ -66,8 +66,8 @@ export function planShares(front) {
      8 s etter igangkjøring: der skjer speil- og skulderblikkene.
    - Veiblikk på rett vei i jevn fart, der plassering og avstand kan måles. Plassering og avstand endrer seg
      sakte, så stikkprøver holder. Over 60 km/t og når forrige blikk så noe: lengre blikk (2,5 s).
-   - Ser veikameraet ingenting (mørkt, eller ingen linjer og biler), blir det færre veiblikk, så føreren
-     ikke mister blikk for ingenting. Et mørkt blikk avsluttes tidlig. */
+   - I mørket ser veikameraet like ofte (k0.6.4: mye av øvingen i Norge skjer i mørket). Bare i lyse bilder
+     der det ikke finnes noe å se (kameraet dekket, feil vei) blir det litt færre veiblikk. */
 export function createPlanner(settings) {
   let phase = 'user', since = -Infinity, lastTurn = -Infinity, lastLookEnd = -Infinity, lastSlow = -Infinity, holdUntil = -Infinity;
   let reason = 'start', lookLen = LOOK, look = null;
@@ -88,13 +88,11 @@ export function createPlanner(settings) {
     look = null;
   };
   const hold = (why, now, until) => { if (now >= holdUntil || reason !== why) stats.holds[why] = (stats.holds[why] || 0) + 1; holdUntil = Math.max(holdUntil, until); reason = why; };
-  // Hvor nyttig veikameraet har vært: mørkt de 3 siste blikkene → sjeldnere, ingenting de 4 siste → litt sjeldnere
+  // Hvor nyttig veikameraet har vært: ingenting i de 4 siste lyse blikkene → litt sjeldnere. Mørke blikk teller ikke.
   const quality = () => {
-    const last = n => recent.length >= n ? recent.slice(-n) : null;
-    const d = last(3), u = last(4);
-    if (d && d.every(q => q.dark)) return { factor: 3, cap: 60, dark: true };
-    if (u && u.every(q => !q.useful)) return { factor: 1.6, cap: 40, dark: false };
-    return { factor: 1, cap: MAX_FRONT, dark: false };
+    const u = recent.length >= 4 ? recent.slice(-4) : null;
+    if (u && u.every(q => !q.useful && !q.dark)) return { factor: 1.6, cap: 40 };
+    return { factor: 1, cap: MAX_FRONT };
   };
   const fn = s => {
     const { now, kmh = NaN, yaw = 0, hacc = 0, facing = phase, switching = false, lastLead = null } = s;
@@ -112,16 +110,13 @@ export function createPlanner(settings) {
     const before = hist.find(h => now - h.now <= 4);
     const slowing = before && kmh < 50 && before.kmh - kmh >= 8 && hacc <= 3;
     if (phase === 'environment') {
-      const q = quality();
-      const darkNow = look && look.n >= 3 && !look.useful && look.darkN === look.n;
-      if (slow || turning || slowing || darkNow || now - since >= lookLen) endLook(now, slow ? 'lav fart' : turning ? 'sving' : slowing ? 'kryss nærmer seg' : darkNow ? 'mørkt' : 'veiblikk ferdig');
-      else if (q.dark && look && look.n >= 3 && !look.useful) endLook(now, 'mørkt');
+      if (slow || turning || slowing || now - since >= lookLen) endLook(now, slow ? 'lav fart' : turning ? 'sving' : slowing ? 'kryss nærmer seg' : 'veiblikk ferdig');
       return { want: phase, reason };
     }
     if (slow) { reason = 'lav fart'; return { want: 'user', reason }; }
     const q = quality();
-    // Kraftig vannrett akselerasjon uten sving = nedbremsing (eller kraftig gass): se veien med en gang (ikke i mørke)
-    if (hacc > 3 && !turning && kmh >= 20 && now - lastLookEnd > 3 && !q.dark) { startLook(now, 'nedbremsing'); return { want: phase, reason }; }
+    // Kraftig vannrett akselerasjon uten sving = nedbremsing (eller kraftig gass): se veien med en gang
+    if (hacc > 3 && !turning && kmh >= 20 && now - lastLookEnd > 3) { startLook(now, 'nedbremsing'); return { want: phase, reason }; }
     if (turning || now - lastTurn < 3) { reason = 'sving'; return { want: 'user', reason }; }
     if (now - lastSlow < 8) { hold('igangkjøring', now, lastSlow + 8); return { want: 'user', reason }; }
     if (slowing) hold('kryss nærmer seg', now, now + 4);
@@ -131,7 +126,7 @@ export function createPlanner(settings) {
     if (near) interval = Math.min(interval, 5);
     if (now - Math.max(since, lastLookEnd) >= interval) {
       const last = recent[recent.length - 1];
-      const long = kmh >= 60 && now - lastTurn > 10 && !q.dark && (!last || last.useful);
+      const long = kmh >= 60 && now - lastTurn > 10 && (!last || last.useful);
       startLook(now, near && interval === 5 ? 'bil nær foran' : 'veiblikk', long);
       return { want: phase, reason };
     }

@@ -31,6 +31,62 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80 } = {}
   return { lead, cars, people };
 }
 
+/* Bilen foran i mørket (k0.6.4): baklysene. Bilgjenkjenningen (lært på dagsbilder) ser lite om natten, men to
+   røde lys side om side er lett å finne. Avstanden anslås ut fra avstanden mellom lysene (rundt 1,45 m på en
+   personbil). rgba: Uint8ClampedArray fra canvas, w×h (gjerne 320×240). Returnerer { lead, pairs }.
+   Ren funksjon, kan testes i Node. */
+export const TAIL_SEP = 1.45;
+export function detectTaillights(rgba, w, h, { fovDeg = 66, maxDist = 80 } = {}) {
+  // Rødt lys: sterk rød kanal, tydelig mer rødt enn grønt og blått. Overeksponerte kjerner (hvite) kobles
+  // til blobben gjennom den røde glorien rundt.
+  const y0 = Math.floor(h * 0.3), y1 = Math.floor(h * 0.95);
+  // Terskelen følger det sterkeste røde i bildet, så lysene finnes også når kameraet eksponerer mørkt.
+  let maxR = 0;
+  for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (rgba[i] - Math.max(rgba[i + 1], rgba[i + 2]) > 20 && rgba[i] > maxR) maxR = rgba[i]; }
+  const thr = Math.max(70, Math.min(110, 0.55 * maxR)), diff = Math.max(25, 0.4 * thr);
+  const mask = new Uint8Array(w * h);
+  for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
+    if (r > thr && r - Math.max(g, b) > diff) mask[y * w + x] = 1;
+  }
+  // Sammenhengende områder (4-naboer)
+  const blobs = [], stack = [];
+  for (let p = 0; p < mask.length; p++) {
+    if (mask[p] !== 1) continue;
+    let n = 0, sx = 0, sy = 0, minX = w, maxX = 0, minY = h, maxY = 0;
+    mask[p] = 2; stack.push(p);
+    while (stack.length) {
+      const q = stack.pop(), x = q % w, y = (q - x) / w;
+      n++; sx += x; sy += y;
+      if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+      for (const nb of [q - 1, q + 1, q - w, q + w]) {
+        if (nb < 0 || nb >= mask.length || mask[nb] !== 1) continue;
+        if ((nb === q - 1 || nb === q + 1) && Math.floor(nb / w) !== y) continue;
+        mask[nb] = 2; stack.push(nb);
+      }
+    }
+    const bw = maxX - minX + 1, bh = maxY - minY + 1;
+    // Lys, ikke lange striper (refleks, bremselys-lister) eller store røde flater (bil, skilt)
+    if (n >= 2 && n <= w * h * 0.03 && bw <= bh * 4 && bh <= bw * 3) blobs.push({ x: sx / n, y: sy / n, n, size: Math.max(bw, bh) });
+  }
+  // Par: samme høyde, lik størrelse, passe avstand
+  const f = focalPx(w, h, fovDeg);
+  let lead = null, pairs = 0;
+  for (let i = 0; i < blobs.length; i++) for (let j = i + 1; j < blobs.length; j++) {
+    const a = blobs[i], b = blobs[j];
+    const dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y), s = (a.size + b.size) / 2;
+    if (dy > Math.max(2, 0.6 * s) || Math.max(a.n, b.n) > 3 * Math.min(a.n, b.n) || dx < 1.5 * s || dx > w * 0.6) continue;
+    pairs++;
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    // Bilen foran: midt i bildet, og lysene rundt horisonten eller litt under (ikke gatelys, ikke panseret)
+    if (cx < w * 0.35 || cx > w * 0.65 || cy < h * 0.35 || cy > h * 0.8) continue;
+    const dist = TAIL_SEP * f / dx;
+    if (dist > maxDist) continue;
+    if (!lead || dx > lead.wpx) lead = { cls: 'car', dist: Math.round(dist * 10) / 10, wpx: Math.round(dx), score: 0.5, src: 'baklys' };
+  }
+  return { lead, pairs };
+}
+
 function kmhAt(points, t) {
   if (!points.length) return NaN;
   let lo = 0, hi = points.length - 1;
@@ -81,6 +137,7 @@ export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1
     // Så veikameraet noe? Andel bilder med bil, folk eller feltlinje, og andel mørke bilder (k0.6.3)
     seenShare: Math.round(s.filter(x => x.lead || x.cars > 0 || x.people > 0 || (x.lane && (x.lane.l || x.lane.r))).length / s.length * 100) / 100,
     darkShare: s.some(x => Number.isFinite(x.lum)) ? Math.round(s.filter(x => Number.isFinite(x.lum) && x.lum < 40).length / s.filter(x => Number.isFinite(x.lum)).length * 100) / 100 : null,
+    tailLeads: s.filter(x => x.lead && x.lead.src === 'baklys').length,   // bilen foran funnet med baklysene (mørke)
     medianLum: s.some(x => Number.isFinite(x.lum)) ? med(s.filter(x => Number.isFinite(x.lum)).map(x => x.lum)) : null,
     lane: laneStats(s),
     close: episodes,

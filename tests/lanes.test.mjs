@@ -41,3 +41,14 @@ test('feltlinjer: ingen linjer gir ingen treff', () => {
   assert.equal(r.right, null);
   assert.equal(r.offset, null);
 });
+
+test('feltlinjer: i mørket (linjer i lyset fra frontlyktene) finnes linjene etter kontraststrekk', () => {
+  const w = 160, h = 120;
+  const day = road(w, h, [[38, 74], [127, 86]]);
+  const dark = day.map(v => Math.round(v * 0.3));   // asfalt ~22, linjer ~63: under dagsterskelen på 90
+  const r = detectLanes(dark, w, h);
+  assert.ok(r.night && r.left && r.right, JSON.stringify({ night: r.night, l: !!r.left, r: !!r.right }));
+  const d = detectLanes(day, w, h);
+  assert.ok(Math.abs(r.offset - d.offset) < 0.15, `natt ${r.offset} dag ${d.offset}`);
+  assert.equal(detectLanes(new Uint8Array(w * h).fill(8), w, h).left, null, 'helt svart bilde: ingen linjer');
+});

@@ -2,7 +2,7 @@
    med gjenkjenning av biler og folk. Testversjonen kan bytte mellom dem under kjøring.
    Ingen bilder lagres eller sendes – bare hodets vinkler og tall om veien går videre til appen. */
 import { poseFromMatrix } from './camera.js';
-import { processDetections } from './road.js';
+import { processDetections, detectTaillights } from './road.js';
 import { detectLanes, toGray } from './lanes.js';
 
 const BASE = new URL('../../vendor/mediapipe/', import.meta.url).href;   // delt med hovedappen
@@ -16,6 +16,8 @@ let firstAfterSwitch = false;   // første analyse etter et bytte er treg (model
 let fpsWanted = 8, fpsNow = 8;
 const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0 };   // glattet tid per analyse
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
+let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null;
+const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
 const switchLog = [];   // byttetider (ms) denne økten
 
 export const state = () => ({ loaded: !!landmarker, roadLoaded: !!detector, running: !!stream, facing, switching,
@@ -187,12 +189,16 @@ export function startLoop(fps = 8) {
     } else {
       if (!detector) return;
       let road = null;
+      // Nattmodus (k0.6.4): bilgjenkjenningen får et lysere bilde, og baklysene letes etter i tillegg
+      const dark = lastLum !== null && lastLum < NIGHT_LUM;
       const t1 = performance.now();
       try {
-        const res = detector.detectForVideo(video, ts);
+        const src = dark ? brightFrame(video) : video;
+        const sw = src === video ? video.videoWidth : src.width, sh = src === video ? video.videoHeight : src.height;
+        const res = detector.detectForVideo(src, ts);
         const dets = (res && res.detections || []).map(d => ({ cls: d.categories[0].categoryName, score: d.categories[0].score,
           x: d.boundingBox.originX, y: d.boundingBox.originY, w: d.boundingBox.width, h: d.boundingBox.height }));
-        road = processDetections(dets, video.videoWidth, video.videoHeight);
+        road = processDetections(dets, sw, sh);
       } catch { road = null; }
       ema('roadMs', performance.now() - t1);
       // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
@@ -206,11 +212,24 @@ export function startLoop(fps = 8) {
           // Lysstyrke 0–255 (snitt): forteller om veikameraet ser noe i det hele tatt (mørke, refleks i ruta)
           let sum = 0; for (let i = 0; i < gray.length; i++) sum += gray[i];
           road.lum = Math.round(sum / gray.length);
+          lastLum = road.lum;
           const ln = detectLanes(gray, W, H);
           road.lane = { l: !!ln.left, r: !!ln.right, offset: ln.offset };
           if (laneOverlay) drawLanes(laneOverlay, ln, W, H);
         } catch { /* ingen feltlinjer */ }
         ema('laneMs', performance.now() - t2);
+        if (dark || road.lum < NIGHT_LUM) {
+          try {
+            const W = 320, H = Math.round(320 * video.videoHeight / video.videoWidth);
+            if (!tailCanvas || tailCanvas.height !== H) { tailCanvas = document.createElement('canvas'); tailCanvas.width = W; tailCanvas.height = H; tailCtx = tailCanvas.getContext('2d', { willReadFrequently: true }); }
+            tailCtx.drawImage(video, 0, 0, W, H);
+            const tl = detectTaillights(tailCtx.getImageData(0, 0, W, H).data, W, H);
+            road.night = true;
+            road.tail = tl.pairs;
+            if (!road.lead && tl.lead) road.lead = tl.lead;
+            road.cars = Math.max(road.cars, tl.pairs);
+          } catch { /* ingen baklys */ }
+        }
       }
       adapt(); firstAfterSwitch = false;
       frames++;
@@ -222,6 +241,37 @@ export function startLoop(fps = 8) {
 }
 
 export function stopLoop() { if (timer) clearTimeout(timer); timer = null; }
+
+/* Testbilde (valgfritt, for feilsøking): 96×72 svart-hvitt JPEG av det veikameraet ser nå, eller null. */
+export function snapshot() {
+  if (!video || facing !== 'environment' || video.videoWidth === 0) return null;
+  const c = document.createElement('canvas'); c.width = 96; c.height = Math.round(96 * video.videoHeight / video.videoWidth);
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(video, 0, 0, c.width, c.height);
+  const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { const v = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8; d[i] = d[i + 1] = d[i + 2] = v; }
+  g.putImageData(img, 0, 0);
+  return c.toDataURL('image/jpeg', 0.6);
+}
+
+/* Lysere kopi av kamerabildet til bilgjenkjenningen i mørket. Bruker canvas-filter der det finnes,
+   ellers en oppslagstabell (gamma 0,5: mørke toner løftes mest). */
+const GAMMA = new Uint8ClampedArray(256).map((_, v) => Math.round(255 * Math.pow(v / 255, 0.5)));
+function brightFrame(v) {
+  const W = Math.min(640, v.videoWidth), H = Math.round(W * v.videoHeight / v.videoWidth);
+  if (!brightCanvas || brightCanvas.width !== W || brightCanvas.height !== H) {
+    brightCanvas = document.createElement('canvas'); brightCanvas.width = W; brightCanvas.height = H;
+    brightCtx = brightCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  if ('filter' in brightCtx) { brightCtx.filter = 'brightness(2.2) contrast(1.15)'; brightCtx.drawImage(v, 0, 0, W, H); brightCtx.filter = 'none'; }
+  else {
+    brightCtx.drawImage(v, 0, 0, W, H);
+    const img = brightCtx.getImageData(0, 0, W, H), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { d[i] = GAMMA[d[i]]; d[i + 1] = GAMMA[d[i + 1]]; d[i + 2] = GAMMA[d[i + 2]]; }
+    brightCtx.putImageData(img, 0, 0);
+  }
+  return brightCanvas;
+}
 
 function drawLanes(cv, ln, W, H) {
   const g = cv.getContext('2d');
