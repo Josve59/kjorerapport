@@ -236,8 +236,9 @@ export function detectManeuvers(L, vs, yaw) {
   // 1) Let etter et rent sidetrinn på 2,5–5 m i GPS-sporet over 4–8 s, i minst 45 km/t hele veien ±10 s
   //    (veien tilpasses med et tredjegradspolynom, så jevne svinger går greit).
   //    Svingraten langs veien må være jevn (standardavvik under 0,8 °/s) i hele vinduet.
-  // 2) Gyroskopet må vise sideforflytning til samme side, minst 1,5 m. Retningsavdrift i vinduet trekkes
-  //    fra først, fordi et feltskifte ender i samme retning som det startet.
+  // 2) Gyroskopet må vise sideforflytning til samme side, minst 2,2 m (v0.9.2; før 1,5 m). Retningsavdrift i
+  //    vinduet trekkes fra først, fordi et feltskifte ender i samme retning som det startet. Mot 24 merkede
+  //    feltskifter (29. okt.) fant 2,2 m like mange ekte, uten de to falske på landevei.
   // Under 45 km/t telles ikke feltskifter: der er det oftest kjøring rundt parkerte biler.
   const fast = vs.map(v => v >= 12.5);
   const gyroShift = (a, b) => {
@@ -270,7 +271,7 @@ export function detectManeuvers(L, vs, yaw) {
       while (ga > 0 && L[i].t - L[ga - 1].t <= 1) ga--;
       while (gb < n - 1 && L[gb + 1].t - L[j].t <= 1) gb++;
       const gy = gyroShift(ga, gb);
-      if (Math.sign(gy) !== Math.sign(g.step) || Math.abs(gy) < 1.5) continue;
+      if (Math.sign(gy) !== Math.sign(g.step) || Math.abs(gy) < 2.2) continue;
       cands.push({ i, j, step: g.step, gy, q: Math.abs(g.step) / (g.rms + 0.1) });
     }
   }

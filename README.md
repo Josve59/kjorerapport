@@ -128,6 +128,15 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.2 / k0.6.6 – lane changes checked against 24 marks
+
+On the 29 Oct 19:46 drive the companion marked 24 lane changes, most of them in a back-and-forth test on the E6 in the second half. The first half was country road with almost no lane changes.
+
+- The sensors found 12 of the 24. Most misses were in the rapid sequence: lane changes 5–20 s apart, where the ±10 s road fit and the 20 s spacing cannot separate them, or where the GPS step was 5–7 m (two lanes, or GPS error).
+- Shorter windows (±6–7 s, 8–10 s spacing) found up to 19 of 24, but tripled the unmarked detections, also on drives with almost no lane changes. So they were not adopted.
+- **Adopted:** the gyro must confirm at least 2.2 m of sideways movement (was 1.5 m). This finds the same 12 of 24, removes both false lane changes on the country road, and gives fewer unmarked ones on the other drives (18:45 from 9 to 6, 17:07 from 2 to 1).
+- Where the companion marks lane changes, the report already uses the marks as ground truth for mirror and shoulder checks.
+
 ## What's new in k0.6.5 – after the 40-minute night drive (29 Oct, 24 marked lane changes)
 
 - **False taillight pairs:** all 416 «cars in front» came from the taillight search. They gave a median headway of 0.5 s on the motorway, which is not true, and triggered 107 extra road looks («bil nær foran»). The driver camera then saw the driver only 66 % of the time. The taillight search now rejects cluttered frames (more than 8 red lights), pairs with a third light between them, large blurry spots, and distances under 4 m. Taillight leads are still stored, but **not used** for distance, «for nær» or planning until test snapshots show that they are right.
