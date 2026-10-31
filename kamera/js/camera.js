@@ -195,6 +195,16 @@ export function eyesOffRoad(samples, calib, { points = [], t0 = 0, minDur = 2, m
   return out;
 }
 
+/* Hvor langt fra kalibreringens «rett fram» føreren faktisk så i fart (median over 40 km/t), i grader.
+   Over 12° passer ikke kalibreringen (k0.6.10: turen til Storlien hadde 28°). null uten nok data. */
+export function calibOffset(samples, calib, points, t0) {
+  if (!calib || !calib.ok || !points || points.length < 3) return null;
+  const kmhAt = t => { let lo = 0, hi = points.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (points[m].t < t) lo = m + 1; else hi = m; } return points[lo].kmh; };
+  const fast = samples.filter(x => x.ok && Number.isFinite(x.yaw) && kmhAt(x.t - t0) >= 40);
+  if (fast.length < 150) return null;
+  return Math.round(Math.hypot(median(fast.map(x => x.yaw)) - calib.forward.yaw, median(fast.map(x => x.pitch)) - calib.forward.pitch));
+}
+
 /* Vurdering mot turen. points: rapportens punkter (t relativt til start), t0: start i opptakstid.
    laneChanges: rapportens feltskifter. Returnerer tall og sjekker for rapporten. */
 export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChanges = [], markedLanes = [] } = {}) {
@@ -254,6 +264,7 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
     longestGap: longest, longestGapAt: longestAt - longest,
     lane, laneSource: marked.length ? 'marks' : 'sensors', start, calibrated: !!(calib && calib.ok),
     drift: Math.round(forwardDrift(valid, calib).max * 10) / 10,
+    calibOff: calibOffset(valid, calib, points, t0),
     away: eyesOffRoad(valid, calib, { points, t0 })
   };
 }

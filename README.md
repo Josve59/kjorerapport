@@ -128,6 +128,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.6 / k0.6.10 – after Trondheim → Storlien (31 Oct, 92 min, daylight)
+
+- **The object detector never worked on the iPhone.** In all drives so far (2994 frames at night, 795 in daylight) it found nothing, not even weak detections. Yet the 50 test snapshots from the Storlien drive show cars clearly. It now runs on the **CPU and gets a canvas copy** of the camera frame instead of the video element. In a browser test this found 12 detections (best score 0.82) in a portrait frame, in about 50 ms. Usage is logged in `cameraPlan.perf` (`detector`, `detFrames`, `detAny`), so the next drive shows whether it works.
+- **A wrong calibration blocked the road camera.** «Rett fram» was calibrated 28° away from where the driver actually looked while driving. The live classification thought the driver looked in the left mirror 63 % of the time, and the hold after mirror glances stopped almost all road looks (road camera 2 % of the time, 54 looks in 92 minutes). Now «rett fram» is taken from the median head pose above 40 km/h over the last ~60 s. If it is more than 12° from the calibration, the calibration is considered wrong: there is no mirror-glance hold, a warning shows on the recording screen, and the report says the mirror and shoulder numbers are uncertain (`camera.calibOff`). The other drives were 4–9°, so they are not affected.
+- **The live speed-limit log was not exported** (`drive.liveLimits`). It was stored on the phone but left out of `exportPayload`, so a drive exported again now includes it.
+- **Daylight lane lines work:** both lines were found in 265 of 795 frames, one line in 604. The car was typically 0.28 m right of the lane centre. The road frames were portrait (480×640).
+
 ## What's new in 0.9.5 / k0.6.9 – «Oppdater nå» shows up again
 
 - **Bug:** if a new version had already been downloaded in the background (the last time the app was open), the app waited for an «installed» event that had already happened. So the «Oppdater nå» banner never appeared. A waiting version is now shown at once.

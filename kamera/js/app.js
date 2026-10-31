@@ -14,7 +14,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.9';
+export const APP_VERSION = 'k0.6.10';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -103,7 +103,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k5`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k6`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -352,20 +352,33 @@ function cameraPlan(settings) {
     return planner({ now: performance.now() / 1000, kmh, limit: liveLimitNow, yaw: r ? r.liveYaw : 0, hacc: r ? r.liveHacc : 0, facing: st.facing, switching: !st.ready, lastLead }).want;
   };
 }
-/* Speilblikk til planen: førerkameraet klassifiserer hodet mot kalibreringen. «Rett fram» kan ha flyttet seg
-   litt siden kalibreringen, så det følges med et sakte glidende snitt av hodestillinger nær rett fram. */
-let liveCalib = null, liveOff = { yaw: 0, pitch: 0 };
+/* Speilblikk til planen: førerkameraet klassifiserer hodet mot kalibreringen. «Rett fram» finnes fra hvor
+   føreren faktisk ser når bilen er i fart (median av de siste ~60 s over 40 km/t), og hele kalibreringen
+   forskyves dit. Turen til Storlien (31. okt.): «rett fram» var kalibrert 27° unna, appen trodde føreren så i
+   venstre speil 63 % av tiden, og holdet etter speilblikk stoppet nesten alle veiblikk (k0.6.10).
+   Før «rett fram» er funnet (de første ~20 s i fart) gir blikk ikke hold. */
+let liveCalib = null, liveOff = null, fwdBuf = [], fwdN = 0;
 function glanceToPlan(p) {
   if (!planner || !liveCalib || !p || !Number.isFinite(p.yaw)) return;
-  const f = liveCalib.forward, dy = p.yaw - f.yaw - liveOff.yaw, dp = p.pitch - f.pitch - liveOff.pitch;
-  if (Math.hypot(dy, dp) < 10) { liveOff.yaw += dy * 0.01; liveOff.pitch += dp * 0.01; }
+  const kmh = recorder && Number.isFinite(recorder.speed) ? recorder.speed * 3.6 : NaN;
+  if (kmh >= 40 && Math.abs(recorder.liveYaw || 0) < 4) {
+    fwdBuf.push(p); if (fwdBuf.length > 450) fwdBuf.shift();
+    if (++fwdN % 40 === 0 && fwdBuf.length >= 150) {
+      const med = k => { const a = fwdBuf.map(x => x[k]).sort((x, y) => x - y); return a[a.length >> 1]; };
+      liveOff = { yaw: med('yaw') - liveCalib.forward.yaw, pitch: med('pitch') - liveCalib.forward.pitch };
+    }
+  }
+  if (!liveOff) return;
+  // Mer enn 12° unna: kalibreringen passer ikke (speilene i forhold til rett fram er også usikre). Ingen hold.
+  if (Math.hypot(liveOff.yaw, liveOff.pitch) > 12) return;
   planner.glance(performance.now() / 1000, classifyPose({ yaw: p.yaw - liveOff.yaw, pitch: p.pitch - liveOff.pitch }, liveCalib));
 }
 /* Det som lagres med turen om kameratiden: plan, fordeling, grunner for veiblikk og hvor rask telefonen var. */
 function cameraInfo() {
   if (roadModeNow === 'off') return null;
   const st = cam.state(), sw = st.switches;
-  const info = { mode: roadModeNow, switchAvg: sw.length ? Math.round(sw.reduce((a, b) => a + b, 0) / sw.length) : null, switches: sw.length, perf: st.perf, roadSize: st.roadSize };
+  const info = { mode: roadModeNow, switchAvg: sw.length ? Math.round(sw.reduce((a, b) => a + b, 0) / sw.length) : null, switches: sw.length, perf: st.perf, roadSize: st.roadSize,
+    calibOff: liveOff ? Math.round(Math.hypot(liveOff.yaw, liveOff.pitch)) : null };
   if (planner) {
     const p = planner.stats, tot = p.front + p.road + p.blind || 1;
     Object.assign(info, { settings: planner.settings, looks: p.looks, byReason: p.byReason, holds: p.holds, usefulLooks: p.useful, darkLooks: p.dark,
@@ -972,6 +985,7 @@ async function startRecording(replay = null) {
       if (st.returnedFromGap) gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`;
       const msgs = [];
       if (st.wakeLockFailed) msgs.push('Sett Autolås til Aldri mens du kjører.');
+      if (liveOff && Math.hypot(liveOff.yaw, liveOff.pitch) > 12) msgs.push(`Kalibreringen passer ikke: føreren ser ${Math.round(Math.hypot(liveOff.yaw, liveOff.pitch))}° unna «rett fram». Speil og skulder blir usikre. Stopp og kalibrer på nytt når det passer.`);
       if (!(st.kmh >= 3) && st.gpsFresh) { if (stillSince === null) stillSince = st.elapsed; } else if (st.kmh >= 3) stillSince = null;
       if (stillSince !== null && st.elapsed - stillSince >= 600) msgs.push(`Dere har stått stille i ${Math.round((st.elapsed - stillSince) / 60)} minutter. Er dere framme eller tar pause? Hold inne Stopp for å avslutte turen, og start en ny etterpå. Da blir rapportene ryddigere.`);
       if (gapMsg) msgs.push(gapMsg);
@@ -994,7 +1008,7 @@ async function startRecording(replay = null) {
     camPill.textContent = 'Kamera: på'; camPill.dataset.state = 'ok';
     const mode = settings.roadMode || 'off';
     roadModeNow = mode; planner = null;
-    liveCalib = getCalib(); liveOff = { yaw: 0, pitch: 0 };
+    liveCalib = getCalib(); liveOff = null; fwdBuf = []; fwdN = 0;
     if (mode !== 'off') {
       let lastRoad = null, lastRoadAt = 0, lookFrames = 0;
       roadUnsub = cam.onRoad(r => {

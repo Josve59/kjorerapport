@@ -14,7 +14,7 @@ let settleUntil = 0;   // bilder rett etter et bytte er for mørke (lyset stille
 let settleLum = null, settleStable = 0;   // veikameraet: vent til lysstyrken er stabil (i mørke tar det lenger tid)
 let firstAfterSwitch = false;   // første analyse etter et bytte er treg (modellen starter på nytt) og telles ikke i farten
 let fpsWanted = 8, fpsNow = 8;
-const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0 };   // glattet tid per analyse
+const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0, detector: null, detFrames: 0, detAny: 0 };   // glattet tid per analyse
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
 let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
@@ -66,8 +66,10 @@ export function loadRoadModel(onStatus = () => {}) {
       runningMode: 'VIDEO', scoreThreshold: 0.15, maxResults: 12,   // road.js teller bare fra 0,35
       categoryAllowlist: ['car', 'truck', 'bus', 'motorcycle', 'bicycle', 'person']
     });
-    try { detector = await ObjectDetector.createFromOptions(fileset, opts('GPU')); }
-    catch { detector = await ObjectDetector.createFromOptions(fileset, opts('CPU')); }
+    // CPU (k0.6.10): med GPU fant gjenkjenningen ikke én eneste bil på iPhone på noen tur (heller ikke svake treff),
+    // selv om testbildene fra turen til Storlien viser biler tydelig. På CPU, med et kopiert bilde, virket den i testene.
+    detector = await ObjectDetector.createFromOptions(fileset, opts('CPU'));
+    perf.detector = 'cpu';
     onStatus('Gjenkjenning av biler klar');
     return detector;
   })().catch(err => { loadingRoad = null; throw err; });
@@ -196,9 +198,11 @@ export function startLoop(fps = 8) {
       roadSize = `${video.videoWidth}x${video.videoHeight}`;
       const t1 = performance.now();
       try {
-        const src = dark ? brightFrame(video) : video;
-        const sw = src === video ? video.videoWidth : src.width, sh = src === video ? video.videoHeight : src.height;
+        // Alltid en kopi i canvas (lysnet i mørket): gjenkjenningen fikk ingenting ut av video-elementet direkte på iPhone
+        const src = brightFrame(video, dark);
+        const sw = src.width, sh = src.height;
         const res = detector.detectForVideo(src, ts);
+        perf.detFrames++; if (res && res.detections && res.detections.length) perf.detAny++;
         const dets = (res && res.detections || []).map(d => ({ cls: d.categories[0].categoryName, score: d.categories[0].score,
           x: d.boundingBox.originX, y: d.boundingBox.originY, w: d.boundingBox.width, h: d.boundingBox.height }));
         road = processDetections(dets, sw, sh);
@@ -259,12 +263,13 @@ export function snapshot() {
 /* Lysere kopi av kamerabildet til bilgjenkjenningen i mørket. Bruker canvas-filter der det finnes,
    ellers en oppslagstabell (gamma 0,5: mørke toner løftes mest). */
 const GAMMA = new Uint8ClampedArray(256).map((_, v) => Math.round(255 * Math.pow(v / 255, 0.5)));
-function brightFrame(v) {
+function brightFrame(v, bright = true) {
   const W = Math.min(640, v.videoWidth), H = Math.round(W * v.videoHeight / v.videoWidth);
   if (!brightCanvas || brightCanvas.width !== W || brightCanvas.height !== H) {
     brightCanvas = document.createElement('canvas'); brightCanvas.width = W; brightCanvas.height = H;
     brightCtx = brightCanvas.getContext('2d', { willReadFrequently: true });
   }
+  if (!bright) { brightCtx.drawImage(v, 0, 0, W, H); return brightCanvas; }
   if ('filter' in brightCtx) { brightCtx.filter = 'brightness(2.2) contrast(1.15)'; brightCtx.drawImage(v, 0, 0, W, H); brightCtx.filter = 'none'; }
   else {
     brightCtx.drawImage(v, 0, 0, W, H);

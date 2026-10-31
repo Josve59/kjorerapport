@@ -645,6 +645,7 @@ function cameraSection(r, ctx = {}) {
   const verdict = c.perMin >= 6 ? 'Hyppige speilblikk – bra!' : c.perMin >= 3 ? 'Jevnlige speilblikk. Prøv å sjekke speilene litt oftere.' : 'Få speilblikk registrert. Øv på å sjekke speilene hvert 5.–8. sekund.';
   return `<section class="card" id="camera-section">
       <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Test</span></h2>
+      ${c.calibOff > 12 ? `<p class="notice">Kalibreringen passet ikke: i fart så føreren ${c.calibOff}° unna kalibreringens «rett fram». Tallene for speil og skulderblikk under er derfor usikre. Kalibrer på nytt med telefonen i holderen der den skal stå, og se rett fram på veien i første steg.</p>` : ''}
       <div class="cam-stats">
         <div><strong>${n1(c.perMin)}</strong><span class="muted small">speilblikk per minutt</span></div>
         <div><strong>${c.longestGap > 5 ? Math.round(c.longestGap) + ' s' : '–'}</strong><span class="muted small">lengste tid uten speil</span></div>
@@ -659,7 +660,7 @@ function cameraSection(r, ctx = {}) {
       ${c.start ? `<h3 class="mt">Igangkjøring</h3><p>${yes(c.start.mirror, 'Speil før start')} ${yes(c.start.shoulder, 'Skulderblikk venstre')}</p>` : ''}
       ${c.lane.length ? `<h3 class="mt">Feltskifter</h3>${c.laneSource === 'marks' ? '<p class="muted small">Feltskiftene ledsageren merket. Speil 15–1 s før merket og skulderblikk 12–0 s før.</p>' : ''}<ul class="cam-lanes">${c.lane.map(l => `<li><span>${mss(l.t)} · ${l.dir ? 'til ' + esc(l.dir) : 'merket'}</span><span>${yes(l.mirror, 'Speil')} ${yes(l.shoulder, 'Skulder')}</span></li>`).join('')}</ul>` : ''}
       <p class="muted small">Kameraet så ansiktet ${cov} % av tiden${cov < 70 ? ' – flytt holderen så ansiktet er bedre synlig' : ''}. Dette er en test: kameraet ser hodet, ikke øynene, så korte blikk med bare øynene blir ikke med. Bruk tallene som en pekepinn og snakk med ledsageren om dem.</p>
-      ${c.drift > 6 ? `<p class="notice">«Rett fram» flyttet seg ${Math.round(c.drift)}° i forhold til kalibreringen. Appen justerer for det, men kalibrer på nytt hvis holderen er flyttet.</p>` : ''}
+      ${c.calibOff > 12 ? '' : c.drift > 6 ? `<p class="notice">«Rett fram» flyttet seg ${Math.round(c.drift)}° i forhold til kalibreringen. Appen justerer for det, men kalibrer på nytt hvis holderen er flyttet.</p>` : ''}
       ${ctx.onCalibrate ? '<button type="button" class="link" id="btn-calib-drive">Stemmer ikke speilene? Kalibrer på nytt for denne turen</button>' : ''}
     </section>`;
 }

@@ -139,7 +139,7 @@ export async function exportPayload(drive) {
   return {
     drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
       marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '',
-      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], calib: drive.calib || null, cameraPlan: drive.cameraPlan || null },
+      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], calib: drive.calib || null, cameraPlan: drive.cameraPlan || null, liveLimits: drive.liveLimits || [] },
     input: raw
   };
 }
