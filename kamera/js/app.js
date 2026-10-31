@@ -14,13 +14,13 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.8';
+export const APP_VERSION = 'k0.6.9';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
 let recorder = null;
 let stopPrecheck = null;
-let swUpdateReady = null;
+let swUpdateReady = null, swReg = null;
 let installPrompt = null;
 let persistState = null;
 
@@ -1458,6 +1458,15 @@ function init() {
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = () => { location.hash = '#/'; });
   setupLongPress($('#btn-stop'), finishRecording);
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
+  $('#btn-check-update').onclick = async () => {
+    if (!swReg) { toast('Oppdatering virker bare i appen fra nettadressen, ikke lokalt.', { type: 'info' }); return; }
+    if (swUpdateReady) { $('#update-banner').hidden = false; toast('Ny versjon er klar. Trykk «Oppdater nå».', { type: 'ok' }); return; }
+    toast('Ser etter ny versjon …', { ms: 1500 });
+    try { await swReg.update(); } catch { toast('Fant ikke nettet. Prøv igjen med nett.', { type: 'error' }); return; }
+    if (swReg.waiting || swUpdateReady) { swUpdateReady = swUpdateReady || swReg.waiting; $('#update-banner').hidden = false; toast('Ny versjon er klar. Trykk «Oppdater nå».', { type: 'ok' }); }
+    else if (swReg.installing) toast('Laster ned ny versjon … «Oppdater nå» kommer om noen sekunder.', { type: 'ok', ms: 4000 });
+    else toast(`Du har siste versjon (${APP_VERSION}).`, { type: 'ok' });
+  };
   $('#version').textContent = `Kjørerapport Kamera versjon ${APP_VERSION}`;
   window.addEventListener('hashchange', route);
   let printOpened = [];
@@ -1476,8 +1485,21 @@ function init() {
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('./sw.js').then(reg => {
-    const track = w => { if (!w) return; w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) { swUpdateReady = w; $('#update-banner').hidden = false; } }); };
+    swReg = reg;
+    const ready = w => { swUpdateReady = w; $('#update-banner').hidden = false; };
+    // En ny versjon som allerede ligger og venter (lastet ned forrige gang appen var åpen), vises med en gang.
+    // Før ventet appen på en hendelse som allerede hadde skjedd, så «Oppdater nå» kom aldri (v0.9.5).
+    const track = w => {
+      if (!w) return;
+      if (w.state === 'installed' && navigator.serviceWorker.controller) { ready(w); return; }
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) ready(w); });
+    };
     track(reg.waiting); reg.addEventListener('updatefound', () => track(reg.installing));
+    // iPhone henter appen fram fra bakgrunnen uten å laste den på nytt, og ser da ikke etter ny versjon.
+    // Se etter når appen blir synlig, og hver halvtime.
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    setInterval(check, 30 * 60 * 1000);
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing || (recorder && recorder.running)) return;

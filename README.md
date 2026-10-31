@@ -128,6 +128,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.5 / k0.6.9 – «Oppdater nå» shows up again
+
+- **Bug:** if a new version had already been downloaded in the background (the last time the app was open), the app waited for an «installed» event that had already happened. So the «Oppdater nå» banner never appeared. A waiting version is now shown at once.
+- **The iPhone does not check for updates when the app comes back from the background.** It now checks each time the app becomes visible, and every 30 minutes.
+- **New button «Se etter ny versjon»** under the version number. It checks right away and says what it found.
+- **The service worker installs past the browser cache** (`cache: 'reload'`). GitHub Pages caches for 10 minutes, so a new version could otherwise get old files.
+
 ## What's new in 0.9.4 / k0.6.8 – active speed limit on the screen
 
 - **The active speed limit is shown while recording:** a speed-limit sign with the current speed next to it. It comes from Statens vegvesen (NVDB, the same data as the report). `js/livelimit.js` fetches the speed-limit segments for an area of about 4.5 × 4.5 km around the car, and fetches the next area in the background before the car reaches the edge. Each GPS fix is matched to the nearest segment within 25 m. The value changes only when 2 of the last 3 fixes agree, so it does not flicker at junctions. Without network, or where NVDB has no data (Sweden), the sign shows «–» with an explanation. It needs «Veidata» on, which is the default.

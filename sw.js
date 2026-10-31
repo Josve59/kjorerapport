@@ -1,6 +1,6 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.9.4';
+const VERSION = 'v0.9.5';
 const CACHE = 'kjorerapport-' + VERSION;
 const ML_CACHE = 'kjorerapport-ml';   // ansiktsgjenkjenningen, beholdes mellom versjoner
 const ASSETS = [
@@ -13,7 +13,8 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  // Forbi nettleserens mellomlager (GitHub Pages: 10 min), ellers kan en ny versjon få med seg gamle filer
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))));
 });
 
 self.addEventListener('activate', e => {
