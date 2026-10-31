@@ -608,7 +608,8 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .mark-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .mark-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 74px; border-radius: 16px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 800; font-size: .95rem; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform .1s, background .2s; }
 .mark-btn:active { transform: scale(.96); }
-.mark-btn[data-cat="felt"] { grid-column: 1 / -1; flex-direction: row; min-height: 56px; border-style: dashed; }
+.mark-btn[data-cat="felt"] { grid-column: span 2; flex-direction: row; min-height: 56px; border-style: dashed; }
+.mark-btn[data-cat="grense"] { flex-direction: row; min-height: 56px; border-style: dashed; font-size: .85rem; gap: 6px; }
 .undo-mark { display: flex; align-items: center; gap: 8px; margin: 10px auto 0; }
 .lane-truth { display: flex; gap: 8px; align-items: flex-start; font-weight: 700; }
 .mark-btn.flash { background: var(--ink); color: var(--bg); border-color: var(--ink); }
@@ -785,3 +786,13 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 
 .along-list { padding-left: 18px; margin: 6px 0; }
 .along-list li { margin-bottom: 4px; }
+
+/* Aktiv fartsgrense under opptak (v0.9.4): skiltet ser ut som et ekte fartsgrenseskilt i begge temaer */
+.rec-limit { margin: 6px 0 2px; }
+.rec-limit-row { display: flex; align-items: center; justify-content: center; gap: 22px; }
+.limit-sign { width: 84px; height: 84px; border-radius: 50%; border: 9px solid #d4001a; background: #fff; color: #111;
+  display: grid; place-items: center; font-weight: 800; font-size: 2.1rem; font-variant-numeric: tabular-nums; box-sizing: border-box; }
+.limit-sign.none { border-color: #9a9a9a; color: #777; }
+.rec-speed-box { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
+.rec-speed { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+#rec-limit-note { margin-top: 4px; }

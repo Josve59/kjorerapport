@@ -125,6 +125,13 @@
     <div class="rec-stats">
       <p class="rec-elapsed" id="rec-elapsed" aria-label="Tid">0:00</p>
       <p class="rec-dist" id="rec-dist">0,0 km</p>
+      <div class="rec-limit" id="rec-limit" hidden>
+        <div class="rec-limit-row">
+          <span class="limit-sign none" id="rec-limit-sign" aria-label="Fartsgrense">–</span>
+          <span class="rec-speed-box"><span class="rec-speed" id="rec-speed">–</span><span class="muted small">km/t</span></span>
+        </div>
+        <p class="muted small" id="rec-limit-note">Henter fartsgrense …</p>
+      </div>
       <div class="rec-pills">
         <span class="pill rec-gps" id="rec-gps" data-state="wait">GPS: venter …</span>
         <span class="pill" id="rec-marks-pill" hidden></span>
@@ -303,7 +310,7 @@
       <p class="muted small">Når disse er på, sendes rutens posisjoner til tjenestene når en rapport åpnes med nett. Ingenting annet sendes. Svarene lagres på telefonen, så rapporten virker uten nett etterpå.</p>
       <div class="toggle-list">
         <label class="toggle"><span><strong>Kart</strong><br><span class="muted small">Kartbakgrunn fra Kartverket. Av: ruten tegnes uten kart.</span></span><input type="checkbox" class="switch" id="netMap"></label>
-        <label class="toggle"><span><strong>Veidata</strong><br><span class="muted small">Fra Statens vegvesen (NVDB): fartsgrenser, stoppskilt, vikeplikt, rundkjøringer, gangfelt, fartsdempere, lyskryss og skiltene Barn og Farlig sving.</span></span><input type="checkbox" class="switch" id="netLimits"></label>
+        <label class="toggle"><span><strong>Veidata</strong><br><span class="muted small">Fra Statens vegvesen (NVDB): fartsgrensen på skjermen under kjøring, fartsgrenser, stoppskilt, vikeplikt, rundkjøringer, gangfelt, fartsdempere, lyskryss og skiltene Barn og Farlig sving.</span></span><input type="checkbox" class="switch" id="netLimits"></label>
         <label class="toggle"><span><strong>Stedsnavn</strong><br><span class="muted small">Gatenavn på hendelser og merker, fra Kartverket.</span></span><input type="checkbox" class="switch" id="netNames"></label>
       </div>
     </section>
@@ -376,7 +383,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.6.7</p>
+    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.6.8</p>
   </section>
 
 </main>

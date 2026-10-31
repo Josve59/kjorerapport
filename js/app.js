@@ -9,9 +9,10 @@ import { esc, km, n0, n1, date, duration } from './format.js';
 import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
+import { createLiveLimit } from './livelimit.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.3';
+export const APP_VERSION = '0.9.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -804,6 +805,12 @@ async function startRecording(replay = null) {
   markCount.textContent = '';
   renderMarkGrid({});
   let gapMsg = '', stillSince = null;   // lang pause: minn om å stoppe turen (v0.9.3, før Trondheim–Storlien)
+  // Aktiv fartsgrense fra NVDB (v0.9.4), når «Veidata» er på. Endringene lagres med turen for sammenligning.
+  const live = !replay && settings.netLimits !== false ? createLiveLimit() : null;
+  const liveLog = [];
+  liveLimitNow = null;
+  const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed');
+  limitBox.hidden = !live;
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
     appVersion: APP_VERSION,
@@ -813,6 +820,17 @@ async function startRecording(replay = null) {
     replay,
     onStatus: st => {
       if (st.replayDone) { finishRecording(); return; }
+      if (live) {
+        const res = live.update(st.pos);
+        liveLimitNow = res.limit;
+        limitSign.textContent = res.limit ?? '–';
+        limitSign.classList.toggle('none', res.limit === null);
+        limitNote.textContent = res.limit !== null ? 'Fartsgrense (Statens vegvesen)' : res.status === 'feil' ? 'Fartsgrense: ingen nett' : res.status === 'ukjent' ? 'Fartsgrense ukjent her' : 'Henter fartsgrense …';
+        speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
+        const last = liveLog[liveLog.length - 1];
+        if (!last || last.limit !== res.limit) liveLog.push({ t: Math.round(st.elapsed), limit: res.limit });
+        if (recorder) recorder.liveLimits = liveLog;
+      }
       elapsed.textContent = fmtClock(st.elapsed);
       dist.textContent = km(st.distanceM / 1000);
       if (st.gpsError) { gps.textContent = 'GPS: ingen signal'; gps.dataset.state = 'fail'; }
@@ -872,6 +890,7 @@ function renderMarkGrid() {
   grid.querySelectorAll('.mark-btn').forEach(b => b.onclick = () => {
     if (!recorder || !recorder.running) return;
     const m = recorder.mark(b.dataset.cat);
+    if (m && m.cat === 'grense') m.note = `Appen viste ${liveLimitNow ?? '–'} km/t`;
     if (m) { vibrate(40); b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 450); }
   });
 }
@@ -885,6 +904,7 @@ function fmtClock(sec) {
   return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(r).padStart(2, '0');
 }
 
+let liveLimitNow = null;   // aktiv fartsgrense under opptak (km/t eller null)
 async function finishRecording() {
   if (!recorder || !recorder.running) return;
   const rec = recorder;
@@ -892,6 +912,7 @@ async function finishRecording() {
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
   const drive = await rec.stop();
+  if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
   if (camUnsub) { camUnsub(); camUnsub = null; }
   cam.stopCamera();
   $('#record').classList.remove('busy');

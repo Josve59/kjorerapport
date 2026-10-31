@@ -175,24 +175,31 @@ async function nvdbPage(url, signal) {
   return res.json();
 }
 
+/* Fartsgrensestrekninger i ett kartutsnitt {minLon, minLat, maxLon, maxLat}. Brukes også under kjøring (livelimit.js). */
+export async function fetchLimitBox(b, signal) {
+  const segments = [];
+  const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
+  let url = `${NVDB}?kartutsnitt=${box}&srid=4326&inkluder=egenskaper,geometri&segmentering=true&antall=800`;
+  for (let page = 0; page < 10 && url; page++) {
+    const data = await nvdbPage(url, signal);
+    for (const o of data.objekter || []) {
+      const e = (o.egenskaper || []).find(x => x.id === 2021);
+      const pts = o.geometri && o.geometri.wkt ? parseWkt(o.geometri.wkt) : [];
+      if (e && Number.isFinite(e.verdi) && pts.length > 1) segments.push({ limit: e.verdi, pts });
+    }
+    const md = data.metadata || {};
+    url = md.returnert && md.returnert >= (md.sidestørrelse || 800) && md.neste && md.neste.href ? md.neste.href : null;
+  }
+  return segments;
+}
+
 /* Henter fartsgrensestrekninger for alle utsnitt. Returnerer [{limit, pts}]. */
 export async function fetchSpeedLimitSegments(points, onProgress = () => {}, signal) {
   const boxes = routeBoxes(points);
   const segments = [];
   let done = 0;
   await pool(boxes, 4, async b => {
-    const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
-    let url = `${NVDB}?kartutsnitt=${box}&srid=4326&inkluder=egenskaper,geometri&segmentering=true&antall=800`;
-    for (let page = 0; page < 10 && url; page++) {
-      const data = await nvdbPage(url, signal);
-      for (const o of data.objekter || []) {
-        const e = (o.egenskaper || []).find(x => x.id === 2021);
-        const pts = o.geometri && o.geometri.wkt ? parseWkt(o.geometri.wkt) : [];
-        if (e && Number.isFinite(e.verdi) && pts.length > 1) segments.push({ limit: e.verdi, pts });
-      }
-      const md = data.metadata || {};
-      url = md.returnert && md.returnert >= (md.sidestørrelse || 800) && md.neste && md.neste.href ? md.neste.href : null;
-    }
+    for (const s of await fetchLimitBox(b, signal)) segments.push(s);
     done++;
     onProgress(done / boxes.length);
   });

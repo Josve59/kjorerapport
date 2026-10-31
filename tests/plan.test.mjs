@@ -103,3 +103,12 @@ test('plan: speilblikk holder førerkameraet i 8 s (feltskifte på vei)', () => 
   assert.equal(p.stats.holds['speilblikk'], 1);
   assert.ok(log.some(x => x.now > 41 && x.now < 50 && x.facing === 'environment'), 'bakspeil gir ikke hold');
 });
+
+test('plan: fartsgrensen forteller veitypen (landevei 70+ gir lange veiblikk, by 50 gir korte)', () => {
+  const rural = createPlanner(planSettings()), town = createPlanner(planSettings());
+  const a = run(rural, 120, () => ({ kmh: 62, limit: 80, yaw: 0, hacc: 0 }));
+  const b = run(town, 120, () => ({ kmh: 62, limit: 50, yaw: 0, hacc: 0 }));
+  const road = log => log.filter(x => x.facing === 'environment').length * 0.125;
+  assert.ok(rural.stats.looks > town.stats.looks, `landevei ${rural.stats.looks} mot by ${town.stats.looks} veiblikk`);
+  assert.ok(road(a) / rural.stats.looks > road(b) / town.stats.looks + 0.5, 'lengre veiblikk på landevei');
+});

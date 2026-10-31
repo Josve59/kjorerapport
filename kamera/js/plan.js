@@ -97,7 +97,10 @@ export function createPlanner(settings) {
     return { factor: 1, cap: MAX_FRONT };
   };
   const fn = s => {
-    const { now, kmh = NaN, yaw = 0, hacc = 0, facing = phase, switching = false, lastLead = null } = s;
+    const { now, kmh = NaN, limit = null, yaw = 0, hacc = 0, facing = phase, switching = false, lastLead = null } = s;
+    // Veitype fra den aktive fartsgrensen (k0.6.8): 70 og over er landevei/motorvei, der plassering og avstand
+    // kan måles i ro. Uten fartsgrense brukes farten (over 50 km/t).
+    const openRoad = Number.isFinite(limit) ? limit >= 70 : kmh >= 50;
     if (since === -Infinity) since = now;
     // Tid telles fra kameraet faktisk gir brukbare bilder
     if (switching || facing !== phase) since = Math.max(since, now);
@@ -123,12 +126,12 @@ export function createPlanner(settings) {
     if (now - lastSlow < 8) { hold('igangkjøring', now, lastSlow + 8); return { want: 'user', reason }; }
     if (slowing) hold('kryss nærmer seg', now, now + 4);
     if (now < holdUntil) return { want: 'user', reason };
-    let interval = Math.min(q.cap, (kmh >= 50 ? settings.fast : settings.city) * q.factor);
+    let interval = Math.min(q.cap, (openRoad ? settings.fast : settings.city) * q.factor);
     const near = lastLead && lastLead.headway < 1.5 && now - lastLead.at < 30;
     if (near) interval = Math.min(interval, 5);
     if (now - Math.max(since, lastLookEnd) >= interval) {
       const last = recent[recent.length - 1];
-      const long = kmh >= 60 && now - lastTurn > 10 && (!last || last.useful);
+      const long = openRoad && kmh >= 60 && now - lastTurn > 10 && (!last || last.useful);
       startLook(now, near && interval === 5 ? 'bil nær foran' : 'veiblikk', long);
       return { want: phase, reason };
     }

@@ -72,7 +72,9 @@ export const MARK_CATS = {
   fart: { label: 'Fart', icon: 'speed' },
   annet: { label: 'Annet', icon: 'flag' },
   // Ikke en merknad, men fasit: ledsageren trykker like etter hvert feltskifte (v0.7.6)
-  felt: { label: 'Feltskifte', icon: 'shift', neutral: true }
+  felt: { label: 'Feltskifte', icon: 'shift', neutral: true },
+  // Fasit for fartsgrensen (v0.9.4): trykk når appens fartsgrense ikke stemmer med skiltet eller bilen
+  grense: { label: 'Feil grense', icon: 'speed', neutral: true }
 };
 /* Merker som ikke er tilbakemelding på kjøringen */
 export const isRemark = m => m.cat !== 'annet' && !(MARK_CATS[m.cat] && MARK_CATS[m.cat].neutral);

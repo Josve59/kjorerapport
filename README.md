@@ -128,6 +128,15 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.4 / k0.6.8 – active speed limit on the screen
+
+- **The active speed limit is shown while recording:** a speed-limit sign with the current speed next to it. It comes from Statens vegvesen (NVDB, the same data as the report). `js/livelimit.js` fetches the speed-limit segments for an area of about 4.5 × 4.5 km around the car, and fetches the next area in the background before the car reaches the edge. Each GPS fix is matched to the nearest segment within 25 m. The value changes only when 2 of the last 3 fixes agree, so it does not flicker at junctions. Without network, or where NVDB has no data (Sweden), the sign shows «–» with an explanation. It needs «Veidata» on, which is the default.
+- Simulated along E14 Trondheim–Storlien with live NVDB: known for 90 % of the route (the rest is Sweden), the same as the analysis after the drive 98 % of the time, and about 0.3 s per fetch. Checked from the browser (CORS works): E6 at Trondheim gives 90.
+- Each change of the shown limit is stored with the drive (`drive.liveLimits`, [{t, limit}]).
+- **New mark «Feil grense»** (neutral, not feedback on the driving): press it when the app's limit does not match the sign or the car. The mark's note stores what the app showed («Appen viste 80 km/t»), so it can be compared with NVDB and the sign afterwards.
+- **Camera plan (k0.6.8):** the active speed limit gives the road type. 70 and above counts as open road, with the fast interval and long looks. Below 70 counts as town. Without a limit, the speed is used as before (over 50 km/h).
+- The privacy page and the «Veidata» setting say that an area around the car is sent during the drive.
+
 ## What's new in 0.9.3 / k0.6.7 – ready for long drives (Trondheim–Storlien)
 
 - **Road data for long drives:** before, routes over about 45 km (30 map boxes) failed with «Turen er for lang». Now routes over 40 km use 3 km boxes, with a maximum of 160 (about 450 km), and the speed limits are fetched 4 at a time. Live test on the 106 km E14 route Trondheim–Storlien: 35 boxes, speed limits in 2 s (known for 90 % of the route; the rest is mainly the Swedish part, which NVDB does not cover), other road data in 14 s.

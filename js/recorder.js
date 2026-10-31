@@ -335,6 +335,7 @@ export class Recorder {
       distanceM: this.distance,
       acc: this.acc,
       kmh: Number.isFinite(this.speed) ? this.speed * 3.6 : NaN,
+      pos: this.lastFix ? { lat: this.lastFix.lat, lon: this.lastFix.lon } : null,
       gpsFresh: gpsAge < 5,
       warmup: !!this.warmup,
       gpsError: this.gpsError || null,

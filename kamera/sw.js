@@ -1,11 +1,11 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'k0.6.7';
+const VERSION = 'k0.6.8';
 const CACHE = 'kjorerapport-kamera-' + VERSION;
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css',
-  './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js', './js/camera.js', './js/facecam.js', './js/situations.js', './js/road.js', './js/plan.js', './js/lanes.js',
+  './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js', './js/camera.js', './js/facecam.js', './js/situations.js', './js/road.js', './js/plan.js', './js/lanes.js', './js/livelimit.js',
   './fonts/overpass-latin.woff2', './fonts/overpass-latin-ext.woff2',
   './vendor/leaflet/leaflet.js', './vendor/leaflet/leaflet.css',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'
