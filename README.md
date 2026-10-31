@@ -128,6 +128,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.3 / k0.6.7 – ready for long drives (Trondheim–Storlien)
+
+- **Road data for long drives:** before, routes over about 45 km (30 map boxes) failed with «Turen er for lang». Now routes over 40 km use 3 km boxes, with a maximum of 160 (about 450 km), and the speed limits are fetched 4 at a time. Live test on the 106 km E14 route Trondheim–Storlien: 35 boxes, speed limits in 2 s (known for 90 % of the route; the rest is mainly the Swedish part, which NVDB does not cover), other road data in 14 s.
+- **Matching along long routes:** `nearRoute` used at most 1500 route points. On a 100 km drive that is more than 100 m between points, so crossings and signs could be missed. It now uses up to 15,000 points.
+- **Long-standstill reminder:** after 10 minutes standing still, the recording screen suggests stopping the drive and starting a new one, so a break does not become part of the report. The main app's recorder now reports live speed for this.
+- Measured: analysis of a 158-minute drive takes 0.4 s on the Mac. The export is about 20 MB per 1.5 hours, so use AirDrop rather than e-mail.
+
 ## What's new in 0.9.2 / k0.6.6 – lane changes checked against 24 marks
 
 On the 29 Oct 19:46 drive the companion marked 24 lane changes, most of them in a back-and-forth test on the E6 in the second half. The first half was country road with almost no lane changes.

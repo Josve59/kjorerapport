@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWkt, routeChunks, mergeBoxes, matchLimits, fillGaps, smoothBlips, analyzeSpeeding } from '../js/enrich.js';
+import { parseWkt, routeChunks, mergeBoxes, routeBoxes, nearRoute, matchLimits, fillGaps, smoothBlips, analyzeSpeeding } from '../js/enrich.js';
 
 test('WKT med Z og lat først parses', () => {
   const pts = parseWkt('LINESTRING Z (63.4263 10.3933 14.8,63.4264 10.3933 14.8)');
@@ -81,4 +81,17 @@ test('veidata v2: gangfelt, fartsdempere, lyskryss og skilt langs ruten', async 
   assert.equal(signKind('142 - Barn'), 'barn');
   assert.equal(signKind('100.2 - Farlig sving, til venstre'), 'svingV');
   assert.equal(signKind('516 - Gangfelt'), null);
+});
+
+test('veidata: lange turer (Trondheim–Storlien) får utsnitt, og alt nær ruten blir med', () => {
+  // 230 km østover (tur retur-lengde), 1 punkt per 21 m
+  const line = km => Array.from({ length: Math.round(km * 1000 / 21) }, (_, i) => ({ t: i, lat: 63.4 + (i % 50) * 1e-6, lon: 10.4 + i * 21 / (111320 * Math.cos(63.4 * Math.PI / 180)) }));
+  const long = line(230);
+  const boxes = routeBoxes(long);
+  assert.ok(boxes.length > 30 && boxes.length <= 160, 'utsnitt: ' + boxes.length);
+  assert.throws(() => routeBoxes(line(700)), /for lang/);
+  // Et gangfelt 15 m fra veien midt mellom to av de opprinnelige 1500 prøvepunktene skal med
+  const mid = long[Math.floor(long.length / 2) + 3];
+  const hit = nearRoute(long, [{ lat: mid.lat + 15 / 111320, lon: mid.lon }], 25);
+  assert.equal(hit.length, 1);
 });

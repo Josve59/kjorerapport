@@ -80,7 +80,7 @@ export class Recorder {
     this.drive = null;
     this.t0 = 0;
     this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [] };
-    this.headOk = 0; this.headN = 0;
+    this.headOk = 0; this.headN = 0; this.speed = NaN;
     this.seq = 0;
     this.lastMotionT = -1;
     this.grav = null;
@@ -211,6 +211,7 @@ export class Recorder {
       this.distance += haversine(this.lastFix, sample);
     }
     if (Number.isFinite(c.accuracy) && c.accuracy <= 50) this.lastFix = sample;
+    this.speed = sample.speed;
     this.lastFixWall = performance.now();
   }
 
@@ -333,6 +334,7 @@ export class Recorder {
       elapsed: this.now(),
       distanceM: this.distance,
       acc: this.acc,
+      kmh: Number.isFinite(this.speed) ? this.speed * 3.6 : NaN,
       gpsFresh: gpsAge < 5,
       warmup: !!this.warmup,
       gpsError: this.gpsError || null,

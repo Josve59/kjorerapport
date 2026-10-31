@@ -1,7 +1,7 @@
 /* v3.1 – valgfrie nettjenester etter turen:
    - fartsgrenser fra Statens vegvesen (NVDB API v4, vegobjekttype 105)
    - stedsnavn (gatenavn) fra Kartverket (adresse-punktsøk)
-   Alt her er av som standard og slås på i innstillinger. Resultatet lagres på turen,
+   Alt her er på som standard (v0.9.1) og kan slås av i innstillinger. Resultatet lagres på turen,
    så rapporten viser det også uten nett senere. */
 
 const NVDB_BASE = 'https://nvdbapiles.atlas.vegvesen.no/vegobjekter/api/v4/vegobjekter';
@@ -20,8 +20,9 @@ const KARTVERKET = 'https://ws.geonorge.no/adresser/v1/punktsok';
 const CLIENT = 'Kjorerapport PWA (github.com/Josve59/kjorerapport)';
 const MATCH_M = 25;            // maks avstand fra GPS-punkt til fartsgrensestrekning
 const CHUNK_M = 1500;          // rutebiter per NVDB-kall
+const CHUNK_LONG_M = 3000;     // lange turer (over 40 km): større biter, færre kall
 const PAD_DEG = 0.0008;        // ca. 60–90 m utvidelse av utsnittet
-const MAX_CHUNKS = 30;
+const MAX_CHUNKS = 160;        // v0.9.3: rundt 450 km (før 30 biter, ca. 45 km)
 
 /* ---------- Rene hjelpefunksjoner (testes i Node) ---------- */
 
@@ -50,6 +51,15 @@ export function routeChunks(points, chunkM = CHUNK_M, pad = PAD_DEG) {
     const lats = c.map(p => p.lat), lons = c.map(p => p.lon);
     return { minLon: Math.min(...lons) - pad, minLat: Math.min(...lats) - pad, maxLon: Math.max(...lons) + pad, maxLat: Math.max(...lats) + pad };
   });
+}
+
+/* Utsnittene for en rute: korte turer i 1,5 km-biter, lange (Trondheim–Storlien) i 3 km-biter. */
+export function routeBoxes(points) {
+  let len = 0;
+  for (let i = 1; i < points.length; i++) len += metres(points[i - 1], points[i]);
+  const boxes = mergeBoxes(routeChunks(points, len > 40000 ? CHUNK_LONG_M : CHUNK_M));
+  if (boxes.length > MAX_CHUNKS) throw new Error(`Turen er for lang til å hente veidata (${Math.round(len / 1000)} km, maks rundt 450 km).`);
+  return boxes;
 }
 
 /* Slår sammen overlappende/nære utsnitt så det blir færre kall. */
@@ -167,11 +177,10 @@ async function nvdbPage(url, signal) {
 
 /* Henter fartsgrensestrekninger for alle utsnitt. Returnerer [{limit, pts}]. */
 export async function fetchSpeedLimitSegments(points, onProgress = () => {}, signal) {
-  const boxes = mergeBoxes(routeChunks(points));
-  if (boxes.length > MAX_CHUNKS) throw new Error('Turen er for lang til å hente fartsgrenser i ett jafs (maks ca. 45 km).');
+  const boxes = routeBoxes(points);
   const segments = [];
   let done = 0;
-  for (const b of boxes) {
+  await pool(boxes, 4, async b => {
     const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
     let url = `${NVDB}?kartutsnitt=${box}&srid=4326&inkluder=egenskaper,geometri&segmentering=true&antall=800`;
     for (let page = 0; page < 10 && url; page++) {
@@ -186,7 +195,7 @@ export async function fetchSpeedLimitSegments(points, onProgress = () => {}, sig
     }
     done++;
     onProgress(done / boxes.length);
-  }
+  });
   return segments;
 }
 
@@ -219,8 +228,7 @@ export function parsePoint(wkt) {
 
 /* Henter punktobjekter av én type langs ruten. */
 async function fetchPoints(points, spec, withProps, signal) {
-  const boxes = mergeBoxes(routeChunks(points));
-  if (boxes.length > MAX_CHUNKS) throw new Error('Turen er for lang til å hente veidata.');
+  const boxes = routeBoxes(points);
   const out = [], seen = new Set();
   await pool(boxes, 4, async b => {
     const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
@@ -274,7 +282,8 @@ export function signKind(text) {
 
 /* Bare det som ligger nær ruten tas vare på (et bykart har hundrevis av gangfelt). */
 export function nearRoute(points, items, maxM = 40) {
-  const step = Math.max(1, Math.floor(points.length / 1500));
+  // Alle punkter opp til rundt 4 timer (1 Hz). Før: høyst 1500, som på lange turer ga 100+ m mellom punktene
+  const step = Math.max(1, Math.floor(points.length / 15000));
   const sample = points.filter((_, i) => i % step === 0);
   return items.filter(it => sample.some(p => Math.abs(p.lat - it.lat) < 0.001 && metres(p, it) <= maxM));
 }
