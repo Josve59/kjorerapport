@@ -4,7 +4,8 @@
 import { poseFromMatrix } from './camera.js';
 import { processDetections, detectTaillights, roadDets } from './road.js';
 import { detectLanes, toGray, rowMeans, dashLine } from './lanes.js';
-import { loadDfine } from './dfine.js';
+import { loadDfine, loadDfineWorker } from './dfine.js';
+import { createTracker } from './track.js';
 
 const BASE = new URL('../../vendor/mediapipe/', import.meta.url).href;   // delt med hovedappen
 const ORT_BASE = new URL('../../vendor/ort/', import.meta.url).href;
@@ -22,6 +23,7 @@ const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops
 let dfine = null, dfineBusy = false, lastDfine = null, lastLite = null;
 let rowEma = null, rowN = 0, roadBottom = null;   // dashbordkanten i veikamerabildet (k0.7.1), som andel av høyden
 let lastView = null;   // det modellene så i siste veibilde, til fullskjermvisningen (k0.7.2)
+const tracker = createTracker();   // følging av biler og folk mellom svarene (k0.7.4)
 let speedKmh = NaN;    // farten fra appen (k0.7.3): Lite2 bare i stillstand når D-FINE går
 export function setSpeed(kmh) { speedKmh = kmh; }   // D-FINE nano (k0.7.0) og Lite2, siste svar
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
@@ -86,11 +88,18 @@ export function loadRoadModel(onStatus = () => {}) {
     // Lastes i bakgrunnen; feiler den, brukes Lite2 alene.
     if (typeof navigator !== 'undefined' && navigator.gpu) {
       onStatus('Laster D-FINE … (rundt 42 MB første gang)');
+      // Først i egen tråd (k0.7.4), ellers i hovedtråden som før
       try {
-        const d = await loadDfine({ ortBase: ORT_BASE, model: DFINE_MODEL, preferGpu: true });
-        if (d.backend === 'webgpu') { dfine = d; perf.dfine = 'webgpu'; perf.detector = 'dfine-webgpu+lite2'; }
-        else perf.dfine = 'bare prosessor (ikke brukt)';
-      } catch (e) { perf.dfine = 'feilet: ' + String(e && e.message || e).slice(0, 80); }
+        dfine = await loadDfineWorker({ ortBase: ORT_BASE, model: DFINE_MODEL });
+        perf.dfine = 'webgpu (egen tråd)'; perf.detector = 'dfine-webgpu+lite2';
+      } catch (we) {
+        perf.dfineWorker = String(we && we.message || we).slice(0, 80);
+        try {
+          const d = await loadDfine({ ortBase: ORT_BASE, model: DFINE_MODEL, preferGpu: true });
+          if (d.backend === 'webgpu') { dfine = d; perf.dfine = 'webgpu'; perf.detector = 'dfine-webgpu+lite2'; }
+          else perf.dfine = 'bare prosessor (ikke brukt)';
+        } catch (e) { perf.dfine = 'feilet: ' + String(e && e.message || e).slice(0, 80); }
+      }
     } else perf.dfine = 'ingen WebGPU';
     onStatus(dfine ? 'Gjenkjenning av biler klar (D-FINE + Lite2)' : 'Gjenkjenning av biler klar (Lite2)');
     return detector;
@@ -144,7 +153,7 @@ export async function switchTo(mode) {
     // Førerkameraet: fast 120 ms (ansiktsgjenkjenningen tåler lys som ikke er helt innstilt).
     // Veikameraet: til lysstyrken er stabil, høyst 1,5 s (se tick)
     settleUntil = performance.now() + (mode === 'environment' ? 1500 : 120);
-    settleLum = null; settleStable = 0; firstAfterSwitch = true; lastLite = null; lastDfine = null;
+    settleLum = null; settleStable = 0; firstAfterSwitch = true; lastLite = null; lastDfine = null; tracker.reset();
     const ms = Math.round(performance.now() - t0);
     switchLog.push(ms);
     if (switchLog.length > 200) switchLog.shift();
@@ -226,13 +235,15 @@ export function startLoop(fps = 8) {
       // - Lite2 på prosessoren hvert 2,5 × sin egen tid. Med D-FINE (k0.7.3) bare når bilen står stille: Lite2 brukte
       //   733 ms per bilde på iPhone og holdt appen opptatt, så bevegelsesmålingene fikk hull i 43 % av turen
       //   (2. nov. kl. 20.32). I stillstand (kø, rødt lys) er bilen tett foran vanligst, og hull gjør ingenting.
-      // Svar eldre enn 1,5 s brukes ikke. Koordinater i kamerabildets piksler.
+      // Begge modellenes svar går inn i følgingen (k0.7.4) med tiden bildet ble tatt, og bilene brukes slik de trolig
+      // står nå: forsinkelsen i D-FINE (rundt 0,3 s) tas igjen, og en bil må være sett minst to ganger.
+      // Koordinater i kamerabildets piksler.
       const now0 = performance.now(), vw = video.videoWidth, vh = video.videoHeight;
       if (dfine && !dfineBusy && (!lastDfine || now0 - lastDfine.at >= 250)) {
         dfineBusy = true;
         const t0 = performance.now();
         dfine.detect(video, vw, vh, dark ? GAMMA : null, roadBottom)
-          .then(d => { const keep = d.filter(x => x.score >= 0.4); lastDfine = { at: performance.now(), dets: keep }; perf.dfineFrames++; if (keep.length) perf.dfineAny++; perf.dfineMs = perf.dfineMs ? perf.dfineMs * 0.9 + (performance.now() - t0) * 0.1 : performance.now() - t0; })
+          .then(d => { const keep = d.filter(x => x.score >= 0.4); tracker.update(keep, t0); lastDfine = { at: performance.now(), dets: keep }; perf.dfineFrames++; if (keep.length) perf.dfineAny++; perf.dfineMs = perf.dfineMs ? perf.dfineMs * 0.9 + (performance.now() - t0) * 0.1 : performance.now() - t0; })
           .catch(() => { perf.dfineErr++; })
           .finally(() => { dfineBusy = false; });
       }
@@ -246,15 +257,15 @@ export function startLoop(fps = 8) {
           perf.detFrames++; if (res && res.detections && res.detections.length) perf.detAny++;
           lastLite = { at: now0, dets: (res && res.detections || []).map(d => ({ cls: d.categories[0].categoryName, score: d.categories[0].score,
             x: d.boundingBox.originX * k, y: d.boundingBox.originY * k, w: d.boundingBox.width * k, h: d.boundingBox.height * k })) };
+          tracker.update(lastLite.dets.filter(d => d.score >= 0.35), now0);
           ema('roadMs', performance.now() - t1);
         }
-        const recent = a => (a && now0 - a.at < 1500 ? a.dets : []);
-        const merged = mergeDets([...recent(lastLite), ...recent(lastDfine)]);
+        const merged = tracker.predict(now0);
         // Feltlinjene fra forrige bilde (regnet på et lite bilde), skalert til kamerabildet
         const pl = lastView && lastView.lane && lastView.lane.left && lastView.lane.right ? lastView.lane : null, kk = pl ? vw / pl.W : 1;
         const sc = L => ({ xBottom: L.xBottom * kk, xTop: L.xTop * kk, yBottom: L.yBottom * kk, yTop: L.yTop * kk });
         road = processDetections(merged, vw, vh, { roadBottom, lane: pl ? { left: sc(pl.left), right: sc(pl.right) } : null });
-        lastView = { at: now0, w: vw, h: vh, dets: roadDets(merged, vw, vh, roadBottom).filter(d => d.score >= 0.35), lead: road.lead, roadBottom, dfine: !!dfine, lane: lastView && lastView.lane };
+        lastView = { at: now0, w: vw, h: vh, lead: road.lead, roadBottom, dfine: dfine ? dfine.backend + (dfine.worker ? ' (egen tråd)' : '') : null, lane: lastView && lastView.lane };
       } catch { road = null; }
       // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
       if (road) {
@@ -320,7 +331,14 @@ export function snapshot(size = 160) {
    Med førerkameraet foran: bare { facing: 'user' }. */
 export function view() {
   if (facing !== 'environment') return { facing };
-  return lastView && performance.now() - lastView.at < 3000 ? { facing, ...lastView } : { facing };
+  if (!lastView || performance.now() - lastView.at > 3000) return { facing };
+  // Boksene slik bilene trolig står akkurat nå (følgingen), og bilen foran regnet fra dem
+  const t = performance.now(), v = lastView, preds = tracker.predict(t);
+  const kk = v.lane && v.lane.W ? v.w / v.lane.W : 1;
+  const sc = L => ({ xBottom: L.xBottom * kk, xTop: L.xTop * kk, yBottom: L.yBottom * kk, yTop: L.yTop * kk });
+  const lane = v.lane && v.lane.left && v.lane.right ? { left: sc(v.lane.left), right: sc(v.lane.right) } : null;
+  const lead = processDetections(preds, v.w, v.h, { roadBottom: v.roadBottom, lane }).lead || (v.lead && v.lead.src === 'baklys' ? v.lead : null);
+  return { facing, ...v, dets: roadDets(preds, v.w, v.h, v.roadBottom), lead };
 }
 
 /* Svar fra to modeller: samme objekt (overlapp over 50 %) telles én gang, med høyeste score. */

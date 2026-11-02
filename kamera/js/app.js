@@ -14,7 +14,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.3';
+export const APP_VERSION = 'k0.7.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -103,7 +103,7 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k8`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k9`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -1194,7 +1194,7 @@ function drawCamView() {
   const n = a => (a || []).length;
   const cars = (v.dets || []).filter(d => !['person', 'bicycle'].includes(d.cls)), ppl = (v.dets || []).filter(d => ['person', 'bicycle'].includes(d.cls));
   info.innerHTML = [
-    `<div>Veikamera · ${v.dfine ? 'D-FINE + Lite2' : 'Lite2'}${v.night ? ' · mørkt' : ''}</div>`,
+    `<div>Veikamera · ${v.dfine ? `D-FINE (${v.dfine})` : 'Lite2'}${v.night ? ' · mørkt' : ''}</div>`,
     `<div>${n(cars)} ${n(cars) === 1 ? 'bil' : 'biler'} · ${n(ppl)} ${n(ppl) === 1 ? 'person' : 'personer'}</div>`,
     `<div>${L ? `Bil foran ${Math.round(L.dist)} m${kmh >= 20 ? ` · ${(L.dist / (kmh / 3.6)).toFixed(1).replace('.', ',')} s` : ''}${L.src === 'baklys' ? ' (baklys)' : ''}` : 'Ingen bil rett foran'}</div>`,
     `<div>${v.lane && v.lane.left && v.lane.right ? `Begge feltlinjer · ${off !== null ? `${Math.abs(off).toFixed(2).replace('.', ',')} m ${off > 0.05 ? 'til høyre' : off < -0.05 ? 'til venstre' : 'midt i'}` : ''}` : v.lane && (v.lane.left || v.lane.right) ? 'Én feltlinje' : 'Ingen feltlinjer'}</div>`,

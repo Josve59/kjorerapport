@@ -128,6 +128,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.7.4 – tracking between detections, D-FINE in its own thread
+
+- **Tracking** (`kamera/js/track.js`): each car or person gets a track with position and velocity (px per ms) from one detection to the next. Between detections the box is moved to where the car probably is now (at most 0.5 s ahead). Detections are fed in with the time the frame was taken, so D-FINE's delay (about 0.3 s on the iPhone) is made up. A track must be seen at least twice before it counts, which removes one-off false detections, and it disappears after 1 s without a new detection. Both the full-screen view and the recorded road samples use the tracks, so the distance to the car in front is steadier.
+- **D-FINE in a Web Worker** (`kamera/js/dfine-worker.js`, `loadDfineWorker`): the main thread only draws the 640×640 crop and reads the pixels. The worker does the tensor, the model on WebGPU and the decoding. If the worker does not get WebGPU, the main-thread version from k0.7.0 is used (`perf.dfineWorker` gives the reason).
+- **Tested with a fake camera** where the picture slides sideways at 0.08 px/ms: D-FINE ran in its own thread at 44 ms per frame on the Mac (before about 105 ms on the main thread). The box moved 4 px per 50 ms between detections, the same speed as the picture, instead of jumping at each new detection.
+- Tested and rejected: D-FINE fp16 was twice as fast but found clearly fewer cars with confidence (4 against 8 on the motorway photo, 5 against 20 at dusk).
+
 ## What's new in 0.9.9 / k0.7.3 – a second opinion on the 2 Nov 20:32 drive, checked and fixed
 
 Another Claude agent analysed the drive (43.7 km, dark and rain). I checked its four claims against the data and the app's own code:

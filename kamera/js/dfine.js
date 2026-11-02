@@ -69,3 +69,38 @@ export async function loadDfine({ ortBase, model, preferGpu = true }) {
   };
   return { detect, backend, canvas };
 }
+
+/* Samme som loadDfine, men modellen kjører i en egen tråd (dfine-worker.js). Hovedtråden tegner bare utsnittet og
+   henter pikslene (rundt 10 ms). Kaster feil hvis tråden ikke får WebGPU innen 30 s (da brukes loadDfine). */
+export function loadDfineWorker({ ortBase, model, timeout = 30000 }) {
+  return new Promise((resolve, reject) => {
+    let w;
+    try { w = new Worker(new URL('./dfine-worker.js', import.meta.url), { type: 'module' }); } catch (e) { reject(e); return; }
+    const canvas = document.createElement('canvas'); canvas.width = SIZE; canvas.height = SIZE;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const pending = new Map();
+    let nextId = 1, ready = false;
+    const timer = setTimeout(() => { if (!ready) { w.terminate(); reject(new Error('egen tråd startet ikke')); } }, timeout);
+    w.onmessage = e => {
+      const m = e.data;
+      if (m.type === 'ready') {
+        ready = true; clearTimeout(timer);
+        const detect = (source, wd, ht, gamma = null, roadBottom = null) => new Promise((res, rej) => {
+          const crop = cropFor(wd, ht, roadBottom);
+          ctx.drawImage(source, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, SIZE, SIZE);
+          const buf = ctx.getImageData(0, 0, SIZE, SIZE).data.buffer;
+          const id = nextId++;
+          pending.set(id, { res, rej });
+          w.postMessage({ type: 'run', id, buf, gamma: !!gamma, crop }, [buf]);
+        });
+        resolve({ detect, backend: m.backend, worker: true, terminate: () => w.terminate() });
+      } else if (m.type === 'error') { clearTimeout(timer); w.terminate(); reject(new Error(m.message)); }
+      else if (m.type === 'dets' || m.type === 'fail') {
+        const p = pending.get(m.id); pending.delete(m.id);
+        if (p) { if (m.type === 'dets') p.res(m.dets); else p.rej(new Error(m.message)); }
+      }
+    };
+    w.onerror = e => { clearTimeout(timer); if (!ready) reject(new Error(e.message || 'feil i egen tråd')); };
+    w.postMessage({ type: 'init', ortBase, model });
+  });
+}
