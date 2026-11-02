@@ -264,7 +264,9 @@ export class Recorder {
     const t = this.now();
     this.headN++;
     if (pose) this.headOk++;
-    this.buf.head.push(pose ? { t, yaw: Math.round(pose.yaw * 10) / 10, pitch: Math.round(pose.pitch * 10) / 10, ok: true } : { t, ok: false });
+    const r1 = v => Math.round(v * 10) / 10;
+    // Øynene (k0.7.6): ex/ey i grader når de er åpne
+    this.buf.head.push(pose ? { t, yaw: r1(pose.yaw), pitch: r1(pose.pitch), ...(Number.isFinite(pose.ex) ? { ex: r1(pose.ex), ey: r1(pose.ey) } : {}), ok: true } : { t, ok: false });
   }
 
   /* Veikameraet: tall om veien foran (aldri bilder). */

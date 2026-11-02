@@ -36,8 +36,50 @@ export function poseFromMatrix(m) {
 
 const median = a => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor(b.length / 2)] : NaN; };
 
-/* Kalibrering: median av vinklene for hvert mål. Returnerer { forward, left, right, rear, ok, problem }. */
+/* Øynene (k0.7.6): ansiktsmodellen gir også hvor øynene ser (blendshapes eyeLookIn/Out/Up/Down, 0–1). Et blikk i
+   speilet tas ofte delvis med øynene, så hodet alene undervurderte blikket. Returnerer { ex, ey, blink }: øynenes
+   vinkel sidelengs og opp/ned i omtrentlige grader (positiv ex = mot førerens venstre, positiv ey = opp), eller
+   ex/ey NaN når øynene er lukket. Retningen i forhold til hodet finnes ved kalibreringen (sy, sp). */
+export function eyesFromBlendshapes(categories) {
+  if (!categories || !categories.length) return null;
+  const v = {}; for (const c of categories) v[c.categoryName] = c.score;
+  const b = k => v[k] || 0;
+  const blink = (b('eyeBlinkLeft') + b('eyeBlinkRight')) / 2;
+  if (blink > 0.55) return { ex: NaN, ey: NaN, blink };
+  const ex = 30 * ((b('eyeLookOutLeft') + b('eyeLookInRight')) / 2 - (b('eyeLookInLeft') + b('eyeLookOutRight')) / 2);
+  const ey = 25 * ((b('eyeLookUpLeft') + b('eyeLookUpRight')) / 2 - (b('eyeLookDownLeft') + b('eyeLookDownRight')) / 2);
+  return { ex, ey, blink };
+}
+/* Blikket = hodet + øynene, når kalibreringen er tatt med øynene (calib.g). Ellers hodet som før, så eldre
+   kalibreringer og turer virker uendret. */
+export const useGaze = calib => !!(calib && calib.g && calib.g.ok);
+export function toGaze(p, calib) {
+  if (!p || !useGaze(calib) || !Number.isFinite(p.yaw)) return p;
+  const g = calib.g, ex = Number.isFinite(p.ex) ? p.ex : 0, ey = Number.isFinite(p.ey) ? p.ey : 0;
+  return { ...p, yaw: p.yaw + g.sy * ex, pitch: p.pitch + g.sp * ey, head: { yaw: p.yaw, pitch: p.pitch } };
+}
+export const gazeCalib = calib => (useGaze(calib) ? calib.g : calib);
+
+/* Kalibrering: median av vinklene for hvert mål. Returnerer { forward, left, right, rear, ok, problem }, og med
+   øynene målt også g: den samme kalibreringen for blikket (hode + øyne), med retningene sy og sp. */
 export function calibrationFromSamples(byTarget) {
+  const head = calibrationHead(byTarget);
+  const all = Object.values(byTarget).flat().filter(p => p && Number.isFinite(p.yaw));
+  if (!head.ok || all.filter(p => Number.isFinite(p.ex)).length < 0.6 * all.length) return head;
+  // Øynene går samme vei som hodet når føreren ser i et speil: fortegnet som gjør det slik
+  const med = (id, k) => median((byTarget[id] || []).filter(p => p && Number.isFinite(p[k])).map(p => p[k]));
+  let cy = 0, cp = 0;
+  for (const id of MIRRORS) {
+    cy += (head[id].yaw - head.forward.yaw) * ((med(id, 'ex') - med('forward', 'ex')) || 0);
+    cp += (head[id].pitch - head.forward.pitch) * ((med(id, 'ey') - med('forward', 'ey')) || 0);
+  }
+  const sy = cy < 0 ? -1 : 1, sp = cp < 0 ? -1 : 1;
+  const gz = {};
+  for (const [id, arr] of Object.entries(byTarget)) gz[id] = (arr || []).filter(p => p && Number.isFinite(p.yaw)).map(p => ({ yaw: p.yaw + sy * (Number.isFinite(p.ex) ? p.ex : 0), pitch: p.pitch + sp * (Number.isFinite(p.ey) ? p.ey : 0) }));
+  const g = calibrationHead(gz);
+  return g.ok ? { ...head, g: { ...g, sy, sp } } : head;
+}
+function calibrationHead(byTarget) {
   const out = {};
   for (const id of ['forward', ...MIRRORS]) {
     const s = (byTarget[id] || []).filter(p => p && Number.isFinite(p.yaw));
@@ -208,6 +250,8 @@ export function calibOffset(samples, calib, points, t0) {
 /* Vurdering mot turen. points: rapportens punkter (t relativt til start), t0: start i opptakstid.
    laneChanges: rapportens feltskifter. Returnerer tall og sjekker for rapporten. */
 export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChanges = [], markedLanes = [] } = {}) {
+  // Blikket (hode + øyne) når kalibreringen er tatt med øynene (k0.7.6)
+  if (useGaze(calib)) { samples = samples.map(x => toGaze(x, calib)); calib = gazeCalib(calib); }
   const valid = samples.filter(x => Number.isFinite(x.t));
   if (!valid.length) return null;
   const coverage = valid.filter(x => x.ok).length / valid.length;

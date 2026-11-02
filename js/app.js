@@ -13,7 +13,7 @@ import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.10';
+export const APP_VERSION = '0.9.11';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};

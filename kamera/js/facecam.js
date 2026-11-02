@@ -1,12 +1,13 @@
 /* Kamera på telefonen: førerkamera (frontkameraet) med ansiktsgjenkjenning og veikamera (bakkameraet)
    med gjenkjenning av biler og folk. Testversjonen kan bytte mellom dem under kjøring.
    Ingen bilder lagres eller sendes – bare hodets vinkler og tall om veien går videre til appen. */
-import { poseFromMatrix } from './camera.js';
+import { poseFromMatrix, eyesFromBlendshapes } from './camera.js';
 import { processDetections, detectTaillights, roadDets } from './road.js';
 import { detectLanes, toGray, rowMeans, dashLine } from './lanes.js';
 import { loadDfine, loadDfineWorker } from './dfine.js';
 import { createTracker } from './track.js';
 import { matchShift } from './flow.js';
+import { readSigns, signTracker } from './signs.js';
 
 const BASE = new URL('../../vendor/mediapipe/', import.meta.url).href;   // delt med hovedappen
 const ORT_BASE = new URL('../../vendor/ort/', import.meta.url).href;
@@ -20,16 +21,19 @@ let settleLum = null, settleStable = 0;   // veikameraet: vent til lysstyrken er
 let firstAfterSwitch = false;   // første analyse etter et bytte er treg (modellen starter på nytt) og telles ikke i farten
 let fpsWanted = 8, fpsNow = 8;
 const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0, detector: null, detFrames: 0, detAny: 0,
-  dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, dfineErr: 0, flowMs: 0, flowHits: 0, flowTries: 0 };   // glattet tid per analyse
+  dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, dfineErr: 0, flowMs: 0, flowHits: 0, flowTries: 0, signMs: 0, signReads: 0, signs: 0 };   // glattet tid per analyse
 let dfine = null, dfineBusy = false, lastDfine = null, lastLite = null;
 let rowEma = null, rowN = 0, roadBottom = null;   // dashbordkanten i veikamerabildet (k0.7.1), som andel av høyden
 let lastView = null;   // det modellene så i siste veibilde, til fullskjermvisningen (k0.7.2)
+let lastFace = null;   // siste ansikt (punkter, hode, øyne) til fullskjermvisningen av førerkameraet (k0.7.6)
 const tracker = createTracker();   // følging av biler og folk mellom svarene (k0.7.4)
 let speedKmh = NaN;    // farten fra appen (k0.7.3): Lite2 bare i stillstand når D-FINE går
 export function setSpeed(kmh) { speedKmh = kmh; }   // D-FINE nano (k0.7.0) og Lite2, siste svar
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
 let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
 let flowPrev = null, flowPrevT = 0, flowRgba = null;   // forrige lille gråtonebilde til bildesammenligningen (k0.7.5)
+let signCanvas = null, signCtx = null, signN = 0, lastSign = null, signReads = [];   // fartsskilt (k0.7.6)
+const signs = signTracker();
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
 const switchLog = [];   // byttetider (ms) denne økten
 
@@ -38,7 +42,7 @@ export const state = () => ({ loaded: !!landmarker, roadLoaded: !!detector, runn
   roadSize,   // bildestørrelse fra veikameraet (stående bilde = telefonen står på høykant)
   roadBottom,   // dashbordkanten (andel av høyden) eller null
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, fpsNow, lastPose, lastRoad, video, switches: switchLog.slice(),
-  perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10, flowMs: Math.round(perf.flowMs * 10) / 10 } });
+  perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10, flowMs: Math.round(perf.flowMs * 10) / 10, signMs: Math.round(perf.signMs * 10) / 10 } });
 
 /* Tegner feltlinjene oppå veikamerabildet (direktevisning i kameratesten). null slår av. */
 export function setLaneOverlay(canvas) { laneOverlay = canvas; }
@@ -58,7 +62,7 @@ export function loadModel(onStatus = () => {}) {
     const opts = delegate => ({
       baseOptions: { modelAssetPath: BASE + 'face_landmarker.task', delegate },
       runningMode: 'VIDEO', numFaces: 1,
-      outputFacialTransformationMatrixes: true, outputFaceBlendshapes: false
+      outputFacialTransformationMatrixes: true, outputFaceBlendshapes: true   // øynene (k0.7.6)
     });
     try { landmarker = await FaceLandmarker.createFromOptions(fileset, opts('GPU')); }
     catch { onStatus('Bytter til enklere modus …'); landmarker = await FaceLandmarker.createFromOptions(fileset, opts('CPU')); }
@@ -220,6 +224,11 @@ export function startLoop(fps = 8) {
         const res = landmarker.detectForVideo(video, ts);
         const m = res && res.facialTransformationMatrixes && res.facialTransformationMatrixes[0];
         pose = m ? poseFromMatrix(m.data) : null;
+        // Øynene (k0.7.6): hvor de ser i forhold til hodet
+        const eyes = pose && res.faceBlendshapes && res.faceBlendshapes[0] ? eyesFromBlendshapes(res.faceBlendshapes[0].categories) : null;
+        if (pose && eyes) Object.assign(pose, eyes);
+        const lm = res && res.faceLandmarks && res.faceLandmarks[0];
+        lastFace = lm ? { at: performance.now(), lm, pose, w: video.videoWidth, h: video.videoHeight } : lastFace && performance.now() - lastFace.at < 500 ? lastFace : null;
       } catch { pose = null; }
       ema('faceMs', performance.now() - t1); adapt(); firstAfterSwitch = false;
       frames++;
@@ -315,6 +324,12 @@ export function startLoop(fps = 8) {
           } catch { /* ingen baklys */ }
         }
       }
+      // Fartsskilt (k0.7.6): hvert 2. bilde, veien over dashbordet i full oppløsning (ikke når bilen står stille)
+      if (road && !(speedKmh < 3) && ++signN % 2 === 0) {
+        const t3 = performance.now();
+        try { signStep(road, now0, vw, vh); } catch { /* ingen skilt */ }
+        ema('signMs', performance.now() - t3);
+      }
       adapt(); firstAfterSwitch = false;
       frames++;
       lastRoad = road;
@@ -322,6 +337,33 @@ export function startLoop(fps = 8) {
     }
   };
   tick();
+}
+
+/* Fartsskilt (k0.7.6): røde ringer i delen av bildet over dashbordet, tallet lest mot maler (signs.js). Skilt som
+   står på en bil (fartsmerker bak på lastebiler) hoppes over. Et skilt godtas når det er lest likt minst 3 ganger;
+   da får veiprøven sign { limit, reads, share, w } og et lite bilde av skiltet. */
+function signStep(road, t, vw, vh) {
+  const hh = Math.round(vh * (roadBottom ? Math.min(roadBottom, 0.85) : 0.72));
+  if (!signCanvas || signCanvas.width !== vw || signCanvas.height !== hh) { signCanvas = document.createElement('canvas'); signCanvas.width = vw; signCanvas.height = hh; signCtx = signCanvas.getContext('2d', { willReadFrequently: true }); }
+  signCtx.drawImage(video, 0, 0, vw, hh, 0, 0, vw, hh);
+  const rgba = signCtx.getImageData(0, 0, vw, hh).data;
+  const skip = tracker.predict(t).filter(p => !['person', 'bicycle'].includes(p.cls));
+  signReads = readSigns(rgba, vw, hh, { skip });
+  perf.signReads += signReads.length;
+  if (signReads.length) road.signRead = signReads.map(r => ({ limit: r.limit, score: r.score, w: r.box.w }));
+  const conf = signs.update(signReads, t);
+  if (conf) {
+    perf.signs++;
+    const b = signReads.slice().sort((a, b2) => b2.box.w - a.box.w)[0].box;
+    lastSign = { ...conf, at: t, box: b };
+    road.sign = conf;
+    // Lite bilde av skiltet (til å sjekke lesingen etterpå)
+    try {
+      const c = document.createElement('canvas'), m = Math.round(b.w * 0.15); c.width = 64; c.height = 64;
+      c.getContext('2d').drawImage(signCanvas, b.x - m, b.y - m, b.w + 2 * m, b.h + 2 * m, 0, 0, 64, 64);
+      road.signImg = c.toDataURL('image/jpeg', 0.7);
+    } catch { /* uten bilde */ }
+  }
 }
 
 /* Bildesammenligning (k0.7.5): et lite bilde (320 piksler bredt) i hvert steg. For hver bil som følges (sett minst to
@@ -364,7 +406,13 @@ export function snapshot(size = 160) {
 /* Det modellene så i siste bilde, til fullskjermvisningen: { facing, w, h, dets, lead, lane, roadBottom, lum, night, dfine }.
    Med førerkameraet foran: bare { facing: 'user' }. */
 export function view() {
-  if (facing !== 'environment') return { facing };
+  if (facing !== 'environment') {
+    // Førerkameraet (k0.7.6): ansiktets punkter (0–1 i kamerabildet, ikke speilvendt), hodet og øynene
+    if (facing !== 'user' || !lastFace || performance.now() - lastFace.at > 1500) return { facing };
+    return { facing, w: lastFace.w, h: lastFace.h, lm: lastFace.lm, pose: lastFace.pose, at: lastFace.at, faceMs: Math.round(perf.faceMs) };
+  }
+  // Fartsskilt: lesningene i siste bilde og siste godtatte skilt (k0.7.6)
+  const signView = { signReads: signReads.map(r => ({ box: r.box, limit: r.limit, score: r.score })), lastSign: lastSign && performance.now() - lastSign.at < 20000 ? lastSign : null };
   if (!lastView || performance.now() - lastView.at > 3000) return { facing };
   // Boksene slik bilene trolig står akkurat nå (følgingen), og bilen foran regnet fra dem
   const t = performance.now(), v = lastView, preds = tracker.predict(t);
@@ -372,7 +420,7 @@ export function view() {
   const sc = L => ({ xBottom: L.xBottom * kk, xTop: L.xTop * kk, yBottom: L.yBottom * kk, yTop: L.yTop * kk });
   const lane = v.lane && v.lane.left && v.lane.right ? { left: sc(v.lane.left), right: sc(v.lane.right) } : null;
   const lead = processDetections(preds, v.w, v.h, { roadBottom: v.roadBottom, lane }).lead || (v.lead && v.lead.src === 'baklys' ? v.lead : null);
-  return { facing, ...v, dets: roadDets(preds, v.w, v.h, v.roadBottom), lead };
+  return { facing, ...v, ...signView, dets: roadDets(preds, v.w, v.h, v.roadBottom), lead };
 }
 
 /* Svar fra to modeller: samme objekt (overlapp over 50 %) telles én gang, med høyeste score. */

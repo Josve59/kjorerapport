@@ -805,6 +805,8 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .limit-sign { width: 84px; height: 84px; border-radius: 50%; border: 9px solid #d4001a; background: #fff; color: #111;
   display: grid; place-items: center; font-weight: 800; font-size: 2.1rem; font-variant-numeric: tabular-nums; box-sizing: border-box; }
 .limit-sign.none { border-color: #9a9a9a; color: #777; }
+/* Fartsgrensen fra et skilt veikameraet leste (k0.7.6), når den er en annen enn i NVDB */
+.limit-sign.cam { box-shadow: 0 0 0 4px #2196f3; }
 .rec-speed-box { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
 .rec-speed { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 #rec-limit-note { margin-top: 4px; }

@@ -128,6 +128,34 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.11 / k0.7.6 – eyes in the driver camera, full screen for the driver, reading speed signs
+
+**Driver camera**
+- **Eyes** (`camera.js`: `eyesFromBlendshapes`, `toGaze`, `gazeCalib`). The face model (MediaPipe Face Landmarker, still the best face model for the browser on iPhone) now also reports where the eyes look (blendshapes eyeLookIn/Out/Up/Down). Gaze is head plus eyes. A calibration taken with k0.7.6 or later stores a separate gaze calibration (`calib.g`). Which way the eyes turn relative to the head is found from the calibration itself: in a mirror the eyes go the same way as the head. Live classification, the plan and the analysis (`evaluateMirrors`) then use gaze. Older calibrations work as before, with the head only. In the test, a mirror glance with 8° head and 22° eyes is found; with the head only it was "straight ahead". Head samples also store `ex`/`ey`.
+- **15 analyses a second** with the driver camera only (before 8). The model takes about 26 ms on the iPhone.
+- **Full screen for the driver camera:**
+  - the face with outline, eyes and irises, all gliding smoothly
+  - an arrow for the gaze
+  - a map of the mirrors from the calibration, with a dot for where the driver is looking (filled for gaze, ring for the head only)
+  - what the app thinks the driver is looking at, head and eye angles, and the last 6 glances with duration
+- **Recalibrate** to get the eyes included. The screen says «Bare hodet – kalibrer på nytt» until you do.
+
+**Speed signs from the road camera** (`kamera/js/signs.js`, `sign-tpl.js`)
+- **Covers** ordinary signs and digital signs (red LED ring and bright digits, as on the E6 when the limit is lowered).
+- **No ready-made model exists with a free licence for Norwegian speed signs.** German GTSRB lacks 40, 90 and 110. So this is image processing on a closed set of numbers:
+  1. red rings (with a 2×2 «any red» and a grown mask so the LED ring holds together)
+  2. a full-resolution edge
+  3. the inside to 48×48, Otsu, the digits as the smallest part
+  4. comparison against 297 templates (DIN Condensed, DIN Alternate, Arial Narrow and Helvetica Neue, ordinary and LED, at 24 and 44 px, 4 bit, 69 kB)
+- **Accepted** when the same sign is read the same way at least 3 times. Signs on vehicles are skipped. Reading runs every second frame when the car is moving.
+- **Tested** on 240 synthetic signs in other typefaces, in real evening photos from the drive, with blur, noise, darkening and tilt:
+  - correct in a single frame for 66 % (83 % over 44 px, 67 % at 28–43 px, 40 % under 28 px)
+  - wrong in 2 of 240, both under 28 px, where a higher score is now required
+  - no hits in 132 real evening photos without signs
+  - in the app with a fake camera, a digital 60 sign was accepted on each of 4 passes, with no wrong readings, in 9 ms per read on the Mac
+- **On screen:** a camera-read sign takes priority over NVDB until the next sign, 3 km, or a new NVDB stretch more than 150 m after the sign. The limit sign gets a blue edge and the text «Skilt sett av kameraet · Statens vegvesen: X». Speed camera beeps use the same limit.
+- **Saved with the drive:** `liveLimits` with `src: 'kamera'`, and in the road samples `sign`, `signRead` and a 64 px picture of the sign (with test pictures on).
+
 ## What's new in 0.9.10 / k0.7.5 – smoother boxes, warning sound for speed cameras
 
 From the evening drive on 2 Nov (k0.7.4, 26 min, dark): D-FINE ran in its own thread at **310 ms per frame** on the iPhone (about 3 answers a second). The boxes moved in straight lines between answers and jumped a little at each new one. There were 0 gaps in the motion data from the camera (before k0.7.3: 43 %).
