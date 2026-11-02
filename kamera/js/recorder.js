@@ -133,7 +133,12 @@ export class Recorder {
     };
     await putDrive(this.drive);
 
-    this._onMotion = e => this.handleMotion(e);
+    // Tiden fra selve hendelsen (k0.7.3 / v0.9.9), ikke fra når appen rakk å behandle den: mens bildegjenkjenningen
+    // holdt appen opptatt, ble målingene liggende og fikk feil tid (turen 2. nov. kl. 20.32: 43 % av tiden i hull)
+    this._onMotion = e => {
+      const te = this.replay || !Number.isFinite(e.timeStamp) ? NaN : (e.timeStamp - this.t0) / 1000;
+      this.handleMotion(e, Number.isFinite(te) && Math.abs(te - this.now()) < 2 ? te : undefined);
+    };
     this._onVis = () => this.handleVisibility();
     document.addEventListener('visibilitychange', this._onVis);
 

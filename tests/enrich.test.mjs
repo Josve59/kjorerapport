@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWkt, routeChunks, mergeBoxes, routeBoxes, nearRoute, matchLimits, fillGaps, smoothBlips, analyzeSpeeding } from '../js/enrich.js';
+import { parseWkt, routeChunks, mergeBoxes, routeBoxes, nearRoute, matchLimits, fillGaps, smoothBlips, analyzeSpeeding, stabilizeLimits } from '../js/enrich.js';
 
 test('WKT med Z og lat først parses', () => {
   const pts = parseWkt('LINESTRING Z (63.4263 10.3933 14.8,63.4264 10.3933 14.8)');
@@ -94,4 +94,24 @@ test('veidata: lange turer (Trondheim–Storlien) får utsnitt, og alt nær rute
   const mid = long[Math.floor(long.length / 2) + 3];
   const hit = nearRoute(long, [{ lat: mid.lat + 15 / 111320, lon: mid.lon }], 25);
   assert.equal(hit.length, 1);
+});
+
+test('fartsgrense: vei på tvers velges ikke, korte hopp glattes, og fart inn mot høyere grense er ikke overskridelse', () => {
+  const lonPerM = 1 / (111320 * Math.cos(63.4 * Math.PI / 180));
+  // Østover langs 63.40 (90), en vei på tvers (nord–sør, 40) krysser ved 1000 m
+  const pts = Array.from({ length: 80 }, (_, i) => ({ t: i, lat: 63.4, lon: 10.4 + i * 25 * lonPerM, kmh: 88 }));
+  const segs = [{ limit: 90, pts: [{ lat: 63.4, lon: 10.4 }, { lat: 63.4, lon: 10.4 + 2000 * lonPerM }] },
+    { limit: 40, pts: [{ lat: 63.39, lon: 10.4 + 1000 * lonPerM }, { lat: 63.41, lon: 10.4 + 1000 * lonPerM }] }];
+  assert.ok(matchLimits(pts, segs).every(v => v === 90), 'veien på tvers velges ikke');
+  // Korte hopp (under 6 s) glattes, også når grensen mangler (null) rundt
+  const lim = [90, 90, 90, 40, 40, 40, 90, 90, null, null, 60, 60, 60, 60, 60, 60, 60, 60, 60];
+  const out = stabilizeLimits(pts.slice(0, lim.length), lim);
+  assert.deepEqual(out.slice(0, 8), [90, 90, 90, 90, 90, 90, 90, 90]);
+  assert.equal(out[10], 60, 'lengre periode beholdes');
+  // Påkjøringsrampe: 70, så 110. 89 km/t i 70 de siste 4 s før 110 er ikke en overskridelse
+  const ramp = Array.from({ length: 20 }, (_, i) => ({ t: i, lat: 63, lon: 10, kmh: i < 10 ? 65 : i < 14 ? 89 : 105 }));
+  const rl = ramp.map((_, i) => (i < 14 ? 70 : 110));
+  assert.equal(analyzeSpeeding(ramp, rl).episodes.length, 0);
+  const town = ramp.map(p => ({ ...p })); const tl = ramp.map(() => 70);
+  assert.equal(analyzeSpeeding(town, tl).episodes.length, 1, 'samme fart uten høyere grense etterpå er en overskridelse');
 });

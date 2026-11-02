@@ -98,3 +98,22 @@ test('veikamera: bilens eget dashbord (bred boks nederst) er ikke en bil foran',
   assert.equal(roadSummary(samples, pts, { frameW: 720 }).follow.length, 0);
   assert.equal(roadSummary(samples, pts).follow.length, 50);
 });
+
+test('veikamera: brøytestikker er ikke folk, møtende biler er ikke bilen foran', () => {
+  const W = 720, H = 1280;
+  const post = { cls: 'person', score: 0.7, x: 100, y: 500, w: 12, h: 120 };      // smal og høy
+  const walker = { cls: 'person', score: 0.7, x: 200, y: 500, w: 40, h: 110 };
+  assert.equal(processDetections([post, walker], W, H).people, 1);
+  // Bil i nabofeltet (utenfor feltlinjene) er ikke bilen foran
+  const lane = { left: { xBottom: 260, xTop: 320, yBottom: 900, yTop: 600 }, right: { xBottom: 420, xTop: 360, yBottom: 900, yTop: 600 } };
+  const other = { cls: 'car', score: 0.8, x: 400, y: 700, w: 80, h: 60 };          // midt i bildet, men til høyre for høyre linje
+  assert.equal(processDetections([other], W, H, { lane }).lead, null);
+  const own = { cls: 'car', score: 0.8, x: 300, y: 700, w: 80, h: 60 };
+  assert.ok(processDetections([own], W, H, { lane }).lead);
+  // Rapporten: en «bil foran» som nærmer seg raskere enn egen fart (60 km/t) er møtende
+  const pts = Array.from({ length: 20 }, (_, i) => ({ t: i, kmh: 60, lat: 63, lon: 10 }));
+  const samples = [0, 1, 2, 3].map(i => ({ t: 5 + i * 0.5, cars: 1, people: 0, lead: { cls: 'car', dist: 60 - i * 15, wpx: 50 } }));
+  assert.equal(roadSummary(samples, pts).follow.length, 0);
+  const ahead = [0, 1, 2, 3].map(i => ({ t: 5 + i * 0.5, cars: 1, people: 0, lead: { cls: 'car', dist: 30 - i * 0.5, wpx: 50 } }));
+  assert.equal(roadSummary(ahead, pts).follow.length, 4);
+});

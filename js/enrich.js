@@ -104,17 +104,33 @@ export function matchLimits(points, segments, maxM = MATCH_M) {
     return { ...s, minLat: Math.min(...lats), maxLat: Math.max(...lats), minLon: Math.min(...lons), maxLon: Math.max(...lons) };
   });
   const dLat = maxM / 111320;
-  return points.map(p => {
+  // Kjøreretningen ved hvert punkt (v0.9.9): p.heading, ellers fra nabopunktene når bilen har flyttet seg. Strekninger
+  // på tvers (veier under eller over, kryssende gater) velges ikke når det finnes en langs kjøreretningen: turen
+  // 2. nov. kl. 20.32 fikk 90→40→90 i 3 s i 88 km/t.
+  const brg = (a, b) => (Math.atan2((b.lon - a.lon) * Math.cos(a.lat * Math.PI / 180), b.lat - a.lat) * 180 / Math.PI + 360) % 360;
+  const heading = i => {
+    const p = points[i];
+    if (Number.isFinite(p.heading)) return p.heading;
+    const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)];
+    return a !== b && metres(a, b) > 5 ? brg(a, b) : null;
+  };
+  return points.map((p, idx) => {
     const cos = Math.cos(p.lat * Math.PI / 180);
     const dLon = dLat / Math.max(cos, 0.1);
-    let best = Infinity, limit = NaN;
+    const h = heading(idx);
+    let best = Infinity, limit = NaN, bestPar = Infinity, limitPar = NaN;
     for (const s of segs) {
       if (p.lat < s.minLat - dLat || p.lat > s.maxLat + dLat || p.lon < s.minLon - dLon || p.lon > s.maxLon + dLon) continue;
       for (let i = 1; i < s.pts.length; i++) {
         const d = segDist(p, s.pts[i - 1], s.pts[i], cos);
         if (d < best) { best = d; limit = s.limit; }
+        if (h !== null && d < bestPar && metres(s.pts[i - 1], s.pts[i]) > 1) {
+          const diff = Math.abs(((brg(s.pts[i - 1], s.pts[i]) - h) % 180 + 180) % 180);
+          if (Math.min(diff, 180 - diff) <= 35) { bestPar = d; limitPar = s.limit; }
+        }
       }
     }
+    if (bestPar <= maxM) return limitPar;
     return best <= maxM ? limit : NaN;
   });
 }
@@ -134,6 +150,23 @@ export function fillGaps(limits, maxGap = 3) {
 }
 
 /* Enkeltpunkter som avviker fra like naboer (typisk i kryss, der en sidevei er nærmest) settes til naboverdien. */
+/* Korte hopp (v0.9.9): en annen fartsgrense i under minSec sekunder, med samme grense før og etter, er nesten alltid en
+   vei på tvers eller GPS-støy (2. nov. kl. 20.32: 90→40→90 i 3 s, 60→40→60 i 2 s, 50→30→50 i 5 s). */
+export function stabilizeLimits(points, limits, minSec = 6) {
+  const out = limits.slice();
+  const same = (a, b) => a === b || (!Number.isFinite(a) && !Number.isFinite(b));   // ukjent (NaN/null) regnes som like
+  let i = 1;
+  while (i < out.length) {
+    if (same(out[i], out[i - 1])) { i++; continue; }
+    let j = i + 1;
+    while (j < out.length && same(out[j], out[i])) j++;
+    const before = out[i - 1];
+    if (j < out.length && Number.isFinite(before) && out[j] === before && points[j - 1].t - points[i].t < minSec) for (let k = i; k < j; k++) out[k] = before;
+    i = j;
+  }
+  return out;
+}
+
 export function smoothBlips(limits) {
   const out = limits.slice();
   for (let i = 1; i < out.length - 1; i++) {
@@ -165,7 +198,17 @@ export function analyzeSpeeding(points, limits, { tol = 4, minSec = 3, mergeSec 
       }
     }
   }
-  const kept = episodes.filter(e => e.tTo - e.tFrom >= minSec || e.maxKmh - e.limit >= 10);
+  // Inn mot høyere grense (v0.9.9): akselerasjon på påkjøringsrampen rett før motorveien (2. nov. kl. 20.32: 89 km/t i
+  // 70 tre sekunder før 110) er vanlig kjøring. Grensen øker innen 6 s etter perioden, og farten er under den nye.
+  const nextLimit = e => {
+    for (let i = 0; i < points.length; i++) {
+      if (points[i].t <= e.tTo) continue;
+      if (points[i].t - e.tTo > 6) return null;
+      if (Number.isFinite(limits[i]) && limits[i] !== e.limit) return limits[i];
+    }
+    return null;
+  };
+  const kept = episodes.filter(e => (e.tTo - e.tFrom >= minSec || e.maxKmh - e.limit >= 10) && !(nextLimit(e) > e.limit && e.maxKmh <= nextLimit(e) + tol));
   kept.forEach((e, i) => { e.n = i + 1; e.over = e.maxKmh - e.limit; });
   const serious = kept.filter(e => e.over >= 10).length;
   const score = Math.max(0, Math.min(100, Math.round(100 - 1.5 * secondsOver - 10 * serious)));
@@ -530,12 +573,14 @@ export function evaluateRoad(points, road, events = [], limits = null) {
 
 /* Henter det som er slått på og mangler, og returnerer et enrich-objekt som lagres på turen. */
 export const ROAD_V = 3;
+export const LIMITS_V = 2;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet
 export async function enrichDrive(r, marks, wants, existing, onProgress = () => {}) {
   const enrich = { version: 1, ...(existing || {}) };
-  if (wants.limits && !enrich.limits) {
+  if (wants.limits && (!enrich.limits || enrich.limitsV !== LIMITS_V)) {
     onProgress('Henter fartsgrenser fra Statens vegvesen …');
     const segs = await fetchSpeedLimitSegments(r.points, p => onProgress(`Henter fartsgrenser fra Statens vegvesen … ${Math.round(p * 100)} %`));
-    enrich.limits = smoothBlips(fillGaps(matchLimits(r.points, segs))).map(v => (Number.isFinite(v) ? v : null));
+    enrich.limits = stabilizeLimits(r.points, smoothBlips(fillGaps(matchLimits(r.points, segs)))).map(v => (Number.isFinite(v) ? v : null));
+    enrich.limitsV = LIMITS_V;
     enrich.limitsFetchedAt = new Date().toISOString();
   }
   if (wants.limits && (!enrich.road || enrich.road.v !== ROAD_V)) {   // v2: skilt, gangfelt, fartsdempere, lyskryss; v3: ATK

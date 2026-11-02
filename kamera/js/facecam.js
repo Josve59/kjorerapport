@@ -21,7 +21,9 @@ const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops
   dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, dfineErr: 0 };   // glattet tid per analyse
 let dfine = null, dfineBusy = false, lastDfine = null, lastLite = null;
 let rowEma = null, rowN = 0, roadBottom = null;   // dashbordkanten i veikamerabildet (k0.7.1), som andel av høyden
-let lastView = null;   // det modellene så i siste veibilde, til fullskjermvisningen (k0.7.2)   // D-FINE nano (k0.7.0) og Lite2, siste svar
+let lastView = null;   // det modellene så i siste veibilde, til fullskjermvisningen (k0.7.2)
+let speedKmh = NaN;    // farten fra appen (k0.7.3): Lite2 bare i stillstand når D-FINE går
+export function setSpeed(kmh) { speedKmh = kmh; }   // D-FINE nano (k0.7.0) og Lite2, siste svar
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
 let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
@@ -221,7 +223,9 @@ export function startLoop(fps = 8) {
       // To modeller, slått sammen (k0.7.0). I test fant D-FINE nano mange flere biler langt unna (dagslys og
       // skumring), mens Lite2 var bedre på store biler tett foran om natten.
       // - D-FINE på grafikkprosessoren, asynkront, høyst hvert 250 ms (blokkerer ikke resten)
-      // - Lite2 på prosessoren hvert 2,5 × sin egen tid (minst 600 ms med D-FINE, ellers 250 ms)
+      // - Lite2 på prosessoren hvert 2,5 × sin egen tid. Med D-FINE (k0.7.3) bare når bilen står stille: Lite2 brukte
+      //   733 ms per bilde på iPhone og holdt appen opptatt, så bevegelsesmålingene fikk hull i 43 % av turen
+      //   (2. nov. kl. 20.32). I stillstand (kø, rødt lys) er bilen tett foran vanligst, og hull gjør ingenting.
       // Svar eldre enn 1,5 s brukes ikke. Koordinater i kamerabildets piksler.
       const now0 = performance.now(), vw = video.videoWidth, vh = video.videoHeight;
       if (dfine && !dfineBusy && (!lastDfine || now0 - lastDfine.at >= 250)) {
@@ -234,7 +238,8 @@ export function startLoop(fps = 8) {
       }
       const t1 = performance.now();
       try {
-        if (!lastLite || now0 - lastLite.at >= Math.max(dfine ? 600 : 250, 2.5 * (perf.roadMs || 100))) {
+        const liteOk = !dfine || speedKmh < 5;
+        if (liteOk && (!lastLite || now0 - lastLite.at >= Math.max(dfine ? 600 : 250, 2.5 * (perf.roadMs || 100)))) {
           // Alltid en kopi i canvas (lysnet i mørket): gjenkjenningen fikk ingenting ut av video-elementet direkte på iPhone
           const src = brightFrame(video, dark), k = vw / src.width;
           const res = detector.detectForVideo(src, ts);
@@ -245,8 +250,11 @@ export function startLoop(fps = 8) {
         }
         const recent = a => (a && now0 - a.at < 1500 ? a.dets : []);
         const merged = mergeDets([...recent(lastLite), ...recent(lastDfine)]);
-        road = processDetections(merged, vw, vh, { roadBottom });
-        lastView = { at: now0, w: vw, h: vh, dets: roadDets(merged, vw, vh, roadBottom).filter(d => d.score >= 0.35), lead: road.lead, roadBottom, dfine: !!dfine };
+        // Feltlinjene fra forrige bilde (regnet på et lite bilde), skalert til kamerabildet
+        const pl = lastView && lastView.lane && lastView.lane.left && lastView.lane.right ? lastView.lane : null, kk = pl ? vw / pl.W : 1;
+        const sc = L => ({ xBottom: L.xBottom * kk, xTop: L.xTop * kk, yBottom: L.yBottom * kk, yTop: L.yTop * kk });
+        road = processDetections(merged, vw, vh, { roadBottom, lane: pl ? { left: sc(pl.left), right: sc(pl.right) } : null });
+        lastView = { at: now0, w: vw, h: vh, dets: roadDets(merged, vw, vh, roadBottom).filter(d => d.score >= 0.35), lead: road.lead, roadBottom, dfine: !!dfine, lane: lastView && lastView.lane };
       } catch { road = null; }
       // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
       if (road) {

@@ -19,10 +19,13 @@ export function focalPx(w, h, fovDeg = 66) {
    er ikke noe på veien. Turen 2. nov.: 8263 av 9364 «biler foran» var dashbordet (720 px bred boks, «2,5 m»). */
 export function roadDets(dets, w, h, roadBottom = null) {
   const rb = roadBottom || 1;
-  return dets.filter(d => d.w < w * 0.7 && d.y + d.h <= h * (rb + 0.04) && d.y < h * rb);
+  // Folk (k0.7.3): rød-hvite brøytestikker ble tatt for fotgjengere om kvelden (270 bilder 2. nov. kl. 20.32).
+  // En stående person er 1,5–4 ganger så høy som bred; stikkene er mye smalere. Svake person-treff teller heller ikke.
+  const okPerson = d => d.cls !== 'person' || (d.h / d.w <= 4.5 && d.score >= 0.5);
+  return dets.filter(d => d.w < w * 0.7 && d.y + d.h <= h * (rb + 0.04) && d.y < h * rb && okPerson(d));
 }
 
-export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minScore = 0.35, roadBottom = null } = {}) {
+export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minScore = 0.35, roadBottom = null, lane = null } = {}) {
   const f = focalPx(w, h, fovDeg);
   let lead = null, cars = 0, people = 0, best = 0;
   const minBottom = roadBottom ? Math.max(0.1, roadBottom - 0.42) : 0.45;
@@ -35,6 +38,13 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minSc
       cars++;
       const cx = d.x + d.w / 2, bottom = d.y + d.h;
       if (cx < w * 0.35 || cx > w * 0.65 || bottom < h * minBottom || d.w < 8) continue;
+      // Eget felt (k0.7.3): med begge feltlinjene kjent må bilen stå mellom dem (møtende biler i nabofeltet ble tatt
+      // for bilen foran). lane: { left, right } i kamerabildets piksler, linjer { xBottom, xTop, yBottom, yTop }.
+      if (lane && lane.left && lane.right) {
+        const at = (L, y) => L.xBottom + (L.xTop - L.xBottom) * (y - L.yBottom) / ((L.yTop - L.yBottom) || 1);
+        const xl = at(lane.left, bottom), xr = at(lane.right, bottom), m = (xr - xl) * 0.15;
+        if (xr > xl && (cx < xl - m || cx > xr + m)) continue;
+      }
       const dist = VEHICLE_WIDTH[d.cls] * f / d.w;
       if (dist > maxDist) continue;
       if (!lead || d.w > lead.wpx) lead = { cls: d.cls, dist: Math.round(dist * 10) / 10, wpx: Math.round(d.w), score: Math.round(d.score * 100) / 100,
@@ -126,6 +136,13 @@ export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1
   // Hvor stor del av tiden veikameraet faktisk så veien (bilder tettere enn 1 s regnes som sammenhengende)
   let seen = 0;
   for (let i = 1; i < s.length; i++) { const dt = s[i].t - s[i - 1].t; if (dt < 1) seen += dt; }
+  // Møtende biler (k0.7.3): en «bil foran» som nærmer seg raskere enn vi selv kjører, kommer mot oss
+  for (let i = 1; i < s.length; i++) {
+    const a = s[i - 1], b = s[i];
+    if (!a.lead || !b.lead || a.lead.src === 'baklys' || b.lead.src === 'baklys') continue;
+    const dt = b.t - a.t, v = kmhAt(points, b.t) / 3.6;
+    if (dt > 0 && dt <= 1.5 && (a.lead.dist - b.lead.dist) / dt > v + 3) { a.lead = null; b.lead = null; a.oncoming = b.oncoming = true; }
+  }
   const follow = [];
   // Baklys (mørke) brukes ikke til avstand ennå (k0.6.5): på turen 29. okt. kl. 19.46 ga de 0,5 s tidsluke på
   // motorvei, som ikke stemmer. De lagres og telles, og tas i bruk når testbilder viser at de treffer.

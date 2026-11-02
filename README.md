@@ -128,6 +128,23 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.9 / k0.7.3 – a second opinion on the 2 Nov 20:32 drive, checked and fixed
+
+Another Claude agent analysed the drive (43.7 km, dark and rain). I checked its four claims against the data and the app's own code:
+
+1. **«The gyro axes are swapped»: not a bug in the app.** The analysis already picks the axis order automatically (`GYRO_AXES`). On this drive it chose «webkit», with a correlation of 0.88 to the GPS heading. The agent computed on the raw data without that step.
+2. **«The speed limit jumps»: right for the report** (the live limit had no jumps). There were 90→40→90 in 3 s at 88 km/h, 60→40→60 and 50→30→50, from roads crossing below or above. Fixed:
+   - `matchLimits` prefers a segment along the direction of travel (within 35°).
+   - `stabilizeLimits` smooths jumps shorter than 6 s that have the same limit before and after. Unknown limits count as equal, which also fixed an infinite loop in the first version.
+   - `analyzeSpeeding` no longer counts speed above the limit when the limit rises within 6 s and the speed is under the new limit (the on-ramp onto the motorway: 89 in 70 three seconds before 110).
+   - Old drives fetch the limits again (`LIMITS_V = 2`). This drive went from 12 speeding episodes to 8, and the false ones are gone.
+3. **«Car in front is mostly wrong»: partly right.** The report already ignored taillights (518 of 1023) and the dashboard, and gave 0 «for nær». Real problems fixed:
+   - red-and-white snow poles were counted as people (people need a height/width ratio of at most 4.5 and a score of 0.5)
+   - oncoming cars could become the «car in front». Live, the car in front must be between the lane lines when both are found. In the report, a «car» that closes in faster than our own speed + 3 m/s is oncoming (18 removed on this drive).
+4. **«The motion data has gaps»: right, and the most important one.** 43 % of the drive was in gaps over 0.25 s. The cause: with 1280×720 and D-FINE, Lite2 took 733 ms per frame on the iPhone and blocked the app. Fixed:
+   - With D-FINE on WebGPU, Lite2 runs only when the car is standing still (queues, red lights), where gaps do not matter.
+   - Motion samples get their time from the event itself (`event.timeStamp`) instead of from when the app got round to processing them.
+
 ## What's new in k0.7.2 – full-screen camera with what the models see
 
 Tap the small camera image during a recording to get the camera in full screen, with what the models see drawn on top:
