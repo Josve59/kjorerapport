@@ -248,15 +248,13 @@ export function startLoop(fps = 8) {
 
 export function stopLoop() { if (timer) clearTimeout(timer); timer = null; }
 
-/* Testbilde (valgfritt, for feilsøking): 96×72 svart-hvitt JPEG av det veikameraet ser nå, eller null. */
+/* Testbilde (valgfritt, for feilsøking): lite JPEG i farger av det veikameraet ser nå (160 piksler på den
+   lengste siden), eller null. Farger fra k0.6.11, så baklys og lyskryss kan sjekkes på kveldsturer. */
 export function snapshot() {
   if (!video || facing !== 'environment' || video.videoWidth === 0) return null;
-  const c = document.createElement('canvas'); c.width = 96; c.height = Math.round(96 * video.videoHeight / video.videoWidth);
-  const g = c.getContext('2d', { willReadFrequently: true });
-  g.drawImage(video, 0, 0, c.width, c.height);
-  const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
-  for (let i = 0; i < d.length; i += 4) { const v = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8; d[i] = d[i + 1] = d[i + 2] = v; }
-  g.putImageData(img, 0, 0);
+  const k = 160 / Math.max(video.videoWidth, video.videoHeight);
+  const c = document.createElement('canvas'); c.width = Math.round(video.videoWidth * k); c.height = Math.round(video.videoHeight * k);
+  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.6);
 }
 

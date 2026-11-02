@@ -14,7 +14,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.10';
+export const APP_VERSION = 'k0.6.11';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -422,7 +422,7 @@ async function renderCamera() {
   const roadHelp = {
     off: 'Bare førerkameraet.',
     switch: 'Bytter etter situasjonen: føreren i svinger, inn mot kryss og de første sekundene etter igangkjøring. Korte veiblikk i by, lengre på rett vei. Like ofte i mørket, med baklys og feltlinjer i lyset fra frontlyktene. Samkjøringen tar høyde for hullene.',
-    road: 'Bare veikameraet under kjøring. Speil og skulderblikk blir ikke målt.'
+    road: 'Bare veikameraet hele turen: biler foran, avstand og plassering i feltet, uten bytting. Ingen kalibrering trengs. Speil og skulderblikk blir ikke målt.'
   };
   document.querySelectorAll('input[name=roadMode]').forEach(r => {
     r.checked = r.value === (getSettings().roadMode || 'off');
@@ -809,9 +809,10 @@ function renderPrecheck() {
   renderFocusSuggestions();
   const camCheck = $('#check-camera');
   camCheck.hidden = !getSettings().cameraOn;
+  camCheck.querySelector('strong').textContent = getSettings().roadMode === 'road' ? 'Veikamera ser veien' : 'Kamera ser føreren';
   const preCalib = $('#btn-pre-calib');
   preCalib.hidden = true;
-  if (getSettings().cameraOn) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
+  if (getSettings().cameraOn) setCheck(camCheck, null, getSettings().roadMode === 'road' ? 'Veikamera: starter når du gir tilgang (ingen kalibrering trengs)' : getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
   preCalib.onclick = async () => {
     unlockSpeech();
     await runCalibration();
@@ -833,7 +834,18 @@ function renderPrecheck() {
     } catch (err) {
       setCheck(gps, false, err.code === 1 ? 'Posisjonstilgang avslått. Tillat posisjon for denne appen i Innstillinger.' : 'Fikk ikke posisjon. Gå ut i friluft og prøv igjen.');
     }
-    if (getSettings().cameraOn) {
+    if (getSettings().cameraOn && getSettings().roadMode === 'road') {
+      // «Bare vei» (k0.6.11): bakkameraet med en gang, uten ansiktsgjenkjenning og kalibrering
+      try {
+        await cam.startCamera($('#pre-video'), 'environment');
+        await cam.loadRoadModel(t => setCheck(camCheck, null, t));
+        cam.startLoop(8);
+        if (camUnsub) camUnsub();
+        let n = 0;
+        camUnsub = cam.onRoad(r => { if (++n % 8) return; setCheck(camCheck, true, `Veikamera på · ${r.cars} ${r.cars === 1 ? 'bil' : 'biler'}${r.lane && (r.lane.l || r.lane.r) ? ' · feltlinjer' : ''}${Number.isFinite(r.lum) && r.lum < 60 ? ' · mørkt' : ''}`); });
+        preCalib.hidden = true;
+      } catch (err) { setCheck(camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : 'Kameraet startet ikke'); }
+    } else if (getSettings().cameraOn) {
       try {
         await cam.startCamera($('#pre-video'));
         await cam.loadModel(t => setCheck(camCheck, null, t));
@@ -1010,13 +1022,15 @@ async function startRecording(replay = null) {
     roadModeNow = mode; planner = null;
     liveCalib = getCalib(); liveOff = null; fwdBuf = []; fwdN = 0;
     if (mode !== 'off') {
-      let lastRoad = null, lastRoadAt = 0, lookFrames = 0;
+      let lastRoad = null, lastRoadAt = 0, lookFrames = 0, lastThumbAt = -Infinity;
       roadUnsub = cam.onRoad(r => {
-        // Testbilder (valgfritt): ett lite svart-hvitt bilde per veiblikk, fra 4. bilde (lyset innstilt)
+        // Testbilder (valgfritt): ett per veiblikk fra 4. bilde (lyset innstilt), og med «Bare vei» hvert 20. s.
+        // Ekstra når det er en bil foran (høyst hvert 8. s), så avstand og baklys kan sjekkes mot bildene.
         const nowS = performance.now() / 1000;
         lookFrames = nowS - lastRoadAt > 1.2 ? 1 : lookFrames + 1;
         lastRoadAt = nowS;
-        if (settings.roadThumbs && lookFrames === 4) { const img = cam.snapshot(); if (img) r.img = img; }
+        const wantThumb = lookFrames === 4 || (lookFrames > 4 && (nowS - lastThumbAt >= 20 || (r.lead && nowS - lastThumbAt >= 8)));
+        if (settings.roadThumbs && wantThumb) { const img = cam.snapshot(); if (img) { r.img = img; lastThumbAt = nowS; } }
         if (recorder) recorder.addRoad(r);
         if (planner) planner.road(r);   // så veikameraet noe? Styrer hvor ofte veien sjekkes
         lastRoad = r;
@@ -1036,7 +1050,7 @@ async function startRecording(replay = null) {
         if (!recorder) { clearInterval(tick); return; }
         const st = cam.state();
         if (st.facing === 'environment') {
-          camPill.textContent = st.switching ? 'Kamera: bytter …' : `Veikamera${lastRoad && lastRoad.lead ? ` · bil ${Math.round(lastRoad.lead.dist)} m foran` : lastRoad ? ` · ${lastRoad.cars} biler` : ''}`;
+          camPill.textContent = st.switching ? 'Kamera: bytter …' : `Veikamera${lastRoad && lastRoad.lead ? ` · bil ${Math.round(lastRoad.lead.dist)} m foran${lastRoad.lead.src === 'baklys' ? ' (baklys)' : ''}` : lastRoad ? ` · ${lastRoad.cars} ${lastRoad.cars === 1 ? 'bil' : 'biler'}` : ''}${lastRoad && lastRoad.lane && Number.isFinite(lastRoad.lane.offset) ? ' · i feltet' : ''}`;
           camPill.dataset.state = 'ok';
         }
         if (st.perf.slow) { camPill.textContent = 'Kamera: telefonen er treg (varm?)'; camPill.dataset.state = 'wait'; }

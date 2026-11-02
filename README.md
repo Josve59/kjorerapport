@@ -128,6 +128,14 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.6.11 – ready for a «Bare vei» test in the dark
+
+Plan from now on: one thing at a time. First the road camera on its own («Bare vei», no switching), then the driver camera on its own. After that, a native iPhone app with both cameras at once. No more work goes into the switching plan.
+
+- **Precheck for «Bare vei»:** the back camera starts at once, without face detection or calibration. The status line shows what the road camera sees («Veikamera på · 2 biler · feltlinjer · mørkt»), so it is easy to see whether the detector works before setting off.
+- **Test snapshots:** in colour, 160 px on the long side (before: 96×72 greyscale), so taillights and traffic lights can be checked on evening drives. With «Bare vei», one every 20 s and an extra one when there is a car in front (at most every 8 s). Before, a continuous road camera gave only one snapshot for the whole drive.
+- **Recording screen:** the pill shows «bil 18 m foran (baklys)» when the distance comes from taillights, and «i feltet» when both lane lines are found.
+
 ## What's new in 0.9.6 / k0.6.10 – after Trondheim → Storlien (31 Oct, 92 min, daylight)
 
 - **The object detector never worked on the iPhone.** In all drives so far (2994 frames at night, 795 in daylight) it found nothing, not even weak detections. Yet the 50 test snapshots from the Storlien drive show cars clearly. It now runs on the **CPU and gets a canvas copy** of the camera frame instead of the video element. In a browser test this found 12 detections (best score 0.82) in a portrait frame, in about 50 ms. Usage is logged in `cameraPlan.perf` (`detector`, `detFrames`, `detAny`), so the next drive shows whether it works.
