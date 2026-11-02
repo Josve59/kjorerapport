@@ -128,6 +128,21 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.6.13 – a stronger detector for the dark, and a ready test setup
+
+- **EfficientDet-Lite2** (int8, 7.5 MB, `vendor/mediapipe/efficientdet_lite2.tflite`, Apache 2.0) replaces Lite0 for the road camera. Lab test on night and dusk photos (vehicles with a score of 0.35 or more):
+
+  | Photo | Lite0 | Lite2 |
+  |---|---|---|
+  | Car close in front at night | 0 | 2 |
+  | Motorway at dusk | 0–1 | 7 (with gamma) |
+  | City at night | 1 | 3 |
+  | Darkened motorway | 4–7 | 8–10 |
+
+  It takes about 3 times as long (151 against 53 ms per frame on the Mac). So detection runs at most every 2.5 × its own time (at least 250 ms, about twice a second) and reuses the last result in between. The lane lines still run on every frame, and the phone slows down based on the lane time.
+- **Gamma brightening** (0.5, lookup table) at night instead of the canvas filter «brightness(2.2)». With Lite2 it was better: 6 cars against 1 at dusk.
+- **Test setup:** once after the update, the camera app turns on «Bruk kamera», «Bare vei», test snapshots and road data (`settings.testSetup`). It can be changed afterwards and is not set again.
+
 ## What's new in 0.9.7 / k0.6.12 – speed cameras and section control
 
 - **Data:** NVDB «ATK-punkt» (type 162: name 9522, control direction 9527) and «Streknings-ATK» (823: name 9520, control direction 9519, a line from entry to exit). NVDB geometry runs in the metering direction, so «Med metreringsretning» means the same way as the line. I checked this on E6/E14 at Trondheim: «mot Narvik» is «Med» and the line runs towards Narvik.

@@ -14,7 +14,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.12';
+export const APP_VERSION = 'k0.6.13';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1480,7 +1480,18 @@ function route() {
   else location.hash = '#/';
 }
 
+/* Testoppsett (k0.6.13): én gang etter oppdatering settes appen opp for neste test, veikameraet alene i mørket.
+   Kan endres etterpå på kameraskjermen; settes ikke på nytt. */
+const TEST_SETUP = 1;
+function applyTestSetup() {
+  const s = getSettings();
+  if ((s.testSetup || 0) >= TEST_SETUP) return false;
+  saveSettings({ ...s, cameraOn: true, roadMode: 'road', roadThumbs: true, netLimits: true, testSetup: TEST_SETUP });
+  return true;
+}
+
 function init() {
+  const setupNow = applyTestSetup();
   applyTheme();
   hydrateIcons();
   ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera'].forEach(n => { screens[n] = document.getElementById(n); });
@@ -1513,6 +1524,7 @@ function init() {
   registerSW();
   requestPersistentStorage().then(r => { persistState = r; });
   route();
+  if (setupNow) setTimeout(() => toast('Testoppsett: «Bare vei», testbilder og veidata er slått på.', { type: 'ok', ms: 5000 }), 800);
 }
 
 function registerSW() {

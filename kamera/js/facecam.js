@@ -16,7 +16,7 @@ let firstAfterSwitch = false;   // første analyse etter et bytte er treg (model
 let fpsWanted = 8, fpsNow = 8;
 const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0, detector: null, detFrames: 0, detAny: 0 };   // glattet tid per analyse
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
-let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
+let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null, lastDet = null;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
 const switchLog = [];   // byttetider (ms) denne økten
 
@@ -54,22 +54,24 @@ export function loadModel(onStatus = () => {}) {
   return loading;
 }
 
-/* Gjenkjenning av biler og folk for veikameraet (rundt 5 MB første gang). */
+/* Gjenkjenning av biler og folk for veikameraet (rundt 8 MB første gang). EfficientDet-Lite2 (k0.6.13): på
+   nattbilder fant den 2–7 biler der Lite0 fant 0–1, og 10 mot 4–7 på mørklagt motorvei. Rundt 3 ganger tregere,
+   så den kjører høyst rundt to ganger i sekundet (se tick), mens feltlinjene kjører på hvert bilde. */
 export function loadRoadModel(onStatus = () => {}) {
   if (detector) return Promise.resolve(detector);
   if (loadingRoad) return loadingRoad;
   loadingRoad = (async () => {
-    onStatus('Laster gjenkjenning av biler … (rundt 5 MB første gang)');
+    onStatus('Laster gjenkjenning av biler … (rundt 8 MB første gang)');
     const { ObjectDetector } = await vision();
     const opts = delegate => ({
-      baseOptions: { modelAssetPath: BASE + 'efficientdet_lite0.tflite', delegate },
+      baseOptions: { modelAssetPath: BASE + 'efficientdet_lite2.tflite', delegate },
       runningMode: 'VIDEO', scoreThreshold: 0.15, maxResults: 12,   // road.js teller bare fra 0,35
       categoryAllowlist: ['car', 'truck', 'bus', 'motorcycle', 'bicycle', 'person']
     });
     // CPU (k0.6.10): med GPU fant gjenkjenningen ikke én eneste bil på iPhone på noen tur (heller ikke svake treff),
     // selv om testbildene fra turen til Storlien viser biler tydelig. På CPU, med et kopiert bilde, virket den i testene.
     detector = await ObjectDetector.createFromOptions(fileset, opts('CPU'));
-    perf.detector = 'cpu';
+    perf.detector = 'cpu-lite2';
     onStatus('Gjenkjenning av biler klar');
     return detector;
   })().catch(err => { loadingRoad = null; throw err; });
@@ -121,7 +123,7 @@ export async function switchTo(mode) {
     // Førerkameraet: fast 120 ms (ansiktsgjenkjenningen tåler lys som ikke er helt innstilt).
     // Veikameraet: til lysstyrken er stabil, høyst 1,5 s (se tick)
     settleUntil = performance.now() + (mode === 'environment' ? 1500 : 120);
-    settleLum = null; settleStable = 0; firstAfterSwitch = true;
+    settleLum = null; settleStable = 0; firstAfterSwitch = true; lastDet = null;
     const ms = Math.round(performance.now() - t0);
     switchLog.push(ms);
     if (switchLog.length > 200) switchLog.shift();
@@ -151,7 +153,8 @@ export function startLoop(fps = 8) {
   /* Blir telefonen treg (varm, eller for mye å gjøre), går vi ned til 5 bilder i sekundet.
      Tilbake til full fart når analysene igjen er raske i 20 s. */
   const adapt = () => {
-    const ms = facing === 'user' ? perf.faceMs : perf.roadMs + perf.laneMs;
+    // Veikameraet: bilgjenkjenningen kjører sjelden (egen takt), så her teller feltlinjene
+    const ms = facing === 'user' ? perf.faceMs : perf.laneMs;
     const now = performance.now();
     if (ms > 110 && fpsNow > 5) { fpsNow = 5; perf.slow = true; perf.slowSince = now; perf.drops++; }
     else if (ms < 60 && fpsNow < fpsWanted && now - perf.slowSince > 20000) { fpsNow = fpsWanted; perf.slow = false; }
@@ -196,8 +199,11 @@ export function startLoop(fps = 8) {
       // Nattmodus (k0.6.4): bilgjenkjenningen får et lysere bilde, og baklysene letes etter i tillegg
       const dark = lastLum !== null && lastLum < NIGHT_LUM;
       roadSize = `${video.videoWidth}x${video.videoHeight}`;
+      // Bilgjenkjenning høyst hvert 2,5 × sin egen tid (minst 250 ms), ellers gjenbrukes forrige svar
+      const now0 = performance.now(), fresh = !lastDet || now0 - lastDet.at >= Math.max(250, 2.5 * (perf.roadMs || 100));
       const t1 = performance.now();
-      try {
+      if (!fresh) road = { ...lastDet.road, stale: true };
+      else try {
         // Alltid en kopi i canvas (lysnet i mørket): gjenkjenningen fikk ingenting ut av video-elementet direkte på iPhone
         const src = brightFrame(video, dark);
         const sw = src.width, sh = src.height;
@@ -206,8 +212,9 @@ export function startLoop(fps = 8) {
         const dets = (res && res.detections || []).map(d => ({ cls: d.categories[0].categoryName, score: d.categories[0].score,
           x: d.boundingBox.originX, y: d.boundingBox.originY, w: d.boundingBox.width, h: d.boundingBox.height }));
         road = processDetections(dets, sw, sh);
+        lastDet = { at: now0, road };
       } catch { road = null; }
-      ema('roadMs', performance.now() - t1);
+      if (fresh) ema('roadMs', performance.now() - t1);
       // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
       if (road) {
         const t2 = performance.now();
@@ -258,8 +265,7 @@ export function snapshot() {
   return c.toDataURL('image/jpeg', 0.6);
 }
 
-/* Lysere kopi av kamerabildet til bilgjenkjenningen i mørket. Bruker canvas-filter der det finnes,
-   ellers en oppslagstabell (gamma 0,5: mørke toner løftes mest). */
+/* Kopi av kamerabildet til bilgjenkjenningen, lysnet i mørket med en gammakurve (0,5: mørke toner løftes mest). */
 const GAMMA = new Uint8ClampedArray(256).map((_, v) => Math.round(255 * Math.pow(v / 255, 0.5)));
 function brightFrame(v, bright = true) {
   const W = Math.min(640, v.videoWidth), H = Math.round(W * v.videoHeight / v.videoWidth);
@@ -267,14 +273,13 @@ function brightFrame(v, bright = true) {
     brightCanvas = document.createElement('canvas'); brightCanvas.width = W; brightCanvas.height = H;
     brightCtx = brightCanvas.getContext('2d', { willReadFrequently: true });
   }
-  if (!bright) { brightCtx.drawImage(v, 0, 0, W, H); return brightCanvas; }
-  if ('filter' in brightCtx) { brightCtx.filter = 'brightness(2.2) contrast(1.15)'; brightCtx.drawImage(v, 0, 0, W, H); brightCtx.filter = 'none'; }
-  else {
-    brightCtx.drawImage(v, 0, 0, W, H);
-    const img = brightCtx.getImageData(0, 0, W, H), d = img.data;
-    for (let i = 0; i < d.length; i += 4) { d[i] = GAMMA[d[i]]; d[i + 1] = GAMMA[d[i + 1]]; d[i + 2] = GAMMA[d[i + 2]]; }
-    brightCtx.putImageData(img, 0, 0);
-  }
+  brightCtx.drawImage(v, 0, 0, W, H);
+  if (!bright) return brightCanvas;
+  // Gammakurve (k0.6.13): løfter mørke toner uten å brenne ut frontlys. I test bedre enn canvas-filteret
+  // «brightness(2.2)» med Lite2 (skumring: 6 biler mot 1)
+  const img = brightCtx.getImageData(0, 0, W, H), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { d[i] = GAMMA[d[i]]; d[i + 1] = GAMMA[d[i + 1]]; d[i + 2] = GAMMA[d[i + 2]]; }
+  brightCtx.putImageData(img, 0, 0);
   return brightCanvas;
 }
 
