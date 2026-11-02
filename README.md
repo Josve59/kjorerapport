@@ -128,6 +128,20 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.7.2 – full-screen camera with what the models see
+
+Tap the small camera image during a recording to get the camera in full screen, with what the models see drawn on top:
+
+- cars, trucks, buses and motorcycles in yellow, people and bikes in pink (with score)
+- the car in front in green, with distance and headway
+- the lane lines (green/pink)
+- the dashboard edge as a dashed blue line
+- a bar for the position in the lane (red when more than 0.75 m from the centre)
+
+At the top: the model (D-FINE + Lite2 or Lite2), dark or not, number of cars and people, car in front, lane lines and side offset, the dashboard edge, brightness and D-FINE time. With the driver camera in front (switching mode), it says «Førerkamera». Tap anywhere or ✕ to close. Nothing of this is stored.
+
+Tested with a fake 720×1280 camera that shows a night snapshot from 2 Nov: the car in front at 46 m, a parked car, the left lane line, and the dashboard edge at 73 %.
+
 ## What's new in 0.9.8 / k0.7.1 – after the evening drive with D-FINE (2 Nov), and large speed-camera warnings
 
 **What the drive showed:** the detectors work on the iPhone. Lite2 found something in 2831 of 3021 runs. D-FINE ran on WebGPU at about 350 ms, and the night snapshots are good. But:

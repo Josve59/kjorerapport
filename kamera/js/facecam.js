@@ -2,7 +2,7 @@
    med gjenkjenning av biler og folk. Testversjonen kan bytte mellom dem under kjøring.
    Ingen bilder lagres eller sendes – bare hodets vinkler og tall om veien går videre til appen. */
 import { poseFromMatrix } from './camera.js';
-import { processDetections, detectTaillights } from './road.js';
+import { processDetections, detectTaillights, roadDets } from './road.js';
 import { detectLanes, toGray, rowMeans, dashLine } from './lanes.js';
 import { loadDfine } from './dfine.js';
 
@@ -20,7 +20,8 @@ let fpsWanted = 8, fpsNow = 8;
 const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0, detector: null, detFrames: 0, detAny: 0,
   dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, dfineErr: 0 };   // glattet tid per analyse
 let dfine = null, dfineBusy = false, lastDfine = null, lastLite = null;
-let rowEma = null, rowN = 0, roadBottom = null;   // dashbordkanten i veikamerabildet (k0.7.1), som andel av høyden   // D-FINE nano (k0.7.0) og Lite2, siste svar
+let rowEma = null, rowN = 0, roadBottom = null;   // dashbordkanten i veikamerabildet (k0.7.1), som andel av høyden
+let lastView = null;   // det modellene så i siste veibilde, til fullskjermvisningen (k0.7.2)   // D-FINE nano (k0.7.0) og Lite2, siste svar
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
 let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
@@ -243,7 +244,9 @@ export function startLoop(fps = 8) {
           ema('roadMs', performance.now() - t1);
         }
         const recent = a => (a && now0 - a.at < 1500 ? a.dets : []);
-        road = processDetections(mergeDets([...recent(lastLite), ...recent(lastDfine)]), vw, vh, { roadBottom });
+        const merged = mergeDets([...recent(lastLite), ...recent(lastDfine)]);
+        road = processDetections(merged, vw, vh, { roadBottom });
+        lastView = { at: now0, w: vw, h: vh, dets: roadDets(merged, vw, vh, roadBottom).filter(d => d.score >= 0.35), lead: road.lead, roadBottom, dfine: !!dfine };
       } catch { road = null; }
       // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
       if (road) {
@@ -267,6 +270,7 @@ export function startLoop(fps = 8) {
           // 37 og 18 av 50 (før 26 og 2). Asfalten rett foran er sterkt opplyst om kvelden, så lys bakgrunn tillates.
           const ln = detectLanes(gray, W, H, roadBottom ? { top: Math.max(0.25, roadBottom - 0.2), bottom: roadBottom - 0.02, horizon: Math.max(0.15, roadBottom - 0.25), minInl: 0.15, maxBg: 230 } : {});
           road.lane = { l: !!ln.left, r: !!ln.right, offset: ln.offset };
+          if (lastView) Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H }, lum: road.lum, roadBottom });
           if (laneOverlay) drawLanes(laneOverlay, ln, W, H);
         } catch { /* ingen feltlinjer */ }
         ema('laneMs', performance.now() - t2);
@@ -279,6 +283,7 @@ export function startLoop(fps = 8) {
             road.night = true;
             road.tail = tl.pairs;
             if (!road.lead && tl.lead) road.lead = tl.lead;
+            if (lastView) Object.assign(lastView, { night: true, tail: tl.pairs, lead: road.lead });
           } catch { /* ingen baklys */ }
         }
       }
@@ -301,6 +306,13 @@ export function snapshot(size = 160) {
   const c = document.createElement('canvas'); c.width = Math.round(video.videoWidth * k); c.height = Math.round(video.videoHeight * k);
   c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', size > 200 ? 0.75 : 0.6);
+}
+
+/* Det modellene så i siste bilde, til fullskjermvisningen: { facing, w, h, dets, lead, lane, roadBottom, lum, night, dfine }.
+   Med førerkameraet foran: bare { facing: 'user' }. */
+export function view() {
+  if (facing !== 'environment') return { facing };
+  return lastView && performance.now() - lastView.at < 3000 ? { facing, ...lastView } : { facing };
 }
 
 /* Svar fra to modeller: samme objekt (overlapp over 50 %) telles én gang, med høyeste score. */

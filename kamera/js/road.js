@@ -15,13 +15,18 @@ export function focalPx(w, h, fovDeg = 66) {
 
 /* Én bildeanalyse → tall. dets: [{ cls, score, x, y, w, h }] i piksler. Bilen foran: et kjøretøy midt i
    bildet (sentrum innenfor midtre 30 %) med underkanten i nedre del (på veien, ikke på en bro), den bredeste. */
+/* Bilens eget panser/dashbord (k0.7.1): bokser over 70 % av bildebredden, eller som går godt ned i dashbordet,
+   er ikke noe på veien. Turen 2. nov.: 8263 av 9364 «biler foran» var dashbordet (720 px bred boks, «2,5 m»). */
+export function roadDets(dets, w, h, roadBottom = null) {
+  const rb = roadBottom || 1;
+  return dets.filter(d => d.w < w * 0.7 && d.y + d.h <= h * (rb + 0.04) && d.y < h * rb);
+}
+
 export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minScore = 0.35, roadBottom = null } = {}) {
   const f = focalPx(w, h, fovDeg);
   let lead = null, cars = 0, people = 0, best = 0;
-  // Bilens eget panser/dashbord (k0.7.1): bokser over 70 % av bildebredden, eller som går godt ned i dashbordet.
-  // Turen 2. nov.: 8263 av 9364 «biler foran» var dashbordet (720 px bred boks, «2,5 m», 0,15 s tidsluke).
-  const rb = roadBottom || 1, minBottom = roadBottom ? Math.max(0.1, roadBottom - 0.42) : 0.45;
-  dets = dets.filter(d => d.w < w * 0.7 && d.y + d.h <= h * (rb + 0.04) && d.y < h * rb);
+  const minBottom = roadBottom ? Math.max(0.1, roadBottom - 0.42) : 0.45;
+  dets = roadDets(dets, w, h, roadBottom);
   for (const d of dets) {
     // Beste bil-score også under grensen (k0.6.5): viser om gjenkjenningen var nær ved å se noe (mørke, refleks)
     if (VEHICLE_WIDTH[d.cls] && d.score > best) best = d.score;
@@ -32,7 +37,8 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minSc
       if (cx < w * 0.35 || cx > w * 0.65 || bottom < h * minBottom || d.w < 8) continue;
       const dist = VEHICLE_WIDTH[d.cls] * f / d.w;
       if (dist > maxDist) continue;
-      if (!lead || d.w > lead.wpx) lead = { cls: d.cls, dist: Math.round(dist * 10) / 10, wpx: Math.round(d.w), score: Math.round(d.score * 100) / 100 };
+      if (!lead || d.w > lead.wpx) lead = { cls: d.cls, dist: Math.round(dist * 10) / 10, wpx: Math.round(d.w), score: Math.round(d.score * 100) / 100,
+        box: { x: Math.round(d.x), y: Math.round(d.y), w: Math.round(d.w), h: Math.round(d.h) } };   // box: bare til visningen
     } else if (PEOPLE.includes(d.cls)) people++;
   }
   return { lead, cars, people, best: Math.round(best * 100) / 100 };

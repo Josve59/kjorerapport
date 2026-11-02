@@ -14,7 +14,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.1';
+export const APP_VERSION = 'k0.7.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1026,6 +1026,7 @@ async function startRecording(replay = null) {
   });
   const camPill = $('#rec-cam'), recVideo = $('#rec-video');
   camPill.hidden = true; recVideo.hidden = true;
+  recVideo.onclick = () => openCamView();
   if (!replay && settings.cameraOn && cam.state().running) {
     await cam.attachVideo(recVideo);
     recVideo.hidden = false; camPill.hidden = false;
@@ -1116,6 +1117,89 @@ function fmtClock(sec) {
 }
 
 let liveLimitNow = null;   // aktiv fartsgrense under opptak (km/t eller null)
+
+/* Fullskjerm kamera (k0.7.2): kamerabildet med det modellene ser tegnet oppå: biler og folk (bokser), bilen foran med
+   avstand og tidsluke, feltlinjene, dashbordkanten og plasseringen i feltet. Trykk på det lille kamerabildet under
+   opptak; trykk ✕ eller hvor som helst for å lukke. Ingenting av dette lagres. */
+let camViewRaf = null;
+async function openCamView() {
+  const box = $('#cam-full'), v = $('#cam-full-video');
+  if (!cam.state().running) return;
+  box.hidden = false;
+  await cam.attachVideo(v);
+  box.onclick = () => closeCamView();
+  const draw = () => { drawCamView(); camViewRaf = requestAnimationFrame(draw); };
+  camViewRaf = requestAnimationFrame(draw);
+}
+// Testkrok når appen kjører lokalt (utvikling): åpne visningen uten et opptak
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.kjCamView = openCamView;
+async function closeCamView() {
+  const box = $('#cam-full');
+  if (box.hidden) return;
+  box.hidden = true;
+  if (camViewRaf) cancelAnimationFrame(camViewRaf);
+  camViewRaf = null;
+  if (cam.state().running) await cam.attachVideo($('#rec-video'));
+}
+function drawCamView() {
+  const cv = $('#cam-full-canvas'), info = $('#cam-full-info');
+  const dpr = window.devicePixelRatio || 1, cw = cv.clientWidth, ch = cv.clientHeight;
+  if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, cw, ch);
+  const v = cam.view(), st = cam.state();
+  if (v.facing !== 'environment') { info.innerHTML = `<div>Førerkamera</div><div class="muted">${st.switching ? 'Bytter kamera …' : 'Ser på føreren (speil og skulderblikk)'}</div>`; return; }
+  if (!v.w) { info.innerHTML = '<div>Veikamera</div><div class="muted">Venter på første bilde …</div>'; return; }
+  // Kamerabildet vises med «contain»: skala og forskyvning fra kamerabildets piksler til skjermen
+  const s = Math.min(cw / v.w, ch / v.h), ox = (cw - v.w * s) / 2, oy = (ch - v.h * s) / 2;
+  const X = x => ox + x * s, Y = y => oy + y * s;
+  const kmh = recorder && Number.isFinite(recorder.speed) ? recorder.speed * 3.6 : NaN;
+  g.lineWidth = 2; g.font = '600 13px system-ui, sans-serif'; g.textBaseline = 'bottom';
+  // Dashbordkanten
+  if (v.roadBottom) { g.save(); g.setLineDash([8, 6]); g.strokeStyle = 'rgba(0,200,255,.9)'; g.beginPath(); g.moveTo(X(0), Y(v.roadBottom * v.h)); g.lineTo(X(v.w), Y(v.roadBottom * v.h)); g.stroke(); g.restore(); }
+  // Feltlinjer (regnet på et lite bilde, skaleres opp)
+  if (v.lane) {
+    const k = v.w / v.lane.W;
+    g.lineWidth = 5; g.lineCap = 'round';
+    for (const [L, col] of [[v.lane.left, '#3ddc84'], [v.lane.right, '#ff4fd8']]) if (L) { g.strokeStyle = col; g.beginPath(); g.moveTo(X(L.xBottom * k), Y(L.yBottom * k)); g.lineTo(X(L.xTop * k), Y(L.yTop * k)); g.stroke(); }
+    g.lineWidth = 2;
+  }
+  // Biler og folk
+  const isLead = d => v.lead && v.lead.box && Math.abs(d.x - v.lead.box.x) < 2 && Math.abs(d.w - v.lead.box.w) < 2;
+  for (const d of v.dets || []) {
+    if (isLead(d)) continue;   // tegnes grønt under
+    const person = d.cls === 'person' || d.cls === 'bicycle';
+    g.strokeStyle = person ? '#ff4fd8' : '#ffd400'; g.fillStyle = g.strokeStyle;
+    g.strokeRect(X(d.x), Y(d.y), d.w * s, d.h * s);
+    g.fillText(`${{ car: 'bil', truck: 'lastebil', bus: 'buss', motorcycle: 'MC', bicycle: 'sykkel', person: 'person' }[d.cls] || d.cls} ${Math.round(d.score * 100)}`, X(d.x) + 2, Y(d.y) - 2);
+  }
+  // Bilen foran
+  const L = v.lead;
+  if (L && L.box) {
+    g.lineWidth = 4; g.strokeStyle = '#00e676'; g.strokeRect(X(L.box.x), Y(L.box.y), L.box.w * s, L.box.h * s);
+    g.font = '800 16px system-ui, sans-serif'; g.fillStyle = '#00e676';
+    g.fillText(`${Math.round(L.dist)} m${kmh >= 20 ? ` · ${(L.dist / (kmh / 3.6)).toFixed(1).replace('.', ',')} s` : ''}`, X(L.box.x), Y(L.box.y) - 4);
+  }
+  // Plassering i feltet: strek med midten av feltet og bilen
+  const off = v.lane && Number.isFinite(v.lane.offset) ? v.lane.offset : null;
+  if (off !== null) {
+    const bw = Math.min(220, cw - 40), bx = (cw - bw) / 2, by = ch - Math.max(40, oy + 30);
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(bx - 8, by - 14, bw + 16, 28);
+    g.fillStyle = '#fff'; g.fillRect(bx, by - 1, bw, 2); g.fillRect(bx + bw / 2 - 1, by - 8, 2, 16);
+    const px = bx + bw / 2 + Math.max(-1, Math.min(1, off / 1.6)) * bw / 2;
+    g.fillStyle = Math.abs(off) > 0.75 ? '#ff5252' : '#3ddc84'; g.beginPath(); g.arc(px, by, 7, 0, Math.PI * 2); g.fill();
+  }
+  const n = a => (a || []).length;
+  const cars = (v.dets || []).filter(d => !['person', 'bicycle'].includes(d.cls)), ppl = (v.dets || []).filter(d => ['person', 'bicycle'].includes(d.cls));
+  info.innerHTML = [
+    `<div>Veikamera · ${v.dfine ? 'D-FINE + Lite2' : 'Lite2'}${v.night ? ' · mørkt' : ''}</div>`,
+    `<div>${n(cars)} ${n(cars) === 1 ? 'bil' : 'biler'} · ${n(ppl)} ${n(ppl) === 1 ? 'person' : 'personer'}</div>`,
+    `<div>${L ? `Bil foran ${Math.round(L.dist)} m${kmh >= 20 ? ` · ${(L.dist / (kmh / 3.6)).toFixed(1).replace('.', ',')} s` : ''}${L.src === 'baklys' ? ' (baklys)' : ''}` : 'Ingen bil rett foran'}</div>`,
+    `<div>${v.lane && v.lane.left && v.lane.right ? `Begge feltlinjer · ${off !== null ? `${Math.abs(off).toFixed(2).replace('.', ',')} m ${off > 0.05 ? 'til høyre' : off < -0.05 ? 'til venstre' : 'midt i'}` : ''}` : v.lane && (v.lane.left || v.lane.right) ? 'Én feltlinje' : 'Ingen feltlinjer'}</div>`,
+    `<div class="muted">${v.roadBottom ? `Dashbordkant ${Math.round(v.roadBottom * 100)} % (blå strek)` : 'Dashbordkant ikke funnet ennå'}${Number.isFinite(v.lum) ? ` · lys ${v.lum}` : ''}${Number.isFinite(st.perf.dfineMs) && st.perf.dfineMs ? ` · D-FINE ${Math.round(st.perf.dfineMs)} ms` : ''}</div>`
+  ].join('');
+}
 async function finishRecording() {
   if (!recorder || !recorder.running) return;
   const rec = recorder;
@@ -1124,6 +1208,7 @@ async function finishRecording() {
   $('#record').classList.add('busy');
   const camInfo = cameraInfo();
   $('#atk-pop').hidden = true;
+  closeCamView();
   const drive = await rec.stop();
   if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
   if (camInfo) { await updateDrive(drive.id, { cameraPlan: camInfo }); drive.cameraPlan = camInfo; }
