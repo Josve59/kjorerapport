@@ -23,3 +23,30 @@ test('følging: enkeltbilder med feil telles ikke, gamle spor forsvinner, folk o
   assert.equal(p.length, 1); assert.equal(p[0].cls, 'car');
   assert.equal(tr.predict(1500).length, 0, 'borte etter 1 s uten svar');
 });
+
+test('følging: samme bil to ganger blir ett spor', () => {
+  const tr = createTracker();
+  for (let k = 0; k < 3; k++) tr.update([{ cls: 'car', score: 0.42, x: 6, y: 500, w: 496, h: 300 }, { cls: 'car', score: 0.41, x: 3, y: 502, w: 492, h: 298 }], k * 300);
+  assert.equal(tr.predict(700).length, 1);
+  // To spor som har glidd over hverandre slås sammen
+  const t2 = createTracker();
+  t2.update([{ cls: 'car', score: 0.8, x: 100, y: 100, w: 80, h: 60 }, { cls: 'car', score: 0.8, x: 200, y: 100, w: 80, h: 60 }], 0);
+  t2.update([{ cls: 'car', score: 0.8, x: 100, y: 100, w: 80, h: 60 }, { cls: 'car', score: 0.8, x: 160, y: 100, w: 80, h: 60 }], 300);
+  t2.update([{ cls: 'car', score: 0.8, x: 100, y: 100, w: 80, h: 60 }], 600);
+  t2.shift(2, 600, -20, 0, 700);   // spor 2 glir over på spor 1
+  t2.update([{ cls: 'car', score: 0.8, x: 100, y: 100, w: 80, h: 60 }], 700);
+  assert.equal(t2.size, 1);
+});
+
+test('følging: usikre svar holder liv i en bil som følges, men starter ingen ny; bildet holder den i inntil 2 s', () => {
+  const tr = createTracker();
+  tr.update([{ cls: 'car', score: 0.3, x: 10, y: 10, w: 50, h: 40 }], 0, { minNew: 0.4 });
+  assert.equal(tr.size, 0, 'usikker ny bil: ikke fulgt');
+  tr.update([{ cls: 'car', score: 0.6, x: 10, y: 10, w: 50, h: 40 }], 0, { minNew: 0.4 });
+  tr.update([{ cls: 'car', score: 0.3, x: 12, y: 10, w: 50, h: 40 }], 300, { minNew: 0.4 });
+  assert.equal(tr.predict(400).length, 1, 'usikkert svar på kjent bil teller');
+  // Ingen svar fra modellen, men bildet finner bilen hvert 125. ms: lever til 2 s etter siste svar
+  for (let t = 425; t <= 2300; t += 125) tr.shift(1, t - 125, 0, 0, t);
+  assert.equal(tr.predict(2050).length, 1);
+  assert.equal(tr.predict(2400).length, 0);
+});

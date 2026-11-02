@@ -6,6 +6,7 @@ import { processDetections, detectTaillights, roadDets } from './road.js';
 import { detectLanes, toGray, rowMeans, dashLine } from './lanes.js';
 import { loadDfine, loadDfineWorker } from './dfine.js';
 import { createTracker } from './track.js';
+import { matchShift } from './flow.js';
 
 const BASE = new URL('../../vendor/mediapipe/', import.meta.url).href;   // delt med hovedappen
 const ORT_BASE = new URL('../../vendor/ort/', import.meta.url).href;
@@ -19,7 +20,7 @@ let settleLum = null, settleStable = 0;   // veikameraet: vent til lysstyrken er
 let firstAfterSwitch = false;   // første analyse etter et bytte er treg (modellen starter på nytt) og telles ikke i farten
 let fpsWanted = 8, fpsNow = 8;
 const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0, detector: null, detFrames: 0, detAny: 0,
-  dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, dfineErr: 0 };   // glattet tid per analyse
+  dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, dfineErr: 0, flowMs: 0, flowHits: 0, flowTries: 0 };   // glattet tid per analyse
 let dfine = null, dfineBusy = false, lastDfine = null, lastLite = null;
 let rowEma = null, rowN = 0, roadBottom = null;   // dashbordkanten i veikamerabildet (k0.7.1), som andel av høyden
 let lastView = null;   // det modellene så i siste veibilde, til fullskjermvisningen (k0.7.2)
@@ -28,6 +29,7 @@ let speedKmh = NaN;    // farten fra appen (k0.7.3): Lite2 bare i stillstand nå
 export function setSpeed(kmh) { speedKmh = kmh; }   // D-FINE nano (k0.7.0) og Lite2, siste svar
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
 let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
+let flowPrev = null, flowPrevT = 0, flowRgba = null;   // forrige lille gråtonebilde til bildesammenligningen (k0.7.5)
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
 const switchLog = [];   // byttetider (ms) denne økten
 
@@ -36,7 +38,7 @@ export const state = () => ({ loaded: !!landmarker, roadLoaded: !!detector, runn
   roadSize,   // bildestørrelse fra veikameraet (stående bilde = telefonen står på høykant)
   roadBottom,   // dashbordkanten (andel av høyden) eller null
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, fpsNow, lastPose, lastRoad, video, switches: switchLog.slice(),
-  perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10 } });
+  perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10, flowMs: Math.round(perf.flowMs * 10) / 10 } });
 
 /* Tegner feltlinjene oppå veikamerabildet (direktevisning i kameratesten). null slår av. */
 export function setLaneOverlay(canvas) { laneOverlay = canvas; }
@@ -153,7 +155,7 @@ export async function switchTo(mode) {
     // Førerkameraet: fast 120 ms (ansiktsgjenkjenningen tåler lys som ikke er helt innstilt).
     // Veikameraet: til lysstyrken er stabil, høyst 1,5 s (se tick)
     settleUntil = performance.now() + (mode === 'environment' ? 1500 : 120);
-    settleLum = null; settleStable = 0; firstAfterSwitch = true; lastLite = null; lastDfine = null; tracker.reset();
+    settleLum = null; settleStable = 0; firstAfterSwitch = true; lastLite = null; lastDfine = null; tracker.reset(); flowPrev = null;
     const ms = Math.round(performance.now() - t0);
     switchLog.push(ms);
     if (switchLog.length > 200) switchLog.shift();
@@ -243,10 +245,13 @@ export function startLoop(fps = 8) {
         dfineBusy = true;
         const t0 = performance.now();
         dfine.detect(video, vw, vh, dark ? GAMMA : null, roadBottom)
-          .then(d => { const keep = d.filter(x => x.score >= 0.4); tracker.update(keep, t0); lastDfine = { at: performance.now(), dets: keep }; perf.dfineFrames++; if (keep.length) perf.dfineAny++; perf.dfineMs = perf.dfineMs ? perf.dfineMs * 0.9 + (performance.now() - t0) * 0.1 : performance.now() - t0; })
+          .then(d => { const keep = d.filter(x => x.score >= 0.4); tracker.update(d.filter(x => x.score >= 0.25), t0, { minNew: 0.4 }); lastDfine = { at: performance.now(), dets: keep }; perf.dfineFrames++; if (keep.length) perf.dfineAny++; perf.dfineMs = perf.dfineMs ? perf.dfineMs * 0.9 + (performance.now() - t0) * 0.1 : performance.now() - t0; })
           .catch(() => { perf.dfineErr++; })
           .finally(() => { dfineBusy = false; });
       }
+      // Bildesammenligning (k0.7.5): hvor bilene har flyttet seg siden forrige bilde, før boksene brukes
+      flowRgba = null;
+      try { const tf = performance.now(); flowStep(now0); ema('flowMs', performance.now() - tf); } catch { flowPrev = null; }
       const t1 = performance.now();
       try {
         const liteOk = !dfine || speedKmh < 5;
@@ -296,9 +301,13 @@ export function startLoop(fps = 8) {
         if (dark || road.lum < NIGHT_LUM) {
           try {
             const W = 320, H = Math.round(320 * video.videoHeight / video.videoWidth);
-            if (!tailCanvas || tailCanvas.height !== H) { tailCanvas = document.createElement('canvas'); tailCanvas.width = W; tailCanvas.height = H; tailCtx = tailCanvas.getContext('2d', { willReadFrequently: true }); }
-            tailCtx.drawImage(video, 0, 0, W, H);
-            const tl = detectTaillights(tailCtx.getImageData(0, 0, W, H).data, W, H, { roadBottom });
+            // Samme lille bilde som bildesammenligningen (tegnes én gang)
+            let rgba = flowRgba && flowRgba.length === W * H * 4 ? flowRgba : null;
+            if (!rgba) {
+              if (!tailCanvas || tailCanvas.height !== H) { tailCanvas = document.createElement('canvas'); tailCanvas.width = W; tailCanvas.height = H; tailCtx = tailCanvas.getContext('2d', { willReadFrequently: true }); }
+              tailCtx.drawImage(video, 0, 0, W, H); rgba = tailCtx.getImageData(0, 0, W, H).data;
+            }
+            const tl = detectTaillights(rgba, W, H, { roadBottom });
             road.night = true;
             road.tail = tl.pairs;
             if (!road.lead && tl.lead) road.lead = tl.lead;
@@ -313,6 +322,31 @@ export function startLoop(fps = 8) {
     }
   };
   tick();
+}
+
+/* Bildesammenligning (k0.7.5): et lite bilde (320 piksler bredt) i hvert steg. For hver bil som følges (sett minst to
+   ganger, de største først), letes midten av boksen fra forrige bilde opp i dette, og følgingen får flyttingen.
+   Rundt 1–3 ms på iPhone. Uten biler å følge tegnes bildet likevel (baklysene i mørket bruker det). */
+function flowStep(t) {
+  const W = 320, H = Math.round(320 * video.videoHeight / video.videoWidth), k = W / video.videoWidth;
+  if (!tailCanvas || tailCanvas.height !== H) { tailCanvas = document.createElement('canvas'); tailCanvas.width = W; tailCanvas.height = H; tailCtx = tailCanvas.getContext('2d', { willReadFrequently: true }); }
+  const preds = tracker.predict(flowPrevT).filter(p => p.w * k >= 7).sort((a, b) => b.w * b.h - a.w * a.h).slice(0, 6);
+  const dark = lastLum !== null && lastLum < NIGHT_LUM;
+  if (!preds.length && !dark) { flowPrev = null; return; }
+  tailCtx.drawImage(video, 0, 0, W, H);
+  flowRgba = tailCtx.getImageData(0, 0, W, H).data;
+  const gray = toGray(flowRgba, W, H);
+  if (flowPrev && flowPrev.length === gray.length && t - flowPrevT < 400) {
+    const radius = Math.min(14, Math.round(5 + (t - flowPrevT) / 30));
+    for (const p of preds) {
+      const b = tracker.boxOf(p.id, flowPrevT);
+      if (!b) continue;
+      perf.flowTries++;
+      const m = matchShift(flowPrev, gray, W, H, { x: b.x * k, y: b.y * k, w: b.w * k, h: b.h * k }, { radius });
+      if (m && tracker.shift(p.id, flowPrevT, m.dx / k, m.dy / k, t)) perf.flowHits++;
+    }
+  }
+  flowPrev = gray; flowPrevT = t;
 }
 
 export function stopLoop() { if (timer) clearTimeout(timer); timer = null; }

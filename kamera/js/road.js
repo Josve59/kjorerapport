@@ -47,7 +47,7 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minSc
       }
       const dist = VEHICLE_WIDTH[d.cls] * f / d.w;
       if (dist > maxDist) continue;
-      if (!lead || d.w > lead.wpx) lead = { cls: d.cls, dist: Math.round(dist * 10) / 10, wpx: Math.round(d.w), score: Math.round(d.score * 100) / 100,
+      if (!lead || d.w > lead.wpx) lead = { id: d.id, cls: d.cls, dist: Math.round(dist * 10) / 10, wpx: Math.round(d.w), score: Math.round(d.score * 100) / 100,
         box: { x: Math.round(d.x), y: Math.round(d.y), w: Math.round(d.w), h: Math.round(d.h) } };   // box: bare til visningen
     } else if (PEOPLE.includes(d.cls)) people++;
   }

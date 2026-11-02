@@ -10,11 +10,12 @@ import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, score
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { createLiveLimit } from './livelimit.js';
+import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.4';
+export const APP_VERSION = 'k0.7.5';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -949,6 +950,9 @@ async function startRecording(replay = null) {
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
   show('record');
   const settings = getSettings();
+  // Lyd ved fotobokser (v0.9.10 / k0.7.5): låses opp nå, i trykket på «Start», ellers spiller ikke iPhone lyden
+  const atkSound = !replay && settings.netLimits !== false && settings.atkSound !== false ? createAtkSounds() : null;
+  if (atkSound) unlockSound();
   const elapsed = $('#rec-elapsed'), dist = $('#rec-dist'), gps = $('#rec-gps'), warn = $('#rec-warn'), saved = $('#rec-saved'), markCount = $('#rec-marks');
   warn.innerHTML = '';
   saved.textContent = '';
@@ -985,6 +989,7 @@ async function startRecording(replay = null) {
         // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
         // 2 s etter at bilen har passert, og forsvinner så av seg selv.
         const atk = st.pos ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
+        if (atkSound && st.pos) { const snd = atkSound.step(atk, { kmh: st.kmh, limit: liveLimitNow, t: st.elapsed }); if (snd) playSound(snd); }
         const big = atk && ((atk.kind === 'boks' || atk.kind === 'strekning-foran') ? atk.d <= 300 : atk.kind === 'ferdig');
         atkEl.hidden = !atk || big;
         if (atk && !big) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
@@ -1123,6 +1128,9 @@ let liveLimitNow = null;   // aktiv fartsgrense under opptak (km/t eller null)
    avstand og tidsluke, feltlinjene, dashbordkanten og plasseringen i feltet. Trykk på det lille kamerabildet under
    opptak; trykk ✕ eller hvor som helst for å lukke. Ingenting av dette lagres. */
 let camViewRaf = null;
+// Myk visning (k0.7.5): boksene, feltlinjene og avstanden glir mot nye verdier (boksene på rundt 70 ms) i stedet for
+// å hoppe hver gang et nytt svar kommer. Følgingen sier hvor bilen er nå; dette jevner bare ut det som tegnes.
+const camEase = { boxes: new Map(), lanes: {}, dist: null, leadId: null, t: 0 };
 async function openCamView() {
   const box = $('#cam-full'), v = $('#cam-full-video');
   if (!cam.state().running) return;
@@ -1140,6 +1148,7 @@ async function closeCamView() {
   box.hidden = true;
   if (camViewRaf) cancelAnimationFrame(camViewRaf);
   camViewRaf = null;
+  camEase.boxes.clear(); camEase.lanes = {}; camEase.dist = null; camEase.t = 0;
   if (cam.state().running) await cam.attachVideo($('#rec-video'));
 }
 function drawCamView() {
@@ -1156,6 +1165,25 @@ function drawCamView() {
   const s = Math.min(cw / v.w, ch / v.h), ox = (cw - v.w * s) / 2, oy = (ch - v.h * s) / 2;
   const X = x => ox + x * s, Y = y => oy + y * s;
   const kmh = recorder && Number.isFinite(recorder.speed) ? recorder.speed * 3.6 : NaN;
+  const now = performance.now(), dt = Math.min(250, Math.max(0, now - (camEase.t || now)));
+  camEase.t = now;
+  const ease = tau => 1 - Math.exp(-dt / tau), aBox = ease(70), aLane = ease(120), aDist = ease(400);
+  const seen = new Set();
+  const smooth = d => {
+    if (d.id == null) return d;
+    seen.add(d.id);
+    const o = camEase.boxes.get(d.id);
+    const n = o ? { x: o.x + (d.x - o.x) * aBox, y: o.y + (d.y - o.y) * aBox, w: o.w + (d.w - o.w) * aBox, h: o.h + (d.h - o.h) * aBox } : { x: d.x, y: d.y, w: d.w, h: d.h };
+    camEase.boxes.set(d.id, n);
+    return { ...d, ...n };
+  };
+  const dets = (v.dets || []).map(smooth);
+  const L = v.lead ? { ...v.lead } : null;
+  if (L && L.box && L.id != null) L.box = camEase.boxes.get(L.id) || L.box;
+  for (const id of camEase.boxes.keys()) if (!seen.has(id)) camEase.boxes.delete(id);
+  // Avstanden til bilen foran glattes (ny bil: start på nytt)
+  if (L && Number.isFinite(L.dist)) { camEase.dist = camEase.leadId === (L.id ?? L.src) && camEase.dist !== null ? camEase.dist + (L.dist - camEase.dist) * aDist : L.dist; camEase.leadId = L.id ?? L.src; L.dist = camEase.dist; }
+  else { camEase.dist = null; camEase.leadId = null; }
   g.lineWidth = 2; g.font = '600 13px system-ui, sans-serif'; g.textBaseline = 'bottom';
   // Dashbordkanten
   if (v.roadBottom) { g.save(); g.setLineDash([8, 6]); g.strokeStyle = 'rgba(0,200,255,.9)'; g.beginPath(); g.moveTo(X(0), Y(v.roadBottom * v.h)); g.lineTo(X(v.w), Y(v.roadBottom * v.h)); g.stroke(); g.restore(); }
@@ -1163,12 +1191,18 @@ function drawCamView() {
   if (v.lane) {
     const k = v.w / v.lane.W;
     g.lineWidth = 5; g.lineCap = 'round';
-    for (const [L, col] of [[v.lane.left, '#3ddc84'], [v.lane.right, '#ff4fd8']]) if (L) { g.strokeStyle = col; g.beginPath(); g.moveTo(X(L.xBottom * k), Y(L.yBottom * k)); g.lineTo(X(L.xTop * k), Y(L.yTop * k)); g.stroke(); }
+    for (const [side, col] of [['left', '#3ddc84'], ['right', '#ff4fd8']]) {
+      const raw = v.lane[side], o = camEase.lanes[side];
+      if (!raw) { delete camEase.lanes[side]; continue; }
+      const Ln = o ? Object.fromEntries(['xBottom', 'xTop', 'yBottom', 'yTop'].map(q => [q, o[q] + (raw[q] - o[q]) * aLane])) : { ...raw };
+      camEase.lanes[side] = Ln;
+      g.strokeStyle = col; g.beginPath(); g.moveTo(X(Ln.xBottom * k), Y(Ln.yBottom * k)); g.lineTo(X(Ln.xTop * k), Y(Ln.yTop * k)); g.stroke();
+    }
     g.lineWidth = 2;
   }
   // Biler og folk
-  const isLead = d => v.lead && v.lead.box && Math.abs(d.x - v.lead.box.x) < 2 && Math.abs(d.w - v.lead.box.w) < 2;
-  for (const d of v.dets || []) {
+  const isLead = d => L && L.box && (L.id != null ? d.id === L.id : Math.abs(d.x - L.box.x) < 2 && Math.abs(d.w - L.box.w) < 2);
+  for (const d of dets) {
     if (isLead(d)) continue;   // tegnes grønt under
     const person = d.cls === 'person' || d.cls === 'bicycle';
     g.strokeStyle = person ? '#ff4fd8' : '#ffd400'; g.fillStyle = g.strokeStyle;
@@ -1176,7 +1210,6 @@ function drawCamView() {
     g.fillText(`${{ car: 'bil', truck: 'lastebil', bus: 'buss', motorcycle: 'MC', bicycle: 'sykkel', person: 'person' }[d.cls] || d.cls} ${Math.round(d.score * 100)}`, X(d.x) + 2, Y(d.y) - 2);
   }
   // Bilen foran
-  const L = v.lead;
   if (L && L.box) {
     g.lineWidth = 4; g.strokeStyle = '#00e676'; g.strokeRect(X(L.box.x), Y(L.box.y), L.box.w * s, L.box.h * s);
     g.font = '800 16px system-ui, sans-serif'; g.fillStyle = '#00e676';
@@ -1192,13 +1225,13 @@ function drawCamView() {
     g.fillStyle = Math.abs(off) > 0.75 ? '#ff5252' : '#3ddc84'; g.beginPath(); g.arc(px, by, 7, 0, Math.PI * 2); g.fill();
   }
   const n = a => (a || []).length;
-  const cars = (v.dets || []).filter(d => !['person', 'bicycle'].includes(d.cls)), ppl = (v.dets || []).filter(d => ['person', 'bicycle'].includes(d.cls));
+  const cars = dets.filter(d => !['person', 'bicycle'].includes(d.cls)), ppl = dets.filter(d => ['person', 'bicycle'].includes(d.cls));
   info.innerHTML = [
     `<div>Veikamera · ${v.dfine ? `D-FINE (${v.dfine})` : 'Lite2'}${v.night ? ' · mørkt' : ''}</div>`,
     `<div>${n(cars)} ${n(cars) === 1 ? 'bil' : 'biler'} · ${n(ppl)} ${n(ppl) === 1 ? 'person' : 'personer'}</div>`,
     `<div>${L ? `Bil foran ${Math.round(L.dist)} m${kmh >= 20 ? ` · ${(L.dist / (kmh / 3.6)).toFixed(1).replace('.', ',')} s` : ''}${L.src === 'baklys' ? ' (baklys)' : ''}` : 'Ingen bil rett foran'}</div>`,
     `<div>${v.lane && v.lane.left && v.lane.right ? `Begge feltlinjer · ${off !== null ? `${Math.abs(off).toFixed(2).replace('.', ',')} m ${off > 0.05 ? 'til høyre' : off < -0.05 ? 'til venstre' : 'midt i'}` : ''}` : v.lane && (v.lane.left || v.lane.right) ? 'Én feltlinje' : 'Ingen feltlinjer'}</div>`,
-    `<div class="muted">${v.roadBottom ? `Dashbordkant ${Math.round(v.roadBottom * 100)} % (blå strek)` : 'Dashbordkant ikke funnet ennå'}${Number.isFinite(v.lum) ? ` · lys ${v.lum}` : ''}${Number.isFinite(st.perf.dfineMs) && st.perf.dfineMs ? ` · D-FINE ${Math.round(st.perf.dfineMs)} ms` : ''}</div>`
+    `<div class="muted">${v.roadBottom ? `Dashbordkant ${Math.round(v.roadBottom * 100)} % (blå strek)` : 'Dashbordkant ikke funnet ennå'}${Number.isFinite(v.lum) ? ` · lys ${v.lum}` : ''}${Number.isFinite(st.perf.dfineMs) && st.perf.dfineMs ? ` · D-FINE ${Math.round(st.perf.dfineMs)} ms` : ''}${st.perf.flowTries ? ` · følger i bildet ${Math.round(100 * st.perf.flowHits / st.perf.flowTries)} %` : ''}</div>`
   ].join('');
 }
 async function finishRecording() {
@@ -1400,6 +1433,9 @@ async function renderSettings() {
     el.checked = settings[key] !== false;
     el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
+  // Lyd ved fotobokser: på som standard. Slås den på (eller trykkes «Prøv lyden»), spilles lyden for 300 m før.
+  { const el = $('#atkSound'); el.checked = settings.atkSound !== false; el.onchange = () => { saveSettings({ ...getSettings(), atkSound: el.checked }); if (el.checked) { unlockSound(); playSound('naer'); } }; }
+  $('#btn-test-sound').onclick = () => { unlockSound(); playSound('varsel'); setTimeout(() => playSound('naer'), 900); setTimeout(() => playSound('fart'), 1900); };
   // Kart og by-tilpasset jevn fart er på som standard
   { const el = $('#autoSpeak'); el.checked = !!settings.autoSpeak; el.onchange = () => { saveSettings({ ...getSettings(), autoSpeak: el.checked }); if (el.checked) speak('Rapporten leses opp når turen er ferdig.'); }; }
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {

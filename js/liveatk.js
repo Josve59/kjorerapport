@@ -112,7 +112,7 @@ export function createLiveAtk() {
     } else track = null;
     if (near) {
       const d = Math.max(50, Math.round(near.d / 50) * 50);
-      return { kind: near.kind, d, text: `${near.kind === 'boks' ? 'Fotoboks' : 'Strekningsmåling'} om ${d} m` };
+      return { kind: near.kind, d, key: near.key, text: `${near.kind === 'boks' ? 'Fotoboks' : 'Strekningsmåling'} om ${d} m` };
     }
     return null;
   };

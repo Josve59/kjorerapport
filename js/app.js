@@ -10,9 +10,10 @@ import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, score
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import * as cam from './facecam.js';
 import { createLiveLimit } from './livelimit.js';
+import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.9';
+export const APP_VERSION = '0.9.10';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -799,6 +800,9 @@ async function startRecording(replay = null) {
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
   show('record');
   const settings = getSettings();
+  // Lyd ved fotobokser (v0.9.10 / k0.7.5): låses opp nå, i trykket på «Start», ellers spiller ikke iPhone lyden
+  const atkSound = !replay && settings.netLimits !== false && settings.atkSound !== false ? createAtkSounds() : null;
+  if (atkSound) unlockSound();
   const elapsed = $('#rec-elapsed'), dist = $('#rec-dist'), gps = $('#rec-gps'), warn = $('#rec-warn'), saved = $('#rec-saved'), markCount = $('#rec-marks');
   warn.innerHTML = '';
   saved.textContent = '';
@@ -834,6 +838,7 @@ async function startRecording(replay = null) {
         // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
         // 2 s etter at bilen har passert, og forsvinner så av seg selv.
         const atk = st.pos ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
+        if (atkSound && st.pos) { const snd = atkSound.step(atk, { kmh: st.kmh, limit: liveLimitNow, t: st.elapsed }); if (snd) playSound(snd); }
         const big = atk && ((atk.kind === 'boks' || atk.kind === 'strekning-foran') ? atk.d <= 300 : atk.kind === 'ferdig');
         atkEl.hidden = !atk || big;
         if (atk && !big) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
@@ -1117,6 +1122,9 @@ async function renderSettings() {
     el.checked = settings[key] !== false;
     el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
+  // Lyd ved fotobokser: på som standard. Slås den på (eller trykkes «Prøv lyden»), spilles lyden for 300 m før.
+  { const el = $('#atkSound'); el.checked = settings.atkSound !== false; el.onchange = () => { saveSettings({ ...getSettings(), atkSound: el.checked }); if (el.checked) { unlockSound(); playSound('naer'); } }; }
+  $('#btn-test-sound').onclick = () => { unlockSound(); playSound('varsel'); setTimeout(() => playSound('naer'), 900); setTimeout(() => playSound('fart'), 1900); };
   // Kart og by-tilpasset jevn fart er på som standard
   { const el = $('#autoSpeak'); el.checked = !!settings.autoSpeak; el.onchange = () => { saveSettings({ ...getSettings(), autoSpeak: el.checked }); if (el.checked) speak('Rapporten leses opp når turen er ferdig.'); }; }
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {
