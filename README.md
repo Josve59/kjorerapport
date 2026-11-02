@@ -128,6 +128,18 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.8 / k0.7.1 – after the evening drive with D-FINE (2 Nov), and large speed-camera warnings
+
+**What the drive showed:** the detectors work on the iPhone. Lite2 found something in 2831 of 3021 runs. D-FINE ran on WebGPU at about 350 ms, and the night snapshots are good. But:
+
+- **The car's own dashboard was taken for a car in front.** The phone was mounted so that the bottom 28 % of the portrait frame was dashboard. 8263 of 9364 «cars in front» were a 719–720 px wide box at «2.5 m» (median headway 0.15 s). New: the app finds the dashboard edge itself (`dashLine` in `lanes.js`), as the topmost clear bright-to-dark transition from 60 % of the height down, in row means smoothed over time. On the snapshots this gives 0.73 (2 Nov) and 0.87 (31 Oct), which matches both. Detections more than 70 % of the frame wide, or reaching well into the dashboard, are ignored. Car detection (D-FINE crop), lane lines and the taillight search use only the road above the edge. In old drives, the report ignores «cars» over 70 % of the frame width (`roadSummary` `frameW`). On 2 Nov the typical headway goes from 0.2 s / 3 m to 1.8 s / 33 m, with no false «for nær».
+- **Lane lines were searched for on the dashboard** (both lines in 95 of 11,856 frames). New: the search band is the road just above the dashboard edge (20 % of the height). The horizon is 25 % above the edge, the inlier requirement is lower (dashed lines), and brighter asphalt is allowed (lit by the headlights). On 67 large evening snapshots: at least one line in 60 (before 7), both in 42 (before 1). The daylight drive on 31 Oct: 37 and 18 of 50 (before 26 and 2).
+
+**Speed camera / section control on the recording screen (both apps):**
+- A small yellow line from 1 km away: «Fotoboks om 800 m» / «Strekningsmåling om 800 m». Before, the range was 700 m and there was no warning for the start of section control.
+- A large yellow card for the last 300 m: «FOTOBOKS · om 250 m · Fartsgrense 80 · du kjører 77 km/t». It disappears by itself 2 s after passing. After section control: «Strekningsmåling ferdig · snitt 75 km/t» for 8 s.
+- The control must be within 30° straight ahead, and the car must have got closer to it 3 updates in a row (or be within 300 m). Controls on other roads nearby gave short false warnings before. Simulated on the Storlien drive: a warning about 1 km before each section control, the large card 300 m before, the running average, and the final average of 74 and 77 km/h.
+
 ## What's new in k0.7.0 – D-FINE nano + Lite2, 1280×720 road camera, large test snapshots
 
 - **Two detectors, merged.** D-FINE nano (Apache 2.0, ONNX from onnx-community/dfine_n_coco-ONNX, COCO AP about 43) runs with ONNX Runtime Web 1.30.0 (MIT, `vendor/ort/`) on the GPU (WebGPU), asynchronously, at most every 250 ms. EfficientDet-Lite2 runs on the CPU every 600 ms. Results older than 1.5 s are not used, and the same object (overlap over 50 %) counts once (`mergeDets`). Without WebGPU only Lite2 is used, because D-FINE on the CPU is too slow on the phone.

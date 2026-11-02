@@ -37,7 +37,7 @@ export function directionAt(p, segs, maxM = 60) {
 }
 
 export function createLiveAtk() {
-  let points = [], sections = [], prev = null, heading = null, section = null, done = null;
+  let points = [], sections = [], prev = null, heading = null, section = null, done = null, track = null;
   /* Nye data for området: { points: [{lat, lon, name, ctl}], sections: [{name, ctl, pts}] }, segs: fartsgrenser */
   const load = (data, segs) => {
     points = (data.points || []).map(p => ({ ...p, mdir: directionAt(p, segs) }));
@@ -49,7 +49,9 @@ export function createLiveAtk() {
       return { name: s.name, len, entry, exit, dir: bearing(entry, next), exitDir: bearing(beforeExit, exit), known: !!s.ctl };
     });
   };
-  /* GPS-punkt {lat, lon, t (s), kmh}. Returnerer { text, kind: 'boks' | 'strekning' | 'ferdig' } eller null. */
+  /* GPS-punkt {lat, lon, t (s), kmh}. Returnerer null eller { text, kind, … }:
+     'boks' { d } fotoboks foran (innen 1 km), 'strekning-foran' { d } inngangen til en strekningsmåling foran,
+     'strekning' { avg, left } på strekningen, 'ferdig' { avg } i 8 s etter utgangen. d i meter (rundet til 50). */
   const update = p => {
     if (!p || !Number.isFinite(p.lat)) return null;
     if (prev && metres(prev, p) >= 8) { heading = bearing(prev, p); }
@@ -80,24 +82,38 @@ export function createLiveAtk() {
       if ((ax >= 0 && metres(p, section.s.exit) <= 2000) || section.dist > section.s.len + 400) {
         const tEnd = ax >= 0 && metres(p, section.s.exit) <= 2000 ? p.t - ax / v(p) : (section.tLen ?? p.t);
         const total = tEnd > section.t0 ? Math.round(section.s.len / (tEnd - section.t0) * 3.6) : avg;
-        done = { until: p.t + 20, text: `Strekningsmåling ferdig · snitt ${total} km/t` };
+        done = { until: p.t + 8, avg: total, text: `Strekningsmåling ferdig · snitt ${total} km/t` };
         section = null;
       } else {
         const left = Math.max(0, Math.round((section.s.len - section.dist) / 100) / 10);
-        return { kind: 'strekning', text: `Strekningsmåling · snitt ${avg ?? '–'} km/t · ${String(left).replace('.', ',')} km igjen` };
+        return { kind: 'strekning', avg, left, text: `Strekningsmåling · snitt ${avg ?? '–'} km/t · ${String(left).replace('.', ',')} km igjen` };
       }
     }
-    if (done && p.t < done.until) return { kind: 'ferdig', text: done.text };
-    // Fotoboks foran i vår retning
+    if (done && p.t < done.until) return { kind: 'ferdig', avg: done.avg, text: done.text };
+    // Fotoboks eller inngang til strekningsmåling foran i vår retning, innen 1 km (k0.7.1: før 700 m), innen 30° rett
+    // foran. Vises først når bilen har nærmet seg den samme kontrollen 3 oppdateringer på rad (eller er innen 300 m):
+    // kontroller på andre veier i nærheten ga ellers korte, falske varsler (Storlien-turen, 11–12 min)
+    const ahead = q => angDiff(heading, bearing(p, q)) <= 30;
     let near = null;
-    for (const b of points) {
+    points.forEach((b, i) => {
       const d = metres(p, b);
-      if (d > 700 || d < 15) continue;
-      if (angDiff(heading, bearing(p, b)) > 30) continue;   // ikke foran oss
-      if (Number.isFinite(b.mdir) && b.ctl) { const withM = angDiff(heading, b.mdir) < 90; if ((b.ctl === 'med') !== withM) continue; }
-      if (!near || d < near.d) near = { d };
+      if (d > 1000 || d < 15 || !ahead(b)) return;
+      if (Number.isFinite(b.mdir) && b.ctl) { const withM = angDiff(heading, b.mdir) < 90; if ((b.ctl === 'med') !== withM) return; }
+      if (!near || d < near.d) near = { d, kind: 'boks', key: 'p' + i };
+    });
+    sections.forEach((s, i) => {
+      const d = metres(p, s.entry);
+      if (d > 1000 || d <= 60 || !ahead(s.entry) || angDiff(heading, s.dir) >= 45) return;
+      if (!near || d < near.d) near = { d, kind: 'strekning-foran', key: 's' + i };
+    });
+    if (near) {
+      track = track && track.key === near.key ? { key: near.key, d: near.d, n: near.d < track.d - 2 ? track.n + 1 : track.n } : { key: near.key, d: near.d, n: 1 };
+      if (track.n < 3 && near.d > 300) near = null;
+    } else track = null;
+    if (near) {
+      const d = Math.max(50, Math.round(near.d / 50) * 50);
+      return { kind: near.kind, d, text: `${near.kind === 'boks' ? 'Fotoboks' : 'Strekningsmåling'} om ${d} m` };
     }
-    if (near) return { kind: 'boks', text: `Fotoboks om ${Math.max(50, Math.round(near.d / 50) * 50)} m` };
     return null;
   };
   return { load, update };

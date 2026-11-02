@@ -11,7 +11,7 @@ export const LANE_WIDTH = 3.25;
 /* gray: Uint8Array w*h (0–255). Returnerer { left, right, offset, width, points } der left/right er
    { xBottom, xTop, yBottom, yTop, inliers } eller null, offset = bilens sideavvik fra midten av feltet i meter
    (positiv = til høyre, forutsatt at kameraet står midt i bilen), width = feltbredde i piksler nederst. */
-export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, seed = 7 } = {}) {
+export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.45, maxBg = 150, minInl = 0.25, seed = 7 } = {}) {
   const y0 = Math.floor(h * top), y1 = Math.floor(h * bottom);
   const night = stretchDark(gray, w, y0, y1);
   if (night) gray = night;
@@ -32,7 +32,7 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, seed = 7 } =
     let start = -1;
     for (let x = 0; x < w; x++) {
       // Lys stripe på mørkere underlag (asfalt). Snø, himmel og lyse flater har lys bakgrunn og tas ikke med.
-      const bright = gray[row + x] > bg[x] + 25 && gray[row + x] > 90 && bg[x] < 150;
+      const bright = gray[row + x] > bg[x] + 25 && gray[row + x] > 90 && bg[x] < maxBg;
       if (bright && start < 0) start = x;
       if ((!bright || x === w - 1) && start >= 0) {
         const len = x - start;
@@ -57,7 +57,7 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, seed = 7 } =
       const inl = cand.filter(c => Math.abs(a + b * c.y - c.x) <= tol);
       if (!best || inl.length > best.inl.length) best = { a, b, inl };
     }
-    if (!best || best.inl.length < Math.max(8, (y1 - y0) * 0.25)) return null;
+    if (!best || best.inl.length < Math.max(8, (y1 - y0) * minInl)) return null;
     // Minste kvadrater på inlierne
     const n = best.inl.length, my = best.inl.reduce((t, c) => t + c.y, 0) / n, mx = best.inl.reduce((t, c) => t + c.x, 0) / n;
     let sxy = 0, syy = 0; for (const c of best.inl) { sxy += (c.y - my) * (c.x - mx); syy += (c.y - my) ** 2; }
@@ -71,7 +71,7 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, seed = 7 } =
   // Perspektiv: linjene skal peke mot et forsvinningspunkt over analyseområdet og nær midten av bildet.
   // Forlenget til horisonten (her antatt rundt 0,45·h) må hver linje ende i midtre halvdel.
   const atY = (L, y) => L.xBottom + (L.xTop - L.xBottom) * (y - L.yBottom) / (L.yTop - L.yBottom);
-  const yh = h * 0.45;
+  const yh = h * horizon;
   const plausible = L => L && atY(L, yh) > w * 0.2 && atY(L, yh) < w * 0.8;
   if (!plausible(left)) left = null;
   if (!plausible(right)) right = null;
@@ -109,4 +109,35 @@ export function toGray(rgba, w, h) {
   const g = new Uint8Array(w * h);
   for (let i = 0, j = 0; j < g.length; i += 4, j++) g[j] = (rgba[i] * 77 + rgba[i + 1] * 150 + rgba[i + 2] * 29) >> 8;
   return g;
+}
+
+/* Dashbordkanten (k0.7.1): hvor veien slutter og bilens eget dashbord begynner, i et stående bilde fra en telefon i
+   holder. På turen 2. nov. var de nederste rundt 28 % av bildet dashbord, og bilgjenkjenningen tok det for en bil
+   rett foran (hele bildebredden, «2,5 m»), mens feltlinjene ble lett etter på dashbordet.
+   Kanten er en tydelig overgang fra lysere (vei) til mørkere (dashbord) i radsnittene, glattet over tid. Den
+   øverste tydelige kanten fra 60 % av høyden og ned: horisonten i dagslys ligger over (31. okt.: 0,49–0,59), og
+   lyse lister nede på dashbordet under (2. nov.: 0,90 mot riktig 0,72). Begge turene gir riktig kant.
+   rowMean: snitt per rad (0–255). Returnerer kanten som andel av høyden, eller null uten tydelig kant. */
+export function rowMeans(gray, w, h) {
+  const out = new Float32Array(h);
+  for (let y = 0; y < h; y++) { let s = 0; for (let x = 0; x < w; x++) s += gray[y * w + x]; out[y] = s / w; }
+  return out;
+}
+export function dashLine(rowMean, { from = 0.6, to = 0.97, win = 5, minStep = 12 } = {}) {
+  const h = rowMean.length, a = Math.floor(h * from), b = Math.floor(h * to);
+  const steps = [];
+  let best = 0;
+  for (let y = Math.max(a, win); y < Math.min(b, h - win); y++) {
+    let up = 0, dn = 0;
+    for (let k = 1; k <= win; k++) { up += rowMean[y - k]; dn += rowMean[y + k - 1]; }
+    const step = (up - dn) / win;
+    steps.push([y, step]);
+    if (step > best) best = step;
+  }
+  if (best < minStep) return null;
+  // Øverste kant som er minst halvparten så tydelig som den sterkeste, og toppen av den kanten
+  const first = steps.findIndex(([, st]) => st >= Math.max(minStep, 0.5 * best));
+  let k = first;
+  while (k + 1 < steps.length && steps[k + 1][1] >= steps[k][1]) k++;
+  return steps[k][0] / h;
 }

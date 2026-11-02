@@ -3,7 +3,7 @@
    Ingen bilder lagres eller sendes – bare hodets vinkler og tall om veien går videre til appen. */
 import { poseFromMatrix } from './camera.js';
 import { processDetections, detectTaillights } from './road.js';
-import { detectLanes, toGray } from './lanes.js';
+import { detectLanes, toGray, rowMeans, dashLine } from './lanes.js';
 import { loadDfine } from './dfine.js';
 
 const BASE = new URL('../../vendor/mediapipe/', import.meta.url).href;   // delt med hovedappen
@@ -19,7 +19,8 @@ let firstAfterSwitch = false;   // første analyse etter et bytte er treg (model
 let fpsWanted = 8, fpsNow = 8;
 const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0, detector: null, detFrames: 0, detAny: 0,
   dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, dfineErr: 0 };   // glattet tid per analyse
-let dfine = null, dfineBusy = false, lastDfine = null, lastLite = null;   // D-FINE nano (k0.7.0) og Lite2, siste svar
+let dfine = null, dfineBusy = false, lastDfine = null, lastLite = null;
+let rowEma = null, rowN = 0, roadBottom = null;   // dashbordkanten i veikamerabildet (k0.7.1), som andel av høyden   // D-FINE nano (k0.7.0) og Lite2, siste svar
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
 let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
@@ -28,6 +29,7 @@ const switchLog = [];   // byttetider (ms) denne økten
 export const state = () => ({ loaded: !!landmarker, roadLoaded: !!detector, running: !!stream, facing, switching,
   ready: !!stream && !switching && performance.now() >= settleUntil,   // gir brukbare bilder nå
   roadSize,   // bildestørrelse fra veikameraet (stående bilde = telefonen står på høykant)
+  roadBottom,   // dashbordkanten (andel av høyden) eller null
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, fpsNow, lastPose, lastRoad, video, switches: switchLog.slice(),
   perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10 } });
 
@@ -224,7 +226,7 @@ export function startLoop(fps = 8) {
       if (dfine && !dfineBusy && (!lastDfine || now0 - lastDfine.at >= 250)) {
         dfineBusy = true;
         const t0 = performance.now();
-        dfine.detect(video, vw, vh, dark ? GAMMA : null)
+        dfine.detect(video, vw, vh, dark ? GAMMA : null, roadBottom)
           .then(d => { const keep = d.filter(x => x.score >= 0.4); lastDfine = { at: performance.now(), dets: keep }; perf.dfineFrames++; if (keep.length) perf.dfineAny++; perf.dfineMs = perf.dfineMs ? perf.dfineMs * 0.9 + (performance.now() - t0) * 0.1 : performance.now() - t0; })
           .catch(() => { perf.dfineErr++; })
           .finally(() => { dfineBusy = false; });
@@ -241,7 +243,7 @@ export function startLoop(fps = 8) {
           ema('roadMs', performance.now() - t1);
         }
         const recent = a => (a && now0 - a.at < 1500 ? a.dets : []);
-        road = processDetections(mergeDets([...recent(lastLite), ...recent(lastDfine)]), vw, vh);
+        road = processDetections(mergeDets([...recent(lastLite), ...recent(lastDfine)]), vw, vh, { roadBottom });
       } catch { road = null; }
       // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
       if (road) {
@@ -255,7 +257,15 @@ export function startLoop(fps = 8) {
           let sum = 0; for (let i = 0; i < gray.length; i++) sum += gray[i];
           road.lum = Math.round(sum / gray.length);
           lastLum = road.lum;
-          const ln = detectLanes(gray, W, H);
+          // Dashbordkanten: radsnitt glattet over tid, ny vurdering hvert 15. bilde
+          const rm = rowMeans(gray, W, H);
+          if (!rowEma || rowEma.length !== H) { rowEma = Float32Array.from(rm); rowN = 0; }
+          else for (let y = 0; y < H; y++) rowEma[y] += (rm[y] - rowEma[y]) * 0.05;
+          if (++rowN >= 20 && rowN % 15 === 0) { const dl = dashLine(rowEma); roadBottom = dl && dl < 0.97 ? Math.round(dl * 100) / 100 : null; }
+          // Feltlinjer: på veien rett over dashbordet når kanten er kjent (før: nederste del av bildet, som var dashbordet)
+          // Testet på 67 store kveldsbilder (2. nov.): minst én linje i 60 (før 7), begge i 42 (før 1); dagsturen 31. okt.
+          // 37 og 18 av 50 (før 26 og 2). Asfalten rett foran er sterkt opplyst om kvelden, så lys bakgrunn tillates.
+          const ln = detectLanes(gray, W, H, roadBottom ? { top: Math.max(0.25, roadBottom - 0.2), bottom: roadBottom - 0.02, horizon: Math.max(0.15, roadBottom - 0.25), minInl: 0.15, maxBg: 230 } : {});
           road.lane = { l: !!ln.left, r: !!ln.right, offset: ln.offset };
           if (laneOverlay) drawLanes(laneOverlay, ln, W, H);
         } catch { /* ingen feltlinjer */ }
@@ -265,7 +275,7 @@ export function startLoop(fps = 8) {
             const W = 320, H = Math.round(320 * video.videoHeight / video.videoWidth);
             if (!tailCanvas || tailCanvas.height !== H) { tailCanvas = document.createElement('canvas'); tailCanvas.width = W; tailCanvas.height = H; tailCtx = tailCanvas.getContext('2d', { willReadFrequently: true }); }
             tailCtx.drawImage(video, 0, 0, W, H);
-            const tl = detectTaillights(tailCtx.getImageData(0, 0, W, H).data, W, H);
+            const tl = detectTaillights(tailCtx.getImageData(0, 0, W, H).data, W, H, { roadBottom });
             road.night = true;
             road.tail = tl.pairs;
             if (!road.lead && tl.lead) road.lead = tl.lead;

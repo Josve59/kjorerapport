@@ -15,9 +15,13 @@ export function focalPx(w, h, fovDeg = 66) {
 
 /* Én bildeanalyse → tall. dets: [{ cls, score, x, y, w, h }] i piksler. Bilen foran: et kjøretøy midt i
    bildet (sentrum innenfor midtre 30 %) med underkanten i nedre del (på veien, ikke på en bro), den bredeste. */
-export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minScore = 0.35 } = {}) {
+export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minScore = 0.35, roadBottom = null } = {}) {
   const f = focalPx(w, h, fovDeg);
   let lead = null, cars = 0, people = 0, best = 0;
+  // Bilens eget panser/dashbord (k0.7.1): bokser over 70 % av bildebredden, eller som går godt ned i dashbordet.
+  // Turen 2. nov.: 8263 av 9364 «biler foran» var dashbordet (720 px bred boks, «2,5 m», 0,15 s tidsluke).
+  const rb = roadBottom || 1, minBottom = roadBottom ? Math.max(0.1, roadBottom - 0.42) : 0.45;
+  dets = dets.filter(d => d.w < w * 0.7 && d.y + d.h <= h * (rb + 0.04) && d.y < h * rb);
   for (const d of dets) {
     // Beste bil-score også under grensen (k0.6.5): viser om gjenkjenningen var nær ved å se noe (mørke, refleks)
     if (VEHICLE_WIDTH[d.cls] && d.score > best) best = d.score;
@@ -25,7 +29,7 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minSc
     if (VEHICLE_WIDTH[d.cls]) {
       cars++;
       const cx = d.x + d.w / 2, bottom = d.y + d.h;
-      if (cx < w * 0.35 || cx > w * 0.65 || bottom < h * 0.45 || d.w < 8) continue;
+      if (cx < w * 0.35 || cx > w * 0.65 || bottom < h * minBottom || d.w < 8) continue;
       const dist = VEHICLE_WIDTH[d.cls] * f / d.w;
       if (dist > maxDist) continue;
       if (!lead || d.w > lead.wpx) lead = { cls: d.cls, dist: Math.round(dist * 10) / 10, wpx: Math.round(d.w), score: Math.round(d.score * 100) / 100 };
@@ -39,10 +43,11 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minSc
    personbil). rgba: Uint8ClampedArray fra canvas, w×h (gjerne 320×240). Returnerer { lead, pairs }.
    Ren funksjon, kan testes i Node. */
 export const TAIL_SEP = 1.45;
-export function detectTaillights(rgba, w, h, { fovDeg = 66, maxDist = 80 } = {}) {
+export function detectTaillights(rgba, w, h, { fovDeg = 66, maxDist = 80, roadBottom = null } = {}) {
   // Rødt lys: sterk rød kanal, tydelig mer rødt enn grønt og blått. Overeksponerte kjerner (hvite) kobles
   // til blobben gjennom den røde glorien rundt.
-  const y0 = Math.floor(h * 0.3), y1 = Math.floor(h * 0.95);
+  // Bare veien: over dashbordkanten når den er kjent (k0.7.1)
+  const rb = roadBottom || 0.95, y0 = Math.floor(h * Math.max(0.05, rb - 0.65)), y1 = Math.floor(h * rb);
   // Terskelen følger det sterkeste røde i bildet, så lysene finnes også når kameraet eksponerer mørkt.
   let maxR = 0;
   for (let y = y0; y < y1; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (rgba[i] - Math.max(rgba[i + 1], rgba[i + 2]) > 20 && rgba[i] > maxR) maxR = rgba[i]; }
@@ -89,7 +94,7 @@ export function detectTaillights(rgba, w, h, { fovDeg = 66, maxDist = 80 } = {})
     if (s > 0.6 * dx) continue;
     const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
     // Bilen foran: midt i bildet, og lysene rundt horisonten eller litt under (ikke gatelys, ikke panseret)
-    if (cx < w * 0.35 || cx > w * 0.65 || cy < h * 0.35 || cy > h * 0.8) continue;
+    if (cx < w * 0.35 || cx > w * 0.65 || cy < h * (roadBottom ? rb - 0.45 : 0.35) || cy > h * (roadBottom ? rb - 0.02 : 0.8)) continue;
     const dist = TAIL_SEP * f / dx;
     if (dist > maxDist || dist < 4) continue;
     if (!lead || dx > lead.wpx) lead = { cls: 'car', dist: Math.round(dist * 10) / 10, wpx: Math.round(dx), score: 0.5, src: 'baklys' };
@@ -107,8 +112,9 @@ function kmhAt(points, t) {
 /* Hele turen. samples: [{ t, lead, cars, people }] i opptakstid, points: rapportens punkter (relativ tid).
    Samkjøring med GPS: mellom bildene fra veikameraet (når kameraet ser på føreren) antas avstanden å være
    den samme, men bare hvis farten vår har endret seg mindre enn 15 km/t. Da bygges det bro over hullet. */
-export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1.0, bridge = 8 } = {}) {
-  const s = (samples || []).filter(x => Number.isFinite(x.t)).map(x => ({ ...x, t: x.t - t0 })).sort((a, b) => a.t - b.t);
+export function roadSummary(samples, points, { t0 = 0, minKmh = 50, closeSec = 1.0, bridge = 8, frameW = null } = {}) {
+  // Eldre turer (før k0.7.1): en «bil foran» over 70 % av bildebredden var bilens eget dashbord, ikke en bil
+  const s = (samples || []).filter(x => Number.isFinite(x.t)).map(x => ({ ...x, t: x.t - t0, lead: x.lead && frameW && x.lead.wpx >= 0.7 * frameW ? null : x.lead })).sort((a, b) => a.t - b.t);
   if (!s.length) return null;
   const total = points.length ? points[points.length - 1].t - points[0].t : 0;
   // Hvor stor del av tiden veikameraet faktisk så veien (bilder tettere enn 1 s regnes som sammenhengende)

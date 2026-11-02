@@ -65,3 +65,15 @@ test('ATK live: «Fotoboks om …» foran i vår retning, og løpende snitt på 
   const west = drive(200, 72, -1).map(p => ({ ...p, lon: p.lon + 4000 * lonPerM }));
   assert.ok(west.every(p => !live2.update(p)), 'P1 måler ikke vestgående');
 });
+
+test('ATK live: varsel fra 1 km, stort kort de siste 300 m (avstand i svaret), også for strekningsmåling foran', () => {
+  const at = m => ({ lat: 63.4, lon: 10.4 + m * lonPerM });
+  const live = createLiveAtk();
+  live.load({ points: [{ ...at(2000), name: 'P1', ctl: 'med' }], sections: [{ name: 'S1', ctl: 'med', pts: [at(3500), at(4500)] }] }, [{ pts: [at(0), at(6000)] }]);
+  const seen = drive(260).map(p => live.update(p));
+  const first = seen.findIndex(x => x && x.kind === 'boks');
+  assert.ok(first >= 50 && first <= 54, 'første varsel rundt 1 km før (t=50): ' + first);
+  assert.ok(seen.slice(86, 99).every(x => x && x.kind === 'boks' && x.d <= 300), 'innen 300 m: avstand for stort kort');
+  assert.ok(seen.some(x => x && x.kind === 'strekning-foran' && x.d <= 300), 'strekningsmåling foran');
+  assert.ok(seen.some(x => x && x.kind === 'ferdig' && Number.isFinite(x.avg)), 'snitt etter strekningen');
+});

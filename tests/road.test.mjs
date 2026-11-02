@@ -84,3 +84,17 @@ test('veikamera: beste bil-score lagres også under grensen, men telles ikke', (
   const r = processDetections([{ cls: 'car', score: 0.22, x: 300, y: 300, w: 60, h: 50 }], 640, 480);
   assert.equal(r.cars, 0); assert.equal(r.lead, null); assert.equal(r.best, 0.22);
 });
+
+test('veikamera: bilens eget dashbord (bred boks nederst) er ikke en bil foran', () => {
+  const W = 720, H = 1280;
+  const hood = { cls: 'car', score: 0.9, x: 0, y: 700, w: 719, h: 400 };          // hele bredden, ned i dashbordet
+  const car = { cls: 'car', score: 0.7, x: 320, y: 600, w: 90, h: 70 };           // bil foran, over dashbordkanten
+  const r = processDetections([hood, car], W, H, { roadBottom: 0.73 });
+  assert.ok(r.lead && r.lead.wpx === 90, JSON.stringify(r.lead));
+  assert.equal(r.cars, 1);
+  // Gamle turer: roadSummary ser bort fra «biler» over 70 % av bildebredden
+  const pts = Array.from({ length: 60 }, (_, i) => ({ t: i, kmh: 60, lat: 63, lon: 10 }));
+  const samples = Array.from({ length: 50 }, (_, i) => ({ t: i, cars: 1, people: 0, lead: { cls: 'car', dist: 2.5, wpx: 719 } }));
+  assert.equal(roadSummary(samples, pts, { frameW: 720 }).follow.length, 0);
+  assert.equal(roadSummary(samples, pts).follow.length, 50);
+});

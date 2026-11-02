@@ -11,7 +11,9 @@ export const CLASSES = { 0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 5
 
 /* Utsnitt av kamerabildet som gis til modellen: stående bilde → kvadrat midt på (der veien er, i full
    oppløsning), liggende → hele bildet. { sx, sy, sw, sh } i bildets piksler. */
-export function cropFor(w, h) {
+export function cropFor(w, h, roadBottom = null) {
+  // Med kjent dashbordkant (k0.7.1): kvadratet slutter rett under kanten, så det dekker veien og lite dashbord
+  if (h > w && roadBottom) { const s = w, sy = Math.round(Math.max(0, Math.min(h - s, roadBottom * h - 0.9 * s))); return { sx: 0, sy, sw: s, sh: s }; }
   if (h > w) { const s = w; return { sx: 0, sy: Math.round((h - s) * 0.5), sw: s, sh: s }; }
   return { sx: 0, sy: 0, sw: w, sh: h };
 }
@@ -57,8 +59,8 @@ export async function loadDfine({ ortBase, model, preferGpu = true }) {
   const canvas = document.createElement('canvas'); canvas.width = SIZE; canvas.height = SIZE;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const inName = session.inputNames[0];
-  const detect = async (source, w, h, gamma = null) => {
-    const crop = cropFor(w, h);
+  const detect = async (source, w, h, gamma = null, roadBottom = null) => {
+    const crop = cropFor(w, h, roadBottom);
     ctx.drawImage(source, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, SIZE, SIZE);
     const data = toTensorData(ctx.getImageData(0, 0, SIZE, SIZE).data, gamma);
     const res = await session.run({ [inName]: new ort.Tensor('float32', data, [1, 3, SIZE, SIZE]) });

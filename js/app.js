@@ -12,7 +12,7 @@ import * as cam from './facecam.js';
 import { createLiveLimit } from './livelimit.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.7';
+export const APP_VERSION = '0.9.8';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -810,7 +810,9 @@ async function startRecording(replay = null) {
   const liveLog = [];
   liveLimitNow = null;
   const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed'), atkEl = $('#rec-atk');
-  atkEl.hidden = true;
+  const atkPop = $('#atk-pop');
+  atkEl.hidden = true; atkPop.hidden = true;
+  let popUntil = 0;
   limitBox.hidden = !live;
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
@@ -829,9 +831,20 @@ async function startRecording(replay = null) {
         limitNote.textContent = res.limit !== null ? 'Fartsgrense (Statens vegvesen)' : res.status === 'feil' ? 'Fartsgrense: ingen nett' : res.status === 'ukjent' ? 'Fartsgrense ukjent her' : 'Henter fartsgrense …';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
         // Fotoboks foran eller strekningsmåling (v0.9.7)
+        // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
+        // 2 s etter at bilen har passert, og forsvinner så av seg selv.
         const atk = st.pos ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
-        atkEl.hidden = !atk;
-        if (atk) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
+        const big = atk && ((atk.kind === 'boks' || atk.kind === 'strekning-foran') ? atk.d <= 300 : atk.kind === 'ferdig');
+        atkEl.hidden = !atk || big;
+        if (atk && !big) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
+        if (big) {
+          popUntil = st.elapsed + 2;
+          atkPop.dataset.kind = atk.kind;
+          atkPop.querySelector('.atk-pop-title').textContent = atk.kind === 'boks' ? 'Fotoboks' : atk.kind === 'ferdig' ? 'Strekningsmåling ferdig' : 'Strekningsmåling';
+          atkPop.querySelector('.atk-pop-main').textContent = atk.kind === 'ferdig' ? `snitt ${atk.avg ?? '–'} km/t` : `om ${atk.d} m`;
+          atkPop.querySelector('.atk-pop-sub').textContent = [liveLimitNow ? `Fartsgrense ${liveLimitNow}` : '', Number.isFinite(st.kmh) ? `du kjører ${n0(st.kmh)} km/t` : ''].filter(Boolean).join(' · ');
+          atkPop.hidden = false;
+        } else if (st.elapsed > popUntil) atkPop.hidden = true;
         const last = liveLog[liveLog.length - 1];
         if (!last || last.limit !== res.limit) liveLog.push({ t: Math.round(st.elapsed), limit: res.limit });
         if (recorder) recorder.liveLimits = liveLog;
@@ -916,6 +929,7 @@ async function finishRecording() {
   recorder = null;
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
+  $('#atk-pop').hidden = true;
   const drive = await rec.stop();
   if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
   if (camUnsub) { camUnsub(); camUnsub = null; }

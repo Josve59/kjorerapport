@@ -14,7 +14,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.0';
+export const APP_VERSION = 'k0.7.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -103,14 +103,16 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k6`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15k7`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
   let result;
   try {
     result = analyze(raw, opts);
-    if (raw.road && raw.road.length > 10) result.road = roadSummary(raw.road, result.points, { t0: result.t0 });
+    // Bildebredden fra kameraplanen: «biler» over 70 % av bredden var bilens eget dashbord (turer før k0.7.1)
+    const frameW = drive.cameraPlan && /^\d+x\d+$/.test(drive.cameraPlan.roadSize || '') ? +drive.cameraPlan.roadSize.split('x')[0] : null;
+    if (raw.road && raw.road.length > 10) result.road = roadSummary(raw.road, result.points, { t0: result.t0, frameW });
     if (raw.head && raw.head.length > 20) result.camera = evaluateMirrors(raw.head, drive.calib, { points: result.points, t0: result.t0, laneChanges: result.maneuvers.laneChanges,
       markedLanes: (drive.marks || []).filter(m => m.cat === 'felt').map(m => m.t - result.t0) });
   } catch (err) {
@@ -377,7 +379,7 @@ function glanceToPlan(p) {
 function cameraInfo() {
   if (roadModeNow === 'off') return null;
   const st = cam.state(), sw = st.switches;
-  const info = { mode: roadModeNow, switchAvg: sw.length ? Math.round(sw.reduce((a, b) => a + b, 0) / sw.length) : null, switches: sw.length, perf: st.perf, roadSize: st.roadSize,
+  const info = { mode: roadModeNow, switchAvg: sw.length ? Math.round(sw.reduce((a, b) => a + b, 0) / sw.length) : null, switches: sw.length, perf: st.perf, roadSize: st.roadSize, roadBottom: st.roadBottom,
     calibOff: liveOff ? Math.round(Math.hypot(liveOff.yaw, liveOff.pitch)) : null };
   if (planner) {
     const p = planner.stats, tot = p.front + p.road + p.blind || 1;
@@ -958,7 +960,9 @@ async function startRecording(replay = null) {
   const liveLog = [];
   liveLimitNow = null;
   const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed'), atkEl = $('#rec-atk');
-  atkEl.hidden = true;
+  const atkPop = $('#atk-pop');
+  atkEl.hidden = true; atkPop.hidden = true;
+  let popUntil = 0;
   limitBox.hidden = !live;
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
@@ -977,9 +981,20 @@ async function startRecording(replay = null) {
         limitNote.textContent = res.limit !== null ? 'Fartsgrense (Statens vegvesen)' : res.status === 'feil' ? 'Fartsgrense: ingen nett' : res.status === 'ukjent' ? 'Fartsgrense ukjent her' : 'Henter fartsgrense …';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
         // Fotoboks foran eller strekningsmåling (v0.9.7)
+        // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
+        // 2 s etter at bilen har passert, og forsvinner så av seg selv.
         const atk = st.pos ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
-        atkEl.hidden = !atk;
-        if (atk) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
+        const big = atk && ((atk.kind === 'boks' || atk.kind === 'strekning-foran') ? atk.d <= 300 : atk.kind === 'ferdig');
+        atkEl.hidden = !atk || big;
+        if (atk && !big) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
+        if (big) {
+          popUntil = st.elapsed + 2;
+          atkPop.dataset.kind = atk.kind;
+          atkPop.querySelector('.atk-pop-title').textContent = atk.kind === 'boks' ? 'Fotoboks' : atk.kind === 'ferdig' ? 'Strekningsmåling ferdig' : 'Strekningsmåling';
+          atkPop.querySelector('.atk-pop-main').textContent = atk.kind === 'ferdig' ? `snitt ${atk.avg ?? '–'} km/t` : `om ${atk.d} m`;
+          atkPop.querySelector('.atk-pop-sub').textContent = [liveLimitNow ? `Fartsgrense ${liveLimitNow}` : '', Number.isFinite(st.kmh) ? `du kjører ${n0(st.kmh)} km/t` : ''].filter(Boolean).join(' · ');
+          atkPop.hidden = false;
+        } else if (st.elapsed > popUntil) atkPop.hidden = true;
         const last = liveLog[liveLog.length - 1];
         if (!last || last.limit !== res.limit) liveLog.push({ t: Math.round(st.elapsed), limit: res.limit });
         if (recorder) recorder.liveLimits = liveLog;
@@ -1108,6 +1123,7 @@ async function finishRecording() {
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
   const camInfo = cameraInfo();
+  $('#atk-pop').hidden = true;
   const drive = await rec.stop();
   if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
   if (camInfo) { await updateDrive(drive.id, { cameraPlan: camInfo }); drive.cameraPlan = camInfo; }

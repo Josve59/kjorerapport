@@ -384,7 +384,7 @@
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.7.0</p>
+    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.7.1</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 
@@ -398,5 +398,7 @@
 </div>
 <script src="./vendor/leaflet/leaflet.js" defer></script>
 <script type="module" src="./js/app.js"></script>
+  <!-- Stort varsel for fotoboks og strekningsmåling (utenfor skjermene, så det alltid ligger øverst) -->
+  <div class="atk-pop" id="atk-pop" role="alert" hidden><div class="atk-pop-title"></div><div class="atk-pop-main"></div><div class="atk-pop-sub"></div></div>
 </body>
 </html>

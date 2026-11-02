@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectLanes } from '../kamera/js/lanes.js';
+import { detectLanes, dashLine, rowMeans } from '../kamera/js/lanes.js';
 
 /* Lager et gråtonebilde med vei, to feltlinjer og litt støy. Linjene går fra (xb, h·0.95) opp mot (xt, h·0.5). */
 function road(w, h, lines, { dashed = false, noise = 12, seed = 3 } = {}) {
@@ -51,4 +51,18 @@ test('feltlinjer: i mørket (linjer i lyset fra frontlyktene) finnes linjene ett
   const d = detectLanes(day, w, h);
   assert.ok(Math.abs(r.offset - d.offset) < 0.15, `natt ${r.offset} dag ${d.offset}`);
   assert.equal(detectLanes(new Uint8Array(w * h).fill(8), w, h).left, null, 'helt svart bilde: ingen linjer');
+});
+
+test('dashbordkant: øverste tydelige overgang fra vei til mørkt dashbord fra 60 % og ned', () => {
+  // Stående bilde: himmel mørk (natt), vei lys til 72 %, dashbord mørkt, lys list ved 90 %, mørkt under
+  const h = 200, row = y => (y < 0.35 * h ? 20 : y < 0.72 * h ? 140 : y < 0.89 * h ? 30 : y < 0.91 * h ? 120 : 15);
+  const rm = Float32Array.from({ length: h }, (_, y) => row(y));
+  const d = dashLine(rm);
+  assert.ok(Math.abs(d - 0.72) < 0.02, 'kant ' + d);
+  // Dagslys: lys himmel over mørkere landskap (horisont ved 50 %) og dashbord ved 87 %
+  const day = Float32Array.from({ length: h }, (_, y) => (y < 0.5 * h ? 200 : y < 0.87 * h ? 110 : 25));
+  assert.ok(Math.abs(dashLine(day) - 0.87) < 0.02, 'dag ' + dashLine(day));
+  assert.equal(dashLine(new Float32Array(h).fill(90)), null, 'ingen kant');
+  const g = new Uint8Array(4 * 3).fill(10); g[4] = 50;
+  assert.equal(rowMeans(g, 4, 3)[1], 20);
 });
