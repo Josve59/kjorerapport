@@ -808,3 +808,8 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .rec-speed-box { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
 .rec-speed { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 #rec-limit-note { margin-top: 4px; }
+
+/* Fotoboks og strekningsmåling under opptak (v0.9.7) */
+.rec-atk { display: inline-block; margin: 6px auto 0; padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: .95rem;
+  background: #ffcc00; color: #111; }
+.rec-atk[data-kind="ferdig"] { background: var(--surface); color: var(--ink); border: 2px solid var(--line); }

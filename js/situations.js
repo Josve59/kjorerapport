@@ -141,6 +141,20 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
       text: `Brå hendelse etter skiltet Farlig sving (${kmh(g.kmh)} ved skiltet). Senk farten før svingen.` });
   }
 
+  // Fotobokser og strekningsmåling (v0.9.7): over grensen der ATK måler. Fart fra GPS, så det er en pekepinn
+  for (const a of nv.atk || []) {
+    if (!a.limit || a.kmh <= a.limit) continue;
+    const over = a.kmh - a.limit;
+    add({ t: a.t, kind: 'speed', sources: ['road', 'gps'], level: over >= 6 ? 'high' : 'medium', title: `Fotoboks i ${kmh(a.kmh)}`,
+      text: `${over} km/t over ${a.limit}-grensen der fotoboksen måler${a.sure ? '' : ' (retningen er usikker)'}. Hold øye med skiltene før kontrollen.` });
+  }
+  for (const x of nv.sections || []) {
+    if (!x.limit || x.avgKmh <= x.limit) continue;
+    const over = x.avgKmh - x.limit;
+    add({ t: x.t, kind: 'speed', sources: ['road', 'gps'], level: over >= 6 ? 'high' : 'medium', title: `Strekningsmåling: snitt ${kmh(x.avgKmh)}`,
+      text: `${over} km/t over ${x.limit}-grensen i snitt over ${(x.lengthM / 1000).toFixed(1).replace('.', ',')} km. Strekningsmåling bruker snittfarten, så jevn fart under grensen hele veien er det som teller.` });
+  }
+
   // 6) Fart over grensen (veidata + GPS), når den ikke allerede er med i en situasjon over
   if (sp) for (const ep of sp.episodes) {
     const over = Math.round(ep.maxKmh - ep.limit);

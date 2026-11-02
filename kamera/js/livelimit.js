@@ -3,12 +3,15 @@
    hentes i bakgrunnen før bilen kommer til kanten. Krever nett og at «Veidata» er på.
    Verdien skifter først når to av de tre siste punktene er enige, så den ikke blinker i kryss.
    Det er NVDB sin fartsgrense, ikke skiltene: i Sverige og der NVDB mangler data vises «–». */
-import { fetchLimitBox, matchLimits } from './enrich.js';
+import { fetchLimitBox, fetchAtkBox, matchLimits } from './enrich.js';
+import { createLiveAtk } from './liveatk.js';
 
 const HALF_LAT = 0.02, HALF_LON = 0.045;     // ca. 2,2 km hver vei (lengdegrad er kortere i nord)
 const EDGE = 0.35;                            // ny henting når bilen er i ytterste 35 % av området
 
-export function createLiveLimit({ fetchBox = fetchLimitBox, now = () => Date.now() } = {}) {
+/* atk: også fotobokser og strekningsmåling for området (v0.9.7), via fetchAtk. */
+export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkBox, atk = false, now = () => Date.now() } = {}) {
+  const live = atk ? createLiveAtk() : null;
   let box = null, segs = [], loading = null, failedAt = -Infinity, current = null, status = 'venter';
   const recent = [];   // siste treff (fartsgrense eller null)
   const index = list => list.map(s => {
@@ -20,7 +23,10 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, now = () => Date.now
   const load = p => {
     if (loading || now() - failedAt < 30000) return;
     const b = { minLat: p.lat - HALF_LAT, maxLat: p.lat + HALF_LAT, minLon: p.lon - HALF_LON, maxLon: p.lon + HALF_LON };
-    loading = fetchBox(b).then(list => { box = b; segs = index(list); status = 'ok'; })
+    loading = fetchBox(b).then(list => {
+      box = b; segs = index(list); status = 'ok';
+      if (live) fetchAtk(b).then(data => live.load(data, list)).catch(() => {});
+    })
       .catch(() => { failedAt = now(); status = 'feil'; })
       .finally(() => { loading = null; });
   };
@@ -39,5 +45,7 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, now = () => Date.now
     for (const [x, n] of counts) if (n >= 2 || recent.length === 1) { current = x; break; }
     return { limit: current, status: current === null && status === 'ok' ? 'ukjent' : status };
   };
-  return { update, get limit() { return current; } };
+  /* Fotoboks foran / strekningsmåling: p = {lat, lon, t (s), kmh}. { text, kind } eller null. */
+  const atkStatus = p => (live ? live.update(p) : null);
+  return { update, atk: atkStatus, get limit() { return current; } };
 }

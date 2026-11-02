@@ -117,7 +117,7 @@ export function renderReport(root, r, ctx = {}) {
   const short = r.stats.km < 1;
   const names = enrich && enrich.names ? enrich.names : { events: {}, marks: {} };
   const sp = speedingFor(r, enrich);
-  const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events), fromNvdb: true } : null;
+  const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events, enrich.limits), fromNvdb: true } : null;
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null) : null;
   const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
   const sits = buildSituations(r, { camera: r.camera, marks, sp, nvdb: road, road: r.road || null });
@@ -532,17 +532,21 @@ function situationSection(sits, sum) {
 /* Langs vegen (veidata v2): gangfelt, fartsdempere, lyskryss og skilt som turen passerte */
 function alongRoad(road) {
   const c = road.crossings || [], b = road.bumps || [], s = road.signals || [], g = road.signs || [];
-  if (!c.length && !b.length && !s.length && !g.length) return '';
+  const atk = road.atk || [], sec = road.sections || [];
+  if (!c.length && !b.length && !s.length && !g.length && !atk.length && !sec.length) return '';
+  const vsLimit = (v, lim) => lim ? (v > lim ? ` <strong>(${v - lim} over ${lim}-grensen)</strong>` : ` (grense ${lim})`) : '';
   const avg = a => Math.round(a.reduce((t, x) => t + x.kmh, 0) / a.length);
   const fastC = c.filter(x => x.kmh >= 45).length, fastB = b.filter(x => x.kmh > 35).length;
   const rows = [
+    atk.length ? `<li><strong>Fotobokser:</strong> ${atk.map(x => `${x.name ? esc(x.name.replace(/\s*\([A-Z]\d\)$/, '')) + ': ' : ''}${x.kmh} km/t${vsLimit(x.kmh, x.limit)}${x.sure ? '' : ' – retningen er usikker'}`).join('; ')}.</li>` : '',
+    sec.length ? `<li><strong>Strekningsmåling:</strong> ${sec.map(x => `${x.name ? esc(x.name.replace(/\s*\([A-Z]\d\)$/, '')) + ': ' : ''}snitt ${x.avgKmh} km/t over ${(x.lengthM / 1000).toFixed(1).replace('.', ',')} km${vsLimit(x.avgKmh, x.limit)}`).join('; ')}.</li>` : '',
     c.length ? `<li><strong>Gangfelt:</strong> ${c.length} passert, snitt ${avg(c)} km/t${fastC ? `, ${fastC} i 45 km/t eller mer` : ''}.</li>` : '',
     b.length ? `<li><strong>Fartsdempere:</strong> ${b.length}, snitt ${avg(b)} km/t${fastB ? `, ${fastB} over 35 km/t` : ''}.</li>` : '',
     s.length ? `<li><strong>Lyskryss:</strong> ${s.length}${s.filter(x => x.stopped).length ? `, stoppet ved ${s.filter(x => x.stopped).length}` : ''}.</li>` : '',
     g.filter(x => x.kind === 'barn').length ? `<li><strong>Skiltet Barn:</strong> ${g.filter(x => x.kind === 'barn').map(x => `høyst ${x.maxKmh} km/t etter skiltet`).join(', ')}.</li>` : '',
     g.filter(x => x.kind !== 'barn').length ? `<li><strong>Farlig sving:</strong> ${g.filter(x => x.kind !== 'barn').map(x => `${x.kmh} km/t ved skiltet${x.events.length ? ', brå hendelse etterpå' : ''}`).join(', ')}.</li>` : ''
   ].join('');
-  return `<h3 class="mt">Langs vegen</h3><ul class="along-list">${rows}</ul><p class="muted small">Fra Statens vegvesen (NVDB). Skilt teller bare når de sto på høyre side av bilen.</p>`;
+  return `<h3 class="mt">Langs vegen</h3><ul class="along-list">${rows}</ul><p class="muted small">Fra Statens vegvesen (NVDB). Skilt teller bare når de sto på høyre side av bilen.${atk.length || sec.length ? ' Fotobokser og strekningsmåling teller bare i kjøreretningen deres. Fart fra GPS, så den kan avvike litt fra speedometeret.' : ''}</p>`;
 }
 
 function maneuverSection(r, road, log, marks, hasRoadData) {

@@ -128,6 +128,15 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.7 / k0.6.12 – speed cameras and section control
+
+- **Data:** NVDB «ATK-punkt» (type 162: name 9522, control direction 9527) and «Streknings-ATK» (823: name 9520, control direction 9519, a line from entry to exit). NVDB geometry runs in the metering direction, so «Med metreringsretning» means the same way as the line. I checked this on E6/E14 at Trondheim: «mot Narvik» is «Med» and the line runs towards Narvik.
+- **Only our direction:** at a speed camera, the metering direction is the direction of the nearest speed-limit segment (point-to-segment distance). It is compared with the direction the car drove. Cameras that measure oncoming traffic are left out. If the direction is unknown (for example in a tunnel without data), the camera is included but marked uncertain.
+- **Section control:** the average speed is computed the way ATK does it: section length divided by the time from entry to exit. The exit is the point where the distance driven after the entry equals the section length, and the time is interpolated linearly through a GPS gap. This matters in tunnels: in Helltunnelen on 31 Oct, 141 of 213 GPS fixes were inaccurate.
+- **Report:** «Langs vegen» lists the speed cameras (speed and limit) and the section controls (average over the length). The situations show speed over the limit at a camera, or an average over the limit on a section.
+- **Recording screen:** a yellow «Fotoboks om 400 m» when a camera in our direction is within 700 m ahead. During section control it shows «Strekningsmåling · snitt 76 km/t · 1,2 km igjen», and at the end «Strekningsmåling ferdig · snitt 75 km/t». The speed-camera data is fetched for the same area as the speed limit (`js/liveatk.js`, `fetchAtkBox`).
+- **Checked on real drives with live NVDB:** Trondheim → Storlien gave three cameras towards Narvik (the ones for the opposite direction were left out), section control in Stavsjøtunnelen with an average of 74 km/h, and Helltunnelen with an average of 75 (live 77, matching the timestamps). The E6 evening drives give «mot Oslo» southbound and «mot Narvik» northbound. Road data is now version 3, so old drives fetch it again automatically.
+
 ## What's new in k0.6.11 – ready for a «Bare vei» test in the dark
 
 Plan from now on: one thing at a time. First the road camera on its own («Bare vei», no switching), then the driver camera on its own. After that, a native iPhone app with both cameras at once. No more work goes into the switching plan.

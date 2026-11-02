@@ -3,7 +3,7 @@ import { analyze, makeDemo, SENSITIVITY, TH } from './analysis.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
 import { renderReport, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel } from './report.js';
-import { enrichDrive, evaluateRoad } from './enrich.js';
+import { enrichDrive, evaluateRoad, ROAD_V } from './enrich.js';
 import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } from './insights.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
 import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
@@ -14,7 +14,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.11';
+export const APP_VERSION = 'k0.6.12';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -321,7 +321,7 @@ async function gatherRows(driver = null) {
     let res;
     try { res = await analyzeDrive(d); } catch { continue; }
     const sp = speedingFor(res, d.enrich || null);
-    const road = d.enrich && d.enrich.road ? { ...evaluateRoad(res.points, d.enrich.road, res.events), fromNvdb: true } : null;
+    const road = d.enrich && d.enrich.road ? { ...evaluateRoad(res.points, d.enrich.road, res.events, d.enrich.limits), fromNvdb: true } : null;
     rows.push({ d, res, sp, road, log: logFor(d, res), marks: markRows(d.marks || [], res) });
   }
   return rows;
@@ -954,10 +954,11 @@ async function startRecording(replay = null) {
   renderMarkGrid({});
   let gapMsg = '', stillSince = null;   // lang pause: minn om å stoppe turen (v0.9.3, før Trondheim–Storlien)
   // Aktiv fartsgrense fra NVDB (v0.9.4), når «Veidata» er på. Endringene lagres med turen for sammenligning.
-  const live = !replay && settings.netLimits !== false ? createLiveLimit() : null;
+  const live = !replay && settings.netLimits !== false ? createLiveLimit({ atk: true }) : null;
   const liveLog = [];
   liveLimitNow = null;
-  const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed');
+  const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed'), atkEl = $('#rec-atk');
+  atkEl.hidden = true;
   limitBox.hidden = !live;
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
@@ -975,6 +976,10 @@ async function startRecording(replay = null) {
         limitSign.classList.toggle('none', res.limit === null);
         limitNote.textContent = res.limit !== null ? 'Fartsgrense (Statens vegvesen)' : res.status === 'feil' ? 'Fartsgrense: ingen nett' : res.status === 'ukjent' ? 'Fartsgrense ukjent her' : 'Henter fartsgrense …';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
+        // Fotoboks foran eller strekningsmåling (v0.9.7)
+        const atk = st.pos ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
+        atkEl.hidden = !atk;
+        if (atk) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
         const last = liveLog[liveLog.length - 1];
         if (!last || last.limit !== res.limit) liveLog.push({ t: Math.round(st.elapsed), limit: res.limit });
         if (recorder) recorder.liveLimits = liveLog;
@@ -1185,7 +1190,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       routeRows.sort((a, b) => a.ts - b.ts);
     }
     const wants = { limits: settings.netLimits !== false, names: settings.netNames !== false };   // på som standard
-    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === 2)) || (wants.names && !(drive.enrich && drive.enrich.names));   // road v2: gangfelt, fartsdempere, lyskryss, skilt
+    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === ROAD_V)) || (wants.names && !(drive.enrich && drive.enrich.names));   // road v2: gangfelt, fartsdempere, lyskryss, skilt
     const draw = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
       title: 'Kjørerapport', subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),
