@@ -4,8 +4,11 @@
 import { poseFromMatrix } from './camera.js';
 import { processDetections, detectTaillights } from './road.js';
 import { detectLanes, toGray } from './lanes.js';
+import { loadDfine } from './dfine.js';
 
 const BASE = new URL('../../vendor/mediapipe/', import.meta.url).href;   // delt med hovedappen
+const ORT_BASE = new URL('../../vendor/ort/', import.meta.url).href;
+const DFINE_MODEL = new URL('../../vendor/dfine/dfine_n_coco.onnx', import.meta.url).href;
 let landmarker = null, loading = null, detector = null, loadingRoad = null, fileset = null;
 let stream = null, video = null, timer = null, facing = 'user', switching = false;
 const listeners = new Set(), roadListeners = new Set();
@@ -14,9 +17,11 @@ let settleUntil = 0;   // bilder rett etter et bytte er for mørke (lyset stille
 let settleLum = null, settleStable = 0;   // veikameraet: vent til lysstyrken er stabil (i mørke tar det lenger tid)
 let firstAfterSwitch = false;   // første analyse etter et bytte er treg (modellen starter på nytt) og telles ikke i farten
 let fpsWanted = 8, fpsNow = 8;
-const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0, detector: null, detFrames: 0, detAny: 0 };   // glattet tid per analyse
+const perf = { faceMs: 0, roadMs: 0, laneMs: 0, slow: false, slowSince: 0, drops: 0, detector: null, detFrames: 0, detAny: 0,
+  dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, dfineErr: 0 };   // glattet tid per analyse
+let dfine = null, dfineBusy = false, lastDfine = null, lastLite = null;   // D-FINE nano (k0.7.0) og Lite2, siste svar
 let laneCanvas = null, laneCtx = null, laneOverlay = null;
-let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null, lastDet = null;
+let brightCanvas = null, brightCtx = null, tailCanvas = null, tailCtx = null, lastLum = null, roadSize = null;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) brukes nattmodus for veikameraet
 const switchLog = [];   // byttetider (ms) denne økten
 
@@ -72,13 +77,24 @@ export function loadRoadModel(onStatus = () => {}) {
     // selv om testbildene fra turen til Storlien viser biler tydelig. På CPU, med et kopiert bilde, virket den i testene.
     detector = await ObjectDetector.createFromOptions(fileset, opts('CPU'));
     perf.detector = 'cpu-lite2';
-    onStatus('Gjenkjenning av biler klar');
+    // D-FINE nano i tillegg (k0.7.0), bare med WebGPU: på prosessoren er den for treg på telefonen (0,5–1 s per bilde).
+    // Lastes i bakgrunnen; feiler den, brukes Lite2 alene.
+    if (typeof navigator !== 'undefined' && navigator.gpu) {
+      onStatus('Laster D-FINE … (rundt 42 MB første gang)');
+      try {
+        const d = await loadDfine({ ortBase: ORT_BASE, model: DFINE_MODEL, preferGpu: true });
+        if (d.backend === 'webgpu') { dfine = d; perf.dfine = 'webgpu'; perf.detector = 'dfine-webgpu+lite2'; }
+        else perf.dfine = 'bare prosessor (ikke brukt)';
+      } catch (e) { perf.dfine = 'feilet: ' + String(e && e.message || e).slice(0, 80); }
+    } else perf.dfine = 'ingen WebGPU';
+    onStatus(dfine ? 'Gjenkjenning av biler klar (D-FINE + Lite2)' : 'Gjenkjenning av biler klar (Lite2)');
     return detector;
   })().catch(err => { loadingRoad = null; throw err; });
   return loadingRoad;
 }
 
-const constraints = mode => ({ video: { facingMode: mode, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 30 } }, audio: false });
+// Veikameraet i 1280×720 (k0.7.0): biler langt unna blir tydeligere, og D-FINE får veien i full oppløsning
+const constraints = mode => ({ video: { facingMode: mode, width: { ideal: mode === 'environment' ? 1280 : 640 }, height: { ideal: mode === 'environment' ? 720 : 480 }, frameRate: { ideal: 15, max: 30 } }, audio: false });
 
 async function show(el) {
   video = el;
@@ -123,7 +139,7 @@ export async function switchTo(mode) {
     // Førerkameraet: fast 120 ms (ansiktsgjenkjenningen tåler lys som ikke er helt innstilt).
     // Veikameraet: til lysstyrken er stabil, høyst 1,5 s (se tick)
     settleUntil = performance.now() + (mode === 'environment' ? 1500 : 120);
-    settleLum = null; settleStable = 0; firstAfterSwitch = true; lastDet = null;
+    settleLum = null; settleStable = 0; firstAfterSwitch = true; lastLite = null; lastDfine = null;
     const ms = Math.round(performance.now() - t0);
     switchLog.push(ms);
     if (switchLog.length > 200) switchLog.shift();
@@ -199,22 +215,34 @@ export function startLoop(fps = 8) {
       // Nattmodus (k0.6.4): bilgjenkjenningen får et lysere bilde, og baklysene letes etter i tillegg
       const dark = lastLum !== null && lastLum < NIGHT_LUM;
       roadSize = `${video.videoWidth}x${video.videoHeight}`;
-      // Bilgjenkjenning høyst hvert 2,5 × sin egen tid (minst 250 ms), ellers gjenbrukes forrige svar
-      const now0 = performance.now(), fresh = !lastDet || now0 - lastDet.at >= Math.max(250, 2.5 * (perf.roadMs || 100));
+      // To modeller, slått sammen (k0.7.0). I test fant D-FINE nano mange flere biler langt unna (dagslys og
+      // skumring), mens Lite2 var bedre på store biler tett foran om natten.
+      // - D-FINE på grafikkprosessoren, asynkront, høyst hvert 250 ms (blokkerer ikke resten)
+      // - Lite2 på prosessoren hvert 2,5 × sin egen tid (minst 600 ms med D-FINE, ellers 250 ms)
+      // Svar eldre enn 1,5 s brukes ikke. Koordinater i kamerabildets piksler.
+      const now0 = performance.now(), vw = video.videoWidth, vh = video.videoHeight;
+      if (dfine && !dfineBusy && (!lastDfine || now0 - lastDfine.at >= 250)) {
+        dfineBusy = true;
+        const t0 = performance.now();
+        dfine.detect(video, vw, vh, dark ? GAMMA : null)
+          .then(d => { const keep = d.filter(x => x.score >= 0.4); lastDfine = { at: performance.now(), dets: keep }; perf.dfineFrames++; if (keep.length) perf.dfineAny++; perf.dfineMs = perf.dfineMs ? perf.dfineMs * 0.9 + (performance.now() - t0) * 0.1 : performance.now() - t0; })
+          .catch(() => { perf.dfineErr++; })
+          .finally(() => { dfineBusy = false; });
+      }
       const t1 = performance.now();
-      if (!fresh) road = { ...lastDet.road, stale: true };
-      else try {
-        // Alltid en kopi i canvas (lysnet i mørket): gjenkjenningen fikk ingenting ut av video-elementet direkte på iPhone
-        const src = brightFrame(video, dark);
-        const sw = src.width, sh = src.height;
-        const res = detector.detectForVideo(src, ts);
-        perf.detFrames++; if (res && res.detections && res.detections.length) perf.detAny++;
-        const dets = (res && res.detections || []).map(d => ({ cls: d.categories[0].categoryName, score: d.categories[0].score,
-          x: d.boundingBox.originX, y: d.boundingBox.originY, w: d.boundingBox.width, h: d.boundingBox.height }));
-        road = processDetections(dets, sw, sh);
-        lastDet = { at: now0, road };
+      try {
+        if (!lastLite || now0 - lastLite.at >= Math.max(dfine ? 600 : 250, 2.5 * (perf.roadMs || 100))) {
+          // Alltid en kopi i canvas (lysnet i mørket): gjenkjenningen fikk ingenting ut av video-elementet direkte på iPhone
+          const src = brightFrame(video, dark), k = vw / src.width;
+          const res = detector.detectForVideo(src, ts);
+          perf.detFrames++; if (res && res.detections && res.detections.length) perf.detAny++;
+          lastLite = { at: now0, dets: (res && res.detections || []).map(d => ({ cls: d.categories[0].categoryName, score: d.categories[0].score,
+            x: d.boundingBox.originX * k, y: d.boundingBox.originY * k, w: d.boundingBox.width * k, h: d.boundingBox.height * k })) };
+          ema('roadMs', performance.now() - t1);
+        }
+        const recent = a => (a && now0 - a.at < 1500 ? a.dets : []);
+        road = processDetections(mergeDets([...recent(lastLite), ...recent(lastDfine)]), vw, vh);
       } catch { road = null; }
-      if (fresh) ema('roadMs', performance.now() - t1);
       // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
       if (road) {
         const t2 = performance.now();
@@ -257,12 +285,20 @@ export function stopLoop() { if (timer) clearTimeout(timer); timer = null; }
 
 /* Testbilde (valgfritt, for feilsøking): lite JPEG i farger av det veikameraet ser nå (160 piksler på den
    lengste siden), eller null. Farger fra k0.6.11, så baklys og lyskryss kan sjekkes på kveldsturer. */
-export function snapshot() {
+export function snapshot(size = 160) {
   if (!video || facing !== 'environment' || video.videoWidth === 0) return null;
-  const k = 160 / Math.max(video.videoWidth, video.videoHeight);
+  const k = size / Math.max(video.videoWidth, video.videoHeight);
   const c = document.createElement('canvas'); c.width = Math.round(video.videoWidth * k); c.height = Math.round(video.videoHeight * k);
   c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', 0.6);
+  return c.toDataURL('image/jpeg', size > 200 ? 0.75 : 0.6);
+}
+
+/* Svar fra to modeller: samme objekt (overlapp over 50 %) telles én gang, med høyeste score. */
+export function mergeDets(dets) {
+  const out = [];
+  const iou = (a, b) => { const x = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)), y = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)); const i = x * y; return i / (a.w * a.h + b.w * b.h - i || 1); };
+  for (const d of dets.slice().sort((a, b) => b.score - a.score)) if (!out.some(o => iou(o, d) > 0.5)) out.push(d);
+  return out;
 }
 
 /* Kopi av kamerabildet til bilgjenkjenningen, lysnet i mørket med en gammakurve (0,5: mørke toner løftes mest). */

@@ -128,6 +128,16 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in k0.7.0 – D-FINE nano + Lite2, 1280×720 road camera, large test snapshots
+
+- **Two detectors, merged.** D-FINE nano (Apache 2.0, ONNX from onnx-community/dfine_n_coco-ONNX, COCO AP about 43) runs with ONNX Runtime Web 1.30.0 (MIT, `vendor/ort/`) on the GPU (WebGPU), asynchronously, at most every 250 ms. EfficientDet-Lite2 runs on the CPU every 600 ms. Results older than 1.5 s are not used, and the same object (overlap over 50 %) counts once (`mergeDets`). Without WebGPU only Lite2 is used, because D-FINE on the CPU is too slow on the phone.
+- **Why both** (lab test on night and dusk photos, boxes drawn and checked): D-FINE found many more distant cars in daylight and at dusk (20 against 7–10). Lite2 was better on large cars close in front at night (the taillight photo and a city car). D-FINE took a smudge on the windscreen for a car at 0.49, so its threshold is 0.4. The int8 version of D-FINE gave many weak false detections, so fp32 (15 MB) is used. On the Mac: D-FINE on WebGPU 26–39 ms, on the CPU 160–580 ms.
+- **D-FINE input:** for a portrait frame, a 720×720 square in the middle (the road, at full resolution) is scaled to 640×640, with gamma brightening in the dark.
+- **Road camera at 1280×720** (before 640×480).
+- **Test snapshots:** a large one (480 px, JPEG 0.75) every 30 s and small ones (160 px) when there is a car in front, so other models can be tested afterwards on real frames from the road.
+- **End-to-end test** with a fake 720×1280 camera (a motorway photo): 44 road frames in 6 s, D-FINE about 3 times a second (about 105 ms, asynchronous), Lite2 185 ms, 11 cars, car in front at 22 m.
+- First load downloads about 50 MB of models (Lite2 8 MB, ONNX Runtime 27 MB, D-FINE 15 MB). They are then cached in the ML cache for offline use.
+
 ## What's new in k0.6.13 – a stronger detector for the dark, and a ready test setup
 
 - **EfficientDet-Lite2** (int8, 7.5 MB, `vendor/mediapipe/efficientdet_lite2.tflite`, Apache 2.0) replaces Lite0 for the road camera. Lab test on night and dusk photos (vehicles with a score of 0.35 or more):

@@ -14,7 +14,7 @@ import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluat
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.6.13';
+export const APP_VERSION = 'k0.7.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1027,15 +1027,17 @@ async function startRecording(replay = null) {
     roadModeNow = mode; planner = null;
     liveCalib = getCalib(); liveOff = null; fwdBuf = []; fwdN = 0;
     if (mode !== 'off') {
-      let lastRoad = null, lastRoadAt = 0, lookFrames = 0, lastThumbAt = -Infinity;
+      let lastRoad = null, lastRoadAt = 0, lookFrames = 0, lastThumbAt = -Infinity, lastBigAt = -Infinity;
       roadUnsub = cam.onRoad(r => {
-        // Testbilder (valgfritt): ett per veiblikk fra 4. bilde (lyset innstilt), og med «Bare vei» hvert 20. s.
-        // Ekstra når det er en bil foran (høyst hvert 8. s), så avstand og baklys kan sjekkes mot bildene.
+        // Testbilder (valgfritt): ett per veiblikk fra 4. bilde (lyset innstilt), og med «Bare vei» et stort bilde
+        // (480 px, k0.7.0: stort nok til å teste andre modeller på etterpå) hvert 30. s. Små bilder (160 px) når det
+        // er en bil foran (høyst hvert 8. s), så avstand og baklys kan sjekkes mot bildene.
         const nowS = performance.now() / 1000;
         lookFrames = nowS - lastRoadAt > 1.2 ? 1 : lookFrames + 1;
         lastRoadAt = nowS;
-        const wantThumb = lookFrames === 4 || (lookFrames > 4 && (nowS - lastThumbAt >= 20 || (r.lead && nowS - lastThumbAt >= 8)));
-        if (settings.roadThumbs && wantThumb) { const img = cam.snapshot(); if (img) { r.img = img; lastThumbAt = nowS; } }
+        const big = lookFrames === 4 || (lookFrames > 4 && nowS - lastBigAt >= 30);
+        const small = !big && lookFrames > 4 && r.lead && nowS - lastThumbAt >= 8;
+        if (settings.roadThumbs && (big || small)) { const img = cam.snapshot(big ? 480 : 160); if (img) { r.img = img; lastThumbAt = nowS; if (big) lastBigAt = nowS; } }
         if (recorder) recorder.addRoad(r);
         if (planner) planner.road(r);   // så veikameraet noe? Styrer hvor ofte veien sjekkes
         lastRoad = r;
