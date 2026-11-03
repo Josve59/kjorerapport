@@ -128,6 +128,18 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.12 / k0.7.7 – tidy-up: report and settings for those who use the app
+
+The app had grown into showing a lot of measurement detail. This version changes only what is shown, not the measurements.
+
+- **Score as a ring** (`scoreRing`, `scoreBadge`): in the report and the drive lists it now reads «72 av 100» with a ring that fills up (green, blue, orange or red). Before, the score stood inside a speed limit sign, where «72» was read as speed limit 72.
+- **The top of the report** shows four figures (distance, time, top speed, sudden events) instead of six. «Snittfart» and «Per 10 km» are gone from the top.
+- **Next practice drive** (`nextPractice`): a new card right after «Kort fortalt». It gives at most two specific things to practise, chosen from this drive, with how and where to practise them. It looks at speed limits, mirror checks (from the companion's marks or the driver camera), serious situations and the weakest category. If the drive went well, it suggests trying a new kind of road.
+- **Ordinary words instead of g-forces:** events show «kraftig/merkbar», and situations say «I 50 km/t, i rundkjøring». The g-figure is still shown when you open an event. The source tags (GPS, motion) are gone from situations.
+- **«Flere detaljer»** at the bottom gathers the speed graph, data quality, how it is measured and (in the test app) the road camera. The quick navigation is shorter.
+- **Front page:** the text now says what actually happens: «Under turen vises bare fartsgrensen, og det piper før fotobokser». It used to say «Ingen poeng, lyder …».
+- **Settings** are 40 % shorter. Ordinary choices come first: drivers and goals, «Under kjøring» (speed limit and speed cameras, sound), «Rapporten» (map, place names, read aloud), appearance, backup and about the app. «Avansert» holds sensitivity, analysis engine, thresholds, the in-car reminder, export and import of single drives, and maintenance.
+
 ## What's new in 0.9.11 / k0.7.6 – eyes in the driver camera, full screen for the driver, reading speed signs
 
 **Driver camera**

@@ -130,7 +130,7 @@ button { font: inherit; color: inherit; }
 /* Rapport */
 .report-head { margin-bottom: 10px; }
 .hero { display: flex; gap: 18px; align-items: center; }
-.hero .sign { flex: none; width: 148px; height: 148px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25)); }
+.hero .sign, .hero .score-ring { flex: none; width: 148px; height: 148px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25)); }
 .hero-text { flex: 1; min-width: 0; }
 .rating { font-size: 1.25rem; font-weight: 800; margin-bottom: 10px; }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 0 0 10px; }
@@ -139,7 +139,7 @@ button { font: inherit; color: inherit; }
 .compare { color: var(--muted); font-size: 0.95rem; margin: 0; }
 @media (max-width: 420px) {
   .hero { flex-direction: column; align-items: stretch; text-align: center; }
-  .hero .sign { margin: 0 auto; }
+  .hero .sign, .hero .score-ring { margin: 0 auto; }
   .stats { text-align: left; }
 }
 
@@ -444,7 +444,7 @@ h3 { font-size: 1rem; margin: 0 0 6px; }
 .last-tip { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; padding: 10px 12px; background: var(--bg); border-radius: 12px; font-size: .95rem; }
 .last-tip .ico { margin-top: 2px; color: var(--accel); }
 .last-cta { display: flex; justify-content: flex-end; align-items: center; gap: 2px; margin-top: 10px; color: var(--accel); font-weight: 800; }
-.badge { flex: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.2)); }
+.badge { flex: none; }
 .delta-pill { display: inline-flex; align-self: flex-start; align-items: center; gap: 4px; font-size: .85rem; font-weight: 800; padding: 3px 10px; border-radius: 20px; background: var(--bg); color: var(--muted); margin: 4px 0 0; }
 .delta-pill.up { background: color-mix(in srgb, var(--good) 16%, var(--surface)); color: var(--good); }
 .delta-pill.down { background: color-mix(in srgb, var(--brake) 14%, var(--surface)); color: var(--brake); }
@@ -540,14 +540,14 @@ a.btn { text-decoration: none; }
 /* Rapport */
 .report-head { margin: 0 4px 10px; }
 .hero { display: grid; grid-template-columns: auto 1fr; gap: 14px 16px; align-items: center; }
-.hero .sign { width: 124px; height: 124px; }
+.hero .sign, .hero .score-ring { width: 124px; height: 124px; }
 .hero .rating { font-size: 1.25rem; margin: 0; }
 .hero-warn { display: flex; gap: 6px; align-items: flex-start; color: var(--turn); font-weight: 700; font-size: .9rem; margin: 8px 0 0; }
-.stat-chips { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; }
+.stat-chips { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0; }
 .stat-chips div { background: var(--bg); border-radius: 12px; padding: 8px 10px; }
 .stat-chips dt { font-size: .78rem; color: var(--muted); }
 .stat-chips dd { margin: 0; font-weight: 800; font-variant-numeric: tabular-nums; }
-@media (max-width: 420px) { .hero { grid-template-columns: 1fr; text-align: center; } .hero .sign { margin: 0 auto; } .hero-text { display: flex; flex-direction: column; align-items: center; } .delta-pill { align-self: center; } .stat-chips { text-align: left; } }
+@media (max-width: 420px) { .hero { grid-template-columns: 1fr; text-align: center; } .hero .sign, .hero .score-ring { margin: 0 auto; } .hero-text { display: flex; flex-direction: column; align-items: center; } .delta-pill { align-self: center; } .stat-chips { text-align: left; grid-template-columns: repeat(2, 1fr); } }
 .summary-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .summary-list li { display: flex; gap: 10px; align-items: flex-start; }
 .summary-list .ico { margin-top: 1px; padding: 3px; border-radius: 50%; box-sizing: content-box; }
@@ -841,3 +841,19 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .cam-full-info .muted { font-weight: 500; opacity: .85; }
 .cam-full-close { position: absolute; right: 12px; top: max(12px, env(safe-area-inset-top)); width: 44px; height: 44px; border-radius: 50%;
   border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 1.3rem; cursor: pointer; }
+
+/* Opprydding (v0.9.12): poengring, neste øvingstur og «Flere detaljer» */
+.hero .score-ring { filter: none; }
+.practice-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: p; }
+.practice-list li { display: grid; grid-template-columns: 32px 1fr; column-gap: 12px; row-gap: 2px; counter-increment: p; }
+.practice-list li::before { content: counter(p); grid-row: span 3; width: 32px; height: 32px; border-radius: 50%; background: var(--lane); color: #1f2428; font-weight: 800; display: grid; place-items: center; }
+.practice-list li > * { grid-column: 2; }
+.more-details { margin: 14px 0; }
+.more-details > summary { list-style: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 8px; cursor: pointer; }
+.more-details > summary::-webkit-details-marker { display: none; }
+.more-details > summary .muted { flex-basis: 100%; text-align: center; font-weight: 400; }
+.more-details[open] > summary { margin-bottom: 14px; }
+.settings-adv { margin: 22px 0 8px; }
+.settings-adv > summary { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 8px; cursor: pointer; }
+.settings-adv > summary::-webkit-details-marker { display: none; }
+.settings-adv > summary .muted { flex-basis: 100%; text-align: center; font-weight: 400; }

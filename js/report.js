@@ -151,7 +151,7 @@ export function renderReport(root, r, ctx = {}) {
         : (enrich && enrich.error && canFetch && onFetch ? `<p class="enrich-status error">Forrige henting feilet: ${esc(enrich.error)} <button type="button" class="link" id="btn-fetch">Prøv igjen</button></p>` : '')}
     </header>
     <section class="hero card">
-      ${speedSign(r.overall)}
+      ${scoreRing(r.overall)}
       <div class="hero-text">
         <p class="rating">${esc(rating(r.overall))}</p>
         ${prevScore !== null ? `<p class="delta-pill ${r.overall > prevScore ? 'up' : r.overall < prevScore ? 'down' : ''}">${r.overall > prevScore ? '▲ ' + (r.overall - prevScore) : r.overall < prevScore ? '▼ ' + (prevScore - r.overall) : '='} fra forrige tur (${n0(prevScore)})</p>` : ''}
@@ -160,10 +160,8 @@ export function renderReport(root, r, ctx = {}) {
       <dl class="stat-chips">
         <div><dt>Distanse</dt><dd>${km(r.stats.km)}</dd></div>
         <div><dt>Tid</dt><dd>${duration(r.stats.duration)}</dd></div>
-        <div><dt>Snittfart</dt><dd>${kmh(r.stats.avgKmh)}</dd></div>
         <div><dt>Toppfart</dt><dd>${kmh(r.stats.maxKmh)}</dd></div>
-        <div><dt>Hendelser</dt><dd>${r.events.length}</dd></div>
-        <div><dt>Per 10 km</dt><dd>${n1(eventsPer10km(r))}</dd></div>
+        <div><dt>Brå hendelser</dt><dd>${r.events.length}</dd></div>
       </dl>
     </section>
 
@@ -179,6 +177,8 @@ export function renderReport(root, r, ctx = {}) {
       </ul>
     </section>
 
+    ${nextPracticeCard(nextPractice(r, { sp, marks, camera: r.camera, sits }))}
+
     ${focusResults.length ? `<section class="card focus-card">
       <h2 class="card-title">${icon('target')}Dagens mål</h2>
       <ul class="focus-list">${focusResults.map(f => `<li class="f-${f.state}"><span class="f-ico">${f.state === 'ok' ? icon('check', 18) : f.state === 'no' ? icon('chev', 18) : icon('info', 18)}</span>
@@ -187,7 +187,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
 
     <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#speed-section">Fart</a><a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}<a href="#quality-section">Data</a>
+      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}
     </nav>
 
 
@@ -249,19 +249,13 @@ export function renderReport(root, r, ctx = {}) {
         : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
     </section>` : ''}
 
-    <section class="card" id="speed-section">
-      <h2 class="card-title">${icon('speed')}Fart underveis</h2>
-      ${speedChart(r, gaps, marks, sp)}
-      ${sp ? '<p class="muted small">Rød stiplet linje er fartsgrensen. Rødt felt er tid over grensen.</p>' : ''}
-    </section>
-
     <section class="card" id="events-section">
       <h2 class="card-title">${icon('warn')}Hendelser</h2>
       ${r.events.length ? `<ol class="events">${r.events.map(e => `
         <li><button type="button" class="event" data-n="${e.n}" style="--c:${KIND_COLOR[e.kind]}">
           <span class="num">${e.n}</span>
           <span class="ev-text"><strong>${esc(eventLabel(e))}</strong><span class="muted">${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}</span>${names.events[e.n] ? `<span class="ev-place">${esc(names.events[e.n])}</span>` : ''}</span>
-          <span class="ev-g">${gee(e.g)}<span class="g-word muted">${gWord(e.g)}</span></span>
+          <span class="ev-g"><span class="g-word">${gWord(e.g)}</span></span>
           <span class="ev-chev" aria-hidden="true">›</span>
         </button>
         <div class="ev-detail" id="ev-detail-${e.n}" hidden></div></li>`).join('')}</ol>
@@ -295,6 +289,15 @@ export function renderReport(root, r, ctx = {}) {
       <textarea id="drive-note" rows="2" placeholder="Hva øvde dere på? F.eks. «rundkjøringer og feltskifte»">${esc(note || '')}</textarea>
       <p class="muted small" id="note-status">Lagres automatisk.</p>
     </section>` : ''}
+
+    <details class="more-details" id="more-section">
+      <summary class="btn secondary">${icon('chart', 20)}Flere detaljer<span class="muted small">fartsgraf, datakvalitet og hvordan det måles</span></summary>
+
+    <section class="card" id="speed-section">
+      <h2 class="card-title">${icon('speed')}Fart underveis</h2>
+      ${speedChart(r, gaps, marks, sp)}
+      ${sp ? '<p class="muted small">Rød stiplet linje er fartsgrensen. Rødt felt er tid over grensen.</p>' : ''}
+    </section>
 
     <section class="card" id="quality-section">
       <details ${qualitySev >= 2 ? 'open' : ''}>
@@ -334,6 +337,7 @@ export function renderReport(root, r, ctx = {}) {
         </div>
       </details>
     </section>
+    </details>
 
     ${onDelete ? `<button type="button" class="btn danger" id="btn-delete-drive">${icon('trash', 20)}Slett denne turen</button>` : ''}
     ${feedbackHref ? `<a class="btn secondary feedback-btn" href="${esc(feedbackHref)}">${icon('mail', 20)}Stemte rapporten? Si fra</a>` : ''}
@@ -437,10 +441,10 @@ export function renderReport(root, r, ctx = {}) {
     if (el) {
       const y = el.getBoundingClientRect().top + window.scrollY - 118;
       window.scrollTo({ top: y, behavior: smooth });
-      if (el.id === 'quality-section') { const d = el.querySelector('details'); if (d) d.open = true; }
+      const more = el.closest('.more-details'); if (more) more.open = true;
     }
   }));
-  countUp(root.querySelector('.sign text'), r.overall);
+  countUp(root.querySelector('.score-ring .score-num'), r.overall);
   if (onDelete) root.querySelector('#btn-delete-drive').addEventListener('click', onDelete);
   const fetchBtn = root.querySelector('#btn-fetch');
   if (fetchBtn && onFetch) fetchBtn.addEventListener('click', onFetch);
@@ -449,6 +453,42 @@ export function renderReport(root, r, ctx = {}) {
 }
 
 const markCount = (marks, cats) => marks.filter(m => cats.includes(m.cat)).length;
+
+/* Neste øvingstur (v0.9.12): høyst to konkrete ting å øve på, valgt fra denne turen, med hvordan og hvor.
+   Rekkefølge etter hvor mye det trekker: fartsgrenser, speilblikk, alvorlige situasjoner og svakeste kategori. */
+const PRACTICE = {
+  brake: { title: 'Myk bremsing', how: 'Se langt fram og slipp gassen tidlig. Velg en strekning med flere lyskryss, og prøv å stoppe så mykt at passasjeren ikke merker det.' },
+  accel: { title: 'Rolig igangkjøring', how: 'Trykk gassen gradvis inn fra stillestående, som om det ligger et egg under pedalen. Øv ut fra kryss og rundkjøringer.' },
+  turn: { title: 'Fart inn i svinger', how: 'Bremse før svingen, ikke i den, og hold jevn fart gjennom. En rolig vei med flere svinger er fin å øve på.' },
+  smooth: { title: 'Jevn fart', how: 'Velg en landevei og hold samme fart. Kast et blikk på speedometeret omtrent hvert femte sekund.' },
+  limits: { title: 'Fartsgrensene', how: 'Si fartsgrensen høyt hver gang du ser et nytt skilt. Ledsageren kan spørre «hva er grensen her?» innimellom.' },
+  mirror: { title: 'Speil og skulderblikk', how: 'Si «speil» høyt hver gang du sjekker speilet, før feltskifte, sving og nedbremsing. Ledsageren følger med.' },
+  situation: { title: 'Situasjonene fra denne turen', how: 'Kjør samme strekning igjen og ta det rolig der det skjedde. Trykk på situasjonene for å se stedene på kartet.' },
+  next: { title: 'Prøv noe nytt', how: 'Turen gikk fint. Neste gang kan dere prøve en ny type vei: landevei, motorvei, bykjøring i rushtid eller kjøring i mørket.' }
+};
+export function nextPractice(r, { sp = null, marks = [], camera = null, sits = [] } = {}) {
+  const out = [];
+  if (sp && sp.secondsOver >= 10) out.push({ id: 'limits', w: 30 + sp.secondsOver / 5, why: `${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.` });
+  const mirrorMarks = markCount(marks, ['speil', 'skulder']);
+  if (mirrorMarks) out.push({ id: 'mirror', w: 25 + 5 * mirrorMarks, why: `Ledsageren merket speil eller skulderblikk ${mirrorMarks === 1 ? 'én gang' : mirrorMarks + ' ganger'}.` });
+  else if (camera && camera.calibrated && Array.isArray(camera.lane)) {
+    // Førerkameraet: feltskifter uten speilblikk først (mirror === false; null = kameraet så ikke føreren da)
+    const missed = camera.lane.filter(l => l.mirror === false).length;
+    if (missed) out.push({ id: 'mirror', w: 22 + 3 * missed, why: `Kameraet så ikke speilblikk før ${missed === 1 ? 'ett feltskifte' : missed + ' feltskifter'}.` });
+  }
+  const high = sits.filter(s => s.level === 'high').length;
+  if (high) out.push({ id: 'situation', w: 20 + 5 * high, why: `${high} ${high === 1 ? 'situasjon' : 'situasjoner'} som bør øves på.` });
+  const cats = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] < (k === 'smooth' ? 85 : 90)).sort((a, b) => r.scores[a] - r.scores[b]);
+  for (const k of cats) out.push({ id: k, w: 100 - r.scores[k], why: `${CATS[k]}: ${r.scores[k]} poeng på denne turen.` });
+  const top = out.sort((a, b) => b.w - a.w).slice(0, 2);
+  return (top.length ? top : [{ id: 'next', why: '' }]).map(x => ({ id: x.id, title: PRACTICE[x.id].title, why: x.why, how: PRACTICE[x.id].how }));
+}
+function nextPracticeCard(items) {
+  return `<section class="card practice-card">
+      <h2 class="card-title">${icon('target')}Neste øvingstur</h2>
+      <ol class="practice-list">${items.map(p => `<li><strong>${esc(p.title)}</strong>${p.why ? `<span class="muted small">${esc(p.why)}</span>` : ''}<span>${esc(p.how)}</span></li>`).join('')}</ol>
+    </section>`;
+}
 
 /* Dagens øvingsmål: vurderer hvert valgt mål mot turen. state: ok | no | na */
 export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], log = null }) {
@@ -518,11 +558,11 @@ function situationSection(sits, sum) {
   const item = s => `<li><button type="button" class="man-item sit-item" data-lat="${s.lat}" data-lon="${s.lon}">
       <span class="man-ico sit-${s.level}">${icon(SIT_ICON[s.kind] || 'info', 20)}</span>
       <span class="ev-text"><strong>${esc(s.title)}</strong><span class="muted small">${mss(s.t)} · ${LEVEL_LABEL[s.level]}</span><span class="sit-text">${esc(s.text)}</span>
-        <span class="src-chips">${s.sources.map(k => `<span class="src-chip">${SOURCE_LABEL[k]}</span>`).join('')}</span></span>
+</span>
       ${icon('chev', 18)}</button></li>`;
   return `<section class="card" id="situation-section">
       <h2 class="card-title">${icon('layers')}Situasjoner</h2>
-      <p class="muted small">GPS, bevegelse${sits.some(s => s.sources.includes('camera')) ? ', førerkamera' : ''}${sits.some(s => s.sources.includes('road')) ? ', veidata' : ''} og ledsagerens merker satt sammen.${sum.high ? ` ${sum.high} alvorlig${sum.high === 1 ? '' : 'e'}, ${sum.medium} å øve på.` : ''}</p>
+      ${sum.high ? `<p class="muted small">${sum.high} alvorlig${sum.high === 1 ? '' : 'e'}, ${sum.medium} å øve på. Trykk for å se stedet på kartet.</p>` : '<p class="muted small">Trykk for å se stedet på kartet.</p>'}
       ${shown.length ? `<ul class="man-list">${shown.map(item).join('')}</ul>` : '<p>Ingen situasjoner å øve på. Bra!</p>'}
       ${good.length ? `<details class="adv"><summary>${good.length} ${good.length === 1 ? 'situasjon' : 'situasjoner'} gikk bra</summary><ul class="man-list">${good.map(item).join('')}</ul></details>` : ''}
     </section>`;
@@ -837,7 +877,19 @@ function prefersReduced() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-/* Fartsgrense-skilt med poengsummen */
+/* Poengsummen som en ring som fylles (v0.9.12). Før sto den i et fartsgrenseskilt, og «72» ble lest som fartsgrense 72. */
+export function scoreRing(score, size = 132) {
+  const c = 2 * Math.PI * 42, f = Math.max(0, Math.min(100, score)) / 100;
+  const col = score >= 90 ? 'var(--good)' : score >= 75 ? 'var(--accel)' : score >= 55 ? 'var(--turn)' : 'var(--brake)';
+  return `<svg class="score-ring" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${score} av 100 poeng">
+    <circle cx="50" cy="50" r="42" fill="none" stroke="var(--line)" stroke-width="8"/>
+    <circle cx="50" cy="50" r="42" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/>
+    <text class="score-num" x="50" y="47" text-anchor="middle" dominant-baseline="central" font-weight="800" font-size="${score >= 100 ? 30 : 34}" fill="var(--ink)">${score}</text>
+    <text x="50" y="69" text-anchor="middle" font-size="10" fill="var(--muted)">av 100</text>
+  </svg>`;
+}
+
+/* Fartsgrense-skilt med poengsummen (brukes ikke i rapporten lenger) */
 export function speedSign(score, size = 148) {
   return `<svg class="sign" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="Poengsum ${score}">
     <circle cx="50" cy="50" r="48" fill="#fff"/>

@@ -49,7 +49,7 @@
         <li><span class="step-num">2</span><span><strong>Ledsageren trykker «Start»</strong> når sjekkene er grønne. Føreren rører ikke telefonen.</span></li>
         <li><span class="step-num">3</span><span><strong>Hold «Stopp» inne</strong> i ett sekund når turen er over. Rapporten kommer med én gang.</span></li>
       </ol>
-      <p class="muted small">Ingen poeng, lyder eller tilbakemelding underveis.</p>
+      <p class="muted small">Under turen vises bare fartsgrensen, og det piper før fotobokser. Rapporten med neste øvingstur kommer når dere stopper.</p>
     </section>
 
     <div class="chips" id="driver-chips" role="group" aria-label="Vis turer for" hidden></div>
@@ -236,6 +236,72 @@
       <span class="appbar-spacer"></span>
     </header>
 
+    <h2 class="group-title"><span data-icon="user"></span>Førere og mål</h2>
+    <section class="card">
+      <h3>Førere</h3>
+      <p class="muted small">Velg hvem som kjører før hver tur. Hjemskjermen viser da utvikling per fører.</p>
+      <ul class="driver-list" id="driver-list"></ul>
+      <div class="add-row"><input id="new-driver" maxlength="40" placeholder="Navn" aria-label="Navn på ny fører"><button type="button" class="btn secondary" id="btn-add-driver">Legg til</button></div>
+      <h3 class="mt">Mål</h3>
+      <p class="muted small">Valgfritt. Sammenlignes med snittet av de tre siste turene. Tomt felt betyr ingen mål.</p>
+      <div class="goal-fields">
+        <label class="field">Poengsum minst<input id="goal-score" inputmode="numeric" placeholder="f.eks. 85"></label>
+        <label class="field">Høyst hendelser per 10 km<input id="goal-ev10" inputmode="decimal" placeholder="f.eks. 2"></label>
+      </div>
+    </section>
+
+    <h2 class="group-title"><span data-icon="map"></span>Under kjøring</h2>
+    <section class="card">
+      <div class="toggle-list">
+        <label class="toggle"><span><strong>Fartsgrense og fotobokser</strong><br><span class="muted small">Viser fartsgrensen på skjermen og varsler før fotobokser og strekningsmåling. Gir også stoppskilt, vikeplikt og rundkjøringer i rapporten. Fra Statens vegvesen.</span></span><input type="checkbox" class="switch" id="netLimits"></label>
+        <label class="toggle"><span><strong>Lyd ved fotobokser</strong><br><span class="muted small">Pip før fotobokser og strekningsmåling, og raske pip hvis farten er for høy der. Høres også med lydløs-bryteren på.</span> <button type="button" class="link" id="btn-test-sound">Prøv lyden</button></span><input type="checkbox" class="switch" id="atkSound"></label>
+      </div>
+    </section>
+
+    <h2 class="group-title"><span data-icon="volume"></span>Rapporten</h2>
+    <section class="card">
+      <div class="toggle-list">
+        <label class="toggle"><span><strong>Kart</strong><br><span class="muted small">Kartbakgrunn fra Kartverket.</span></span><input type="checkbox" class="switch" id="netMap"></label>
+        <label class="toggle"><span><strong>Stedsnavn</strong><br><span class="muted small">Gatenavn der noe skjedde.</span></span><input type="checkbox" class="switch" id="netNames"></label>
+        <label class="toggle"><span><strong>Les opp rapporten</strong><br><span class="muted small">Telefonen leser opp det viktigste når dere har stoppet.</span></span><input type="checkbox" class="switch" id="autoSpeak"></label>
+      </div>
+      <p class="muted small">For fartsgrenser, kart og stedsnavn sendes rutens posisjoner til Statens vegvesen og Kartverket. Ingenting annet sendes, og turene lagres bare på denne telefonen.</p>
+    </section>
+
+    <h2 class="group-title"><span data-icon="sun"></span>Utseende</h2>
+    <section class="card">
+      <div class="segment" role="radiogroup" aria-label="Utseende">
+        <label><input type="radio" name="theme" value="auto"><span>Automatisk</span></label>
+        <label><input type="radio" name="theme" value="light"><span>Lys</span></label>
+        <label><input type="radio" name="theme" value="dark"><span>Mørk</span></label>
+      </div>
+    </section>
+
+    <h2 class="group-title"><span data-icon="shield"></span>Sikkerhetskopi</h2>
+    <section class="card">
+      <p class="muted small" id="persist-status"></p>
+      <p class="muted small" id="storage-status"></p>
+      <p class="muted small">Én fil med alle turer, rådata og innstillinger (førere, mål, opplæringsplan, terskler). Gjenoppretting hopper over turer som finnes fra før.</p>
+      <p class="small" id="last-backup"></p>
+      <div class="btn-row">
+        <button type="button" class="btn secondary" id="btn-backup"><span data-icon="download"></span>Ta kopi</button>
+        <label class="btn secondary file-btn"><span data-icon="upload"></span>Gjenopprett<input type="file" id="restore-file" accept="application/json,.json"></label>
+      </div>
+    </section>
+
+    <h2 class="group-title"><span data-icon="info"></span>Om appen</h2>
+    <section class="card">
+      <p>Appen er i testfase. Fortell gjerne hva som stemte og hva som ikke stemte. Det er sånn den blir bedre.</p>
+      <div class="about-actions">
+        <a class="btn secondary" id="btn-feedback" href="mailto:Jo@svendsenmedia.net"><span data-icon="mail"></span>Gi tilbakemelding</a>
+        <a class="btn secondary" href="./personvern/" target="_blank" rel="noopener"><span data-icon="shield"></span>Personvern</a>
+      </div>
+      <p class="small mt"><a href="./trafikkskole/" target="_blank" rel="noopener">Informasjon for trafikkskoler</a></p>
+    </section>
+
+    <details class="settings-adv" id="settings-adv">
+      <summary class="btn secondary">Avansert<span class="muted small">vurdering, påminnelse i bilen, eksport og vedlikehold</span></summary>
+
     <h2 class="group-title"><span data-icon="sliders"></span>Vurdering</h2>
     <section class="card">
       <h3>Følsomhet</h3>
@@ -269,38 +335,6 @@
       </details>
     </section>
 
-    <h2 class="group-title"><span data-icon="user"></span>Førere og mål</h2>
-    <section class="card">
-      <h3>Førere</h3>
-      <p class="muted small">Velg hvem som kjører før hver tur. Hjemskjermen viser da utvikling per fører.</p>
-      <ul class="driver-list" id="driver-list"></ul>
-      <div class="add-row"><input id="new-driver" maxlength="40" placeholder="Navn" aria-label="Navn på ny fører"><button type="button" class="btn secondary" id="btn-add-driver">Legg til</button></div>
-      <h3 class="mt">Mål</h3>
-      <p class="muted small">Valgfritt. Sammenlignes med snittet av de tre siste turene. Tomt felt betyr ingen mål.</p>
-      <div class="goal-fields">
-        <label class="field">Poengsum minst<input id="goal-score" inputmode="numeric" placeholder="f.eks. 85"></label>
-        <label class="field">Høyst hendelser per 10 km<input id="goal-ev10" inputmode="decimal" placeholder="f.eks. 2"></label>
-      </div>
-    </section>
-
-    <h2 class="group-title"><span data-icon="map"></span>Kart og nettjenester</h2>
-    <section class="card">
-      <p class="muted small">Når disse er på, sendes rutens posisjoner til tjenestene når en rapport åpnes med nett. Ingenting annet sendes. Svarene lagres på telefonen, så rapporten virker uten nett etterpå.</p>
-      <div class="toggle-list">
-        <label class="toggle"><span><strong>Kart</strong><br><span class="muted small">Kartbakgrunn fra Kartverket. Av: ruten tegnes uten kart.</span></span><input type="checkbox" class="switch" id="netMap"></label>
-        <label class="toggle"><span><strong>Veidata</strong><br><span class="muted small">Fra Statens vegvesen (NVDB): fartsgrensen, fotobokser og strekningsmåling på skjermen under kjøring, fartsgrenser, stoppskilt, vikeplikt, rundkjøringer, gangfelt, fartsdempere, lyskryss og skiltene Barn og Farlig sving.</span></span><input type="checkbox" class="switch" id="netLimits"></label>
-        <label class="toggle"><span><strong>Lyd ved fotobokser</strong><br><span class="muted small">Ding-dong rundt 1 km før en fotoboks eller strekningsmåling, tre pip 300 m før, og raske pip hvis du kjører for fort nær boksen eller har for høyt snitt på strekningen. Spilles også med lydløs-bryteren på. Krever Veidata.</span> <button type="button" class="link" id="btn-test-sound">Prøv lyden</button></span><input type="checkbox" class="switch" id="atkSound"></label>
-        <label class="toggle"><span><strong>Stedsnavn</strong><br><span class="muted small">Gatenavn på hendelser og merker, fra Kartverket.</span></span><input type="checkbox" class="switch" id="netNames"></label>
-      </div>
-    </section>
-
-    <h2 class="group-title"><span data-icon="volume"></span>Etter turen</h2>
-    <section class="card">
-      <div class="toggle-list">
-        <label class="toggle"><span><strong>Les opp rapporten</strong><br><span class="muted small">Telefonen leser opp poeng og de viktigste tipsene når ledsageren har trykket «Stopp». Du kan også trykke på høyttaleren øverst i rapporten.</span></span><input type="checkbox" class="switch" id="autoSpeak"></label>
-      </div>
-    </section>
-
     <h2 class="group-title"><span data-icon="bell"></span>Påminnelse i bilen</h2>
     <section class="card">
       <p>iPhone kan minne deg på appen når telefonen kobler seg til bilens Bluetooth. Det settes opp én gang i appen <strong>Snarveier</strong>:</p>
@@ -313,27 +347,9 @@
       <p class="muted small">Bruk ikke «Åpne URL»: den åpner Safari, og der ligger ikke turene dine. Appen på Hjem-skjermen har sin egen lagring.</p>
     </section>
 
-    <h2 class="group-title"><span data-icon="sun"></span>Utseende</h2>
-    <section class="card">
-      <div class="segment" role="radiogroup" aria-label="Utseende">
-        <label><input type="radio" name="theme" value="auto"><span>Automatisk</span></label>
-        <label><input type="radio" name="theme" value="light"><span>Lys</span></label>
-        <label><input type="radio" name="theme" value="dark"><span>Mørk</span></label>
-      </div>
-    </section>
-
     <h2 class="group-title"><span data-icon="shield"></span>Data</h2>
     <section class="card">
-      <h3>Sikkerhetskopi</h3>
-      <p class="muted small" id="persist-status"></p>
-      <p class="muted small" id="storage-status"></p>
-      <p class="muted small">Én fil med alle turer, rådata og innstillinger (førere, mål, opplæringsplan, terskler). Gjenoppretting hopper over turer som finnes fra før.</p>
-      <p class="small" id="last-backup"></p>
-      <div class="btn-row">
-        <button type="button" class="btn secondary" id="btn-backup"><span data-icon="download"></span>Ta kopi</button>
-        <label class="btn secondary file-btn"><span data-icon="upload"></span>Gjenopprett<input type="file" id="restore-file" accept="application/json,.json"></label>
-      </div>
-      <h3 class="mt">Én tur</h3>
+      <h3>Én tur</h3>
       <p class="muted small">Rådata som JSON-fil, for eksempel til trafikklæreren.</p>
       <select id="export-select" aria-label="Velg tur"></select>
       <div class="btn-row">
@@ -345,24 +361,16 @@
       <button type="button" class="btn danger" id="btn-delete-all"><span data-icon="trash"></span>Slett alle turer</button>
     </section>
 
-    <h2 class="group-title"><span data-icon="info"></span>Om appen</h2>
-    <section class="card">
-      <p>Appen er i testfase. Fortell gjerne hva som stemte og hva som ikke stemte. Det er sånn den blir bedre.</p>
-      <div class="about-actions">
-        <a class="btn secondary" id="btn-feedback" href="mailto:Jo@svendsenmedia.net"><span data-icon="mail"></span>Gi tilbakemelding</a>
-        <a class="btn secondary" href="./personvern/" target="_blank" rel="noopener"><span data-icon="shield"></span>Personvern</a>
-      </div>
-      <p class="small mt"><a href="./trafikkskole/" target="_blank" rel="noopener">Informasjon for trafikkskoler</a></p>
-    </section>
-
     <section class="card" id="dev-section" hidden>
       <h3>Utvikler</h3>
       <p class="muted small">Spiller demoturen gjennom opptakeren, lagringen og rapporten, som om sensorene leverte dataene.</p>
       <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
       <button type="button" class="btn secondary" id="btn-dev-demo-slow">Samme, i 10× fart</button>
     </section>
+    </details>
+
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.9.11</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.9.12</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

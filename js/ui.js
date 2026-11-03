@@ -198,12 +198,14 @@ export function routeThumb(points, size = 56) {
   </svg>`;
 }
 
-/* Liten poengskive (fartsgrenseskilt) til lister */
+/* Liten poengring til lister (v0.9.12: før et fartsgrenseskilt, som ble lest som en fartsgrense) */
 export function scoreBadge(score, size = 46) {
-  return `<svg class="badge" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${score} poeng">
-    <circle cx="50" cy="50" r="47" fill="#fff"/>
-    <circle cx="50" cy="50" r="40" fill="none" stroke="#c8102e" stroke-width="13"/>
-    <text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-weight="800" font-size="${score >= 100 ? 32 : 40}" fill="#111">${score}</text>
+  const c = 2 * Math.PI * 40, f = Math.max(0, Math.min(100, score)) / 100;
+  const col = score >= 90 ? 'var(--good)' : score >= 75 ? 'var(--accel)' : score >= 55 ? 'var(--turn)' : 'var(--brake)';
+  return `<svg class="badge" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${score} av 100 poeng">
+    <circle cx="50" cy="50" r="40" fill="none" stroke="var(--line)" stroke-width="12"/>
+    <circle cx="50" cy="50" r="40" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/>
+    <text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-weight="800" font-size="${score >= 100 ? 30 : 36}" fill="var(--ink)">${score}</text>
   </svg>`;
 }
 

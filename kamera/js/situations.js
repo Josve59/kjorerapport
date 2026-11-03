@@ -77,7 +77,8 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
     const sources = ['motion', 'gps', ...(before ? ['camera'] : []), ...(lead ? ['roadcam'] : []), ...(over ? ['road'] : [])];
     const where = rb ? null : placeAt(e.t);
     if (where && !sources.includes('road')) sources.push('road');
-    const parts = [`${(e.g).toFixed(2).replace('.', ',')} g i ${kmh(e.speedKmh)}${rb ? ', i rundkjøring' : where ? ', ' + where : ''}.`];
+    // Fart og sted i vanlige ord (v0.9.12; g-verdien står i hendelsens detaljer)
+    const parts = [`I ${kmh(e.speedKmh)}${rb ? ', i rundkjøring' : where ? ', ' + where : ''}.`];
     if (where === 'rett før fartsdemper' && e.kind === 'brake') parts.push('Brems tidligere og mykere før fartsdempere.');
     if (before) parts.push(`Blikket var borte fra veien i ${n1(before.dur)} s rett før.`);
     if (lead) parts.push(`Bilen foran var ca. ${Math.round(lead.dist)} m unna (${n1(lead.headway)} s) rett før.`);
