@@ -189,7 +189,7 @@
   <section id="log" class="screen" hidden>
     <header class="appbar">
       <button type="button" class="btn-back icon-btn" aria-label="Til hjem" data-icon="back"></button>
-      <h1>Kjørelogg</h1>
+      <h1>Turer</h1>
       <span class="appbar-actions"><button type="button" class="icon-btn" id="btn-log-csv" aria-label="Eksporter loggen som regneark" data-icon="download"></button></span>
     </header>
     <div id="log-root"></div>
@@ -382,11 +382,18 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.9.15</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.9.16</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 
 </main>
+<!-- Fanelinje (v0.9.16): de fire hoveddelene av appen, alltid synlig unntatt før og under kjøring -->
+<nav class="tabbar" id="tabbar" aria-label="Hovedmeny" hidden>
+  <a href="#/" data-tab="home"><span data-icon="home"></span><span>Hjem</span></a>
+  <a href="#/logg" data-tab="trips"><span data-icon="list"></span><span>Turer</span></a>
+  <a href="#/opplaering" data-tab="plan"><span data-icon="school"></span><span>Opplæring</span></a>
+  <a href="#/trafikklaerer" data-tab="teacher"><span data-icon="user"></span><span>Trafikklærer</span></a>
+</nav>
 <div class="calib-overlay" id="calib-overlay" role="dialog" aria-modal="true" aria-labelledby="calib-step" hidden>
   <p class="calib-progress" id="calib-progress"></p>
   <p class="calib-step" id="calib-step" aria-live="assertive"></p>

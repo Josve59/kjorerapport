@@ -128,6 +128,15 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.16 / k0.7.11 – tab bar
+
+A fixed **tab bar** at the bottom with the four main parts (`tab-bars.md › Best practices`): **Hjem**, **Turer** (the driving log with all drives, before «Kjørelogg»), **Opplæring** and **Trafikklærer**.
+
+- **Where it is shown:** on all screens except the pre-drive check, the drive itself and the camera screen, so nobody leaves the drive by mistake. A report belongs to the tab it was opened from. Settings and the demo belong to «Hjem», «Faresteder» to «Opplæring».
+- **Back button:** the tabs' own screens have none. From a report it goes back to the tab you came from, and from «Faresteder» to «Opplæring».
+- **Front page:** now only start, last drive, development and goals. The drive list, the driving log card and the shortcut cards are in the tabs. «Faresteder» is a card at the top of «Opplæring» (shown only when there are any).
+- **Style:** the chosen tab is blue (navigation/information) with a slightly thicker icon. Labels are 13.3 px and touch targets 52 px. The bar becomes solid with «Reduser gjennomsiktighet», and toast messages are lifted above it.
+
 ## What's new in 0.9.15 / k0.7.10 – fixes from the design review (Apple HIG)
 
 This is a design review against Apple's Human Interface Guidelines (the apple-design skill), measured on the newest version at mobile size.

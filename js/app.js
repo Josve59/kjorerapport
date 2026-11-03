@@ -14,7 +14,7 @@ import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.15';
+export const APP_VERSION = '0.9.16';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -642,7 +642,9 @@ async function renderPlan() {
   const { key, mine } = planState();
   const prog = planProgress();
   const dfmt = iso => new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
+  const spots = hotspots(rows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
   root.innerHTML = `
+    ${spots.length ? `<button type="button" class="card mini-card plan-spots" id="btn-plan-spots"><span class="card-title">${icon('pin')}Faresteder</span><span class="muted small">${spots.length} ${spots.length === 1 ? 'sted' : 'steder'} der det har skjedd noe flere ganger</span><span class="last-cta">Se på kartet ${icon('chev', 18)}</span></button>` : ''}
     <section class="card plan-head">
       <p class="eyebrow">${driver ? esc(driver) : 'Fører ikke valgt'}</p>
       <p class="plan-prog"><strong>${prog.done}</strong> av ${prog.total} punkter krysset av</p>
@@ -657,6 +659,8 @@ async function renderPlan() {
         ${it.help ? `<span class="muted small">${esc(it.help)}</span>` : ''}
         ${it.auto ? `<span class="plan-ev ${e && e.good ? 'good' : ''}">${e ? esc(e.text) : 'Ikke øvd på turene ennå'}</span>` : ''}</span></label></li>`;
     }).join('')}</ul></section>`).join('')}`;
+  const spotsBtn = root.querySelector('#btn-plan-spots');
+  if (spotsBtn) spotsBtn.onclick = () => { location.hash = '#/faresteder'; };
   root.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => {
     const cur = getSettings();
     const allC = { ...(cur.curriculum || {}) };
@@ -1328,9 +1332,34 @@ async function shareFile(json, name) {
 }
 
 /* ---------- Ruting ---------- */
+/* Fanelinjen (v0.9.16): hvilken fane som er valgt, og om linjen vises. Skjult før og under kjøring og på
+   kameraskjermen (en oppgave med fokus). En rapport hører til fanen den ble åpnet fra. */
+const TAB_ROOTS = { '#/': 'home', '#/logg': 'trips', '#/opplaering': 'plan', '#/trafikklaerer': 'teacher' };
+let lastTab = '#/';
+function updateTabbar(h) {
+  const bar = $('#tabbar');
+  if (!bar) return;
+  const hide = ['#/sjekk', '#/opptak', '#/kamera'].includes(h);
+  bar.hidden = hide;
+  document.body.classList.toggle('has-tabbar', !hide);
+  if (TAB_ROOTS[h]) lastTab = h;
+  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
+  bar.querySelectorAll('a').forEach(a => {
+    const on = a.dataset.tab === active;
+    a.classList.toggle('on', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+}
+/* Tilbake: fra en rapport til fanen den kom fra, fra Faresteder til Opplæring, ellers til Hjem */
+function goBack() {
+  const h = location.hash;
+  location.hash = h === '#/faresteder' ? '#/opplaering' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
+}
+
 function route() {
   const h = location.hash || '#/';
   if (recorder && recorder.running && h !== '#/opptak') { location.hash = '#/opptak'; return; }
+  updateTabbar(h);
   if (stopPrecheck && h !== '#/sjekk') { stopPrecheck(); stopPrecheck = null; }
   if (!h.startsWith('#/rapport/') && h !== '#/kamera' && h !== '#/sjekk') stopSpeaking();
   if (h !== '#/kamera') calibForDrive = null;
@@ -1358,7 +1387,7 @@ function init() {
   $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
   $('#btn-settings').onclick = () => { location.hash = '#/innstillinger'; };
-  document.querySelectorAll('.btn-back').forEach(b => b.onclick = () => { location.hash = '#/'; });
+  document.querySelectorAll('.btn-back').forEach(b => b.onclick = goBack);
   setupLongPress($('#btn-stop'), finishRecording);
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
   $('#btn-check-update').onclick = async () => {
