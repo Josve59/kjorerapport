@@ -128,6 +128,20 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## Testing the iPhone app with a simulated drive
+
+`ios/sim-rute.sh` drives a 6.9 km round trip in Trondheim city centre in the simulator. It follows real streets (`ios/testrute-trondheim.txt`, routed with TomTom).
+- `./sim-rute.sh` drives at 50 km/h.
+- `./sim-rute.sh 8` drives at about 30 km/h.
+- `./sim-rute.sh stopp` stops the simulated position.
+
+**Why «Fartsgrense ukjent her» appeared in the simulator:**
+- The earlier test route was straight lines between 7 points, so it cut through blocks.
+- The app only uses a speed limit section within 25 m of the GPS point, so about a third of the points got no limit.
+- That is correct behaviour, not a bug.
+- On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
+- **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
+
 ## What's new in 0.9.22 – Live Activity in the iPhone app
 
 While a recording is running, the lock screen and the Dynamic Island show:
