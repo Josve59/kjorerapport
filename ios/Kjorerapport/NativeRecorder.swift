@@ -66,6 +66,8 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             return (plus.status, nil)
         case "plusBuy":
             return (await plus.buy(in: webView?.window?.windowScene), nil)
+        case "plusTrial":
+            return (await plus.buy(in: webView?.window?.windowScene, trial: true), nil)
         case "plusRestore":
             return (await plus.restore(), nil)
         case "plusRedeem":

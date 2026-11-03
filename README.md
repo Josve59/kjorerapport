@@ -142,6 +142,29 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.11.2 – free trial and «Klar for oppkjøring?»
+
+**Free 14-day trial of Pluss (iPhone app):**
+- The Pluss screen now offers **«Prøv gratis i 14 dager»** first, with the purchase as the second button.
+- Apple does not allow a free trial on a one-time purchase directly, so the trial is a separate **free** in-app purchase, «14 dagers prøveperiode» (App Review Guidelines 3.1.1). It unlocks Pluss for 14 days from when it was taken, once per Apple ID.
+- During the trial, the Pluss screen and Innstillinger show the days left. When it ends, the app goes back to the free parts, and all drives stay.
+- Nothing is charged and nothing renews. The product must be created in App Store Connect (see `appstore/README.md`, section 12).
+
+**«Klar for oppkjøring?» (new Pluss screen, `js/readiness.js`):**
+- A card on Home shows how many points are in place (free to see). The screen itself is part of Pluss.
+- It checks eight things against the app's own targets:
+  - amount (2 000 km, also what several insurers require for a discount)
+  - variety (town, country road, motorway)
+  - driving in the dark
+  - smooth driving on the latest drives
+  - speed limits (with Veidata)
+  - roundabouts, lane changes and junctions
+  - mirror and shoulder checks (with the camera)
+  - the mandatory training, as ticked in Opplæring
+- Points the app cannot measure yet (no camera, no Veidata) are shown but not counted.
+- The top three things to practise next are listed first.
+- The wording never says the pupil will pass. It says that the driving teacher decides when the pupil is ready for the test.
+
 ## What's new in 0.11.1 – more trustworthy mirror checks (after the drives on 3 Nov)
 
 **What the drives showed:**

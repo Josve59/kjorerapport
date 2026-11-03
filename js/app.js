@@ -18,9 +18,10 @@ import { roadSummary } from './road.js';
 import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit } from './signs.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
-import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
+import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
+import { readiness, READY_TEXT } from './readiness.js';
 
-export const APP_VERSION = '0.11.1';
+export const APP_VERSION = '0.11.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -145,7 +146,7 @@ async function renderHome() {
   $('#start-hello').textContent = settings.activeDriver ? `Hei, ${settings.activeDriver}!` : 'Klar for en tur?';
   const calibrated = !!getCalib();
   $('#btn-go-camera').classList.toggle('warn', hasPlus() && !!settings.cameraOn && !calibrated);
-  $('#cam-card-text').textContent = !hasPlus() ? 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.'
+  $('#cam-card-text').textContent = !hasPlus() ? (plusState().trialAvailable ? 'Prøv Pluss gratis i 14 dager: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.' : 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.')
     : !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
     : calibrated ? (roadWanted() ? 'Kalibrert og slått på, med veikameraet samtidig. Trykk for å teste.' : 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.')
     : 'Ikke kalibrert. Trykk her og kalibrer før turen – det tar 30 sekunder.';
@@ -308,6 +309,8 @@ async function renderHome() {
     const allRows = filter ? sugRows : await gatherRows(null);
     const spots = hotspots(allRows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
     const plan = planProgress(allRows);
+    const full = filter ? await gatherRows(null) : allRows;
+    const rd = readiness(settings.activeDriver ? full.filter(x => (x.d.driver || '') === settings.activeDriver) : full, { plan: planState().mine });
     more.innerHTML = `<button type="button" class="card t-cta" id="btn-go-teacher"><span class="card-title">${icon('school')}Til trafikklæreren</span><span class="muted small">Det som er øvd siden forrige kjøretime, klart til å vise fram eller dele</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
       ${spots.length ? `<button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>` : ''}
       <button type="button" class="card mini-card" id="btn-go-plan"${spots.length ? '' : ' style="grid-column: 1 / -1"'}><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
@@ -315,7 +318,12 @@ async function renderHome() {
     if (spots.length) $('#btn-go-spots').onclick = () => { location.hash = '#/faresteder'; };
     $('#btn-go-plan').onclick = () => { location.hash = '#/opplaering'; };
     $('#btn-go-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
-  } else more.hidden = true;
+    // Klar for oppkjøring? (0.11.2): eget kort på Hjem, gratis å se, skjermen hører til Pluss
+    const rc = $('#ready-card');
+    rc.innerHTML = `<button type="button" class="card t-cta ready-cta lv-${rd.level}" id="btn-go-ready"><span class="card-title">${icon('flag')}Klar for oppkjøring?${hasPlus() ? '' : `<span class="lock-tag">${icon('lock', 14)}Pluss</span>`}</span><span class="ready-mini"><strong>${rd.done} av ${rd.counted}</strong> <span class="muted small">på plass · ${esc(READY_TEXT[rd.level].title.toLowerCase())}</span></span><span class="goal-bar"><span style="width:${rd.counted ? Math.round(rd.done / rd.counted * 100) : 0}%"></span></span><span class="last-cta">Se hva som gjenstår ${icon('chev', 18)}</span></button>`;
+    rc.hidden = false;
+    $('#btn-go-ready').onclick = () => { location.hash = '#/klar'; };
+  } else { more.hidden = true; $('#ready-card').hidden = true; }
   $('#update-banner').hidden = !swUpdateReady;
   renderInstallHint();
 }
@@ -353,16 +361,20 @@ async function renderPlus(feature = null) {
     const st = plusState(), owned = hasPlus();
     const order = feature && PLUS_FEATURES[feature] ? [feature, ...Object.keys(PLUS_FEATURES).filter(k => k !== feature)] : Object.keys(PLUS_FEATURES);
     const price = st.price ? `Kjøp for ${esc(st.price)}` : 'Kjøp Pluss';
+    const owns = st.owned || st.dev === true || !st.native, trial = owned && !owns && trialActive(), canTrial = !owned && st.native && st.trialAvailable;
+    const days = trialDaysLeft(), endTxt = st.trialEnd ? new Date(st.trialEnd).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }) : '';
     root.innerHTML = `
       <section class="plus-hero">
         <span class="plus-badge">${icon('check', 18)}Pluss</span>
-        <h2>${owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingskjøringen'}</h2>
-        <p>${owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
+        <h2>${trial ? `Prøveperioden: ${days} ${days === 1 ? 'dag' : 'dager'} igjen` : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingskjøringen'}</h2>
+        <p>${trial ? `Alt i Pluss er låst opp til ${esc(endTxt)}. Etterpå er det gratis delene som før, og alle turene dine er med videre. Kjøper du, beholder du Pluss for godt.` : owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
       </section>
       <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${owned ? `<span class="plus-ok">${icon('check', 18)}</span>` : ''}</div>`; }).join('')}</section>
-      ${owned ? `<button type="button" class="btn secondary" id="plus-back">Tilbake</button>` : `
-      <button type="button" class="btn primary plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
-      <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse.'}</p>
+      ${owned && !trial ? `<button type="button" class="btn secondary" id="plus-back">Tilbake</button>` : `
+      ${canTrial ? `<button type="button" class="btn primary plus-buy" id="plus-trial">Prøv gratis i 14 dager</button>` : ''}
+      <button type="button" class="btn ${canTrial ? 'secondary' : 'primary'} plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
+      <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : canTrial ? 'Prøven er gratis og stopper av seg selv etter 14 dager. Ingenting trekkes, og det fornyes ikke.' : `Betales med Apple-ID-en din. Ingen automatisk fornyelse.${!owned && st.native && st.trialEnd ? ' Prøveperioden er brukt.' : ''}`}</p>`}
+      ${owned && !trial ? '' : `
       <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button></div>`}
       <p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg og rapportene for de ${FREE_REPORTS} siste turene. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>`;
     const back = root.querySelector('#plus-back');
@@ -371,7 +383,8 @@ async function renderPlus(feature = null) {
       btn.disabled = true; const old = btn.textContent; btn.textContent = 'Venter på App Store …';
       const r = await fn();
       btn.disabled = false; btn.textContent = old;
-      if (r.owned) { vibrate([30, 60, 30]); toast(okText, { type: 'ok' }); if (gateFor(location.hash)) route(); else draw(); return; }
+      if (r.error === 'avbrutt') return;
+      if (fn === startTrial ? r.owned : r.bought) { vibrate([30, 60, 30]); toast(okText, { type: 'ok' }); if (gateFor(location.hash)) route(); else draw(); return; }
       if (r.error === 'avbrutt') return;
       if (r.error === 'venter') { infoDialog({ title: 'Venter på godkjenning', text: 'Kjøpet må godkjennes (for eksempel av en forelder med «Spør før kjøp»). Pluss låses opp av seg selv når det er godkjent.' }); return; }
       if (r.error) infoDialog({ title: 'Kjøpet gikk ikke', text: r.error });
@@ -379,6 +392,8 @@ async function renderPlus(feature = null) {
     };
     const buy = root.querySelector('#plus-buy');
     if (buy) buy.onclick = () => act(buy, buyPlus, 'Pluss er låst opp. God tur!');
+    const tr = root.querySelector('#plus-trial');
+    if (tr) tr.onclick = () => act(tr, startTrial, 'Prøveperioden er i gang: Pluss er låst opp i 14 dager.');
     const res = root.querySelector('#plus-restore');
     if (res) res.onclick = () => act(res, restorePlus, 'Pluss er gjenopprettet.');
     const code = root.querySelector('#plus-code');
@@ -760,6 +775,32 @@ async function renderTeacher() {
     toast('Ny periode fra i dag. Neste oppsummering viser øvingen fram til neste time.', { type: 'ok' });
     renderTeacher();
   };
+}
+
+/* ---------- Klar for oppkjøring? (0.11.2) ---------- */
+async function renderReady() {
+  show('ready');
+  const root = $('#ready-root');
+  const driver = getSettings().activeDriver || '';
+  root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
+  const rows = await gatherRows(driver || null);
+  const r = readiness(rows, { plan: planState().mine });
+  const t = READY_TEXT[r.level];
+  const groups = [...new Set(r.items.map(i => i.group))];
+  const mark = i => i.ok === true ? `<span class="rd-ok">${icon('check', 18)}</span>` : i.ok === false ? '<span class="rd-no"></span>' : '<span class="rd-na">–</span>';
+  root.innerHTML = `
+    <section class="card ready-head lv-${r.level}">
+      <p class="eyebrow">${driver ? esc(driver) : 'Alle turer'}</p>
+      <h2>${esc(t.title)}</h2>
+      <p class="plan-prog"><strong>${r.done}</strong> av ${r.counted} punkter på plass</p>
+      <span class="goal-bar"><span style="width:${r.counted ? Math.round(r.done / r.counted * 100) : 0}%"></span></span>
+      <p>${esc(t.text)}</p>
+    </section>
+    ${r.next.length ? `<h2 class="group-title">Øv på dette nå</h2><section class="card"><ul class="rd-next">${r.next.map(i => `<li>${icon('chev', 18)}<span>${esc(i.tip)}</span></li>`).join('')}</ul></section>` : ''}
+    ${groups.map(g => `<h2 class="group-title">${esc(g)}</h2><section class="card"><ul class="rd-list">${r.items.filter(i => i.group === g).map(i => `<li class="rd-item">${mark(i)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.have)}${i.need ? ` · mål ${esc(i.need)}` : ''}</span>${i.ok === null && i.tip ? `<span class="muted small">${esc(i.tip)}</span>` : ''}${i.ok !== null ? `<span class="goal-bar thin"><span style="width:${Math.round(i.progress * 100)}%"></span></span>` : ''}</span></li>`).join('')}</ul></section>`).join('')}
+    <p class="muted small ready-note">Målene er appens egne, satt ut fra vanlige råd for øvelseskjøring. Det er trafikklæreren som vurderer når du er klar for oppkjøring, og ingen app kan love at du består.</p>
+    <button type="button" class="btn secondary" id="btn-ready-teacher">${icon('school', 20)}Vis trafikklæreren</button>`;
+  $('#btn-ready-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
 }
 
 function planState() {
@@ -1704,8 +1745,10 @@ async function renderSettings() {
   const pr = $('#plus-row');
   pr.hidden = !plusState().native;
   if (!pr.hidden) {
-    pr.innerHTML = hasPlus() ? `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Låst opp. Takk!</span></span>`
-      : `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Kameraene, opplæringsplanen, trafikklæreren og alle rapportene</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Se Pluss</button>`;
+    const pst = plusState(), inTrial = !pst.owned && trialActive(), dl = trialDaysLeft();
+    pr.innerHTML = inTrial ? `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Prøveperiode: ${dl} ${dl === 1 ? 'dag' : 'dager'} igjen</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Kjøp</button>`
+      : hasPlus() ? `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Låst opp. Takk!</span></span>`
+      : `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">${pst.trialAvailable ? 'Prøv gratis i 14 dager: kameraene, opplæringsplanen, klar for oppkjøring og alle rapportene' : 'Kameraene, opplæringsplanen, trafikklæreren, klar for oppkjøring og alle rapportene'}</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Se Pluss</button>`;
     const b = pr.querySelector('#btn-plus-row');
     if (b) b.onclick = () => { location.hash = '#/pluss'; };
   }
@@ -1958,7 +2001,7 @@ function updateTabbar(h) {
   bar.hidden = hide;
   document.body.classList.toggle('has-tabbar', !hide);
   if (TAB_ROOTS[h]) lastTab = h;
-  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/guider': 'home', '#/pluss': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
+  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/guider': 'home', '#/pluss': 'home', '#/klar': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -2005,6 +2048,7 @@ function route() {
   else if (h === '#/innstillinger') renderSettings();
   else if (h === '#/logg') renderLog();
   else if (h === '#/trafikklaerer') renderTeacher();
+  else if (h === '#/klar') renderReady();
   else if (h === '#/faresteder') renderSpots();
   else if (h === '#/opplaering') renderPlan();
   else if (h === '#/kamera') renderCamera();
@@ -2016,7 +2060,7 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
   $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };

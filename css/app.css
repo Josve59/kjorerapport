@@ -1013,3 +1013,26 @@ body.has-tabbar .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
   background: var(--primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='3'%3E%3Crect x='6' y='11' width='12' height='9' rx='1.5'/%3E%3Cpath d='M9 11V8a3 3 0 0 1 6 0v3'/%3E%3C/svg%3E") center / 9px no-repeat; }
 .drive.locked { opacity: .55; }
 .drive.locked .drive-main strong::after { content: ' · Pluss'; font-weight: 700; font-size: .8rem; color: var(--muted); }
+
+/* Klar for oppkjøring? (0.11.2) */
+.ready-cta { width: 100%; }
+.ready-cta .card-title { display: flex; align-items: center; gap: 6px; width: 100%; }
+.lock-tag { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: .75rem; font-weight: 800; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.ready-cta .goal-bar { width: 100%; margin-top: 6px; }
+.ready-mini strong { font-size: 1.15rem; }
+.lv-klar .goal-bar span { background: var(--good); }
+.ready-head h2 { margin: 2px 0 6px; }
+.ready-head.lv-klar h2 { color: var(--good); }
+.ready-head .goal-bar { margin: 8px 0 10px; }
+.rd-list, .rd-next { list-style: none; margin: 0; padding: 0; }
+.rd-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.rd-item:first-child { border-top: 0; padding-top: 2px; }
+.rd-item > span:last-child { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.rd-ok, .rd-no, .rd-na { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; margin-top: 1px; }
+.rd-ok { background: var(--good); color: #fff; }
+.rd-no { border: 2px solid var(--turn); }
+.rd-na { border: 2px dashed var(--line); color: var(--muted); font-weight: 800; }
+.goal-bar.thin { height: 6px; margin-top: 6px; }
+.rd-next li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; }
+.rd-next li svg { flex: none; color: var(--turn); margin-top: 2px; }
+.ready-note { margin: 16px 4px; }

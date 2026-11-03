@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reportLocked, gateFor, hasPlus, setDevPlus, FREE_REPORTS, PLUS_FEATURES } from '../js/plus.js';
+import { reportLocked, gateFor, hasPlus, setDevPlus, FREE_REPORTS, PLUS_FEATURES, trialActive, trialDaysLeft, _setStateForTest } from '../js/plus.js';
 
 const drives = Array.from({ length: 14 }, (_, i) => ({ id: 'd' + i, startedAt: new Date(Date.UTC(2026, 10, 1, 8 + i)).toISOString() }));
 
@@ -24,9 +24,10 @@ test('skjermene som hører til Pluss', () => {
   assert.equal(gateFor('#/opplaering'), 'plan');
   assert.equal(gateFor('#/faresteder'), 'plan');
   assert.equal(gateFor('#/trafikklaerer'), 'teacher');
+  assert.equal(gateFor('#/klar'), 'ready');
   assert.equal(gateFor('#/'), null);
   assert.equal(gateFor('#/rapport/x'), null);
-  for (const k of ['camera', 'plan', 'teacher', 'history']) assert.ok(PLUS_FEATURES[k].title && PLUS_FEATURES[k].text);
+  for (const k of ['camera', 'plan', 'teacher', 'ready', 'history']) assert.ok(PLUS_FEATURES[k].title && PLUS_FEATURES[k].text);
 });
 
 test('utenfor iPhone-appen har alle Pluss, og utviklerbryteren overstyrer', () => {
@@ -34,4 +35,16 @@ test('utenfor iPhone-appen har alle Pluss, og utviklerbryteren overstyrer', () =
   setDevPlus(false); assert.equal(hasPlus(), false);
   setDevPlus(true); assert.equal(hasPlus(), true);
   setDevPlus(null); assert.equal(hasPlus(), true);
+});
+
+test('prøveperioden: aktiv til den går ut, dager igjen rundes opp', () => {
+  const now = Date.parse('2026-11-04T12:00:00Z');
+  _setStateForTest({ trialEnd: '2026-11-18T12:00:00Z' });
+  assert.equal(trialActive(now), true);
+  assert.equal(trialDaysLeft(now), 14);
+  assert.equal(trialDaysLeft(now + 13.5 * 86400000), 1);
+  assert.equal(trialActive(Date.parse('2026-11-18T12:00:01Z')), false);
+  _setStateForTest({ trialEnd: null });
+  assert.equal(trialActive(now), false);
+  assert.equal(trialDaysLeft(now), 0);
 });

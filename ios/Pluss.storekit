@@ -1,38 +1,47 @@
 {
-  "identifier" : "4F1C2B8A",
-  "nonRenewingSubscriptions" : [
-
-  ],
-  "products" : [
+  "identifier": "4F1C2B8A",
+  "nonRenewingSubscriptions": [],
+  "products": [
     {
-      "displayPrice" : "349.0",
-      "familyShareable" : true,
-      "internalID" : "6740000001",
-      "localizations" : [
+      "displayPrice": "349.0",
+      "familyShareable": true,
+      "internalID": "6740000001",
+      "localizations": [
         {
-          "description" : "Kameraene, opplæringsplanen, trafikklæreren og alle rapportene. Ett kjøp, ikke abonnement.",
-          "displayName" : "Kjørerapport Pluss",
-          "locale" : "nb"
+          "description": "Kameraene, opplæringsplanen, trafikklæreren og alle rapportene. Ett kjøp, ikke abonnement.",
+          "displayName": "Kjørerapport Pluss",
+          "locale": "nb"
         }
       ],
-      "productID" : "net.svendsenmedia.kjorerapport.pluss",
-      "referenceName" : "Pluss",
-      "type" : "NonConsumable"
+      "productID": "net.svendsenmedia.kjorerapport.pluss",
+      "referenceName": "Pluss",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "0.0",
+      "familyShareable": false,
+      "internalID": "6740000002",
+      "localizations": [
+        {
+          "description": "Prøv alt i Pluss gratis i 14 dager. Ingen betaling, ingen automatisk fornyelse.",
+          "displayName": "Pluss – 14 dagers prøveperiode",
+          "locale": "nb"
+        }
+      ],
+      "productID": "net.svendsenmedia.kjorerapport.pluss.trial14",
+      "referenceName": "14-day Trial",
+      "type": "NonConsumable"
     }
   ],
-  "settings" : {
-    "_failTransactionsEnabled" : false,
-    "_locale" : "nb",
-    "_storefront" : "NOR",
-    "_storeKitErrors" : [
-
-    ]
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "nb",
+    "_storefront": "NOR",
+    "_storeKitErrors": []
   },
-  "subscriptionGroups" : [
-
-  ],
-  "version" : {
-    "major" : 4,
-    "minor" : 0
+  "subscriptionGroups": [],
+  "version": {
+    "major": 4,
+    "minor": 0
   }
 }

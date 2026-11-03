@@ -186,6 +186,20 @@ Use the demo drive or a real drive without personal place names in a visible pos
 | Review screenshot | A screenshot of the Pluss screen (Innstillinger › Se Pluss) |
 | Review note | «Unlocks the cameras, the training plan, the driving-teacher summary and all older reports. Restore is on the same screen.» |
 
+**The free trial (0.11.2)** – a second in-app purchase, created the same way:
+
+| Field | Value |
+| --- | --- |
+| Type | **Non-Consumable** |
+| Reference name | **14-day Trial** (Apple's guideline 3.1.1 asks for this kind of name) |
+| Product ID | `net.svendsenmedia.kjorerapport.pluss.trial14` (must match `PlusStore.swift` exactly) |
+| Price | **Free** (price point 0) |
+| Family Sharing | Off |
+| Display name (Norwegian) | Pluss – 14 dagers prøveperiode |
+| Description (Norwegian) | Prøv alt i Pluss gratis i 14 dager. Ingenting trekkes, og det fornyes ikke. |
+| Review screenshot | The Pluss screen with «Prøv gratis i 14 dager» |
+| Review note | «Free 14-day trial of Pluss, as described in guideline 3.1.1. Pluss is unlocked for 14 days from the trial purchase date, then the app returns to the free features. No charge, no renewal.» |
+
 - The first in-app purchase must be **submitted together with an app version** (choose it under «In-App Purchases» on the version page).
 - The **Paid Applications agreement**, bank and tax details must be in place, or the product will show «Får ikke kontakt med App Store».
 - **Small Business Program** (developer.apple.com): Apple then takes 15 % instead of 30 %. Apply before the first sale.
@@ -198,6 +212,6 @@ Use the demo drive or a real drive without personal place names in a visible pos
 
 **What is free and what is Pluss** (`js/plus.js`):
 - **Free:** recording, report, map, speed limit, speed-camera warnings, guides, driving log, export and backup, and reports for the 10 latest real drives.
-- **Pluss:** the cameras, the training plan (with hotspots), the driving-teacher page, and reports for all older drives.
+- **Pluss:** the cameras, the training plan (with hotspots), the driving-teacher page, «Klar for oppkjøring?» and reports for all older drives.
 - **Nothing is ever deleted or held back:** a locked report shows «Eksporter turen».
 - **The web version in Safari** keeps everything free. It cannot record with the screen locked or use both cameras.
