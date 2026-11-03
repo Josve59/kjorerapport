@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App Store-ikonet (fase 0): kvadrat uten runde hjørner (iPhone runder selv). Bakgrunn #f3f4f1, mørk variant #14181b med flate #f3f4f1. -->
+  <rect width="512" height="512" fill="#f3f4f1"/>
+  <circle cx="256" cy="256" r="196" fill="#ffffff"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#c8102e" stroke-width="52"/>
+  <circle cx="256" cy="256" r="104" fill="none" stroke="#1f2428" stroke-width="30"/>
+  <path d="M256 256 L256 352 M256 256 L163 218 M256 256 L349 218" stroke="#1f2428" stroke-width="30" stroke-linecap="butt"/>
+  <circle cx="256" cy="256" r="34" fill="#1f2428"/>
+</svg>

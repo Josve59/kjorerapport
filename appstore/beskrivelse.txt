@@ -1,0 +1,34 @@
+Kjørerapport gjør øvelseskjøringen mer konkret. Fest telefonen i holderen, la ledsageren trykke Start, og kjør som vanlig. Når dere stopper, får dere en rapport med det som gikk bra, det som bør øves på, og et forslag til neste øvingstur.
+
+SLIK FUNGERER DET
+• Telefonen står i en holder. Ledsageren starter og stopper opptaket, og føreren rører ikke telefonen.
+• Under turen vises bare fartsgrensen, og det piper før fotobokser og strekningsmåling.
+• Etter turen kommer rapporten med en gang.
+
+RAPPORTEN ETTER HVER TUR
+• Poeng for bremsing, akselerasjon, svinger og jevn fart.
+• Brå hendelser vist på kartet, med fart og sted.
+• Tid over fartsgrensen, med grenser fra Statens vegvesen.
+• Rundkjøringer, feltskifter, stoppskilt og vikeplikt dere har kjørt gjennom.
+• «Neste øvingstur»: to konkrete ting å øve på, med hvordan og hvor.
+
+FØLG FREMGANGEN
+• Kjørelogg med tid, kilometer, veityper og mørkekjøring.
+• Utvikling fra tur til tur, og steder der det gjentatte ganger skjer noe.
+• Opplæringsplan etter læreplanen for klasse B, der appen viser hva dere har øvd på.
+
+TIL TRAFIKKLÆREREN
+• Én side med alt som er øvd siden forrige kjøretime: tid, veityper, manøvrer, hva som går bra og hva som bør jobbes med.
+• Vis den på telefonen, skriv den ut eller send den som melding. Da blir kjøretimene brukt på det som trengs.
+
+LEDSAGERENS MERKER
+Ledsageren kan merke speil, skulderblikk, feltskifte og andre ting med ett trykk under turen. Merkene kommer med i rapporten.
+
+KAMERA (VALGFRITT)
+Med kameraet på kan appen se om føreren sjekker speil og gjør skulderblikk. Analysen skjer på telefonen. Bilder lagres og sendes aldri.
+
+PERSONVERN
+Ingen konto, ingen reklame og ingen sporing. Turene lagres bare på telefonen din. Fartsgrenser og kart hentes fra Statens vegvesen og Kartverket, og det kan slås av.
+
+VIKTIG
+Kjørerapport er en øvingshjelp. Målingene er veiledende og erstatter ikke ledsager, trafikklærer eller førerprøven. Føreren skal aldri bruke telefonen under kjøring.
