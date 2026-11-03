@@ -128,6 +128,22 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.15 / k0.7.10 – fixes from the design review (Apple HIG)
+
+This is a design review against Apple's Human Interface Guidelines (the apple-design skill), measured on the newest version at mobile size.
+
+- **Text follows the iPhone's text size** (Critical, `accessibility.md › Vision`). The root element uses `-apple-system-body` (17 px by default) and the body uses `1rem`, so all rem sizes grow with the setting in Settings › Display & Text Size. Other browsers get 17 px. Tested at 28 px root: no horizontal overflow.
+- **Correction to 0.9.14:** small text was 14.4 px, not «never under 15 px» as stated. It is now 15.3 px at the default size. Labels such as «Distanse» are at least 13.6 px.
+- **One colour means one thing** (`color.md › Best practices`):
+  - acceleration is now violet (before blue, like links)
+  - neutral data series (weeks, score trend, road types) have their own colours (`--chart`, `--cat-2`, `--cat-3`)
+  - the score ring has its own scale: green from 75, orange 55–74, red below
+- **Icons and numbers on coloured surfaces** are dark in dark mode (`--on-color`). White on the light dark-mode colours gave 2.2:1.
+- **No separate light/dark setting** (`dark-mode.md › Best practices`): the app follows the phone.
+- **Touch targets of at least 44 px** (`accessibility.md › Mobility`): map zoom, playback speed, and the links «Personvern» and «Informasjon for trafikkskoler».
+- **«Øk kontrast»** gives darker grey text and visible lines. **«Reduser gjennomsiktighet»** gives a solid top bar.
+- **«Faresteder»** is shown only when there is something there. The training card then fills the width.
+
 ## What's new in 0.9.14 / k0.7.9 – new visual style
 
 `css/theme.css` (the same file in both apps) is loaded after `app.css` and sets a common style. The direction is still road and signs, but calmer.

@@ -912,7 +912,7 @@ function prefersReduced() {
 /* Poengsummen som en ring som fylles (v0.9.12). Før sto den i et fartsgrenseskilt, og «72» ble lest som fartsgrense 72. */
 export function scoreRing(score, size = 132) {
   const c = 2 * Math.PI * 42, f = Math.max(0, Math.min(100, score)) / 100;
-  const col = score >= 90 ? 'var(--good)' : score >= 75 ? 'var(--accel)' : score >= 55 ? 'var(--turn)' : 'var(--brake)';
+  const col = score >= 75 ? 'var(--good)' : score >= 55 ? 'var(--turn)' : 'var(--brake)';   // egen skala, ikke hendelsesfargene
   return `<svg class="score-ring" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${score} av 100 poeng">
     <circle cx="50" cy="50" r="42" fill="none" stroke="var(--line)" stroke-width="8"/>
     <circle cx="50" cy="50" r="42" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/>
@@ -1058,9 +1058,9 @@ function speedChart(r, gaps, marks = [], sp = null) {
     ${grid}
     ${gapRects}
     ${markLines}
-    <path d="${area}" fill="var(--accel)" opacity="0.12"/>
+    <path d="${area}" fill="var(--chart)" opacity="0.12"/>
     ${overRects}
-    <path d="${line}" fill="none" stroke="var(--accel)" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="${line}" fill="none" stroke="var(--chart)" stroke-width="2.5" stroke-linejoin="round"/>
     ${limitPath}
     <line x1="${pl}" x2="${W - pr}" y1="${Y(0)}" y2="${Y(0)}" class="axis-line"/>
     ${ticks.join('')}

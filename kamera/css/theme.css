@@ -5,11 +5,15 @@
    Brukervennlighet: kontrast minst 4,5:1 på all tekst (også grå), trykkflater minst 48 px, tydelig fokusring,
    og liten tekst aldri under 15 px. */
 
-/* ---------- Farger ---------- */
+/* ---------- Farger ----------
+   Én farge betyr én ting (designgjennomgang etter Apples retningslinjer, color.md › Best practices):
+   blått = lenker og informasjon, fiolett = akselerasjon, oransje = svinger, rødt = bremsing og feil,
+   grønt = bra. Nøytrale dataserier (uker, poengutvikling, veityper) har egne farger (--chart, --cat-2, --cat-3). */
 :root {
   --bg: #f3f4f1; --surface: #ffffff; --surface-2: #eff1ee; --ink: #14181b; --muted: #545e66; --line: #e0e4df;
   --primary: #f5c518; --on-primary: #14181b; --link: #1e5aa8; --focus: #1e5aa8;
-  --brake: #c0392b; --accel: #1e5aa8; --turn: #a15c0b; --good: #23784a; --sign: #c8102e;
+  --brake: #c0392b; --accel: #6941c6; --turn: #a15c0b; --good: #23784a; --sign: #c8102e;
+  --chart: #0e7c86; --cat-2: #5f6b76; --cat-3: #b07d12; --on-color: #ffffff;
   --asphalt: #262c31; --road-edge: #1b2024; --lane: #f5c518;
   --radius: 20px; --radius-sm: 14px;
   --shadow: 0 1px 2px rgba(16, 24, 32, .04), 0 6px 20px rgba(16, 24, 32, .06);
@@ -20,7 +24,8 @@
   :root:not([data-theme="light"]) {
     --bg: #0f1214; --surface: #181c1f; --surface-2: #22272b; --ink: #eceeed; --muted: #a5aeb5; --line: #2b3136;
     --primary: #f5c518; --on-primary: #14181b; --link: #84b6f4; --focus: #84b6f4;
-    --brake: #f07a66; --accel: #84b6f4; --turn: #f0a257; --good: #5cc08a; --sign: #e0384f;
+    --brake: #f07a66; --accel: #b69cf7; --turn: #f0a257; --good: #5cc08a; --sign: #e0384f;
+    --chart: #4cc3c9; --cat-2: #9aa6b0; --cat-3: #e0b04a; --on-color: #101315;
     --asphalt: #3a4248; --road-edge: #4c555c; --lane: #f5c518;
     --shadow: none; --shadow-lg: 0 14px 34px rgba(0, 0, 0, .5); --card-border: var(--line);
   }
@@ -28,16 +33,23 @@
 :root[data-theme="dark"] {
   --bg: #0f1214; --surface: #181c1f; --surface-2: #22272b; --ink: #eceeed; --muted: #a5aeb5; --line: #2b3136;
   --primary: #f5c518; --on-primary: #14181b; --link: #84b6f4; --focus: #84b6f4;
-  --brake: #f07a66; --accel: #84b6f4; --turn: #f0a257; --good: #5cc08a; --sign: #e0384f;
+  --brake: #f07a66; --accel: #b69cf7; --turn: #f0a257; --good: #5cc08a; --sign: #e0384f;
+  --chart: #4cc3c9; --cat-2: #9aa6b0; --cat-3: #e0b04a; --on-color: #101315;
   --asphalt: #3a4248; --road-edge: #4c555c; --lane: #f5c518;
   --shadow: none; --shadow-lg: 0 14px 34px rgba(0, 0, 0, .5); --card-border: var(--line);
 }
 
-/* ---------- Typografi ---------- */
-body { font-size: 17px; line-height: 1.5; letter-spacing: .005em; -webkit-font-smoothing: antialiased; }
+/* ---------- Typografi ----------
+   Teksten følger tekststørrelsen i iPhonens innstillinger (accessibility.md › Vision: «Support larger text
+   sizes»). -apple-system-body gir 17 px som standard og vokser med valget; alle størrelser i rem følger med.
+   Andre nettlesere får 17 px. */
+html { font-size: 106.25%; }
+@supports (font: -apple-system-body) { html { font: -apple-system-body; } }
+body { font-size: 1rem; line-height: 1.5; letter-spacing: .005em; -webkit-font-smoothing: antialiased; }
 h1 { font-size: 1.65rem; letter-spacing: -.01em; }
 h2, .card-title { font-size: 1.08rem; font-weight: 800; letter-spacing: -.005em; }
-.small, .muted.small { font-size: .9rem; }          /* 15,3 px */
+.small, .muted.small { font-size: .9rem; }          /* 15,3 px ved standard tekststørrelse */
+.stat-chips dt, .tile-label, .tag { font-size: .8rem; }   /* minst 13,6 px */
 .eyebrow { font-size: .8rem; letter-spacing: .08em; }
 .muted { color: var(--muted); }
 a, .link { color: var(--link); }
@@ -127,4 +139,33 @@ input.switch:checked { background: var(--good); }
 /* Mindre bevegelse for de som har bedt om det */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* ---------- Designgjennomgang (v0.9.15) ---------- */
+/* Fargebetydning: blått bare for lenker og informasjon, egne farger for nøytrale dataserier */
+.last-tip .ico, .last-cta { color: var(--link); }
+.cam-card-ico { background: color-mix(in srgb, var(--link) 14%, transparent); color: var(--link); }
+.wk-bar, .t-bar span { background: var(--chart); }
+.mix-by { background: var(--chart); } .mix-land { background: var(--cat-2); } .mix-motor { background: var(--cat-3); }
+.segment input:focus-visible + span, input.switch:focus-visible, .file-btn:focus-within { outline-color: var(--focus); }
+
+/* Tekst og ikoner på fargede flater: hvite i lys modus, mørke i mørk modus (der er fargene lyse; hvitt ga 2,2:1) */
+.sum-good .ico, .sum-work .ico, .sum-brake .ico, .sum-accel .ico, .sum-turn .ico, .sum-limits .ico,
+.event .num, .lm-ev, .goal-ok .goal-icon, .f-ok .f-ico, .f-no .f-ico, .sit-high, .spot-n, .btn.danger-fill { color: var(--on-color); }
+[data-state="ok"] .check-icon::after, .flow-step[data-state="done"] .flow-num::after { border-color: var(--on-color); }
+
+/* Trykkflater på minst 44 px (accessibility.md › Mobility: 44 × 44 pt) */
+.leaflet-touch .leaflet-bar a, .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; }
+.seg-mini button { min-height: 44px; min-width: 52px; }
+.report-foot a, #settings p.small a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
+
+/* «Øk kontrast» og «Reduser gjennomsiktighet» i iPhonens innstillinger */
+@media (prefers-contrast: more) {
+  :root { --muted: #3a4249; --line: #a9b1ab; --card-border: var(--line); }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root { --muted: #d0d6da; --line: #59626a; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .appbar, .quicknav { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

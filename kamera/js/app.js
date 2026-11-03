@@ -17,7 +17,7 @@ import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.9';
+export const APP_VERSION = 'k0.7.10';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -76,10 +76,9 @@ function vibrate(pattern) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch { /* ignorer */ }
 }
 
+/* Lys eller mørk følger alltid telefonen (v0.9.15, Apples retningslinjer: ingen egen innstilling i appen) */
 function applyTheme() {
-  const t = getSettings().theme || 'auto';
-  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', t);
+  document.documentElement.removeAttribute('data-theme');
 }
 
 function isStandalone() {
@@ -299,10 +298,10 @@ async function renderHome() {
     const spots = hotspots(allRows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
     const plan = planProgress(allRows);
     more.innerHTML = `<button type="button" class="card t-cta" id="btn-go-teacher"><span class="card-title">${icon('school')}Til trafikklæreren</span><span class="muted small">Det som er øvd siden forrige kjøretime, klart til å vise fram eller dele</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
-      <button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>
-      <button type="button" class="card mini-card" id="btn-go-plan"><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
+      ${spots.length ? `<button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>` : ''}
+      <button type="button" class="card mini-card" id="btn-go-plan"${spots.length ? '' : ' style="grid-column: 1 / -1"'}><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
     more.hidden = false;
-    $('#btn-go-spots').onclick = () => { location.hash = '#/faresteder'; };
+    if (spots.length) $('#btn-go-spots').onclick = () => { location.hash = '#/faresteder'; };
     $('#btn-go-plan').onclick = () => { location.hash = '#/opplaering'; };
     $('#btn-go-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
   } else more.hidden = true;
@@ -1586,10 +1585,6 @@ async function renderSettings() {
   document.querySelectorAll('input[name=sensitivity]').forEach(r => {
     r.checked = r.value === settings.sensitivity;
     r.onchange = () => { saveSettings({ ...getSettings(), sensitivity: r.value }); toast(`Følsomhet: ${r.parentElement.textContent.trim()}.`, { type: 'ok', ms: 2000 }); };
-  });
-  document.querySelectorAll('input[name=theme]').forEach(r => {
-    r.checked = r.value === (settings.theme || 'auto');
-    r.onchange = () => { saveSettings({ ...getSettings(), theme: r.value }); applyTheme(); };
   });
   document.querySelectorAll('input[name=engine]').forEach(r => {
     r.checked = r.value === (settings.engine === 'v1' ? 'v1' : 'v3');

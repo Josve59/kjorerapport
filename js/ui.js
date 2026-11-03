@@ -201,7 +201,7 @@ export function routeThumb(points, size = 56) {
 /* Liten poengring til lister (v0.9.12: før et fartsgrenseskilt, som ble lest som en fartsgrense) */
 export function scoreBadge(score, size = 46) {
   const c = 2 * Math.PI * 40, f = Math.max(0, Math.min(100, score)) / 100;
-  const col = score >= 90 ? 'var(--good)' : score >= 75 ? 'var(--accel)' : score >= 55 ? 'var(--turn)' : 'var(--brake)';
+  const col = score >= 75 ? 'var(--good)' : score >= 55 ? 'var(--turn)' : 'var(--brake)';
   return `<svg class="badge" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${score} av 100 poeng">
     <circle cx="50" cy="50" r="40" fill="none" stroke="var(--line)" stroke-width="12"/>
     <circle cx="50" cy="50" r="40" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/>
