@@ -10,14 +10,16 @@ import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, score
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import { teacherSummary, teacherText, teacherHtml } from './teacher.js';
 import * as cam from './facecam.js';
-import { createLiveLimit } from './livelimit.js';
+import { createLiveLimit, createLiveRoad } from './livelimit.js';
+import { trackCurvature, aheadCurvature, kappaPrior } from './roadshape.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
 import { roadSummary } from './road.js';
+import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit } from './signs.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 
-export const APP_VERSION = '0.10.2';
+export const APP_VERSION = '0.10.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -953,7 +955,7 @@ async function startRecording(replay = null) {
   // Aktiv fartsgrense fra NVDB (v0.9.4), når «Veidata» er på. Endringene lagres med turen for sammenligning.
   const live = !replay && settings.netLimits !== false ? createLiveLimit({ atk: true }) : null;
   const liveLog = [];
-  liveLimitNow = null; camLimit.reset(); camSignNew = null;
+  liveLimitNow = null; camLimit.reset(); camSignNew = null; roadTrack.length = 0; liveRoad = null;
   const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed'), atkEl = $('#rec-atk');
   const atkPop = $('#atk-pop');
   atkEl.hidden = true; atkPop.hidden = true;
@@ -971,6 +973,7 @@ async function startRecording(replay = null) {
     onStatus: st => {
       if (st.replayDone) { finishRecording(); return; }
       cam.setSpeed(st.kmh);   // fartsskilt leses bare når bilen kjører
+      if (!replay && st.pos && cam.state().road) feedRoadShape(st, live);
       if (live) {
         const res = live.update(st.pos);
         // Skilt fra veikameraet (midlertidige og digitale skilt) går foran NVDB til neste skilt, 3 km eller ny NVDB-strekning
@@ -1124,6 +1127,27 @@ function fmtClock(sec) {
 }
 
 let liveLimitNow = null;   // aktiv fartsgrense under opptak (km/t eller null)
+
+/* Veiens form til feltlinjene i veikameraet (0.10.3): svingen nå fra GPS-sporet (siste 6 s), svingen foran fra veiens
+   linje i Statens vegvesens data (fartsgrensestrekningene), og felt og feltbredde der bilen er (lite område). */
+const roadTrack = [];
+let liveRoad = null;
+const bearingDeg = (a, b) => (Math.atan2((b.lon - a.lon) * Math.cos(a.lat * Math.PI / 180), b.lat - a.lat) * 180 / Math.PI + 360) % 360;
+function feedRoadShape(st, live) {
+  const now = performance.now() / 1000, last = roadTrack[roadTrack.length - 1];
+  if (!last || last.lat !== st.pos.lat || last.lon !== st.pos.lon) roadTrack.push({ lat: st.pos.lat, lon: st.pos.lon, t: now });
+  while (roadTrack.length && now - roadTrack[0].t > 6) roadTrack.shift();
+  const moving = st.kmh >= 15;
+  const a = roadTrack[Math.max(0, roadTrack.length - 4)], b = roadTrack[roadTrack.length - 1];
+  const heading = a && b && a !== b ? bearingDeg(a, b) : null;
+  const kNow = moving ? trackCurvature(roadTrack) : null;
+  const ahead = live && moving && Number.isFinite(heading) ? aheadCurvature(live.near(st.pos), st.pos, heading) : null;
+  const prior = moving ? kappaPrior(kNow, ahead) : { kappa: 0, weight: 2 };   // sakte (kø, kryss): ingen forventet sving
+  if (live && !liveRoad) liveRoad = createLiveRoad();
+  const info = liveRoad ? liveRoad.update(st.pos, heading) : null;
+  cam.setRoadShape({ kappa: prior ? prior.kappa : null, kappaWeight: prior ? prior.weight : 1,
+    laneWidth: info ? info.laneWidth : null, lanes: info ? info.lanes : null, src: ahead ? 'veidata' : Number.isFinite(kNow) ? 'gps' : null });
+}
 // Fartsskilt lest av veikameraet (k0.7.6): gjelder foran NVDB til neste skilt, 3 km eller ny NVDB-strekning
 const camLimit = createCamLimit();
 let camSignNew = null;
@@ -1226,15 +1250,34 @@ function drawCamView() {
   // Dashbordkanten
   if (v.roadBottom) { g.save(); g.setLineDash([8, 6]); g.strokeStyle = 'rgba(0,200,255,.9)'; g.beginPath(); g.moveTo(X(0), Y(v.roadBottom * v.h)); g.lineTo(X(v.w), Y(v.roadBottom * v.h)); g.stroke(); g.restore(); }
   // Feltlinjer (regnet på et lite bilde, skaleres opp)
+  // Feltlinjer (0.10.3): buer langs veien, prøvd i 16 punkter og glattet hvert for seg. Feltet fargelegges svakt mellom
+  // linjene, og en linje kameraet ikke så (tegnet etter feltbredden) er stiplet
   if (v.lane) {
-    const k = v.w / v.lane.W;
-    g.lineWidth = 5; g.lineCap = 'round';
-    for (const [side, col] of [['left', '#3ddc84'], ['right', '#ff4fd8']]) {
+    const k = v.w / v.lane.W, N = 16;
+    const sample = L => { const S = scaleLane(L, k); return Array.from({ length: N }, (_, i) => { const y = S.yBottom + (S.yTop - S.yBottom) * i / (N - 1); return [laneX(S, y), y]; }); };
+    const lines = {};
+    for (const side of ['left', 'right']) {
       const raw = v.lane[side], o = camEase.lanes[side];
       if (!raw) { delete camEase.lanes[side]; continue; }
-      const Ln = o ? Object.fromEntries(['xBottom', 'xTop', 'yBottom', 'yTop'].map(q => [q, o[q] + (raw[q] - o[q]) * aLane])) : { ...raw };
-      camEase.lanes[side] = Ln;
-      g.strokeStyle = col; g.beginPath(); g.moveTo(X(Ln.xBottom * k), Y(Ln.yBottom * k)); g.lineTo(X(Ln.xTop * k), Y(Ln.yTop * k)); g.stroke();
+      const pts = sample(raw);
+      const eased = o && o.pts.length === N ? pts.map(([x, y], i) => [o.pts[i][0] + (x - o.pts[i][0]) * aLane, o.pts[i][1] + (y - o.pts[i][1]) * aLane]) : pts;
+      camEase.lanes[side] = { pts: eased };
+      lines[side] = { pts: eased, predicted: !!raw.predicted };
+    }
+    if (lines.left && lines.right) {
+      g.fillStyle = 'rgba(61, 220, 132, 0.16)'; g.beginPath();
+      lines.left.pts.forEach(([x, y], i) => (i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))));
+      lines.right.pts.slice().reverse().forEach(([x, y]) => g.lineTo(X(x), Y(y)));
+      g.closePath(); g.fill();
+    }
+    g.lineWidth = 5; g.lineCap = 'round'; g.lineJoin = 'round';
+    for (const [side, col] of [['left', '#3ddc84'], ['right', '#ff4fd8']]) {
+      const Ln = lines[side];
+      if (!Ln) continue;
+      g.save(); g.strokeStyle = col;
+      if (Ln.predicted) { g.setLineDash([10, 9]); g.globalAlpha = 0.6; }
+      g.beginPath(); Ln.pts.forEach(([x, y], i) => (i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y)))); g.stroke();
+      g.restore();
     }
     g.lineWidth = 2;
   }
@@ -1273,11 +1316,29 @@ function drawCamView() {
     `<div>Veikamera · ${esc(st.perf.dfine || v.dfine || 'ingen bilgjenkjenning')}${v.night ? ' · mørkt' : ''}</div>`,
     `<div>${n(cars)} ${n(cars) === 1 ? 'bil' : 'biler'} · ${n(ppl)} ${n(ppl) === 1 ? 'person' : 'personer'}</div>`,
     `<div>${L ? `Bil foran ${Math.round(L.dist)} m${kmh >= 20 ? ` · ${(L.dist / (kmh / 3.6)).toFixed(1).replace('.', ',')} s` : ''}${L.src === 'baklys' ? ' (baklys)' : ''}` : 'Ingen bil rett foran'}</div>`,
-    `<div>${v.lane && v.lane.left && v.lane.right ? `Begge feltlinjer · ${off !== null ? `${Math.abs(off).toFixed(2).replace('.', ',')} m ${off > 0.05 ? 'til høyre' : off < -0.05 ? 'til venstre' : 'midt i'}` : ''}` : v.lane && (v.lane.left || v.lane.right) ? 'Én feltlinje' : 'Ingen feltlinjer'}</div>`,
+    `<div>${laneSeenText(v.lane)}${off !== null ? ` · ${Math.abs(off).toFixed(2).replace('.', ',')} m ${off > 0.05 ? 'til høyre' : off < -0.05 ? 'til venstre' : 'midt i'}` : ''}</div>`,
+    `<div class="muted">${roadShapeText(v.lane)}</div>`,
     `<div>Skilt: ${v.lastSign ? `<strong>${v.lastSign.limit}</strong> (lest ${v.lastSign.reads} ganger, ${Math.round((performance.now() - v.lastSign.at) / 1000)} s siden)` : 'ingen lest ennå'}${liveLimitNow ? ` · grense nå ${liveLimitNow}` : ''}</div>`,
     `<div class="muted">${v.roadBottom ? `Dashbordkant ${Math.round(v.roadBottom * 100)} % (blå strek)` : 'Dashbordkant ikke funnet ennå'}${Number.isFinite(v.lum) ? ` · lys ${v.lum}` : ''}${Number.isFinite(st.perf.dfineMs) && st.perf.dfineMs ? ` · D-FINE ${Math.round(st.perf.dfineMs)} ms` : ''}${st.perf.flowTries ? ` · følger i bildet ${Math.round(100 * st.perf.flowHits / st.perf.flowTries)} %` : ''}</div>`
   ].join('');
 }
+/* Hva kameraet så av feltlinjene (0.10.3): sette linjer, og om en er tegnet etter feltbredden */
+function laneSeenText(ln) {
+  if (!ln) return 'Ingen feltlinjer';
+  const seen = ['left', 'right'].filter(k => ln[k] && !ln[k].predicted).length, guess = ['left', 'right'].some(k => ln[k] && ln[k].predicted);
+  return seen === 2 ? 'Begge feltlinjer' : seen === 1 ? (guess ? 'Én feltlinje, den andre etter feltbredden' : 'Én feltlinje') : 'Ingen feltlinjer';
+}
+/* Svingen og feltene: «Sving til høyre, radius 240 m (veidata) · tofeltsvei · felt 3,25 m» */
+function roadShapeText(ln) {
+  if (!ln) return '';
+  const k = Number.isFinite(ln.kappa) ? ln.kappa : ln.prior, parts = [];
+  if (Number.isFinite(k) && Math.abs(k) > 1 / 1500) parts.push(`Sving til ${k > 0 ? 'høyre' : 'venstre'}, radius ${Math.round(1 / Math.abs(k) / 10) * 10} m${ln.src === 'veidata' ? ' (veidata)' : ln.src === 'gps' ? ' (GPS)' : ''}`);
+  else if (Number.isFinite(k)) parts.push('Rett fram');
+  if (ln.lanes) parts.push(ln.lanes.total === 2 && ln.lanes.ours === 1 ? 'tofeltsvei' : `${ln.lanes.ours} ${ln.lanes.ours === 1 ? 'felt' : 'felt'} i vår retning`);
+  if (ln.laneWidth) parts.push(`felt ${String(ln.laneWidth).replace('.', ',')} m`);
+  return parts.join(' · ');
+}
+
 /* Fullskjerm for førerkameraet (k0.7.6): ansiktet med omriss, øyne og regnbuehinner, en pil for blikket, et kart
    over speilene fra kalibreringen med en prikk for hvor føreren ser nå (fylt: blikket med øynene, ring: bare hodet),
    hva appen tror føreren ser på, og de siste blikkene. Alt glir mykt (punktene 50 ms, blikket 90 ms). */

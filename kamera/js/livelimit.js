@@ -3,8 +3,9 @@
    hentes i bakgrunnen før bilen kommer til kanten. Krever nett og at «Veidata» er på.
    Verdien skifter først når to av de tre siste punktene er enige, så den ikke blinker i kryss.
    Det er NVDB sin fartsgrense, ikke skiltene: i Sverige og der NVDB mangler data vises «–». */
-import { fetchLimitBox, fetchAtkBox, matchLimits } from './enrich.js';
+import { fetchLimitBox, fetchAtkBox, fetchRoadInfo, matchLimits } from './enrich.js';
 import { createLiveAtk } from './liveatk.js';
+import { matchRoad, laneCount, laneWidthFrom } from './roadshape.js';
 
 const HALF_LAT = 0.02, HALF_LON = 0.045;     // ca. 2,2 km hver vei (lengdegrad er kortere i nord)
 const EDGE = 0.35;                            // ny henting når bilen er i ytterste 35 % av området
@@ -47,5 +48,29 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
   };
   /* Fotoboks foran / strekningsmåling: p = {lat, lon, t (s), kmh}. { text, kind } eller null. */
   const atkStatus = p => (live ? live.update(p) : null);
-  return { update, atk: atkStatus, get limit() { return current; } };
+  /* Fartsgrensestrekningene nær et punkt (veiens linje, til svingen foran i roadshape.js) */
+  const near = (p, d = 0.002) => (!p || !box ? [] : segs.filter(s => p.lat > s.minLat - d && p.lat < s.maxLat + d && p.lon > s.minLon - 2 * d && p.lon < s.maxLon + 2 * d));
+  return { update, atk: atkStatus, near, get limit() { return current; } };
+}
+
+/* Felt og feltbredde der bilen er (0.10.3): nytt lite område fra Statens vegvesen når bilen har kjørt 100 m (eller
+   etter 60 s), aldri mer enn ett om gangen. update(p, heading) → { lanes: { ours, total }, laneWidth (m) } eller null. */
+export function createLiveRoad({ fetchInfo = fetchRoadInfo, now = () => Date.now() } = {}) {
+  let info = null, at = null, atTime = -Infinity, loading = null, failedAt = -Infinity;
+  const dist = (a, b) => Math.hypot((a.lat - b.lat) * 111195, (a.lon - b.lon) * 111195 * Math.cos(a.lat * Math.PI / 180));
+  const update = (p, heading) => {
+    if (!p || !Number.isFinite(p.lat)) return null;
+    const stale = !at || dist(at, p) > 100 || now() - atTime > 60000;
+    if (stale && !loading && now() - failedAt > 20000) {
+      const q = { lat: p.lat, lon: p.lon };
+      loading = fetchInfo(q).then(r => { info = r; at = q; atTime = now(); }).catch(() => { failedAt = now(); }).finally(() => { loading = null; });
+    }
+    if (!info) return null;
+    const m = matchRoad(info.segs, p, heading);
+    if (!m) return null;
+    const lanes = laneCount(m.seg.lanes, m.forward);
+    const w = matchRoad(info.widths, p, heading, { maxM: 20 });
+    return { lanes, laneWidth: w ? laneWidthFrom(w.seg.width, m.seg.lanes) : null };
+  };
+  return { update, get loading() { return !!loading; } };
 }

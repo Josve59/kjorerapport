@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 // Veikameraets moduler finnes både i hovedappen (iPhone-appen, 0.10.0) og i kameratestappen, og skal være like
-const SHARED = ['road', 'track', 'lanes', 'flow', 'signs', 'sign-tpl', 'camera', 'analysis', 'situations'];
+const SHARED = ['road', 'track', 'lanes', 'flow', 'signs', 'sign-tpl', 'camera', 'analysis', 'situations', 'roadshape', 'livelimit', 'enrich'];
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
 for (const name of SHARED) {
@@ -14,7 +14,7 @@ for (const name of SHARED) {
 
 test('service workeren forhåndslagrer veikameraets moduler', () => {
   const sw = read('sw.js');
-  for (const name of ['nativecam', 'guides', 'road', 'track', 'lanes', 'flow', 'signs', 'sign-tpl']) assert.ok(sw.includes(`'./js/${name}.js'`), name);
+  for (const name of ['nativecam', 'guides', 'roadshape', 'road', 'track', 'lanes', 'flow', 'signs', 'sign-tpl']) assert.ok(sw.includes(`'./js/${name}.js'`), name);
 });
 
 test('nativecam: utenfor iPhone-appen finnes ingen egne kameraer', async () => {

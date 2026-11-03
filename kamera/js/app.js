@@ -17,7 +17,7 @@ import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.12';
+export const APP_VERSION = 'k0.7.13';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};

@@ -1,3 +1,5 @@
+import { laneX } from './lanes.js';
+
 /* Veikameraet (testversjon k0.5.0): bakkameraet ser veien foran. Gjenkjenning av biler og folk skjer
    på telefonen (MediaPipe Object Detector). Bilder lagres aldri, bare tall: hvor mange biler og folk,
    og hvor langt unna bilen rett foran er.
@@ -41,7 +43,7 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minSc
       // Eget felt (k0.7.3): med begge feltlinjene kjent må bilen stå mellom dem (møtende biler i nabofeltet ble tatt
       // for bilen foran). lane: { left, right } i kamerabildets piksler, linjer { xBottom, xTop, yBottom, yTop }.
       if (lane && lane.left && lane.right) {
-        const at = (L, y) => L.xBottom + (L.xTop - L.xBottom) * (y - L.yBottom) / ((L.yTop - L.yBottom) || 1);
+        const at = laneX;   // buet linje når den finnes (0.10.3)
         const xl = at(lane.left, bottom), xr = at(lane.right, bottom), m = (xr - xl) * 0.15;
         if (xr > xl && (cx < xl - m || cx > xr + m)) continue;
       }

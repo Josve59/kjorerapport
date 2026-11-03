@@ -241,6 +241,30 @@ export async function fetchLimitBox(b, signal) {
   return segments;
 }
 
+/* Felt og vegbredde der bilen er (0.10.3), til feltlinjene i veikameraet: et lite område (rundt 130 × 130 m), så
+   svaret er noen få kB. Feltoversikten for hele området sammen med fartsgrensene ville gjort svaret 2,5 ganger større.
+   { segs: [{ pts, lanes }] (vegsegmentene med feltoversikt, i lenkeretningen), widths: [{ pts, width }] (kjørebanebredde) } */
+export async function fetchRoadInfo(p, signal) {
+  const dLat = 0.0006, dLon = 0.0013;
+  const box = [p.lon - dLon, p.lat - dLat, p.lon + dLon, p.lat + dLat].map(v => v.toFixed(5)).join(',');
+  const [lim, wid] = await Promise.all([
+    nvdbPage(`${NVDB}?kartutsnitt=${box}&srid=4326&inkluder=vegsegmenter&segmentering=true&antall=100`, signal),
+    nvdbPage(`${NVDB_BASE}/838?kartutsnitt=${box}&srid=4326&inkluder=egenskaper,geometri&segmentering=true&antall=100`, signal).catch(() => ({ objekter: [] }))
+  ]);
+  const segs = [];
+  for (const o of lim.objekter || []) for (const v of o.vegsegmenter || []) {
+    const pts = v.geometri && v.geometri.wkt ? parseWkt(v.geometri.wkt) : [];
+    if (pts.length > 1) segs.push({ pts, lanes: Array.isArray(v.feltoversikt) ? v.feltoversikt : [] });
+  }
+  const widths = [];
+  for (const o of wid.objekter || []) {
+    const e = (o.egenskaper || []).find(x => x.id === 9800);   // Kjørebanebredde
+    const pts = o.geometri && o.geometri.wkt ? parseWkt(o.geometri.wkt) : [];
+    if (e && Number.isFinite(e.verdi) && pts.length > 1) widths.push({ pts, width: e.verdi });
+  }
+  return { segs, widths };
+}
+
 /* Fotobokser og strekningsmålinger i ett kartutsnitt (under kjøring, livelimit.js). */
 export async function fetchAtkBox(b, signal) {
   const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');

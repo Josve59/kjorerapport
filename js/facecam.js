@@ -3,8 +3,8 @@
    og her følges de mellom svarene, og feltlinjer, dashbordkant, baklys i mørket og fartsskilt leses fra bildet.
    I Safari bare førerkameraet, som før. Ingen bilder lagres eller sendes – bare vinkler og tall om veien går videre. */
 import { poseFromMatrix, eyesFromBlendshapes } from './camera.js';
-import { processDetections, detectTaillights, roadDets } from './road.js';
-import { detectLanes, toGray, rowMeans, dashLine } from './lanes.js';
+import { processDetections, detectTaillights, roadDets, focalPx } from './road.js';
+import { detectLanes, toGray, rowMeans, dashLine, scaleLane, LANE_WIDTH } from './lanes.js';
 import { createTracker } from './track.js';
 import { matchShift } from './flow.js';
 import { readSigns, signTracker } from './signs.js';
@@ -17,6 +17,10 @@ const listeners = new Set(), roadListeners = new Set();
 let lastPose = null, lastTs = 0, frames = 0, startedAt = 0, fpsWanted = 8, fpsNow = 8;
 let driver = null, road = null, roadModel = null, detsUnsub = null, driverSeq = -1, roadSeq = -1;   // kildene i iPhone-appen
 let wantFacings = [], lastKick = 0;   // vakten: kameraene startes på nytt hvis bildene stopper (0.10.1)
+// Veiens form (0.10.3): forventet sving og feltbredde fra app.js (GPS-sporet og Statens vegvesen), og kamerahøyden
+// slik feltlinjene viser den (lært underveis: feltbredde / avstanden mellom linjene i modellen)
+let shape = { kappa: null, kappaWeight: 1, laneWidth: null, lanes: null, src: null }, camHEst = 1.2;
+export function setRoadShape(s) { shape = { ...shape, ...s }; }
 let lastFace = null, lastView = null, lastRoad = null;
 let rowEma = null, rowN = 0, roadBottom = null, lastLum = null, speedKmh = NaN;
 let laneCanvas = null, laneCtx = null, tailCanvas = null, tailCtx = null, signCanvas = null, signCtx = null;
@@ -214,16 +218,15 @@ function roadTick() {
     const merged = tracker.predict(now0);
     // Feltlinjene fra forrige bilde (regnet på et lite bilde), skalert til kamerabildet
     const pl = lastView && lastView.lane && lastView.lane.left && lastView.lane.right ? lastView.lane : null, kk = pl ? vw / pl.W : 1;
-    const sc = L => ({ xBottom: L.xBottom * kk, xTop: L.xTop * kk, yBottom: L.yBottom * kk, yTop: L.yTop * kk });
-    r = processDetections(merged, vw, vh, { roadBottom, lane: pl ? { left: sc(pl.left), right: sc(pl.right) } : null });
+    r = processDetections(merged, vw, vh, { roadBottom, lane: pl ? { left: scaleLane(pl.left, kk), right: scaleLane(pl.right, kk) } : null });
     lastView = { at: performance.now(), w: vw, h: vh, lead: r.lead, roadBottom, dfine: roadModel, lane: lastView && lastView.lane };
   } catch { r = null; }
   ema('roadMs', performance.now() - t1);
   if (!r) return;
-  // Feltlinjer på et lite gråtonebilde (160 piksler bredt, noen millisekunder)
+  // Feltlinjer på et lite gråtonebilde (240 piksler bredt fra 0.10.3, så linjene langt fram og svingen synes)
   const t2 = performance.now();
   try {
-    const W = 160, H = Math.round(160 * vh / vw);
+    const W = 240, H = Math.round(240 * vh / vw);
     if (!laneCanvas || laneCanvas.height !== H) { laneCanvas = document.createElement('canvas'); laneCanvas.width = W; laneCanvas.height = H; laneCtx = laneCanvas.getContext('2d', { willReadFrequently: true }); }
     laneCtx.drawImage(el, 0, 0, W, H);
     const gray = toGray(laneCtx.getImageData(0, 0, W, H).data, W, H);
@@ -237,9 +240,16 @@ function roadTick() {
     else for (let y = 0; y < H; y++) rowEma[y] += (rm[y] - rowEma[y]) * 0.05;
     if (++rowN >= 20 && rowN % 15 === 0) { const dl = dashLine(rowEma); roadBottom = dl && dl < 0.97 ? Math.round(dl * 100) / 100 : null; }
     // Feltlinjer på veien rett over dashbordet når kanten er kjent (testet på kveldsbildene 2. nov. og dagsturen 31. okt.)
-    const ln = detectLanes(gray, W, H, roadBottom ? { top: Math.max(0.25, roadBottom - 0.2), bottom: roadBottom - 0.02, horizon: Math.max(0.15, roadBottom - 0.25), minInl: 0.15, maxBg: 230 } : {});
-    r.lane = { l: !!ln.left, r: !!ln.right, offset: ln.offset };
-    Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H }, lum: r.lum, roadBottom });
+    // Buede linjer (0.10.3): forventet sving og feltbredde fra veidata og GPS, og den andre linjen der den skal være
+    const base = roadBottom ? { top: Math.max(0.25, roadBottom - 0.2), bottom: roadBottom - 0.02, horizon: Math.max(0.15, roadBottom - 0.25), minInl: 0.15, maxBg: 230 } : { top: 0.6, bottom: 0.92, horizon: 0.45 };
+    const laneW = shape.laneWidth || LANE_WIDTH;
+    const ln = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
+      focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true });
+    if (Number.isFinite(ln.camH) && ln.camH > 0.5 && ln.camH < 5) camHEst += (ln.camH - camHEst) * 0.05;
+    const seenL = !!ln.left && !ln.left.predicted, seenR = !!ln.right && !ln.right.predicted;
+    r.lane = { l: seenL, r: seenR, offset: ln.offset, ...(ln.curve ? { k: Math.round(ln.curve.kappa * 1e4) / 1e4 } : {}), ...(shape.laneWidth ? { lw: shape.laneWidth } : {}) };
+    Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H, kappa: ln.curve ? ln.curve.kappa : null,
+      prior: shape.kappa, src: shape.src, lanes: shape.lanes, laneWidth: shape.laneWidth }, lum: r.lum, roadBottom });
   } catch { /* ingen feltlinjer */ }
   ema('laneMs', performance.now() - t2);
   if (dark || r.lum < NIGHT_LUM) {
@@ -339,8 +349,7 @@ export function view(facing = 'user') {
   // Boksene slik bilene trolig står akkurat nå (følgingen), og bilen foran regnet fra dem
   const t = road.t, v = lastView, preds = tracker.predict(t);
   const kk = v.lane && v.lane.W ? v.w / v.lane.W : 1;
-  const sc = L => ({ xBottom: L.xBottom * kk, xTop: L.xTop * kk, yBottom: L.yBottom * kk, yTop: L.yTop * kk });
-  const lane = v.lane && v.lane.left && v.lane.right ? { left: sc(v.lane.left), right: sc(v.lane.right) } : null;
+  const lane = v.lane && v.lane.left && v.lane.right ? { left: scaleLane(v.lane.left, kk), right: scaleLane(v.lane.right, kk) } : null;
   const lead = processDetections(preds, v.w, v.h, { roadBottom: v.roadBottom, lane }).lead || (v.lead && v.lead.src === 'baklys' ? v.lead : null);
   return { facing, ...v, ...signView, dets: roadDets(preds, v.w, v.h, v.roadBottom), lead, dfineMs: Math.round(perf.dfineMs) };
 }

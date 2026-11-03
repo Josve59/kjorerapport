@@ -142,6 +142,49 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.10.3 – curved lane lines, using the road ahead from Statens vegvesen
+
+Before 0.10.3 the road camera fitted a straight line to each lane line close to the car. In a bend the drawn line shot straight ahead off the road.
+
+**1. Curved lines** (`js/lanes.js`, `curve: true`):
+- **The model:** a road with a steady curve looks like this in the camera image: `x = A + B·d + C/d`, where `d` is the number of pixels below the horizon.
+  - `A` is the direction (the vanishing point).
+  - `B` is how far the line is to the side (lane width / camera height).
+  - `C` is the curve (`C = f²·H·κ/2`, κ in 1/m, positive = to the right).
+- **Fitting:** both lines share `A` and `C`. The straight lines near the car are the starting point. The fit follows the line upwards in bands towards the horizon, so the far part of the line, where the curve shows, is included.
+- **The lane analysis image** is now 240 px wide (was 160).
+- **Camera height:** the app learns it during the drive from the distance between the two lines and the lane width.
+- **One line seen:** the other is drawn where it should be from the lane width. It is dashed in full screen and does not count as seen.
+
+**2. Knowing the curve before the camera sees it** (`js/roadshape.js`):
+- **The curve now** comes from the GPS track over the last 6 s (change of heading per metre).
+- **The curve ahead** comes from the road line in Statens vegvesen's data, 8–60 m ahead in the direction of travel. The app already fetches this line with the speed limits, so it costs no extra download. It follows onto the next road stretch where the lines meet.
+- **Together:** the curve ahead counts most (70 %). It pulls the camera's curve towards it, more strongly when the lines in the image are weak (worn, snow, darkness).
+- **Below 15 km/h** the app assumes no curve (queues, junctions).
+
+**3. Lanes and lane width** (`fetchRoadInfo` in `enrich.js`, `createLiveRoad` in `livelimit.js`):
+- **What is fetched:** «feltoversikt» from the road segments (lanes in our direction: odd numbers with the road direction, even against it) and «Kjørebanebredde» from «Vegbredde, beregnet» (type 838).
+- **Area:** about 130 × 130 m around the car, refetched after 100 m. That is a few kB and 110–250 ms in the tests. The whole area along with the speed limits would have made the answer 2.5 times larger (2.5 MB).
+- **Lane width:** the carriageway width minus 0.5 m shoulder, divided by the number of lanes, kept within 2.75–3.75 m. It is not used when the width per lane is unreasonable.
+- **In the app:** the lane width scales the position in the lane and the predicted second line.
+
+**On screen:**
+- The lines are drawn as curves (16 points, each smoothed), with the lane lightly shaded between them.
+- Full screen says for example «Sving til høyre, radius 240 m (veidata) · tofeltsvei · felt 3,25 m».
+
+**Saved:** the road samples get `lane.k` (curve, 1/m) and `lane.lw` (lane width from NVDB).
+
+**Tested:**
+- **Synthetic curves (radius 67–100 m):**
+  - The fitted curve hits the far end within 1 px when the road data agrees, against 32–37 px off for a straight line.
+  - Without road data, the error is 6–8 px.
+  - A very sharp curve without road data is drawn straight, as before.
+- **The 168 night snapshots from 2 Nov:** both lines were found as often as before (88 against 84). 43 got a curve, and in 11 the second line was drawn from the lane width.
+- **Real NVDB:** tested at four places in Trondheim. On Omkjøringsvegen it found 2 lanes our way (of 4, with bus lanes).
+- 153 tests pass.
+
+**Not tested yet:** a real drive through bends. Watch full screen in the next drive: the lines should bend with the road, and the text at the top says where the curve comes from.
+
 ## What's new in 0.10.2 – after the first drives with the iPhone app (3 Nov, five drives, 39 min)
 
 **What the drives showed:**

@@ -4,20 +4,29 @@
    3) avstanden mellom linjene nederst i bildet gir skalaen (et kjørefelt er rundt 3,25 m i Norge).
    Virker best på merket vei i dagslys. I mørke bilder strekkes kontrasten først (k0.6.4), så linjer i lyset
    fra frontlyktene blir med. Snø, regn og slitte linjer gir ofte ingen treff.
-   Ren funksjon på gråtonebilde, så den kan testes i Node. Ingen bilder lagres. */
+   Ren funksjon på gråtonebilde, så den kan testes i Node. Ingen bilder lagres.
+   0.10.3: buede linjer (curve: true). En vei med jevn kurve gir i bildet x = A + B·d + C/d, der d er antall piksler
+   under horisonten: A er retningen (forsvinningspunktet), B sidestillingen til linjen (feltbredde / kamerahøyde),
+   og C svingen (C = f²·H·κ/2, f brennvidde i piksler, H kamerahøyde i meter, κ krumning i 1/m, + = mot høyre).
+   Begge linjene deler A og C. Svingen tas fra bildet langt fram, med en forventet verdi fra bilens egen sving og
+   veien foran (Statens vegvesen) som hjelp når linjene er svake. Ser kameraet bare én linje, tegnes den andre der
+   den skal være etter feltbredden (predicted). */
 
 export const LANE_WIDTH = 3.25;
 
 /* gray: Uint8Array w*h (0–255). Returnerer { left, right, offset, width, points } der left/right er
    { xBottom, xTop, yBottom, yTop, inliers } eller null, offset = bilens sideavvik fra midten av feltet i meter
    (positiv = til høyre, forutsatt at kameraet står midt i bilen), width = feltbredde i piksler nederst. */
-export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.45, maxBg = 150, minInl = 0.25, seed = 7 } = {}) {
+export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.45, maxBg = 150, minInl = 0.25, seed = 7,
+  curve = false, far = null, kappa = null, kappaWeight = 3, focal = null, camH = 1.2, laneWidth = LANE_WIDTH, predict = false, useHorizon = false } = {}) {
   const y0 = Math.floor(h * top), y1 = Math.floor(h * bottom);
-  const night = stretchDark(gray, w, y0, y1);
+  // Med buede linjer letes det også lenger fram (mot horisonten), der svingen synes
+  const ys = curve ? Math.max(1, Math.min(y0, Math.floor(h * (far ?? Math.max(horizon + 0.04, top - 0.15))))) : y0;
+  const night = stretchDark(gray, w, ys, y1);
   if (night) gray = night;
   const minW = Math.max(1, Math.round(w * 0.006)), maxW = Math.max(3, Math.round(w * 0.08));
   const pts = [];
-  for (let y = y0; y <= y1; y += 1) {
+  for (let y = ys; y <= y1; y += 1) {
     const row = y * w;
     // Lokal bakgrunn: glidende snitt over 1/8 av bredden
     const win = Math.max(4, Math.round(w / 8));
@@ -36,7 +45,8 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
       if (bright && start < 0) start = x;
       if ((!bright || x === w - 1) && start >= 0) {
         const len = x - start;
-        if (len >= minW && len <= maxW * (0.5 + (y - y0) / (y1 - y0 + 1))) pts.push({ x: start + len / 2, y });
+        const maxLen = y >= y0 ? maxW * (0.5 + (y - y0) / (y1 - y0 + 1)) : maxW * 0.5 * Math.max(0.3, (y - ys) / (y0 - ys + 1));
+        if (len >= minW && len <= maxLen) pts.push({ x: start + len / 2, y });
         start = -1;
       }
     }
@@ -65,28 +75,153 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
     if (Math.sign(b) !== sign) return null;
     return { xBottom: a + b * y1, xTop: a + b * y0, yBottom: y1, yTop: y0, inliers: n };
   };
-  const mid = w / 2;
-  let left = fit(pts.filter(p => p.x < mid), -1);
-  let right = fit(pts.filter(p => p.x >= mid), 1);
+  const mid = w / 2, near = pts.filter(p => p.y >= y0);
+  let left = fit(near.filter(p => p.x < mid), -1);
+  let right = fit(near.filter(p => p.x >= mid), 1);
   // Perspektiv: linjene skal peke mot et forsvinningspunkt over analyseområdet og nær midten av bildet.
   // Forlenget til horisonten (her antatt rundt 0,45·h) må hver linje ende i midtre halvdel.
   const atY = (L, y) => L.xBottom + (L.xTop - L.xBottom) * (y - L.yBottom) / (L.yTop - L.yBottom);
   const yh = h * horizon;
-  const plausible = L => L && atY(L, yh) > w * 0.2 && atY(L, yh) < w * 0.8;
+  // I sving (buede linjer på) kan de rette linjene nær bilen peke lenger til siden
+  const lo = curve ? 0.02 : 0.2, hi = curve ? 0.98 : 0.8;
+  const plausible = L => L && atY(L, yh) > w * lo && atY(L, yh) < w * hi;
   if (!plausible(left)) left = null;
   if (!plausible(right)) right = null;
   if (left && right) {
     const xi = (a, b) => { const sa = (a.xTop - a.xBottom) / (a.yTop - a.yBottom), sb = (b.xTop - b.xBottom) / (b.yTop - b.yBottom); const y = (b.xBottom - a.xBottom + sa * a.yBottom - sb * b.yBottom) / (sa - sb); return { y, x: a.xBottom + sa * (y - a.yBottom) }; };
     const v = xi(left, right);
-    if (!(v.y < y0 && v.x > w * 0.2 && v.x < w * 0.8)) { if (left.inliers >= right.inliers) right = null; else left = null; }
+    if (!(v.y < y0 && v.x > w * lo && v.x < w * hi)) { if (left.inliers >= right.inliers) right = null; else left = null; }
   }
-  let offset = null, width = null;
-  if (left && right && right.xBottom > left.xBottom) {
-    width = right.xBottom - left.xBottom;
-    if (width > w * 0.25) offset = Math.round(((w / 2) - (left.xBottom + right.xBottom) / 2) / width * LANE_WIDTH * 100) / 100;
+  let shape = null;
+  if (curve && (left || right)) {
+    shape = fitCurves(pts, left, right, { w, h, y1, ys, yh, kappa, kappaWeight, focal, camH, useHorizon });
+    if (shape) { left = shape.left; right = shape.right; }
+  }
+  // Én linje: den andre der den skal være etter feltbredden og kamerahøyden (tegnes, men telles ikke som sett)
+  if (shape && predict && (left ? !right : right) && laneWidth > 0 && camH > 0) {
+    const seen = left || right, sign = left ? 1 : -1, c = seen.curve;
+    const other = { ...c, B: c.B + sign * laneWidth / camH };
+    const L2 = curveLine(other, y1, seen.yTop, 0);
+    if (L2.xBottom > -w * 0.5 && L2.xBottom < w * 1.5) { L2.predicted = true; if (left) right = L2; else left = L2; }
+  }
+  let offset = null, width = null, camHeight = null;
+  const seenL = left && !left.predicted ? left : null, seenR = right && !right.predicted ? right : null;
+  if (seenL && seenR && seenR.xBottom > seenL.xBottom) {
+    width = seenR.xBottom - seenL.xBottom;
+    if (width > w * 0.25) offset = Math.round(((w / 2) - (seenL.xBottom + seenR.xBottom) / 2) / width * laneWidth * 100) / 100;
     else width = null;
+    // Kamerahøyden følger av feltbredden: B(høyre) − B(venstre) = feltbredde / høyde
+    if (width && seenL.curve && seenR.curve) { const dB = seenR.curve.B - seenL.curve.B; if (dB > 0) camHeight = Math.round(laneWidth / dB * 100) / 100; }
   }
-  return { left, right, offset, width, points: pts.length, night: !!night };
+  return { left, right, offset, width, points: pts.length, night: !!night, curve: shape ? { C: shape.C, kappa: shape.kappa, vh: shape.vh } : null, camH: camHeight };
+}
+
+/* x i bildet for en linje på høyde y: buet (curve) eller rett */
+export function laneX(L, y) {
+  if (L.curve) { const d = Math.max(1, y - L.curve.vh); return L.curve.A + L.curve.B * d + L.curve.C / d; }
+  return L.xBottom + (L.xTop - L.xBottom) * (y - L.yBottom) / ((L.yTop - L.yBottom) || 1);
+}
+
+/* Linjen skalert fra analysebildet til kamerabildet (k = bredde i kamerabildet / bredde i analysebildet) */
+export function scaleLane(L, k) {
+  if (!L) return L;
+  const o = { ...L, xBottom: L.xBottom * k, xTop: L.xTop * k, yBottom: L.yBottom * k, yTop: L.yTop * k };
+  if (L.curve) o.curve = { A: L.curve.A * k, B: L.curve.B, C: L.curve.C * k * k, vh: L.curve.vh * k };
+  return o;
+}
+
+function curveLine(c, yBottom, yTop, inliers) {
+  const L = { curve: c, yBottom, yTop, inliers };
+  L.xBottom = laneX(L, yBottom); L.xTop = laneX(L, yTop);
+  return L;
+}
+
+/* Felles tilpasning av x = A + B·d + C/d for linjene som ble funnet rett. Startes fra de rette linjene, og punktene
+   nær kurven tas med i tre runder, så linjen kan følge svingen oppover i bildet. Forventet sving (kappa) trekker C
+   mot sin verdi, sterkere jo svakere bildet er. Returnerer { left, right, C, kappa, vh } eller null. */
+function fitCurves(pts, left, right, { w, h, y1, ys, yh, kappa, kappaWeight, focal, camH, useHorizon }) {
+  const slope = L => (L.xTop - L.xBottom) / (L.yTop - L.yBottom);
+  let vh = yh;
+  if (left && right && !useHorizon) {
+    const sa = slope(left), sb = slope(right);
+    const y = (right.xBottom - left.xBottom + sa * left.yBottom - sb * right.yBottom) / (sa - sb);
+    if (Number.isFinite(y)) vh = y;
+  }
+  vh = Math.min(vh, ys - 3);
+  const f = focal || h / 2 / Math.tan(33 * Math.PI / 180);
+  const Cp = Number.isFinite(kappa) ? f * f * camH * kappa / 2 : 0;
+  const Cmax = f * f * camH * 0.03 / 2;   // svinger krappere enn radius 33 m tegnes ikke
+  // Start: de rette linjene med den forventede svingen trukket fra (ellers bommer starten nær bilen med C/d)
+  const y0n = Math.min(...[left, right].filter(Boolean).map(L => L.yTop));
+  const sides = [left, right].map(L => {
+    if (!L) return null;
+    let n = 0, sd = 0, st = 0, sdd = 0, sdt = 0;
+    for (let k = 0; k <= 10; k++) {
+      const y = y0n + (y1 - y0n) * k / 10, d = y - vh, t = laneX(L, y) - Cp / d;
+      n++; sd += d; st += t; sdd += d * d; sdt += d * t;
+    }
+    const B0 = (n * sdt - sd * st) / (n * sdd - sd * sd || 1);
+    return { B: B0, A: (st - B0 * sd) / n };
+  });
+  let A = (sides[0] ? sides[0].A : 0) + (sides[1] ? sides[1].A : 0);
+  A /= (sides[0] ? 1 : 0) + (sides[1] ? 1 : 0);
+  let C = Cp, B = sides.map(sd => sd && sd.B), used = [[], []];
+  const model = (k, y) => { const d = y - vh; return A + B[k] * d + C / d; };
+  const tol0 = Math.max(1.5, w * 0.012), steps = 12;
+  // Linjen følges trinnvis oppover: hver runde tar med et høyere bånd, spådd fra kurven så langt
+  for (let it = 0; it < steps; it++) {
+    used = [[], []];
+    const yLim = y1 - (y1 - ys) * Math.min(1, (it + 2) / 6);
+    for (const p of pts) {
+      const d = p.y - vh;
+      if (d < 3 || p.y < yLim) continue;
+      const tol = tol0 * (1 + 1.5 * (y1 - p.y) / Math.max(1, y1 - ys));
+      let bestK = -1, bestE = tol;
+      for (let k = 0; k < 2; k++) if (B[k] !== null && B[k] !== undefined) { const e = Math.abs(model(k, p.y) - p.x); if (e <= bestE) { bestE = e; bestK = k; } }
+      if (bestK >= 0) used[bestK].push(p);
+    }
+    // Normalligningene for [A, C, B0, B1]; ubrukte sider tas ut
+    const idx = [0, 1]; if (B[0] !== null && B[0] !== undefined) idx.push(2); if (B[1] !== null && B[1] !== undefined) idx.push(3);
+    const n = idx.length, M = Array.from({ length: n }, () => new Float64Array(n)), v = new Float64Array(n);
+    const add = (row, rhs, wt = 1) => { for (let i = 0; i < n; i++) { v[i] += wt * row[idx[i]] * rhs; for (let j = 0; j < n; j++) M[i][j] += wt * row[idx[i]] * row[idx[j]]; } };
+    let dSum = 0, cnt = 0;
+    for (let k = 0; k < 2; k++) for (const p of used[k]) {
+      const d = p.y - vh, row = [1, 1 / d, k === 0 ? d : 0, k === 1 ? d : 0];
+      add(row, p.x); dSum += d; cnt++;
+    }
+    if (cnt < 10) return null;
+    // Forventet sving: som kappaWeight punkter på typisk avstand
+    const dTyp = dSum / cnt;
+    add([0, 1 / dTyp, 0, 0], Cp / dTyp, kappaWeight);
+    const sol = solve(M, v);
+    if (!sol) return null;
+    const full = [A, C, B[0], B[1]];
+    idx.forEach((k, i) => { full[k] = sol[i]; });
+    [A, C] = full; B = [full[2], full[3]];
+    if (Math.abs(C) > Cmax) C = Math.sign(C) * Cmax;
+  }
+  const yTop = Math.max(ys, Math.ceil(vh + Math.max(4, (y1 - vh) * 0.12)));
+  const mk = k => {
+    if (B[k] === null || B[k] === undefined || used[k].length < 6) return null;
+    const L = curveLine({ A, B: B[k], C, vh }, y1, yTop, used[k].length);
+    return L;
+  };
+  const nl = mk(0), nr = mk(1);
+  if (!nl && !nr) return null;
+  // Rimelig: linjene på hver sin side av midten nederst, og ikke krysset over analyseområdet
+  if (nl && nr && !(nl.xBottom < nr.xBottom && laneX(nl, yTop) < laneX(nr, yTop))) return null;
+  return { left: nl || (left && !nr ? left : null), right: nr || (right && !nl ? right : null), C, kappa: C * 2 / (f * f * camH), vh };
+}
+
+function solve(M, v) {
+  const n = v.length, a = M.map((r, i) => [...r, v[i]]);
+  for (let c = 0; c < n; c++) {
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(a[r][c]) > Math.abs(a[p][c])) p = r;
+    if (Math.abs(a[p][c]) < 1e-9) return null;
+    [a[c], a[p]] = [a[p], a[c]];
+    for (let r = 0; r < n; r++) if (r !== c) { const k = a[r][c] / a[c][c]; for (let j = c; j <= n; j++) a[r][j] -= k * a[c][j]; }
+  }
+  return a.map((r, i) => r[n] / r[i]);
 }
 
 /* Mørkt analyseområde (snitt under 60): strekk lysstyrken så de 5 % mørkeste blir 30 og de 1 % lyseste 230.
