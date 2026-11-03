@@ -986,3 +986,30 @@ body.has-tabbar .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
 .record .stop-dock .stop-ico { width: 24px; height: 24px; border-radius: 6px; }
 @media (min-height: 900px) { .record .stop-dock .stop { width: 184px; height: 184px; } .record .stop-dock .stop-label { font-size: 2rem; } }
 .guide-item summary::before, .guide-steps summary::before { display: none; }
+
+/* ---------- Kjørerapport Pluss (0.11.0) ---------- */
+.plus-hero { text-align: center; padding: 18px 8px 6px; }
+.plus-hero h2 { font-size: 1.6rem; line-height: 1.15; margin: 12px 0 8px; }
+.plus-hero p { margin: 0 auto 8px; max-width: 34ch; color: var(--muted); }
+.plus-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: var(--primary); color: var(--on-primary, #111); font-weight: 800; letter-spacing: .02em; }
+.plus-list { display: grid; gap: 14px; }
+.plus-item { display: flex; gap: 12px; align-items: flex-start; border-radius: 14px; padding: 4px; transition: background .2s; }
+.plus-item > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.plus-item.focus { background: color-mix(in srgb, var(--primary) 16%, transparent); padding: 10px; margin: -6px; }
+.plus-ico { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--primary) 22%, var(--surface)); color: var(--ink); }
+.plus-ok { flex: none; color: var(--good); align-self: center; }
+.plus-buy { width: 100%; min-height: 58px; font-size: 1.15rem; margin-top: 4px; }
+.plus-links { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.plus-free { margin: 14px 4px 24px; text-align: center; }
+#pluss > .btn, #plus-root > .btn { width: 100%; }
+.plus-row { display: flex; align-items: center; gap: 12px; }
+.plus-row > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.plus-locked { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 18px; }
+.plus-locked h2 { margin: 4px 0 0; }
+.plus-locked .btn { width: 100%; }
+/* Låste ting: en liten lås ved fanene og turene som krever Pluss */
+.tabbar a.locked > span:first-child { position: relative; }
+.tabbar a.locked > span:first-child::after { content: ''; position: absolute; right: -7px; top: -3px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='3'%3E%3Crect x='6' y='11' width='12' height='9' rx='1.5'/%3E%3Cpath d='M9 11V8a3 3 0 0 1 6 0v3'/%3E%3C/svg%3E") center / 9px no-repeat; }
+.drive.locked { opacity: .55; }
+.drive.locked .drive-main strong::after { content: ' · Pluss'; font-weight: 700; font-size: .8rem; color: var(--muted); }

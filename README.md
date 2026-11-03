@@ -142,6 +142,45 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.11.0 – Kjørerapport Pluss
+
+The iPhone app is free to download, with **Kjørerapport Pluss** as a one-time in-app purchase (planned price NOK 349, not a subscription, Family Sharing on).
+
+| Free | Pluss |
+| --- | --- |
+| Recording (also with the screen locked), report, map, speed limit, speed-camera warnings | The cameras: mirror and shoulder checks, road camera |
+| Guides, driving log, export and backup | The training plan with hotspots |
+| Reports for the 10 latest real drives | The driving-teacher page |
+| | Reports for all older drives |
+
+**How it is built:**
+- **`ios/Kjorerapport/PlusStore.swift`** uses StoreKit 2:
+  - the product `net.svendsenmedia.kjorerapport.pluss`, purchase in the app's window, «Gjenopprett kjøp» (`AppStore.sync`), and codes from driving schools (`presentOfferCodeRedeemSheet`)
+  - it listens to `Transaction.updates`, so purchases on other devices, Family Sharing and refunds are picked up.
+- **`js/plus.js`:**
+  - status and purchase via the bridge
+  - `reportLocked` (pure function, tested)
+  - which screens belong to Pluss.
+- **Gates in `app.js`:**
+  - the screens Kamera, Opplæring, Faresteder and Trafikklærer show the Pluss screen with that feature on top
+  - small locks on the Opplæring and Trafikklærer tabs
+  - older drives in the log are faded with «· Pluss»
+  - a locked report has «Se Pluss» and «Eksporter turen»
+  - the camera is not started before a drive without Pluss
+  - a Pluss row in Innstillinger.
+- **The Pluss screen** shows the price from the App Store, «Kjøp», «Gjenopprett kjøp», «Kode fra trafikkskolen», and what is free.
+- **Testing:**
+  - `ios/Pluss.storekit` and a shared scheme make ▶︎ in Xcode use a local test store, so the purchase can be tried without money.
+  - The developer section has «Pluss (test)»: as the App Store says, always on, or always off.
+- **The web version (Safari)** has everything free, as before.
+
+**Before the purchase can be sold:** see `appstore/README.md` section 12 (the product in App Store Connect, the Paid Applications agreement, the Small Business Program).
+
+**Tested:**
+- In the simulator: the locks on the tabs, the Pluss screen with the right feature first, and the message when the App Store cannot be reached.
+- 157 tests pass.
+- **Not tested yet:** the purchase itself, which needs ▶︎ from Xcode (the test store) or TestFlight.
+
 ## What's new in 0.10.3 – curved lane lines, using the road ahead from Statens vegvesen
 
 Before 0.10.3 the road camera fitted a straight line to each lane line close to the car. In a bend the drawn line shot straight ahead off the road.

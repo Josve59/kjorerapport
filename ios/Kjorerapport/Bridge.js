@@ -8,7 +8,10 @@
   window.kjNative = { platform: 'ios', recStart: () => call('recStart'), recStop: () => call('recStop'), info: () => call('info'), status: s => call('recStatus', s),
     // Kameraene (CameraHub.swift): bildene hentes fra /cam/user.jpg og /cam/environment.jpg, bilene kommer som «kjcamdets»
     camInfo: () => call('camInfo'), camStart: o => call('camStart', o), camStop: () => call('camStop'), camConfig: o => call('camConfig', o),
-    review: () => call('review') };
+    review: () => call('review'),
+    // Kjørerapport Pluss (PlusStore.swift): engangskjøp i App Store; endringer kommer som hendelsen «kjplus»
+    plusStatus: () => call('plusStatus'), plusBuy: () => call('plusBuy'), plusRestore: () => call('plusRestore'), plusRedeem: () => call('plusRedeem') };
+  window.__kjPlus = owned => { window.dispatchEvent(new CustomEvent('kjplus', { detail: { owned } })); };
   window.__kjCamDets = r => { window.dispatchEvent(new CustomEvent('kjcamdets', { detail: r })); };
 
   const watchers = new Map();

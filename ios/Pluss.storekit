@@ -1,0 +1,38 @@
+{
+  "identifier" : "4F1C2B8A",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "349.0",
+      "familyShareable" : true,
+      "internalID" : "6740000001",
+      "localizations" : [
+        {
+          "description" : "Kameraene, opplæringsplanen, trafikklæreren og alle rapportene. Ett kjøp, ikke abonnement.",
+          "displayName" : "Kjørerapport Pluss",
+          "locale" : "nb"
+        }
+      ],
+      "productID" : "net.svendsenmedia.kjorerapport.pluss",
+      "referenceName" : "Pluss",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "nb",
+    "_storefront" : "NOR",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

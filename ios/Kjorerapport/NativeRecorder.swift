@@ -24,6 +24,11 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     private var lastActivityUpdate = Date.distantPast
     private let gravity = 9.80665
     private let detector = RoadDetector()   // bilgjenkjenning for veikameraet (CameraHub)
+    private lazy var plus: PlusStore = {
+        let p = PlusStore()
+        p.onChange = { [weak self] owned in self?.send("window.__kjPlus && window.__kjPlus(\(owned))") }
+        return p
+    }()
 
     override init() {
         super.init()
@@ -56,6 +61,15 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             let model = detect && started.active.contains(.environment) ? await startDetector() : nil
             if model == nil { CameraHub.shared.onRoadFrame = nil }
             return (["active": started.active.map(\.rawValue), "multi": started.multi, "error": started.error.map { $0 as Any } ?? NSNull(), "model": model.map { $0 as Any } ?? NSNull()], nil)
+        case "plusStatus":
+            await plus.refresh()
+            return (plus.status, nil)
+        case "plusBuy":
+            return (await plus.buy(in: webView?.window?.windowScene), nil)
+        case "plusRestore":
+            return (await plus.restore(), nil)
+        case "plusRedeem":
+            return (await plus.redeem(in: webView?.window?.windowScene), nil)
         case "share":
             return (["completed": await share(body)], nil)
         case "print":

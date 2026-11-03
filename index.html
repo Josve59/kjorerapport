@@ -257,6 +257,16 @@
   </section>
 
   <!-- Innstillinger -->
+  <!-- Kjørerapport Pluss (0.11.0): engangskjøp i iPhone-appen (js/plus.js, PlusStore.swift) -->
+  <section id="pluss" class="screen" hidden>
+    <header class="appbar">
+      <button type="button" class="btn-back icon-btn" aria-label="Tilbake" data-icon="back"></button>
+      <h1>Kjørerapport Pluss</h1>
+      <span class="appbar-spacer"></span>
+    </header>
+    <div id="plus-root"></div>
+  </section>
+
   <!-- Guider og tips (0.10.1) -->
   <section id="guides" class="screen" hidden>
     <header class="appbar">
@@ -319,6 +329,8 @@
         <label class="btn secondary file-btn"><span data-icon="upload"></span>Gjenopprett<input type="file" id="restore-file" accept="application/json,.json"></label>
       </div>
     </section>
+
+    <section class="card plus-row" id="plus-row" hidden></section>
 
     <h2 class="group-title"><span data-icon="info"></span>Om appen</h2>
     <section class="card">
@@ -406,6 +418,8 @@
       <h3>Utvikler</h3>
       <p class="muted small">Spiller demoturen gjennom opptakeren, lagringen og rapporten, som om sensorene leverte dataene.</p>
       <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
+      <label class="field mt"><span>Pluss (test)</span>
+        <select id="dev-plus"><option value="">Som App Store sier</option><option value="on">Alltid på</option><option value="off">Alltid av</option></select></label>
       <div class="toggle-list mt">
         <label class="toggle"><span><strong>Testbilder fra veikameraet</strong><br><span class="muted small">Lagrer små bilder av veien med turen (et stort hvert 30. s, små når det er en bil foran), så bilgjenkjenningen kan sjekkes etterpå. Turene blir større.</span></span><input type="checkbox" class="switch" id="roadThumbs"></label>
       </div>
@@ -413,7 +427,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.10.3</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.11.0</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

@@ -18,8 +18,9 @@ import { roadSummary } from './road.js';
 import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit } from './signs.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
+import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 
-export const APP_VERSION = '0.10.3';
+export const APP_VERSION = '0.11.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -143,8 +144,9 @@ async function renderHome() {
   if (!list.children.length || list.querySelector('.empty')) list.innerHTML = '<li class="skeleton-row"></li><li class="skeleton-row"></li><li class="skeleton-row"></li>';
   $('#start-hello').textContent = settings.activeDriver ? `Hei, ${settings.activeDriver}!` : 'Klar for en tur?';
   const calibrated = !!getCalib();
-  $('#btn-go-camera').classList.toggle('warn', !!settings.cameraOn && !calibrated);
-  $('#cam-card-text').textContent = !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
+  $('#btn-go-camera').classList.toggle('warn', hasPlus() && !!settings.cameraOn && !calibrated);
+  $('#cam-card-text').textContent = !hasPlus() ? 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.'
+    : !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
     : calibrated ? (roadWanted() ? 'Kalibrert og slått på, med veikameraet samtidig. Trykk for å teste.' : 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.')
     : 'Ikke kalibrert. Trykk her og kalibrer før turen – det tar 30 sekunder.';
   const allDrives = await listDrives();
@@ -340,6 +342,57 @@ async function gatherRows(driver = null) {
     rows.push({ d, res, sp, road, log: logFor(d, res), marks: markRows(d.marks || [], res) });
   }
   return rows;
+}
+
+/* ---------- Kjørerapport Pluss (0.11.0) ---------- */
+/* Pluss-siden: hva Pluss gir (funksjonen brukeren kom fra øverst), pris, kjøp, gjenopprett og kode fra trafikkskolen */
+async function renderPlus(feature = null) {
+  show('pluss');
+  const root = $('#plus-root');
+  const draw = () => {
+    const st = plusState(), owned = hasPlus();
+    const order = feature && PLUS_FEATURES[feature] ? [feature, ...Object.keys(PLUS_FEATURES).filter(k => k !== feature)] : Object.keys(PLUS_FEATURES);
+    const price = st.price ? `Kjøp for ${esc(st.price)}` : 'Kjøp Pluss';
+    root.innerHTML = `
+      <section class="plus-hero">
+        <span class="plus-badge">${icon('check', 18)}Pluss</span>
+        <h2>${owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingskjøringen'}</h2>
+        <p>${owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
+      </section>
+      <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${owned ? `<span class="plus-ok">${icon('check', 18)}</span>` : ''}</div>`; }).join('')}</section>
+      ${owned ? `<button type="button" class="btn secondary" id="plus-back">Tilbake</button>` : `
+      <button type="button" class="btn primary plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
+      <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse.'}</p>
+      <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button></div>`}
+      <p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg og rapportene for de ${FREE_REPORTS} siste turene. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>`;
+    const back = root.querySelector('#plus-back');
+    if (back) back.onclick = () => goBack();
+    const act = async (btn, fn, okText) => {
+      btn.disabled = true; const old = btn.textContent; btn.textContent = 'Venter på App Store …';
+      const r = await fn();
+      btn.disabled = false; btn.textContent = old;
+      if (r.owned) { vibrate([30, 60, 30]); toast(okText, { type: 'ok' }); if (gateFor(location.hash)) route(); else draw(); return; }
+      if (r.error === 'avbrutt') return;
+      if (r.error === 'venter') { infoDialog({ title: 'Venter på godkjenning', text: 'Kjøpet må godkjennes (for eksempel av en forelder med «Spør før kjøp»). Pluss låses opp av seg selv når det er godkjent.' }); return; }
+      if (r.error) infoDialog({ title: 'Kjøpet gikk ikke', text: r.error });
+      else if (fn === restorePlus) infoDialog({ title: 'Fant ikke Pluss', text: 'Det er ikke kjøpt Pluss med denne Apple-ID-en. Er det kjøpt av noen andre i familien, må Familiedeling være slått på.' });
+    };
+    const buy = root.querySelector('#plus-buy');
+    if (buy) buy.onclick = () => act(buy, buyPlus, 'Pluss er låst opp. God tur!');
+    const res = root.querySelector('#plus-restore');
+    if (res) res.onclick = () => act(res, restorePlus, 'Pluss er gjenopprettet.');
+    const code = root.querySelector('#plus-code');
+    if (code) code.onclick = () => act(code, redeemPlus, 'Koden er brukt. Pluss er låst opp.');
+  };
+  draw();
+  await refreshPlus();
+  if (!screens.pluss.hidden) draw();
+}
+
+/* Tre små ting som viser Pluss rundt i appen: låsene på fanene, raden i Innstillinger og kamerakortet på Hjem */
+function updatePlusMarks() {
+  const plus = hasPlus();
+  document.querySelectorAll('#tabbar a[data-tab="plan"], #tabbar a[data-tab="teacher"]').forEach(a => a.classList.toggle('locked', !plus));
 }
 
 /* ---------- Guider (0.10.1) ---------- */
@@ -549,7 +602,9 @@ async function renderLog() {
   root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
   const settings = getSettings();
   const filter = settings.homeDriver || '';
-  const drives = (await listDrives()).filter(d => isReal(d) && (!filter || d.driver === filter));
+  const all = await listDrives(), plus = hasPlus();
+  const drives = all.filter(d => isReal(d) && (!filter || d.driver === filter));
+  const lockedIds = new Set(drives.filter(d => reportLocked(all, d.id, plus)).map(d => d.id));   // rapporter som krever Pluss
   const rows = [];
   for (const d of drives) { try { const res = await analyzeDrive(d); rows.push({ d, res, log: logFor(d, res) }); } catch { /* for lite data */ } }
   if (!rows.length) { root.innerHTML = `<div class="empty card"><span class="empty-ico">${icon('book', 40)}</span><strong>Ingen turer i loggen enda</strong><span class="muted small">Ekte opptak legges inn her automatisk.</span></div>`; return; }
@@ -584,7 +639,7 @@ async function renderLog() {
       <div class="week-bars" role="img" aria-label="Kjøretid per uke">${weeks.map(w => `<div class="wk"><span class="wk-val">${w.sec ? Math.round(w.sec / 60) : ''}</span><span class="wk-bar" style="height:${Math.max(2, w.sec / maxW * 100)}%"></span><span class="wk-lbl">${wkFmt.format(new Date(w.start))}</span></div>`).join('')}</div>
       <p class="muted small">Minutter per uke, fra mandag.</p></section>
     <h2 class="section-title">Alle turer</h2>
-    <ul class="drives log-list card">${rows.map(x => `<li><button type="button" class="drive" data-id="${x.d.id}">
+    <ul class="drives log-list card">${rows.map(x => `<li><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${x.d.id}">
       <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
       <span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.log.light.dark > 60 ? `${fmtHours(x.log.light.dark)} mørke` : ''].filter(Boolean).join(SEP)}</span>
       ${x.d.driver && !filter ? `<span class="tags"><span class="tag">${esc(x.d.driver)}</span></span>` : ''}</span>
@@ -802,9 +857,10 @@ function renderPrecheck() {
   renderFocusChips();
   renderFocusSuggestions();
   const camCheck = $('#check-camera'), roadCheck = $('#check-road');
-  camCheck.hidden = !getSettings().cameraOn;
+  const camWanted = () => !!getSettings().cameraOn && hasPlus();   // kameraene er en del av Pluss (0.11.0)
+  camCheck.hidden = !camWanted();
   const showRoadCheck = () => {
-    roadCheck.hidden = !(getSettings().cameraOn && roadWanted());
+    roadCheck.hidden = !(camWanted() && roadWanted());
     if (!roadCheck.hidden && !roadCheck.dataset.state) setCheck(roadCheck, null, 'Starter sammen med førerkameraet');
   };
   roadCheck.dataset.state = '';
@@ -812,7 +868,7 @@ function renderPrecheck() {
   cam.roadSupported().then(v => { roadOk = v; showRoadCheck(); }).catch(() => {});
   const preCalib = $('#btn-pre-calib');
   preCalib.hidden = true;
-  if (getSettings().cameraOn) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
+  if (camWanted()) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
   preCalib.onclick = async () => {
     unlockSpeech();
     await runCalibration();
@@ -834,7 +890,7 @@ function renderPrecheck() {
     } catch (err) {
       setCheck(gps, false, err.code === 1 ? 'Posisjonstilgang avslått. Tillat posisjon for denne appen i Innstillinger.' : 'Fikk ikke posisjon. Gå ut i friluft og prøv igjen.');
     }
-    if (getSettings().cameraOn) {
+    if (camWanted()) {
       try {
         await cam.startCamera($('#pre-video'), { road: roadWanted() });
         await cam.loadModel(t => setCheck(camCheck, null, t));
@@ -1509,6 +1565,20 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
   const drive = await getDrive(id);
   if (!drive) { root.innerHTML = '<p class="notice">Fant ikke turen.</p>'; return; }
   const drives = await listDrives();
+  // Pluss (0.11.0): rapportene for de eldre turene er låst uten Pluss. Turen ligger der og kan eksporteres.
+  if (reportLocked(drives, id, hasPlus())) {
+    show('report');
+    $('#report-bar-title').textContent = 'Rapport';
+    $('#report-actions').innerHTML = '';
+    root.innerHTML = `<section class="card plus-locked"><span class="plus-ico">${icon('list', 24)}</span>
+      <h2>Turen ${esc(date(drive.startedAt))}</h2>
+      <p>Uten Pluss vises rapportene for de ${FREE_REPORTS} siste turene. Denne turen er eldre. Den er ikke slettet, og kan eksporteres.</p>
+      <button type="button" class="btn primary" id="btn-locked-plus">Se Pluss</button>
+      <button type="button" class="btn secondary" id="btn-locked-export">${icon('download', 20)}Eksporter turen</button></section>`;
+    $('#btn-locked-plus').onclick = () => { location.hash = '#/pluss'; };
+    $('#btn-locked-export').onclick = () => exportDrive(id);
+    return;
+  }
   const idx = drives.findIndex(d => d.id === id);
   let prev = null;
   // Sammenlign bare med forrige ekte opptak, og bare hvis denne turen selv er ekte.
@@ -1624,6 +1694,18 @@ async function renderDemoReport() {
 async function renderSettings() {
   show('settings');
   const settings = getSettings();
+  // Pluss (0.11.0), bare i iPhone-appen
+  const pr = $('#plus-row');
+  pr.hidden = !plusState().native;
+  if (!pr.hidden) {
+    pr.innerHTML = hasPlus() ? `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Låst opp. Takk!</span></span>`
+      : `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Kameraene, opplæringsplanen, trafikklæreren og alle rapportene</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Se Pluss</button>`;
+    const b = pr.querySelector('#btn-plus-row');
+    if (b) b.onclick = () => { location.hash = '#/pluss'; };
+  }
+  const devPlus = $('#dev-plus');
+  devPlus.value = settings.devPlus || '';
+  devPlus.onchange = () => { saveSettings({ ...getSettings(), devPlus: devPlus.value }); setDevPlus(({ on: true, off: false })[devPlus.value] ?? null); toast(devPlus.value ? `Pluss er ${devPlus.value === 'on' ? 'på' : 'av'} (test).` : 'Pluss følger App Store.', { type: 'ok', ms: 2000 }); };
   $('#btn-feedback').href = feedbackHref();
   document.querySelectorAll('input[name=sensitivity]').forEach(r => {
     r.checked = r.value === settings.sensitivity;
@@ -1870,7 +1952,7 @@ function updateTabbar(h) {
   bar.hidden = hide;
   document.body.classList.toggle('has-tabbar', !hide);
   if (TAB_ROOTS[h]) lastTab = h;
-  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/guider': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
+  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/guider': 'home', '#/pluss': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -1880,7 +1962,7 @@ function updateTabbar(h) {
 /* Tilbake: fra en rapport til fanen den kom fra, fra Faresteder til Opplæring, ellers til Hjem */
 function goBack() {
   const h = location.hash;
-  location.hash = h === '#/faresteder' ? '#/opplaering' : h === '#/guider' ? (guidesFrom || '#/') : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
+  location.hash = h === '#/faresteder' ? '#/opplaering' : h === '#/guider' ? (guidesFrom || '#/') : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
 }
 
 /* Overlegg som låser siden (fullskjerm kart og kamera) lukkes ved hvert skjermbytte. Før 0.10.1 kunne «Tilbake»
@@ -1895,7 +1977,7 @@ function releaseOverlays() {
 let guidesFrom = null, prevHash = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
 function route() {
   const h = location.hash || '#/';
-  if (h === '#/guider' && prevHash !== '#/guider') guidesFrom = prevHash;
+  if ((h === '#/guider' || h === '#/pluss') && prevHash !== h) guidesFrom = prevHash;
   prevHash = h;
   if (recorder && recorder.running && h !== '#/opptak') { location.hash = '#/opptak'; return; }
   releaseOverlays();
@@ -1905,7 +1987,11 @@ function route() {
   if (h !== '#/kamera') calibForDrive = null;
   // Kameraet står bare på i kameratesten, før kjøring og under opptak
   if (!['#/kamera', '#/sjekk', '#/opptak'].includes(h) && cam.state().running && !(recorder && recorder.running)) { cam.stopCamera(); if (camUnsub) { camUnsub(); camUnsub = null; } }
+  // Pluss (0.11.0): skjermene som hører til Pluss viser Pluss-siden i stedet, med den funksjonen øverst
+  const gate = gateFor(h);
+  if (gate && !hasPlus()) { renderPlus(gate); return; }
   if (h === '#/') renderHome();
+  else if (h === '#/pluss') renderPlus();
   else if (h === '#/sjekk') renderPrecheck();
   else if (h === '#/opptak') { if (!recorder) location.hash = '#/'; }
   else if (h === '#/demo') renderDemoReport();
@@ -1924,7 +2010,7 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
   $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
@@ -1932,6 +2018,18 @@ function init() {
   $('#btn-show-intro').onclick = () => openIntro();
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = goBack);
   setupLongPress($('#btn-stop'), finishRecording);
+  // Pluss: status fra App Store ved start; endres den (kjøp, Familiedeling, refusjon), tegnes skjermen på nytt
+  setDevPlus(({ on: true, off: false })[getSettings().devPlus] ?? null);
+  let plusWas = hasPlus();
+  onPlusChange(plus => {
+    updatePlusMarks();
+    if (plus === plusWas) return;
+    plusWas = plus;
+    // Bare skjermene som ser annerledes ut med og uten Pluss tegnes på nytt (ikke sjekken før kjøring eller opptaket)
+    const h = location.hash || '#/';
+    if (!(recorder && recorder.running) && (gateFor(h) || h.startsWith('#/rapport/') || ['#/', '#/logg', '#/innstillinger'].includes(h))) route();
+  });
+  refreshPlus().then(updatePlusMarks).catch(() => {});
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
   $('#btn-check-update').onclick = async () => {
     if (!swReg) { toast('Oppdatering virker bare i appen fra nettadressen, ikke lokalt.', { type: 'info' }); return; }

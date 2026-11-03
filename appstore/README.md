@@ -14,7 +14,8 @@ Status, 3 November 2026: text and plans are ready. Before phase 1, Xcode must be
 | Create an **Apple Developer** account (about NOK 1,200 a year) | TestFlight on your own phone and publishing | developer.apple.com/programs |
 | Choose **personal or company account** | A company (Svendsen Media) shows the company name in the App Store, but needs a D-U-N-S number (free, takes 1–2 weeks) | Same place |
 | Check that the name **«Kjørerapport»** is free | The name must be unique in the App Store | App Store Connect when the app is created |
-| Decide on the **price** | Recommendation: free while it is being tested | App Store Connect |
+| Decide on the **price** | The app is free to download; «Kjørerapport Pluss» is a one-time in-app purchase (section 12) | App Store Connect |
+| Sign the **Paid Applications agreement** and add bank and tax details | Needed before any in-app purchase can be sold | App Store Connect › Business |
 
 ---
 
@@ -30,7 +31,7 @@ Status, 3 November 2026: text and plans are ready. Before phase 1, Xcode must be
 | **Primary language** | Norwegian (Bokmål) | |
 | **Primary category** | Education | |
 | **Secondary category** | Navigation | |
-| **Price** | Free | |
+| **Price** | Free (with the in-app purchase «Kjørerapport Pluss», section 12) | |
 | **Availability** | Norway (speed limits and road data only cover Norway) | |
 | **Privacy policy URL** | https://josve59.github.io/kjorerapport/personvern/ (updated for the app before submission, see section 5) | |
 | **Support URL** | https://josve59.github.io/kjorerapport/trafikkskole/ or a separate support page with an email address | |
@@ -105,6 +106,8 @@ Paste into «Notes» under App Review Information (in English, since the reviewe
 > **No account, no server, no tracking.** Drives stay on the device. Speed limits and maps are looked up from the Norwegian Public Roads Administration (NVDB) and the Norwegian Mapping Authority (Kartverket).
 >
 > **Camera (optional):** off by default. When enabled, face and road analysis run on-device; no images or video are stored or transmitted.
+>
+> **In-app purchase «Kjørerapport Pluss»** (non-consumable, one-time, Family Sharing on) unlocks the cameras, the training plan, the driving-teacher summary and reports for drives older than the 10 latest. Recording, the report, the map, speed limits and data export are free. «Gjenopprett kjøp» is on the Pluss screen (Innstillinger › Kjørerapport Pluss, or tap the «Opplæring» tab).
 
 Contact information: your name, phone and email. No demo account is needed (no login).
 
@@ -164,3 +167,37 @@ Use the demo drive or a real drive without personal place names in a visible pos
 - **Analysis and report:** today's `js/` files bundled in the app and shown in a `WebView` (SwiftUI, iOS 26) without the network. Native and web talk via JavaScript calls (`callJavaScript`) and a custom URL scheme. No duplicate code to maintain.
 - **Data:** drives in the app's own storage (not Safari). iCloud backup can come later (then the privacy label must be checked again).
 - **Done in 0.10.0 (phase 2):** both cameras at once (`AVCaptureMultiCamSession`), with car detection as Core ML on the phone (D-FINE xlarge, GPU). The face model still runs in the web view on frames from the app. The app is about 157 MB because of the model.
+
+---
+
+## 12. Kjørerapport Pluss (in-app purchase, 0.11.0)
+
+**In App Store Connect** (the app › Monetization › In-App Purchases › +):
+
+| Field | Value |
+| --- | --- |
+| Type | **Non-Consumable** |
+| Reference name | Pluss |
+| Product ID | `net.svendsenmedia.kjorerapport.pluss` (must match `PlusStore.swift` exactly) |
+| Price | NOK 349 (price point 349,00), all countries where the app is sold |
+| Family Sharing | **On** (the app says the purchase works for the whole family) |
+| Display name (Norwegian) | Kjørerapport Pluss |
+| Description (Norwegian) | Kameraene, opplæringsplanen, trafikklæreren og alle rapportene. Ett kjøp, ikke abonnement. |
+| Review screenshot | A screenshot of the Pluss screen (Innstillinger › Se Pluss) |
+| Review note | «Unlocks the cameras, the training plan, the driving-teacher summary and all older reports. Restore is on the same screen.» |
+
+- The first in-app purchase must be **submitted together with an app version** (choose it under «In-App Purchases» on the version page).
+- The **Paid Applications agreement**, bank and tax details must be in place, or the product will show «Får ikke kontakt med App Store».
+- **Small Business Program** (developer.apple.com): Apple then takes 15 % instead of 30 %. Apply before the first sale.
+- **Codes for driving schools:** Monetization › In-App Purchases › Pluss › Offer Codes. Apple generates the codes; give a driving school a batch, and the pupils use «Kode fra trafikkskolen» on the Pluss screen. Apple added offer codes for one-time purchases in 2025. Check that the option is there for a non-consumable before promising it to a school.
+
+**Testing without paying:**
+- **In Xcode:** ▶︎ in Xcode uses `ios/Pluss.storekit` (chosen in the shared scheme «Kjorerapport»). The purchase sheet appears, nothing is charged, and Debug › StoreKit › Manage Transactions lets you delete the purchase to test again.
+- **TestFlight:** testers buy with their own Apple ID in the sandbox, free of charge.
+- **The developer section:** «Pluss (test)» can force Pluss on or off in Xcode and TestFlight builds.
+
+**What is free and what is Pluss** (`js/plus.js`):
+- **Free:** recording, report, map, speed limit, speed-camera warnings, guides, driving log, export and backup, and reports for the 10 latest real drives.
+- **Pluss:** the cameras, the training plan (with hotspots), the driving-teacher page, and reports for all older drives.
+- **Nothing is ever deleted or held back:** a locked report shows «Eksporter turen».
+- **The web version in Safari** keeps everything free. It cannot record with the screen locked or use both cameras.
