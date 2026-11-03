@@ -13,14 +13,14 @@ import * as cam from './facecam.js';
 import { createLiveLimit, createLiveRoad } from './livelimit.js';
 import { trackCurvature, aheadCurvature, kappaPrior } from './roadshape.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
-import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
+import { CLASS_LABEL, CALIB_STEPS, MIRRORS, closeMirrorText, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
 import { roadSummary } from './road.js';
 import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit } from './signs.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 
-export const APP_VERSION = '0.11.0';
+export const APP_VERSION = '0.11.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -471,7 +471,7 @@ async function renderCamera() {
   const video = $('#cam-video'), label = $('#cam-label'), nums = $('#cam-nums'), status = $('#cam-status'), log = $('#cam-log');
   const calibInfo = () => {
     const c = getCalib();
-    $('#cam-calib-status').innerHTML = c ? `${icon('check', 18)} Kalibrert${c.at ? ' ' + esc(date(c.at)) : ''}. Kalibrer på nytt hvis holderen er flyttet.` : `${icon('info', 18)} Ikke kalibrert ennå. Sett telefonen i holderen der den skal stå under kjøring, og trykk «Kalibrer».`;
+    $('#cam-calib-status').innerHTML = c ? `${icon('check', 18)} Kalibrert${c.at ? ' ' + esc(date(c.at)) : ''}. ${c.close ? `${esc(closeMirrorText(c.close))}: kalibrer gjerne på nytt og snu hodet tydeligere.` : 'Kalibrer på nytt hvis holderen er flyttet.'}` : `${icon('info', 18)} Ikke kalibrert ennå. Sett telefonen i holderen der den skal stå under kjøring, og trykk «Kalibrer».`;
     $('#btn-cam-calib').lastChild.textContent = c ? 'Kalibrer på nytt' : 'Kalibrer';
   };
   calibInfo();
@@ -515,7 +515,7 @@ async function renderCamera() {
       label.dataset.cls = c ? cls : (pose ? 'forward' : 'none');
       nums.textContent = pose ? `Sidelengs ${Math.round(pose.yaw)}° · opp/ned ${Math.round(pose.pitch)}° · ${cam.state().fps.toFixed(0)} bilder/s` : '';
       if (cls === lastCls) run++; else { lastCls = cls; run = 1; }
-      if (run === 2 && c && !['forward', 'other', 'none'].includes(cls)) {
+      if (run === 3 && c && !['forward', 'other', 'none'].includes(cls)) {   // 3 bilder (~0,35 s), som i rapporten
         recent.unshift({ cls, at: new Date() });
         recent.length = Math.min(recent.length, 8);
         log.innerHTML = recent.map(r => `<li><strong>${CLASS_LABEL[r.cls]}</strong><span class="muted small">${r.at.toLocaleTimeString('nb-NO')}</span></li>`).join('');
@@ -589,7 +589,13 @@ async function runCalibration() {
   if (cancelled) { stopSpeaking(); return null; }
   vibrate([30, 60, 30]);
   const c = calibrationFromSamples(byTarget);
-  if (c.ok) { c.at = new Date().toISOString(); saveCalib(c); speak('Ferdig. Kalibreringen er lagret.'); toast('Kalibreringen er lagret.', { type: 'ok' }); return c; }
+  if (c.ok) {
+    c.at = new Date().toISOString(); saveCalib(c); speak('Ferdig. Kalibreringen er lagret.');
+    // To speil nær hverandre (v0.11.1): lagret, men si fra, så de kan kalibrere på nytt med tydeligere hodebevegelser
+    if (c.close) infoDialog({ title: 'Kalibreringen er lagret, men …', text: `${closeMirrorText(c.close)}, så appen kan blande dem. Kalibrer gjerne på nytt og snu hodet tydelig mot hvert speil. Flytt holderen mer mot midten av bilen hvis det ikke hjelper.` });
+    else toast('Kalibreringen er lagret.', { type: 'ok' });
+    return c;
+  }
   speak('Kalibreringen ble ikke god nok.');
   infoDialog({ title: 'Kalibreringen ble ikke god nok', text: c.problem === 'missing' ? 'Kameraet så ikke ansiktet lenge nok i ett eller flere trinn. Sjekk at ansiktet er godt synlig og at det er lyst nok.' : c.problem === 'close' ? 'Telefonen ser for liten forskjell mellom rett fram og et av speilene. Flytt holderen mer mot midten av bilen, og snu hodet tydelig mot speilet.' : 'Venstre og høyre speil ble ikke skilt fra hverandre. Prøv igjen, og snu hodet tydelig.' });
   return null;
@@ -1240,7 +1246,7 @@ async function openCamView(facing = 'user') {
     const c = getCalib(), cls = c ? classifyPose(toGaze(p, c), gazeCalib(c)) : (p ? 'forward' : 'none'), now = performance.now() / 1000;
     if (cls === faceRun.cls) faceRun.n++;
     else {
-      if (faceRun.n >= 2 && !['forward', 'other', 'none'].includes(faceRun.cls)) { faceLog.unshift({ cls: faceRun.cls, t: faceRun.t0, dur: now - faceRun.t0 }); faceLog.length = Math.min(faceLog.length, 6); }
+      if (faceRun.n >= 3 && !['forward', 'other', 'none'].includes(faceRun.cls)) { faceLog.unshift({ cls: faceRun.cls, t: faceRun.t0, dur: now - faceRun.t0 }); faceLog.length = Math.min(faceLog.length, 6); }
       faceRun = { cls, n: 1, t0: now };
     }
   });

@@ -14,6 +14,14 @@ export const CLASS_LABEL = {
   none: 'Ser ikke ansiktet'
 };
 export const MIRRORS = ['left', 'right', 'rear'];
+export const MIRROR_NAME = { left: 'venstre speil', right: 'høyre speil', rear: 'bakspeilet' };
+/* «Høyre speil og bakspeilet ligger bare 10° fra hverandre» for kalibreringer med speil nær hverandre, ellers '' */
+export function closeMirrorText(close) {
+  if (!close || !close.length) return '';
+  const p = close.slice().sort((a, b) => a.deg - b.deg)[0];
+  const t = `${MIRROR_NAME[p.a]} og ${MIRROR_NAME[p.b]} ligger bare ${p.deg}° fra hverandre`;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
 export const CALIB_STEPS = [
   { id: 'forward', text: 'Se rett fram på veien' },
   { id: 'left', text: 'Se i venstre sidespeil' },
@@ -91,7 +99,11 @@ function calibrationHead(byTarget) {
   const tooClose = MIRRORS.filter(id => dist(id) < 8);
   if (tooClose.length) return { ...out, ok: false, problem: 'close', tooClose };
   if (Math.sign(out.left.yaw - out.forward.yaw) === Math.sign(out.right.yaw - out.forward.yaw)) return { ...out, ok: false, problem: 'sides' };
-  return { ...out, ok: true };
+  // To speil nær hverandre (v0.11.1): kalibreringen godtas, men appen kan blande dem. Kalibreringen 3. nov. hadde
+  // høyre speil og bakspeilet rundt 10° fra hverandre. close: [{ a, b, deg }] for par under 14°
+  const pairs = [['left', 'rear'], ['right', 'rear'], ['left', 'right']];
+  const close = pairs.map(([a, b]) => ({ a, b, deg: Math.round(Math.hypot(out[a].yaw - out[b].yaw, out[a].pitch - out[b].pitch)) })).filter(p => p.deg < 14);
+  return { ...out, ok: true, ...(close.length ? { close } : {}) };
 }
 
 /* Klassifiserer én retning mot kalibreringen. */
@@ -144,9 +156,12 @@ export function forwardDrift(samples, calib, { bucket = 30, near = 12, min = 30 
 /* Blikk: sammenhengende perioder mot et speil eller skulder.
    samples: [{ t, yaw, pitch, ok }] (sekunder). Mister kameraet ansiktet like etter at hodet var på vei
    kraftig til siden, regnes det som skulderblikk (ansiktet forsvinner ofte da). */
-export function detectGlances(samples, calib, { maxGap = 0.35, minDur = 0.2 } = {}) {
+export function detectGlances(samples, calib, { maxGap = 0.35, minDur = 0.35 } = {}) {
   const s = samples.filter(x => Number.isFinite(x.t)).slice().sort((a, b) => a.t - b.t);
   const drift = forwardDrift(s, calib);
+  // Tiden ett bilde dekker (median mellom bildene, 0,1–0,25 s): et blikk varer fra første bilde til etter det siste
+  const steps = []; for (let i = 1; i < s.length; i++) { const d = s[i].t - s[i - 1].t; if (d > 0 && d < 1) steps.push(d); }
+  const dt = Math.max(0.1, Math.min(0.25, steps.length ? median(steps) : 0.125));
   const cls = [];
   let lastValid = null;
   for (const x of s) {
@@ -157,6 +172,13 @@ export function detectGlances(samples, calib, { maxGap = 0.35, minDur = 0.2 } = 
     }
     if (x.ok) lastValid = { t: x.t, c };
     cls.push({ t: x.t, c });
+  }
+  // Ett enkelt bilde med en annen retning enn begge naboene er støy (v0.11.1): hodet skjelver over grensen mellom
+  // rett fram og et speil, eller mellom to speil som ligger nær hverandre. Turene 3. nov. ga 15–25 «blikk» i minuttet,
+  // 40–50 % kortere enn 0,3 s.
+  for (let i = 1; i < cls.length - 1; i++) {
+    const a = cls[i - 1].c, b = cls[i + 1].c;
+    if (a === b && cls[i].c !== a && cls[i + 1].t - cls[i - 1].t <= 2 * maxGap) cls[i] = { t: cls[i].t, c: a };
   }
   const out = [];
   let cur = null;
@@ -175,7 +197,9 @@ export function detectGlances(samples, calib, { maxGap = 0.35, minDur = 0.2 } = 
     if (side && nx && nx.cls === side && nx.t - g.tEnd <= maxGap && g.tEnd - g.t < 0.4) { nx.t = g.t; nx.n += g.n; continue; }
     merged.push(g);
   }
-  return merged.filter(g => g.n >= 2 || g.tEnd - g.t >= minDur).map(g => ({ cls: g.cls, t: g.t, tEnd: g.tEnd, dur: Math.max(g.tEnd - g.t, 0.125) }));
+  // Et speilblikk varer typisk 0,5–1 s. Kortere enn minDur (fra første bilde til etter det siste) telles ikke (v0.11.1:
+  // før holdt to bilder, 0,13 s). Skulderblikk der ansiktet forsvinner, holdes fortsatt av bildene rundt.
+  return merged.filter(g => g.tEnd - g.t + dt >= minDur).map(g => ({ cls: g.cls, t: g.t, tEnd: g.tEnd, dur: g.tEnd - g.t + dt }));
 }
 
 /* Blikket borte fra veien (v0.8.0): sammenhengende perioder der hodet tydelig ikke ser på veien foran,
@@ -309,6 +333,7 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
     lane, laneSource: marked.length ? 'marks' : 'sensors', start, calibrated: !!(calib && calib.ok),
     drift: Math.round(forwardDrift(valid, calib).max * 10) / 10,
     calibOff: calibOffset(valid, calib, points, t0),
+    ...(calib && calib.close ? { closeMirrors: calib.close } : {}),
     away: eyesOffRoad(valid, calib, { points, t0 })
   };
 }

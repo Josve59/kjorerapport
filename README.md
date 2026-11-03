@@ -142,6 +142,24 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.11.1 – more trustworthy mirror checks (after the drives on 3 Nov)
+
+**What the drives showed:**
+- The app counted **15–25 mirror glances a minute**, and 40–50 % of them were shorter than 0.3 s. Real mirror checks are about every 5–8 s and last 0.5–1 s, so most of the short ones were the head shaking across the border between straight ahead and a mirror.
+- In the calibration, the right mirror and the rear-view mirror were only about 10° apart, so the app could mix them up.
+
+**Fixed:**
+- **One frame that differs from both neighbours is noise** (`detectGlances`): a single frame towards a mirror between two straight-ahead frames, or a single frame towards another mirror in the middle of a glance.
+- **A glance must last at least 0.35 s**, measured from the first frame to after the last one. That is 3 frames at 8 per second; before, 2 frames (0.13 s) were enough. The live log on the camera screen and the full-screen view also need 3 frames.
+- **Mirrors close together:**
+  - **Calibration:** a calibration with two mirrors less than 14° apart is still accepted, but marked (`calib.close`).
+  - **Dialog:** the app says so in a dialog after calibrating («Høyre speil og bakspeilet ligger bare 10° fra hverandre … snu hodet tydelig mot hvert speil»).
+  - **Camera screen:** it shows the same note.
+  - **Report:** the report mentions it under «Speil og skulderblikk».
+- **Road camera without a known dashboard edge:** boxes over 60 % of the width, or with the bottom edge in the lowest 10 % of the frame, do not count as cars. On the 19:57 drive the edge was never found, and 66 «cars in front» at 3–4 m were the dashboard.
+
+**Result on the four drives with the camera:** 9–17 mirror glances a minute, none shorter than 0.35 s. The verdicts in the report (from 6 a minute «bra», from 3 «jevnlige») still fit. 162 tests pass.
+
 ## What's new in 0.11.0 – Kjørerapport Pluss
 
 The iPhone app is free to download, with **Kjørerapport Pluss** as a one-time in-app purchase (planned price NOK 349, not a subscription, Family Sharing on).

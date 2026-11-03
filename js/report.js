@@ -3,6 +3,7 @@ import { CATS, rating } from './analysis.js';
 import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
 import { analyzeSpeeding, evaluateRoad } from './enrich.js';
 import { icon, MARK_CATS, FOCUS, isRemark } from './ui.js';
+import { closeMirrorText } from './camera.js';
 import { driveLog, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import { buildSituations, situationSummary, SOURCE_LABEL, LEVEL_ORDER } from './situations.js';
 
@@ -708,6 +709,7 @@ function cameraSection(r, ctx = {}) {
       ${c.start ? `<h3 class="mt">Igangkjøring</h3><p>${yes(c.start.mirror, 'Speil før start')} ${yes(c.start.shoulder, 'Skulderblikk venstre')}</p>` : ''}
       ${c.lane.length ? `<h3 class="mt">Feltskifter</h3>${c.laneSource === 'marks' ? '<p class="muted small">Feltskiftene ledsageren merket. Speil 15–1 s før merket og skulderblikk 12–0 s før.</p>' : ''}<ul class="cam-lanes">${c.lane.map(l => `<li><span>${mss(l.t)} · ${l.dir ? 'til ' + esc(l.dir) : 'merket'}</span><span>${yes(l.mirror, 'Speil')} ${yes(l.shoulder, 'Skulder')}</span></li>`).join('')}</ul>` : ''}
       <p class="muted small">Kameraet så ansiktet ${cov} % av tiden${cov < 70 ? ' – flytt holderen så ansiktet er bedre synlig' : ''}. Dette er en test: kameraet ser hodet, ikke øynene, så korte blikk med bare øynene blir ikke med. Bruk tallene som en pekepinn og snakk med ledsageren om dem.</p>
+      ${c.closeMirrors ? `<p class="muted small">${esc(closeMirrorText(c.closeMirrors))} i kalibreringen, så appen kan blande dem. Snu hodet tydeligere mot hvert speil neste gang dere kalibrerer.</p>` : ''}
       ${c.calibOff > 12 ? '' : c.drift > 6 ? `<p class="notice">«Rett fram» flyttet seg ${Math.round(c.drift)}° i forhold til kalibreringen. Appen justerer for det, men kalibrer på nytt hvis holderen er flyttet.</p>` : ''}
       ${ctx.onCalibrate ? '<button type="button" class="link" id="btn-calib-drive">Stemmer ikke speilene? Kalibrer på nytt for denne turen</button>' : ''}
     </section>`;

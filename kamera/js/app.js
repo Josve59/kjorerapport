@@ -17,7 +17,7 @@ import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.13';
+export const APP_VERSION = 'k0.7.14';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -501,7 +501,7 @@ async function renderCamera() {
       label.dataset.cls = c ? cls : (pose ? 'forward' : 'none');
       nums.textContent = pose ? `Hode ${Math.round(pose.yaw)}° / ${Math.round(pose.pitch)}°${Number.isFinite(pose.ex) ? ` · øyne ${Math.round(pose.ex)}° / ${Math.round(pose.ey)}°` : pose.blink > 0.55 ? ' · øyne lukket' : ''} · ${cam.state().fps.toFixed(0)} bilder/s${useGaze(c) ? ' · blikk' : c ? ' · bare hodet (kalibrer på nytt for øynene)' : ''}` : '';
       if (cls === lastCls) run++; else { lastCls = cls; run = 1; }
-      if (run === 2 && c && !['forward', 'other', 'none'].includes(cls)) {
+      if (run === 3 && c && !['forward', 'other', 'none'].includes(cls)) {   // 3 bilder (~0,35 s), som i rapporten
         recent.unshift({ cls, at: new Date() });
         recent.length = Math.min(recent.length, 8);
         log.innerHTML = recent.map(r => `<li><strong>${CLASS_LABEL[r.cls]}</strong><span class="muted small">${r.at.toLocaleTimeString('nb-NO')}</span></li>`).join('');
@@ -1220,7 +1220,7 @@ async function openCamView() {
     const c = getCalib(), cls = c ? classifyPose(toGaze(p, c), gazeCalib(c)) : (p ? 'forward' : 'none'), now = performance.now() / 1000;
     if (cls === faceRun.cls) faceRun.n++;
     else {
-      if (faceRun.n >= 2 && !['forward', 'other', 'none'].includes(faceRun.cls)) { faceLog.unshift({ cls: faceRun.cls, t: faceRun.t0, dur: now - faceRun.t0 }); faceLog.length = Math.min(faceLog.length, 6); }
+      if (faceRun.n >= 3 && !['forward', 'other', 'none'].includes(faceRun.cls)) { faceLog.unshift({ cls: faceRun.cls, t: faceRun.t0, dur: now - faceRun.t0 }); faceLog.length = Math.min(faceLog.length, 6); }
       faceRun = { cls, n: 1, t0: now };
     }
   });

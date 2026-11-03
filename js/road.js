@@ -24,6 +24,9 @@ export function roadDets(dets, w, h, roadBottom = null) {
   // Folk (k0.7.3): rød-hvite brøytestikker ble tatt for fotgjengere om kvelden (270 bilder 2. nov. kl. 20.32).
   // En stående person er 1,5–4 ganger så høy som bred; stikkene er mye smalere. Svake person-treff teller heller ikke.
   const okPerson = d => d.cls !== 'person' || (d.h / d.w <= 4.5 && d.score >= 0.5);
+  // Dashbordkanten ikke funnet ennå (v0.11.1: turen 3. nov. kl. 19.57 fant den aldri, og 66 «biler foran» på 3–4 m var
+  // 500 px brede bokser nederst): da godtas ikke bokser over 60 % av bredden eller med underkanten i nederste 10 %
+  if (!roadBottom) return dets.filter(d => d.w < w * 0.6 && d.y + d.h <= h * 0.9 && okPerson(d));
   return dets.filter(d => d.w < w * 0.7 && d.y + d.h <= h * (rb + 0.04) && d.y < h * rb && okPerson(d));
 }
 
