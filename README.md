@@ -128,6 +128,22 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.13 / k0.7.8 – a page for the driving instructor
+
+New screen **«Til trafikklæreren»** (`js/teacher.js`, route `#/trafikklaerer`, card on the front page). It is one page with everything practised since the last driving lesson, ready to show on the phone, print or save as PDF, or share as a message.
+
+- **Period:** «Forrige time» (a date per driver, `settings.lessons`), 30 days or everything. After the lesson, «Timen er ferdig – ny periode fra i dag» sets today's date and empties the question field.
+- **Contents:**
+  - drives, driving time, km and time in the dark
+  - what should be worked on (`suggestFocus` for the period) and what is going well (categories averaging 90 or more)
+  - what has been practised: road types, light conditions, roundabouts, lane changes, junctions with give way or stop
+  - how it is going: average score with trend (first half of the drives against the second), categories, speed limits, and mirror checks before lane changes when the driver camera has been used
+  - the companion's marks and notes
+  - the training plan: ticked items and what the app has seen
+  - «Spørsmål til trafikklæreren», a free-text question saved per driver
+- **Note on the score:** the page says plainly that the score measures how calmly and smoothly the car is driven, not whether the traffic rules are followed.
+- **Tested** with the evening drives of 29 Oct–2 Nov: 3 drives, 1 h 44 min, 89.6 km, everything in the dark, 10 roundabouts and 27 lane changes. Tests are in `tests/teacher.test.mjs`.
+
 ## What's new in 0.9.12 / k0.7.7 – tidy-up: report and settings for those who use the app
 
 The app had grown into showing a lot of measurement detail. This version changes only what is shown, not the measurements.

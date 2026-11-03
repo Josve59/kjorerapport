@@ -8,6 +8,7 @@ import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } fro
 import { esc, km, n0, n1, date, duration } from './format.js';
 import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
+import { teacherSummary, teacherText, teacherHtml } from './teacher.js';
 import * as cam from './facecam.js';
 import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
@@ -16,7 +17,7 @@ import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.7';
+export const APP_VERSION = 'k0.7.8';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -297,11 +298,13 @@ async function renderHome() {
     const allRows = filter ? sugRows : await gatherRows(null);
     const spots = hotspots(allRows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
     const plan = planProgress(allRows);
-    more.innerHTML = `<button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>
+    more.innerHTML = `<button type="button" class="card t-cta" id="btn-go-teacher"><span class="card-title">${icon('school')}Til trafikklæreren</span><span class="muted small">Det som er øvd siden forrige kjøretime, klart til å vise fram eller dele</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
+      <button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>
       <button type="button" class="card mini-card" id="btn-go-plan"><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
     more.hidden = false;
     $('#btn-go-spots').onclick = () => { location.hash = '#/faresteder'; };
     $('#btn-go-plan').onclick = () => { location.hash = '#/opplaering'; };
+    $('#btn-go-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
   } else more.hidden = true;
   $('#update-banner').hidden = !swUpdateReady;
   renderInstallHint();
@@ -718,6 +721,48 @@ async function renderSpots() {
     root.querySelectorAll('.spot').forEach(b => b.onclick = () => { const h = spots[Number(b.dataset.i)]; map.setView([h.lat, h.lon], 17); root.querySelector('#spots-map').scrollIntoView({ block: 'center' }); });
     setTimeout(() => { if (spotsMap === map) map.invalidateSize(); }, 150);
   } else root.querySelectorAll('.spot').forEach(b => b.onclick = () => {});
+}
+
+/* ---------- Til trafikklæreren (v0.9.13) ---------- */
+async function renderTeacher() {
+  show('teacher');
+  const root = $('#teacher-root');
+  const s = getSettings(), key = s.activeDriver || '_', driver = s.activeDriver || '';
+  const lesson = (s.lessons || {})[key] || '';
+  let mode = s.teacherPeriod || (lesson ? 'lesson' : '30');
+  if (mode === 'lesson' && !lesson) mode = '30';
+  document.querySelectorAll('input[name=tperiod]').forEach(r => {
+    r.checked = r.value === mode;
+    r.onchange = () => { saveSettings({ ...getSettings(), teacherPeriod: r.value }); renderTeacher(); };
+  });
+  const dateIn = $('#t-lesson'), noteIn = $('#t-note');
+  dateIn.value = lesson;
+  dateIn.onchange = () => {
+    const cur = getSettings();
+    saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: dateIn.value }, teacherPeriod: dateIn.value ? 'lesson' : '30' });
+    renderTeacher();
+  };
+  const note = (s.teacherNotes || {})[key] || '';
+  if (document.activeElement !== noteIn) noteIn.value = note;
+  let noteTimer = null;
+  noteIn.oninput = () => { clearTimeout(noteTimer); noteTimer = setTimeout(() => { const cur = getSettings(); saveSettings({ ...cur, teacherNotes: { ...(cur.teacherNotes || {}), [key]: noteIn.value.trim() } }); }, 500); };
+  noteIn.onchange = () => { const cur = getSettings(); saveSettings({ ...cur, teacherNotes: { ...(cur.teacherNotes || {}), [key]: noteIn.value.trim() } }); renderTeacher(); };
+  root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
+  const rows = await gatherRows(driver || null);
+  // Fra starten av dagen for forrige time (lokal tid)
+  const from = mode === 'lesson' ? new Date(lesson + 'T00:00:00').getTime() : mode === '30' ? Date.now() - 30 * 86400000 : null;
+  const sum = teacherSummary(rows, { from, driver, plan: planState().mine });
+  root.innerHTML = teacherHtml(sum, { note: noteIn.value.trim() });
+  $('#btn-teacher-print').onclick = () => window.print();
+  $('#btn-teacher-share').onclick = () => shareText(teacherText(sum, { note: noteIn.value.trim() }));
+  $('#btn-teacher-done').onclick = () => {
+    const d = new Date(), iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const cur = getSettings();
+    saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: iso }, teacherPeriod: 'lesson', teacherNotes: { ...(cur.teacherNotes || {}), [key]: '' } });
+    noteIn.value = '';
+    toast('Ny periode fra i dag. Neste oppsummering viser øvingen fram til neste time.', { type: 'ok' });
+    renderTeacher();
+  };
 }
 
 function planState() {
@@ -1735,6 +1780,7 @@ function route() {
   else if (h === '#/demo') renderDemoReport();
   else if (h === '#/innstillinger') renderSettings();
   else if (h === '#/logg') renderLog();
+  else if (h === '#/trafikklaerer') renderTeacher();
   else if (h === '#/faresteder') renderSpots();
   else if (h === '#/opplaering') renderPlan();
   else if (h === '#/kamera') renderCamera();
@@ -1756,7 +1802,7 @@ function init() {
   const setupNow = applyTestSetup();
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
   $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };

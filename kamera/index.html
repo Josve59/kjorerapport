@@ -165,6 +165,26 @@
   </section>
 
   <!-- Kjørelogg -->
+  <section id="teacher" class="screen" hidden>
+    <header class="appbar">
+      <button type="button" class="btn-back icon-btn" aria-label="Til hjem" data-icon="back"></button>
+      <h1>Til trafikklæreren</h1>
+      <span class="appbar-actions"><button type="button" class="icon-btn" id="btn-teacher-print" aria-label="Skriv ut eller lagre som PDF" data-icon="print"></button><button type="button" class="icon-btn" id="btn-teacher-share" aria-label="Del som tekst" data-icon="share"></button></span>
+    </header>
+    <section class="card t-controls">
+      <p class="muted small">Vis trafikklæreren hva som er øvd siden forrige kjøretime, eller del det som en melding.</p>
+      <div class="segment" role="radiogroup" aria-label="Tidsrom">
+        <label><input type="radio" name="tperiod" value="lesson"><span>Forrige time</span></label>
+        <label><input type="radio" name="tperiod" value="30"><span>30 dager</span></label>
+        <label><input type="radio" name="tperiod" value="all"><span>Alt</span></label>
+      </div>
+      <label class="field">Forrige kjøretime<input type="date" id="t-lesson"></label>
+      <label class="field">Spørsmål til trafikklæreren<textarea id="t-note" rows="2" placeholder="F.eks. «Hvordan øver vi best på rundkjøringer med to felt?»"></textarea></label>
+    </section>
+    <div id="teacher-root"></div>
+    <button type="button" class="btn secondary t-done" id="btn-teacher-done">Timen er ferdig – ny periode fra i dag</button>
+  </section>
+
   <section id="log" class="screen" hidden>
     <header class="appbar">
       <button type="button" class="btn-back icon-btn" aria-label="Til hjem" data-icon="back"></button>
@@ -393,7 +413,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.7.7</p>
+    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.7.8</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

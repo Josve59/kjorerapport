@@ -355,7 +355,7 @@ details.adv summary { font-size: 1rem; }
     --brake: #c8412b; --accel: #1f5fa8; --turn: #c7741f; --good: #2f7d4f; color-scheme: light; }
   body { padding: 0; background: #fff; }
   #app { max-width: none; padding: 0; }
-  .screen:not(#report), .top, .quicknav, .head-actions, .lmap-toggle, .btn, .enrich-status button, .ev-chev, .leaflet-control-zoom, #btn-delete-drive, .ev-detail .btn { display: none !important; }
+  .screen:not(#report):not(#teacher), .t-controls, .t-done, .top, .quicknav, .head-actions, .lmap-toggle, .btn, .enrich-status button, .ev-chev, .leaflet-control-zoom, #btn-delete-drive, .ev-detail .btn { display: none !important; }
   .card { break-inside: avoid; border-color: #ccc; }
   .lmap { height: 420px; }
   textarea { border: 0 !important; resize: none; background: none !important; padding: 0 !important; }
@@ -829,3 +829,25 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .settings-adv > summary { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 8px; cursor: pointer; }
 .settings-adv > summary::-webkit-details-marker { display: none; }
 .settings-adv > summary .muted { flex-basis: 100%; text-align: center; font-weight: 400; }
+
+/* Til trafikklæreren (v0.9.13) */
+.t-cta { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; font: inherit; color: inherit; cursor: pointer; margin: 0; padding: 14px; }
+.t-controls .segment { margin: 10px 0; }
+.t-controls .field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.t-controls textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.t-tiles { margin: 8px 0 0; }
+.t-good { display: flex; gap: 8px; align-items: flex-start; color: var(--good); margin-top: 12px; }
+.t-man { margin-top: 12px; }
+.t-cats { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.t-cats li { display: grid; grid-template-columns: 110px 1fr 32px; align-items: center; gap: 8px; }
+.t-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.t-bar span { display: block; height: 100%; background: var(--accel); }
+.t-notes { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.t-stage { font-size: .9rem; margin: 12px 0 4px; }
+.t-plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.t-plan li { display: flex; gap: 8px; align-items: flex-start; }
+.t-plan li.done { color: var(--good); }
+.t-plan li.done span { color: var(--ink); }
+.t-dot { flex: none; width: 10px; height: 10px; margin: 5px 3px; border-radius: 50%; border: 2px solid var(--muted); box-sizing: border-box; }
+.t-q { white-space: pre-wrap; }
+.t-done { margin: 6px 0 20px; }
