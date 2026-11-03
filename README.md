@@ -128,6 +128,33 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.21 – licenses page
+
+**«Lisenser og kilder»** (`lisenser/index.html`) is linked under Innstillinger › Om appen and from Personvern. It is included in the iPhone app and works offline.
+
+**What the page lists:**
+- **Software in the app:**
+  - Leaflet 1.9.4 (BSD 2-Clause);
+  - MediaPipe Tasks Vision with Face Landmarker and EfficientDet-Lite (Apache 2.0);
+  - the Overpass typeface (SIL OFL 1.1).
+- **Data:**
+  - maps and place names from Kartverket (CC BY 4.0);
+  - road data from Statens vegvesen NVDB (NLOD 2.0, with the attribution text NLOD requires).
+- **The full license texts:**
+  - Each one is in a closed `details` box.
+  - They are stored as plain text in `<pre>`, and a small script joins the hard-wrapped lines into paragraphs, so the text flows on a narrow screen.
+- **Not listed:** D-FINE and ONNX Runtime. They are only used by the camera test app (`kamera/`), which is not in the iPhone app.
+
+**Personvern updated:**
+- Date: 3 November 2026.
+- It applies to the iPhone app too.
+- The sentence «Appen kjører ikke i bakgrunnen» was wrong for the iPhone app. It now says that location and motion continue with a locked screen while a recording is running, with the blue indicator, and only then.
+
+**Tested:**
+- In the browser at mobile width: no horizontal scroll, and the license texts open.
+- In the iPhone app (simulator): the link opens the page.
+- The two links under Om appen are now on separate lines, instead of one line that broke in an ugly place.
+
 ## What's new in 0.9.20 – no more «Testversjon»
 
 **Texts:**

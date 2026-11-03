@@ -7,7 +7,7 @@ DST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/web"
 mkdir -p "$DST"
 rsync -a --delete \
   --include='/index.html' --include='/manifest.webmanifest' \
-  --include='/css/***' --include='/js/***' --include='/fonts/***' --include='/icons/***' --include='/personvern/***' --include='/trafikkskole/***' \
+  --include='/css/***' --include='/js/***' --include='/fonts/***' --include='/icons/***' --include='/personvern/***' --include='/trafikkskole/***' --include='/lisenser/***' \
   --include='/vendor/' --include='/vendor/leaflet/***' --include='/vendor/mediapipe/***' \
   --exclude='*' \
   "$SRC/" "$DST/"

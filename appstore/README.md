@@ -155,7 +155,7 @@ Use the demo drive or a real drive without personal place names in a visible pos
 - **Done in 0.9.19: the button «Spill av en demotur»** under Innstillinger › Avansert, visible to everyone, so Apple can test without driving.
 - **Done in 0.9.18: a short intro on first launch** (3 screens): the phone in a holder, the companion operates it, the driver does not touch it. The permission prompts come when Start is pressed, not at launch.
 - **Done in 0.9.20: «Testversjon» removed from the texts.** The developer section exists only in Xcode and TestFlight (`AppTransaction` environment), not in the App Store version.
-- **Om appen › Lisenser** with open data and code (NVDB, Kartverket, Overpass, Leaflet, D-FINE, ONNX Runtime, MediaPipe).
+- **Done in 0.9.21: Om appen › «Lisenser og kilder»** (`lisenser/`): Leaflet (BSD-2), MediaPipe (Apache 2.0), Overpass (OFL 1.1), Kartverket (CC BY 4.0), NVDB (NLOD 2.0). D-FINE and ONNX Runtime are only in the camera test app, not in the iPhone app.
 
 ## 11. Architecture for phase 1 (summary)
 

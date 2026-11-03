@@ -101,3 +101,12 @@ footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; g
   .topbar nav { display: none; }
   .lead { font-size: 1.08rem; }
 }
+
+/* Lisenstekstene (lisenser/): lange tekster, lukket til man åpner dem */
+.doc details.license { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin: 0 0 12px; }
+.doc details.license summary { cursor: pointer; padding: 14px 16px; font-weight: 700; min-height: 44px; box-sizing: border-box; }
+.doc details.license pre { margin: 0; padding: 0 16px 16px; white-space: pre-wrap; overflow-wrap: anywhere; font: 0.8rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+.doc details.license .license-text { padding: 0 16px 8px; font-size: 0.85rem; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.doc details.license .license-text p { margin: 0 0 10px; }
+.doc ul.credits { list-style: none; padding: 0; }
+.doc ul.credits li { padding: 12px 0; border-bottom: 1px solid var(--line); margin: 0; }
