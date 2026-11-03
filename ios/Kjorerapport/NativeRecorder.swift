@@ -1,3 +1,4 @@
+import ActivityKit
 import CoreLocation
 import CoreMotion
 import StoreKit
@@ -15,6 +16,12 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     private var recording = false     // et opptak pågår
     private var inBackground = false
     private var buffer: [[String: Any]] = []   // målinger mens appen er i bakgrunnen
+    // Live Activity (låseskjerm og Dynamic Island) mens opptaket pågår
+    private var activityID: String?
+    private var recordStart = Date()
+    private var distanceM = 0.0          // nettappens avstand når den er synlig, pluss det som måles i bakgrunnen
+    private var lastLocation: CLLocation?
+    private var lastActivityUpdate = Date.distantPast
     private let gravity = 9.80665
 
     override init() {
@@ -26,6 +33,8 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(didEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         center.addObserver(self, selector: #selector(didBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+        // Et opptak kan ikke overleve at appen ble avsluttet: rydd bort gamle Live Activities
+        Task { for old in Activity<RecordingAttributes>.activities { await old.end(nil, dismissalPolicy: .immediate) } }
     }
 
     // MARK: Meldinger fra nettappen
@@ -48,8 +57,13 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             location.showsBackgroundLocationIndicator = true
             UIApplication.shared.isIdleTimerDisabled = true   // skjermen holdes på under opptak
             startLocation()
+            startActivity()
+        case "recStatus":
+            // I bakgrunnen får ikke nettappen nye posisjoner (de samles her), så da gjelder appens egen avstand
+            if !inBackground, let d = body["distanceM"] as? Double, d.isFinite { distanceM = d; updateActivity(force: false) }
         case "recStop":
             recording = false
+            endActivity()
             buffer.removeAll()
             motion.stopDeviceMotionUpdates()
             location.allowsBackgroundLocationUpdates = false
@@ -91,6 +105,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for loc in locations {
+            if recording { addDistance(loc) }
             let sample: [String: Any] = [
                 "type": "loc",
                 "ts": loc.timestamp.timeIntervalSince1970 * 1000,
@@ -122,10 +137,60 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         }
     }
 
+    // MARK: Live Activity
+
+    private func startActivity() {
+        recordStart = Date()
+        distanceM = 0
+        lastLocation = nil
+        Task {
+            for old in Activity<RecordingAttributes>.activities { await old.end(nil, dismissalPolicy: .immediate) }
+            guard ActivityAuthorizationInfo().areActivitiesEnabled, recording else { return }
+            let started = try? Activity.request(
+                attributes: RecordingAttributes(startedAt: recordStart),
+                content: content(finished: nil),
+                pushType: nil)
+            activityID = started?.id
+            lastActivityUpdate = Date()
+        }
+    }
+
+    /// Avstand mens appen er i bakgrunnen (nettappen sender sin egen når den er synlig)
+    private func addDistance(_ loc: CLLocation) {
+        guard inBackground, loc.horizontalAccuracy >= 0, loc.horizontalAccuracy <= 30 else { return }
+        if let last = lastLocation { distanceM += loc.distance(from: last) }
+        lastLocation = loc
+        updateActivity(force: false)
+    }
+
+    private func updateActivity(force: Bool) {
+        guard let id = activityID, force || Date().timeIntervalSince(lastActivityUpdate) >= 15 else { return }
+        lastActivityUpdate = Date()
+        let c = content(finished: nil)
+        Task { for a in Activity<RecordingAttributes>.activities where a.id == id { await a.update(c) } }
+    }
+
+    private func endActivity() {
+        guard let id = activityID else { return }
+        activityID = nil
+        let c = content(finished: Date().timeIntervalSince(recordStart))
+        // Står igjen en stund på låseskjermen som en bekreftelse på at turen er lagret
+        let until = Date().addingTimeInterval(15 * 60)
+        Task { for a in Activity<RecordingAttributes>.activities where a.id == id { await a.end(c, dismissalPolicy: .after(until)) } }
+    }
+
+    private func content(finished: Double?) -> ActivityContent<RecordingAttributes.ContentState> {
+        // Uten nye målinger på 3 minutter regnes den som utdatert (for eksempel hvis appen er avsluttet)
+        ActivityContent(state: .init(distanceM: distanceM, finishedDuration: finished),
+                        staleDate: finished == nil ? Date().addingTimeInterval(180) : nil)
+    }
+
     // MARK: Bakgrunn
 
     @objc private func didEnterBackground() {
         inBackground = true
+        lastLocation = nil
+        updateActivity(force: true)
         guard recording, motion.isDeviceMotionAvailable else { return }
         // Samme tall som Safari gir nettappen (WebKit): m/s² og grader/s, alpha om x, beta om y, gamma om z
         motion.deviceMotionUpdateInterval = 1.0 / 20

@@ -14,7 +14,7 @@ import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.21';
+export const APP_VERSION = '0.9.22';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -858,7 +858,7 @@ async function startRecording(replay = null) {
   saved.textContent = '';
   markCount.textContent = '';
   renderMarkGrid({});
-  let gapMsg = '', gapShown = null, stillSince = null;   // lang pause: minn om å stoppe turen (v0.9.3, før Trondheim–Storlien)
+  let gapMsg = '', gapShown = null, stillSince = null, lastNativeStatus = -Infinity;   // lang pause: minn om å stoppe turen (v0.9.3, før Trondheim–Storlien)
   // Aktiv fartsgrense fra NVDB (v0.9.4), når «Veidata» er på. Endringene lagres med turen for sammenligning.
   const live = !replay && settings.netLimits !== false ? createLiveLimit({ atk: true }) : null;
   const liveLog = [];
@@ -916,6 +916,8 @@ async function startRecording(replay = null) {
       }
       elapsed.textContent = fmtClock(st.elapsed);
       dist.textContent = km(st.distanceM / 1000);
+      // iPhone-appen: avstanden til Live Activity på låseskjermen (v0.9.22)
+      if (window.kjNative && window.kjNative.status && !replay && st.elapsed - lastNativeStatus >= 10) { lastNativeStatus = st.elapsed; window.kjNative.status({ distanceM: st.distanceM }); }
       if (st.gpsError) { gps.textContent = 'GPS: ingen signal'; gps.dataset.state = 'fail'; }
       else if (st.warmup) { gps.textContent = 'GPS: venter på fersk posisjon …'; gps.dataset.state = 'wait'; }
       else if (!st.gpsFresh) { gps.textContent = 'GPS: venter …'; gps.dataset.state = 'wait'; }

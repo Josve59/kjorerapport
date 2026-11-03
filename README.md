@@ -128,6 +128,44 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.22 – Live Activity in the iPhone app
+
+While a recording is running, the lock screen and the Dynamic Island show:
+- **«Opptak pågår»** with a red dot.
+- **The trip time**, counted by iOS itself, so it is right without updates.
+- **The distance.**
+- **The text «Ledsageren stopper i appen».**
+
+When the trip is stopped, it says **«Turen er lagret»**, with the time, distance and «Rapporten ligger i appen». That stays for 15 minutes.
+
+**Deliberately not shown:**
+- The speed limit. It is fetched by the web app and can be out of date while the app is in the background.
+- Anything the driver needs to look at.
+
+**Structure (`ios/`):**
+- **`KjorerapportWidgets/` (new widget extension, `net.svendsenmedia.kjorerapport.widgets`):**
+  - `RecordingLiveActivity.swift` covers the lock screen and the Dynamic Island (expanded, compact and minimal).
+  - It is embedded in the app ("Embed Foundation Extensions"), with its own `KjorerapportWidgets-Info.plist`.
+- **`Shared/RecordingAttributes.swift`:** the data both parts share (start time, distance, finished duration).
+- **`NativeRecorder.swift`:**
+  - starts the Live Activity at `recStart`;
+  - updates it at most every 15 s;
+  - ends it at `recStop`.
+- **Distance:**
+  - While the app is visible, the web app's distance is used (`kjNative.status`, every 10 s).
+  - In the background, the app measures the distance itself from the location points (accuracy 30 m or better).
+- **No updates for 3 minutes:** it shows «Åpne appen for å se opptaket», for example if the app was closed.
+- **Old Live Activities** are removed when the app starts.
+- **`Kjorerapport-Info.plist`:** `NSSupportsLiveActivities`.
+
+**Tested in the simulator** (simulated route at 50 km/h):
+- The lock screen showed «Opptak pågår», and the time and distance followed with the screen locked: 1.0 km after 1:18.
+- The Dynamic Island showed the red dot and the time on the home screen.
+- After Stopp it showed «Turen er lagret», 2:22 and 1.7 km.
+- iOS itself asks whether Live Activities should be allowed, the first time and once more later. That is normal.
+- **Bug found:** the web app kept sending its last distance in the background and overwrote the app's own. Fixed: in the background, only the app's own distance counts.
+- **Not tested on a real iPhone.**
+
 ## What's new in 0.9.21 – licenses page
 
 **«Lisenser og kilder»** (`lisenser/index.html`) is linked under Innstillinger › Om appen and from Personvern. It is included in the iPhone app and works offline.

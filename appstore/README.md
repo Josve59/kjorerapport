@@ -114,7 +114,7 @@ Contact information: your name, phone and email. No demo account is needed (no l
 
 | Guideline | Risk | What we do |
 |---|---|---|
-| **4.2 Minimum Functionality** | A web page in a frame is rejected | Native recording with GPS and motion sensors (also with the screen locked), native tab bar, permissions and sharing. Planned in phase 1: a Live Activity with timer on the lock screen. The report is reused, but the app does far more than a web page |
+| **4.2 Minimum Functionality** | A web page in a frame is rejected | Native recording with GPS and motion sensors (also with the screen locked), native tab bar, permissions and sharing. A Live Activity on the lock screen and in the Dynamic Island shows the running trip (time and distance). The report is reused, but the app does far more than a web page |
 | **1.4.1 / safety while driving** | Apps that make people use the phone while driving | The companion operates the app, the driver does not. No reading during the drive except the speed limit. Stated clearly in the onboarding and the review notes |
 | **2.5.4 Background modes** | Background location without a clear need | Only during an active recording, «Når appen er i bruk» |
 | **5.1.1 Privacy** | Missing privacy policy or unclear permission texts | Section 3 and 5, link in the app (Innstillinger › Om appen) |

@@ -6,7 +6,36 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A1B2C3D4E5F6A7B8C9D0E031 /* KjorerapportWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E020 /* KjorerapportWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1B2C3D4E5F6A7B8C9D0E032 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1B2C3D4E5F6A7B8C9D0E011 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D4E5F6A7B8C9D0E023;
+			remoteInfo = KjorerapportWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A1B2C3D4E5F6A7B8C9D0E030 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1B2C3D4E5F6A7B8C9D0E031 /* KjorerapportWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		A1B2C3D4E5F6A7B8C9D0E020 /* KjorerapportWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KjorerapportWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D4E5F6A7B8C9D0E001 /* Kjorerapport.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kjorerapport.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -16,10 +45,27 @@
 			path = Kjorerapport;
 			sourceTree = "<group>";
 		};
+		A1B2C3D4E5F6A7B8C9D0E021 /* KjorerapportWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KjorerapportWidgets;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6A7B8C9D0E022 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A1B2C3D4E5F6A7B8C9D0E003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D4E5F6A7B8C9D0E025 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +79,8 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6A7B8C9D0E002 /* Kjorerapport */,
+				A1B2C3D4E5F6A7B8C9D0E021 /* KjorerapportWidgets */,
+				A1B2C3D4E5F6A7B8C9D0E022 /* Shared */,
 				A1B2C3D4E5F6A7B8C9D0E005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +89,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6A7B8C9D0E001 /* Kjorerapport.app */,
+				A1B2C3D4E5F6A7B8C9D0E020 /* KjorerapportWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,14 +104,17 @@
 				A1B2C3D4E5F6A7B8C9D0E007 /* Sources */,
 				A1B2C3D4E5F6A7B8C9D0E003 /* Frameworks */,
 				A1B2C3D4E5F6A7B8C9D0E008 /* Resources */,
+				A1B2C3D4E5F6A7B8C9D0E030 /* Embed Foundation Extensions */,
 				A1B2C3D4E5F6A7B8C9D0E009 /* Kopier webappen */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A1B2C3D4E5F6A7B8C9D0E033 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A1B2C3D4E5F6A7B8C9D0E002 /* Kjorerapport */,
+				A1B2C3D4E5F6A7B8C9D0E022 /* Shared */,
 			);
 			name = Kjorerapport;
 			packageProductDependencies = (
@@ -70,6 +122,29 @@
 			productName = Kjorerapport;
 			productReference = A1B2C3D4E5F6A7B8C9D0E001 /* Kjorerapport.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A1B2C3D4E5F6A7B8C9D0E023 /* KjorerapportWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D4E5F6A7B8C9D0E027 /* Build configuration list for PBXNativeTarget "KjorerapportWidgets" */;
+			buildPhases = (
+				A1B2C3D4E5F6A7B8C9D0E024 /* Sources */,
+				A1B2C3D4E5F6A7B8C9D0E025 /* Frameworks */,
+				A1B2C3D4E5F6A7B8C9D0E026 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D4E5F6A7B8C9D0E021 /* KjorerapportWidgets */,
+				A1B2C3D4E5F6A7B8C9D0E022 /* Shared */,
+			);
+			name = KjorerapportWidgets;
+			packageProductDependencies = (
+			);
+			productName = KjorerapportWidgets;
+			productReference = A1B2C3D4E5F6A7B8C9D0E020 /* KjorerapportWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -82,6 +157,9 @@
 				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					A1B2C3D4E5F6A7B8C9D0E006 = {
+						CreatedOnToolsVersion = 27.2;
+					};
+					A1B2C3D4E5F6A7B8C9D0E023 = {
 						CreatedOnToolsVersion = 27.2;
 					};
 				};
@@ -101,12 +179,20 @@
 			projectRoot = "";
 			targets = (
 				A1B2C3D4E5F6A7B8C9D0E006 /* Kjorerapport */,
+				A1B2C3D4E5F6A7B8C9D0E023 /* KjorerapportWidgets */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A1B2C3D4E5F6A7B8C9D0E008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D4E5F6A7B8C9D0E026 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -145,7 +231,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D4E5F6A7B8C9D0E024 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1B2C3D4E5F6A7B8C9D0E033 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D4E5F6A7B8C9D0E023 /* KjorerapportWidgets */;
+			targetProxy = A1B2C3D4E5F6A7B8C9D0E032 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A1B2C3D4E5F6A7B8C9D0E015 /* Debug */ = {
@@ -258,6 +359,60 @@
 			};
 			name = Release;
 		};
+		A1B2C3D4E5F6A7B8C9D0E028 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "KjorerapportWidgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Kjørerapport";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = net.svendsenmedia.kjorerapport.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F6A7B8C9D0E029 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "KjorerapportWidgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Kjørerapport";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = net.svendsenmedia.kjorerapport.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -275,6 +430,15 @@
 			buildConfigurations = (
 				A1B2C3D4E5F6A7B8C9D0E013 /* Debug */,
 				A1B2C3D4E5F6A7B8C9D0E014 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D4E5F6A7B8C9D0E027 /* Build configuration list for PBXNativeTarget "KjorerapportWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F6A7B8C9D0E028 /* Debug */,
+				A1B2C3D4E5F6A7B8C9D0E029 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
