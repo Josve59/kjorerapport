@@ -153,7 +153,7 @@ Use the demo drive or a real drive without personal place names in a visible pos
 ## 11. Must be in the app before submission (phase 1)
 
 - The button **«Spill av en demotur»** under Innstillinger › Avansert, visible in the App Store version too, so Apple can test without driving (today it is a hidden developer button).
-- **A short intro on first launch** (2–3 screens): the phone in a holder, the companion operates it, the driver does not touch it. The permission prompts come when Start is pressed, not at launch.
+- **Done in 0.9.18: a short intro on first launch** (3 screens): the phone in a holder, the companion operates it, the driver does not touch it. The permission prompts come when Start is pressed, not at launch.
 - **«Testversjon»** removed from the texts. Developer features shown only in TestFlight.
 - **Om appen › Lisenser** with open data and code (NVDB, Kartverket, Overpass, Leaflet, D-FINE, ONNX Runtime, MediaPipe).
 

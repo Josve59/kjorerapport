@@ -128,6 +128,27 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.18 – intro on first launch
+
+Three short screens appear the first time the app opens, before the first trip. They can be swiped, and «Hopp over» closes them:
+1. **«Øvelseskjøring med en rapport etterpå»**: what the phone measures and what the report gives.
+2. **«Ledsageren styrer telefonen»**: the holder, the companion starts and stops, only the speed limit and speed camera beeps during the drive.
+3. **«Turene blir på telefonen»**: no account, no trips uploaded, sharing is the user's choice. The permission prompts come at the first trip, not at launch. Ends with «Kom i gang» or «Se en demotur først».
+
+**Behaviour:**
+- Shown only when there are no trips and it has not been seen before (`introSeen` in the settings).
+- Can be shown again from Innstillinger → Om appen → «Vis introen igjen».
+- Built for HIG:
+  - Short, and skippable on every page.
+  - The button stays in place.
+  - Page dots can be tapped.
+  - Reduced motion makes the page change instant.
+  - Content starts at the top if it does not fit (low screens, large text).
+  - The image gets smaller on short screens.
+- **Tested:**
+  - In the browser (light and dark): the intro opens by itself on an empty app, and the pages change with both the button and swiping. «Kom i gang» closes it, and it does not come back after reload.
+  - In the simulator: on a fresh install, the same three pages show on a short iPhone screen.
+
 ## What's new in 0.9.17 / k0.7.12 – the iPhone app (phase 1, first version)
 
 A real iPhone app in `ios/` (Xcode 27, SwiftUI, iOS 26 or newer). It is built in Xcode by opening `ios/Kjorerapport.xcodeproj` and pressing Run, or from the command line:

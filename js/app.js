@@ -14,7 +14,7 @@ import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.17';
+export const APP_VERSION = '0.9.18';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -266,6 +266,7 @@ async function renderHome() {
       ${mode === 'cats' ? categoryTrendChart(chrono) : trendChart(chrono.map(r => r.overall), Number.isFinite(gScore) ? gScore : null)}` : '';
   $('#trend').querySelectorAll('.mini-seg button').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), trendMode: b.dataset.m }); renderHome(); });
   $('#howto').hidden = allDrives.length > 0;
+  if (!allDrives.length && !settings.introSeen) openIntro();
 
   // Dagens forslag i startkortet
   const sugRows = await gatherRows(settings.activeDriver || '');
@@ -1333,6 +1334,50 @@ async function shareFile(json, name) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
+/* ---------- Intro ved første start ---------- */
+/* Vises én gang, før første tur. Sidene ligger side om side og sveipes (scroll-snap); knappen og prikkene
+   blar i samme rad. Lukkes med «Kom i gang», «Hopp over» eller demoturen, og kan vises igjen fra Innstillinger. */
+let introOpen = false;
+function openIntro() {
+  if (introOpen) return;
+  introOpen = true;
+  const box = $('#intro'), pagesEl = $('#intro-pages'), pages = [...pagesEl.children], dots = $('#intro-dots');
+  const next = $('#intro-next'), skip = $('#intro-skip'), demo = $('#intro-demo');
+  const opener = document.activeElement;
+  dots.innerHTML = pages.map((_, i) => `<button type="button" aria-label="Side ${i + 1} av ${pages.length}"></button>`).join('');
+  let cur = -1;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const goTo = i => pagesEl.scrollTo({ left: i * pagesEl.clientWidth, behavior: reduce ? 'auto' : 'smooth' });
+  const setPage = i => {
+    if (i === cur) return;
+    cur = i;
+    const last = i === pages.length - 1;
+    pages.forEach((p, k) => { p.setAttribute('aria-hidden', k === i ? 'false' : 'true'); });
+    [...dots.children].forEach((d, k) => { d.classList.toggle('on', k === i); if (k === i) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current'); });
+    next.textContent = last ? 'Kom i gang' : 'Fortsett';
+    demo.style.visibility = last ? '' : 'hidden';   // plassen holdes av, så knappen står stille
+    skip.style.visibility = last ? 'hidden' : '';
+  };
+  const close = then => {
+    saveSettings({ ...getSettings(), introSeen: true });
+    box.hidden = true; introOpen = false;
+    document.body.classList.remove('intro-open');
+    pagesEl.onscroll = null;
+    if (then) then(); else if (opener && opener.focus) opener.focus();
+  };
+  pagesEl.onscroll = () => setPage(Math.round(pagesEl.scrollLeft / Math.max(1, pagesEl.clientWidth)));
+  [...dots.children].forEach((d, k) => { d.onclick = () => goTo(k); });
+  next.onclick = () => { if (cur < pages.length - 1) goTo(cur + 1); else close(); };
+  skip.onclick = () => close();
+  demo.onclick = () => close(() => { location.hash = '#/demo'; });
+  box.hidden = false;
+  document.body.classList.add('intro-open');
+  pagesEl.scrollLeft = 0;
+  setPage(0);
+  $('#intro-t1').setAttribute('tabindex', '-1');
+  $('#intro-t1').focus({ preventScroll: true });
+}
+
 /* ---------- Ruting ---------- */
 /* Fanelinjen (v0.9.16): hvilken fane som er valgt, og om linjen vises. Skjult før og under kjøring og på
    kameraskjermen (en oppgave med fokus). En rapport hører til fanen den ble åpnet fra. */
@@ -1389,6 +1434,7 @@ function init() {
   $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
   $('#btn-settings').onclick = () => { location.hash = '#/innstillinger'; };
+  $('#btn-show-intro').onclick = () => openIntro();
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = goBack);
   setupLongPress($('#btn-stop'), finishRecording);
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };

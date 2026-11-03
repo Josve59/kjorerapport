@@ -309,6 +309,7 @@
         <a class="btn secondary" href="./personvern/" target="_blank" rel="noopener"><span data-icon="shield"></span>Personvern</a>
       </div>
       <p class="small mt"><a href="./trafikkskole/" target="_blank" rel="noopener">Informasjon for trafikkskoler</a></p>
+      <p class="small"><button type="button" class="link" id="btn-show-intro">Vis introen igjen</button></p>
     </section>
 
     <details class="settings-adv" id="settings-adv">
@@ -382,7 +383,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.9.17</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.9.18</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 
@@ -394,6 +395,33 @@
   <a href="#/opplaering" data-tab="plan"><span data-icon="school"></span><span>Opplæring</span></a>
   <a href="#/trafikklaerer" data-tab="teacher"><span data-icon="user"></span><span>Trafikklærer</span></a>
 </nav>
+<!-- Intro ved første start (v0.9.18): tre korte sider, kan sveipes eller hoppes over. Tillatelser spørres først når turen startes. -->
+<div class="intro" id="intro" role="dialog" aria-modal="true" aria-label="Velkommen til Kjørerapport" hidden>
+  <button type="button" class="link intro-skip" id="intro-skip">Hopp over</button>
+  <div class="intro-pages" id="intro-pages">
+    <section class="intro-page" aria-labelledby="intro-t1">
+      <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="wheel"></span></div>
+      <h2 id="intro-t1">Øvelseskjøring med en rapport etterpå</h2>
+      <p>Telefonen måler bremsing, gass, svinger og fart mens dere kjører. Når dere stopper, får dere en rapport med det som gikk bra og hva dere bør øve på neste gang.</p>
+    </section>
+    <section class="intro-page" aria-labelledby="intro-t2">
+      <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="speed"></span></div>
+      <h2 id="intro-t2">Ledsageren styrer telefonen</h2>
+      <p>Fest telefonen i en holder. Ledsageren starter og stopper turen, og føreren rører ikke telefonen. Under kjøringen vises bare fartsgrensen, og det piper før fotobokser.</p>
+    </section>
+    <section class="intro-page" aria-labelledby="intro-t3">
+      <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="shield"></span></div>
+      <h2 id="intro-t3">Turene blir på telefonen</h2>
+      <p>Ingen konto, og ingen turer lastes opp. Du velger selv om du vil dele en rapport, for eksempel med trafikklæreren. Første gang dere starter en tur, spør appen om tilgang til posisjon og bevegelse.</p>
+      <p class="muted small">Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
+    </section>
+  </div>
+  <div class="intro-foot">
+    <div class="intro-dots" id="intro-dots" role="group" aria-label="Sider"></div>
+    <button type="button" class="btn primary intro-next" id="intro-next">Fortsett</button>
+    <button type="button" class="link intro-demo" id="intro-demo">Se en demotur først</button>
+  </div>
+</div>
 <div class="calib-overlay" id="calib-overlay" role="dialog" aria-modal="true" aria-labelledby="calib-step" hidden>
   <p class="calib-progress" id="calib-progress"></p>
   <p class="calib-step" id="calib-step" aria-live="assertive"></p>
