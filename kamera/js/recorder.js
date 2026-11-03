@@ -66,6 +66,9 @@ export function startPrecheck(onUpdate) {
 
 const IOS_AXES = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent || '');
 
+
+/* Et innfylt tidsrom dekker hullet (med litt slingring: første og siste måling ligger ikke nøyaktig på kanten). */
+const covers = (r, g) => g.from >= r.first - 5 && g.to <= r.last + 5;
 export class Recorder {
   constructor(opts = {}) {
     this.onStatus = opts.onStatus || (() => {});
@@ -88,6 +91,7 @@ export class Recorder {
     this.lastMotionT = -1;
     this.grav = null;
     this.gaps = [];
+    this.filled = [];   // tidsrom iPhone-appen har fylt inn (målt med låst skjerm)
     this.marks = [];
     this.hiddenAt = null;
     this.distance = 0;
@@ -187,7 +191,8 @@ export class Recorder {
       if (this.hiddenAt !== null) {
         const gap = gapFromHidden(this.hiddenAt, this.now());
         this.hiddenAt = null;
-        if (gap) {
+        // iPhone-appen kan ha fylt inn tiden før nettappen merker at den er synlig igjen
+        if (gap && !this.filled.some(r => covers(r, gap))) {
           this.gaps.push(gap);
           this.drive.gaps = this.gaps;
           this.returnedFromGap = gap;
@@ -281,9 +286,11 @@ export class Recorder {
     this.lastMotionT = Math.max(Number.isFinite(prevMotionT) ? prevMotionT : -Infinity, this.lastMotionT);
     if (Number.isFinite(first)) {
       for (const k of Object.keys(this.buf)) this.buf[k].sort((a, b) => a.t - b.t);
-      this.gaps = this.gaps.filter(g => !(g.from >= first - 5 && g.to <= last + 5));
+      const range = { first, last };
+      this.filled.push(range);
+      this.gaps = this.gaps.filter(g => !covers(range, g));
       this.drive.gaps = this.gaps;
-      if (this.returnedFromGap && this.returnedFromGap.from >= first - 5) this.returnedFromGap = null;
+      if (this.returnedFromGap && covers(range, this.returnedFromGap)) this.returnedFromGap = null;
       this.diag.backfilled = (this.diag.backfilled || 0) + list.length;
     }
     this.emit();

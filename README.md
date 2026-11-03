@@ -155,7 +155,13 @@ A real iPhone app in `ios/` (Xcode 27, SwiftUI, iOS 26 or newer). It is built in
 - The demo report works.
 - The pre-drive check shows. The tab bar is hidden there.
 - The motion permission answer had to use WebKit's completion-block variant: it has no async version, so the async method was never called, and the permission waited forever.
-- Not tested yet: recording with a simulated route and a locked screen. The simulator lost its iOS runtime after an interrupted runtime download (`xcodebuild -downloadPlatform iOS` exit 70); usually fixed by restarting the Mac.
+- **Recording with the app in the background (iPhone Duo simulator, simulated route in Trondheim at 50 km/h):**
+  - 30 seconds on the home screen. Afterwards the distance and GPS points had grown as if the app had been open the whole time (18 → 76 points, 0.2 → 0.8 km).
+  - The speed graph is continuous, and the report has no gap.
+  - The simulator has no motion sensor. In the simulator only, the app sends noise from a phone lying still, so the pre-drive check and recording can be tested. Because of that, the report says the accelerometer did not match the GPS. That is expected.
+- **Order fix:** the iPhone app sends the fill-in (`didBecomeActive`) *before* the web app sees that it is visible (`visibilitychange`).
+  - Before the fix, the gap was registered after it was already covered: «Appen var skjult i 43 sekunder» appeared, and the gap stayed in the data.
+  - Now the recorder remembers the filled-in time ranges (`filled`) and does not register a gap that is already covered. The message disappears if the fill-in comes afterwards.
 - On a physical iPhone: requires the developer account (or a free Apple ID for 7-day test installation from Xcode).
 
 ## What's new in 0.9.16 / k0.7.11 – tab bar

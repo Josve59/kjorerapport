@@ -18,6 +18,10 @@ struct WebAppView: UIViewRepresentable {
             content.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
         content.addScriptMessageHandler(recorder, contentWorld: .page, name: "kj")
+        #if targetEnvironment(simulator)
+        // Simulatoren har ingen bevegelsessensor: en telefon som ligger i ro, så sjekken før kjøring og opptaket kan testes
+        content.addUserScript(WKUserScript(source: Self.simulatorMotion, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        #endif
         config.userContentController = content
 
         let web = WKWebView(frame: .zero, configuration: config)
@@ -35,6 +39,23 @@ struct WebAppView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    #if targetEnvironment(simulator)
+    private static let simulatorMotion = """
+    setInterval(() => {
+      const n = () => (Math.random() - 0.5) * 0.04;
+      const d = { acceleration: { x: n(), y: n(), z: n() }, accelerationIncludingGravity: { x: n(), y: -9.6 + n(), z: -1.9 + n() },
+        rotationRate: { alpha: n(), beta: n(), gamma: n() }, interval: 16 };
+      let ev = null;
+      try { ev = new DeviceMotionEvent('devicemotion', d); } catch (e) { ev = null; }
+      if (!ev || !ev.accelerationIncludingGravity) {
+        ev = new Event('devicemotion');
+        for (const k of Object.keys(d)) Object.defineProperty(ev, k, { value: d[k] });
+      }
+      window.dispatchEvent(ev);
+    }, 16);
+    """
+    #endif
 
     final class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
         private func isApp(_ url: URL) -> Bool { url.host == "127.0.0.1" || ["about", "blob", "data"].contains(url.scheme ?? "") }

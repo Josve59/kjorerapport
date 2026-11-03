@@ -1013,7 +1013,7 @@ async function startRecording(replay = null) {
   saved.textContent = '';
   markCount.textContent = '';
   renderMarkGrid({});
-  let gapMsg = '', stillSince = null;   // lang pause: minn om å stoppe turen (v0.9.3, før Trondheim–Storlien)
+  let gapMsg = '', gapShown = null, stillSince = null;   // lang pause: minn om å stoppe turen (v0.9.3, før Trondheim–Storlien)
   // Aktiv fartsgrense fra NVDB (v0.9.4), når «Veidata» er på. Endringene lagres med turen for sammenligning.
   const live = !replay && settings.netLimits !== false ? createLiveLimit({ atk: true }) : null;
   const liveLog = [];
@@ -1082,7 +1082,8 @@ async function startRecording(replay = null) {
       pill.textContent = st.marks ? `${st.marks} ${st.marks === 1 ? 'merke' : 'merker'}` : '';
       if (st.markCats) renderMarkCounts(st.markCats);
       liveKmh = st.kmh;
-      if (st.returnedFromGap) gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`;
+      if (st.returnedFromGap) { gapShown = st.returnedFromGap; gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`; }
+      if (gapShown && recorder && !recorder.gaps.includes(gapShown)) { gapShown = null; gapMsg = ''; }   // iPhone-appen fylte inn hullet
       const msgs = [];
       if (st.wakeLockFailed) msgs.push('Sett Autolås til Aldri mens du kjører.');
       if (liveOff && Math.hypot(liveOff.yaw, liveOff.pitch) > 12) msgs.push(`Kalibreringen passer ikke: føreren ser ${Math.round(Math.hypot(liveOff.yaw, liveOff.pitch))}° unna «rett fram». Speil og skulder blir usikre. Stopp og kalibrer på nytt når det passer.`);
