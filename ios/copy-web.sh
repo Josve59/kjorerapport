@@ -14,7 +14,7 @@ rsync -a --delete \
   "$SRC/" "$DST/"
 echo "Webappen kopiert til $DST"
 
-# Bilgjenkjenningen (D-FINE, ferdig kompilert Core ML, se Models/README.md). Vektfilen ligger i biter under 50 MB,
+# Bilgjenkjenningen (D-FINE medium, ferdig kompilert Core ML, se Models/README.md). Vektfilen ligger i biter under 50 MB,
 # fordi GitHub ikke tar imot filer over 100 MB; bitene settes sammen her.
 MODEL="$SRCROOT/Models/DFine.mlmodelc"
 OUT="$RES/DFine.mlmodelc"

@@ -142,6 +142,34 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.10.2 – after the first drives with the iPhone app (3 Nov, five drives, 39 min)
+
+**What the drives showed:**
+
+| Drive | Length | GPS / motion gaps | Driver camera | Road camera | D-FINE per frame |
+| --- | --- | --- | --- | --- | --- |
+| 19:57 | 5.2 km, 7 min | none | 7.7/s, face 93 %, eyes in 92 % | lead car 43 %, both lane lines 47 % | 381 ms |
+| 20:07 | 3.0 km, 4 min | none | 7.7/s, 95 % | 48 %, 50 % | 428 ms |
+| 20:11 | 9.2 km, 10 min | none | 7.7/s, 97 % | 50 %, 53 % | 529 ms |
+| 20:25 | 2.5 km, 5 min | none | **no frames** | **no frames** | (ran, 214 ms) |
+| 20:32 | 9.6 km, 14 min | none | 6.3/s, 87 % | 26 %, 33 % | 659 ms |
+
+- **Both cameras at once work on the iPhone.** The camera read the speed signs 40 and 50, in agreement with NVDB.
+- The 13 events on the first drive look real: 0.4–0.6 g in turns at 30–40 km/h.
+
+**Fixed:**
+- **No camera data on the 20:25 drive.**
+  - The detector in the app ran the whole drive, but the web app got no frames: its first request to the local server never succeeded.
+  - The cause is that iPhone closes the listening socket while the app is in the background, and the server did not start again.
+  - Now the server restarts when it fails and when the app comes to the front.
+  - Each frame request has a 2.5 s time limit.
+  - A watchdog in `facecam.js` asks the app to restart the cameras (and the server) after 4 s without frames, at most every 10 s.
+  - The recording pill says «Kamera: får ingen bilder – starter på nytt …».
+  - The camera session also restarts after runtime errors and interruptions.
+- **D-FINE xlarge was too slow on the phone** (381 ms cool, 659 ms after 14 minutes, with the driver camera slowing to 6.3/s). The app now uses **D-FINE medium** (Objects365 + COCO, AP about 55; 2.2 times faster on the Mac, the same cars on the night snapshots). The app is about 80 MB smaller.
+- **Camera numbers per drive:** the camera speed numbers saved with a drive (`cameraPlan.perf`) are now reset for each camera session. Before, they added up across drives.
+- **«Sett Autolås til Aldri»** is no longer shown in the iPhone app. The app keeps the screen on itself.
+
 ## What's new in 0.10.1 – guides, a better map, the stop button, and scrolling fixed
 
 **Scrolling fixed** (found in the simulator):

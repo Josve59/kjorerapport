@@ -45,11 +45,14 @@ export function onDets(fn) {
 export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  let running = true, seq = -1, t = 0, frames = 0, stream = null, timer = null;
+  let running = true, seq = -1, t = 0, frames = 0, stream = null, timer = null, lastAt = performance.now();
   const pull = async () => {
     const t0 = performance.now();
+    // Tidsfrist (0.10.1): en henting som henger (serveren stengt i bakgrunnen) skal ikke stoppe alle senere bilder
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const limit = ctl ? setTimeout(() => ctl.abort(), 2500) : null;
     try {
-      const r = await fetch(`/cam/${facing}.jpg?after=${seq}&q=${quality}${max ? '&max=' + max : ''}`, { cache: 'no-store' });
+      const r = await fetch(`/cam/${facing}.jpg?after=${seq}&q=${quality}${max ? '&max=' + max : ''}`, { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
       if (r.status === 200) {
         const age = Number(r.headers.get('X-Age')) || 0;
         const s = Number(r.headers.get('X-Seq'));
@@ -58,11 +61,12 @@ export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
           if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
           ctx.drawImage(bmp, 0, 0);
           seq = Number.isFinite(s) ? s : seq + 1;
-          t = performance.now() - age; frames++;
+          t = performance.now() - age; frames++; lastAt = performance.now();
         }
         if (bmp.close) bmp.close();
       }
     } catch { /* neste forsøk */ }
+    if (limit) clearTimeout(limit);
     if (running) timer = setTimeout(pull, Math.max(5, 1000 / fps - (performance.now() - t0)));
   };
   pull();
@@ -71,6 +75,8 @@ export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
     get width() { return canvas.width; }, get height() { return canvas.height; },
     get t() { return t; }, get frames() { return frames; }, get seq() { return seq; },
     get ready() { return frames > 0; },
+    /* Millisekunder siden siste nye bilde (eller siden kilden startet) */
+    get stalledMs() { return performance.now() - lastAt; },
     /* Til et <video>-element (forhåndsvisning) */
     stream() { if (!stream && canvas.captureStream) stream = canvas.captureStream(fps); return stream; },
     stop() { running = false; clearTimeout(timer); if (stream) for (const tr of stream.getTracks()) tr.stop(); stream = null; }

@@ -17,7 +17,7 @@ import { roadSummary } from './road.js';
 import { createCamLimit } from './signs.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 
-export const APP_VERSION = '0.10.1';
+export const APP_VERSION = '0.10.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1032,7 +1032,7 @@ async function startRecording(replay = null) {
       if (gapShown && recorder && !recorder.gaps.includes(gapShown)) { gapShown = null; gapMsg = ''; }   // iPhone-appen fylte inn hullet
       const msgs = [];
       if (replay) msgs.push(`Demotur: en tenkt tur i Trondheim spilles av i ${replay.speed || 60} ganger fart. Den stopper av seg selv, eller hold inne Stopp.`);
-      if (st.wakeLockFailed && !replay) msgs.push('Sett Autolås til Aldri mens du kjører.');
+      if (st.wakeLockFailed && !replay && !window.kjNative) msgs.push('Sett Autolås til Aldri mens du kjører.');   // iPhone-appen holder skjermen på selv
       if (!(st.kmh >= 3) && st.gpsFresh) { if (stillSince === null) stillSince = st.elapsed; } else if (st.kmh >= 3) stillSince = null;
       if (stillSince !== null && st.elapsed - stillSince >= 600) msgs.push(`Dere har stått stille i ${Math.round((st.elapsed - stillSince) / 60)} minutter. Er dere framme eller tar pause? Hold inne Stopp for å avslutte turen, og start en ny etterpå. Da blir rapportene ryddigere.`);
       if (gapMsg) msgs.push(gapMsg);
@@ -1050,13 +1050,15 @@ async function startRecording(replay = null) {
     let seen = 0, n = 0, face = 'Kamera: på', lastRoad = null;
     const pillText = () => {
       const st = cam.state();
-      camPill.textContent = st.perf.slow ? 'Kamera: telefonen er treg (varm?)' : face + (st.road && lastRoad ? ` · ${lastRoad.lead ? `bil ${Math.round(lastRoad.lead.dist)} m foran${lastRoad.lead.src === 'baklys' ? ' (baklys)' : ''}` : 'vei'}` : '');
+      camPill.textContent = st.stalled ? 'Kamera: får ingen bilder – starter på nytt …' : st.perf.slow ? 'Kamera: telefonen er treg (varm?)' : face + (st.road && lastRoad ? ` · ${lastRoad.lead ? `bil ${Math.round(lastRoad.lead.dist)} m foran${lastRoad.lead.src === 'baklys' ? ' (baklys)' : ''}` : 'vei'}` : '');
     };
     const offPose = cam.onPose(p => {
       if (recorder) recorder.addHead(p);
       n++; if (p) seen++;
       if (n % 16 === 0) { const ok = seen / 16 > 0.5; face = ok ? 'Kamera: ser føreren' : 'Kamera: ser ikke ansiktet'; camPill.dataset.state = ok ? 'ok' : 'wait'; seen = 0; pillText(); }
     });
+    // Uten bilder kommer det ingen ansikter, så pillen oppdateres også av seg selv
+    const pillTimer = setInterval(() => { if (!recorder) { clearInterval(pillTimer); return; } if (cam.state().stalled) { camPill.dataset.state = 'wait'; pillText(); } }, 2000);
     let offRoad = null;
     // Veikameraet samtidig (0.10.0): tall om veien foran til opptaket, og fartsskilt til skiltet på skjermen
     if (cam.state().road) {

@@ -1,16 +1,18 @@
 # D-FINE for the road camera (Core ML)
 
-`DFine.mlmodelc` is **D-FINE xlarge, trained on Objects365 and COCO** (COCO AP about 59). It comes from [Peterande/D-FINE](https://github.com/Peterande/D-FINE) under Apache 2.0, via Hugging Face `ustc-community/dfine-xlarge-obj2coco`. It is compiled for Core ML (fp16, iOS 17+).
+`DFine.mlmodelc` is **D-FINE medium, trained on Objects365 and COCO** (COCO AP about 55). Until 0.10.1 it was xlarge (AP about 59).
+
+**Why medium:** on the iPhone, on the drives on 3 Nov, xlarge took 380 ms per frame on a cool phone and 660 ms after 14 minutes (heat). That is only 1.5–2.5 answers a second, and the driver camera slowed down too. On the Mac, medium is 2.2 times faster than xlarge (7 against 15 ms), so it should give about twice as many answers and less heat. It found the same cars on the night snapshots (38 against 39 boxes). It comes from [Peterande/D-FINE](https://github.com/Peterande/D-FINE) under Apache 2.0, via Hugging Face `ustc-community/dfine-medium-obj2coco`. It is compiled for Core ML (fp16, iOS 17+).
 
 - **Input:** `image`, 640×640 RGB (values 0–1, no normalisation).
 - **Output:** `logits` [1, 300, 80] (COCO classes) and `boxes` [1, 300, 4] (cx, cy, w, h, 0–1). `RoadDetector.swift` decodes them the same way as `kamera/js/dfine.js`.
 
-**The weights are split into three parts.** `weights/weight.bin` is 120 MB, and GitHub refuses files over 100 MB. So it is stored as `weight.bin.part00–02`. `copy-web.sh` joins them into the app at build time.
+**The weights are stored in parts** (`weight.bin.part00`, …) under 50 MB each, because GitHub refuses files over 100 MB. Medium needs only one part (39 MB); xlarge needed three. `copy-web.sh` joins them into the app at build time.
 
 **How it was made** (`convert-dfine.py`, Python 3.9, torch 2.8, transformers 4.57, coremltools 9.0):
 
 ```
-python convert-dfine.py ustc-community/dfine-xlarge-obj2coco DFine.mlpackage
+python convert-dfine.py ustc-community/dfine-medium-obj2coco DFine.mlpackage
 xcrun coremlcompiler compile DFine.mlpackage .
 cd DFine.mlmodelc/weights && split -b 45m -d -a 2 weight.bin weight.bin.part && rm weight.bin
 ```

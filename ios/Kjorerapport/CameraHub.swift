@@ -77,6 +77,13 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         }
     }
 
+    /// Starter økten igjen hvis den har stoppet (kalles ved feil og når et avbrudd er over)
+    private func resume() {
+        setupQueue.asyncAfter(deadline: .now() + 1) { [self] in
+            if let s = session, !s.isRunning { s.startRunning() }
+        }
+    }
+
     func stop() {
         setupQueue.async { self.stopNow() }
     }
@@ -147,6 +154,10 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         active = got
         lock.unlock()
         session = s
+        // Stopper kameraene av seg selv (for varm telefon, en annen app tok kameraet), startes de igjen når det går
+        for name in [AVCaptureSession.runtimeErrorNotification, AVCaptureSession.interruptionEndedNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: s, queue: nil) { [weak self] _ in self?.resume() }
+        }
         s.startRunning()
         return Started(active: got, multi: got.count > 1, error: nil)
         #endif

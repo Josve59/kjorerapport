@@ -5,6 +5,7 @@ import Network
 /// Fast port, så nettappens lagring (IndexedDB) hører til samme opprinnelse hver gang appen åpnes.
 nonisolated final class WebServer: @unchecked Sendable {
     static let port: UInt16 = 51789
+    nonisolated(unsafe) static var shared: WebServer?   // settes når appen starter
     private let root: URL
     private let queue = DispatchQueue(label: "kjorerapport.webserver")
     private var listener: NWListener?
@@ -19,8 +20,29 @@ nonisolated final class WebServer: @unchecked Sendable {
         params.allowLocalEndpointReuse = true
         let listener = try NWListener(using: params)
         listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+        // iPhone stenger lyttende tilkoblinger når appen har vært i bakgrunnen en stund. Da starter serveren på nytt,
+        // ellers får nettappen ingen kamerabilder (turen 3. nov. kl. 20.25 fikk ingen bilder fra kameraene)
+        listener.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .failed, .cancelled:
+                guard let server = self else { return }
+                server.queue.asyncAfter(deadline: .now() + 0.5) { server.restart() }
+            default: break
+            }
+        }
         listener.start(queue: queue)
         self.listener = listener
+    }
+
+    /// Starter lytteren på nytt hvis den ikke lenger er klar (også når appen kommer fram igjen)
+    func restart() {
+        queue.async { [self] in
+            if let l = listener, case .ready = l.state { return }
+            listener?.stateUpdateHandler = nil
+            listener?.cancel()
+            listener = nil
+            if (try? start()) == nil { queue.asyncAfter(deadline: .now() + 1) { self.restart() } }
+        }
     }
 
     private func accept(_ connection: NWConnection) {

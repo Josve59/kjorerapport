@@ -51,6 +51,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             // Begge kameraene samtidig når telefonen kan (iPhone XS og nyere), ellers det første i listen
             let facings = (body["facings"] as? [String] ?? ["user"]).compactMap(CameraHub.Facing.init(rawValue:))
             let detect = (body["detect"] as? Bool ?? false) && facings.contains(.environment)
+            WebServer.shared?.restart()   // nettappens vakt ber om dette når bildene har stoppet
             let started = await CameraHub.shared.start(facings)
             let model = detect && started.active.contains(.environment) ? await startDetector() : nil
             if model == nil { CameraHub.shared.onRoadFrame = nil }

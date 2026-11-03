@@ -16,16 +16,20 @@ let landmarker = null, loading = null, stream = null, video = null, timer = null
 const listeners = new Set(), roadListeners = new Set();
 let lastPose = null, lastTs = 0, frames = 0, startedAt = 0, fpsWanted = 8, fpsNow = 8;
 let driver = null, road = null, roadModel = null, detsUnsub = null, driverSeq = -1, roadSeq = -1;   // kildene i iPhone-appen
+let wantFacings = [], lastKick = 0;   // vakten: kameraene startes på nytt hvis bildene stopper (0.10.1)
 let lastFace = null, lastView = null, lastRoad = null;
 let rowEma = null, rowN = 0, roadBottom = null, lastLum = null, speedKmh = NaN;
 let laneCanvas = null, laneCtx = null, tailCanvas = null, tailCtx = null, signCanvas = null, signCtx = null;
 let flowPrev = null, flowPrevT = 0, flowRgba = null, signN = 0, lastSign = null, signReads = [];
 const tracker = createTracker();   // biler og folk mellom svarene fra bilgjenkjenningen
 const signs = signTracker();
-const perf = { faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0,
+const freshPerf = () => ({ faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0,
+  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0, stalls: 0 });
+const perf = { stalls: 0, faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0 };
 
 export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver, native: !!driver,
+  stalled: !!driver && driver.stalledMs > 3000,   // ingen nye bilder fra kameraene på 3 s
   road: !!road, roadModel, roadSize: road && road.ready ? `${road.width}x${road.height}` : null, roadBottom,
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, lastPose, lastRoad, video,
   perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10,
@@ -73,6 +77,8 @@ export async function startCamera(videoEl, { road: withRoad = false } = {}) {
     const want = withRoad ? ['user', 'environment'] : ['user'];
     if (driver && !!road === withRoad) { video = videoEl; await show(videoEl, driver.stream()); return; }
     stopSources();
+    Object.assign(perf, freshPerf());   // tallene som lagres med turen gjelder denne økten
+    wantFacings = want;
     const r = await native.start(want, { detect: withRoad });
     driver = native.source('user', { fps: 15, max: 640 });
     if (r.active.includes('environment')) {
@@ -138,7 +144,16 @@ export function startLoop(fps = 8) {
   }
 }
 
+/* Vakten: har det ikke kommet bilder på 4 s, bes appen starte kameraene (og serveren) igjen, høyst hvert 10. s */
+function watchdog() {
+  if (!driver || driver.stalledMs < 4000 || performance.now() - lastKick < 10000) return;
+  lastKick = performance.now();
+  perf.stalls++;
+  native.start(wantFacings, { detect: wantFacings.includes('environment') }).catch(() => {});
+}
+
 function faceTick() {
+  watchdog();
   if (!landmarker) return;
   let src, w, h;
   if (driver) {

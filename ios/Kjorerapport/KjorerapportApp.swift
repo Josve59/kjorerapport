@@ -6,6 +6,7 @@ import SwiftUI
 @main
 struct KjorerapportApp: App {
     @State private var recorder = NativeRecorder()
+    @Environment(\.scenePhase) private var scenePhase
     private let server: WebServer?
 
     init() {
@@ -14,6 +15,7 @@ struct KjorerapportApp: App {
             let s = WebServer(root: root)
             try? s.start()
             server = s
+            WebServer.shared = s
         } else {
             server = nil
         }
@@ -25,5 +27,7 @@ struct KjorerapportApp: App {
                 .ignoresSafeArea()
                 .background(Color(uiColor: .systemBackground))
         }
+        // Tilbake fra bakgrunnen: sjekk at den lokale serveren fortsatt lytter (iPhone kan ha stengt den)
+        .onChange(of: scenePhase) { _, phase in if phase == .active { server?.restart() } }
     }
 }
