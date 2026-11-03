@@ -7,7 +7,8 @@
   const call = (cmd, arg) => handler.postMessage({ cmd, ...(arg || {}) }).catch(() => null);
   window.kjNative = { platform: 'ios', recStart: () => call('recStart'), recStop: () => call('recStop'), info: () => call('info'), status: s => call('recStatus', s),
     // Kameraene (CameraHub.swift): bildene hentes fra /cam/user.jpg og /cam/environment.jpg, bilene kommer som «kjcamdets»
-    camInfo: () => call('camInfo'), camStart: o => call('camStart', o), camStop: () => call('camStop'), camConfig: o => call('camConfig', o) };
+    camInfo: () => call('camInfo'), camStart: o => call('camStart', o), camStop: () => call('camStop'), camConfig: o => call('camConfig', o),
+    review: () => call('review') };
   window.__kjCamDets = r => { window.dispatchEvent(new CustomEvent('kjcamdets', { detail: r })); };
 
   const watchers = new Map();
@@ -34,4 +35,27 @@
   try { Object.defineProperty(navigator, 'geolocation', { value: geolocation, configurable: true }); } catch (e) { console.error(e); }
 
   window.__kjBackfill = list => { window.dispatchEvent(new CustomEvent('kjbackfill', { detail: list })); };
+
+  // Deling, utskrift og vibrasjon gjør ingenting i en WKWebView, så appen gjør dem selv (NativeRecorder.swift):
+  // delearket til iPhone (også for sikkerhetskopier og eksport), iPhone-utskrift, og haptikk i stedet for vibrasjon.
+  const b64 = buf => {
+    const a = new Uint8Array(buf);
+    let s = '';
+    for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000));
+    return btoa(s);
+  };
+  const define = (obj, key, value) => { try { Object.defineProperty(obj, key, { value, configurable: true, writable: true }); } catch (e) { console.error(e); } };
+  define(navigator, 'share', async (data = {}) => {
+    const files = [];
+    for (const f of data.files || []) files.push({ name: f.name, data: b64(await f.arrayBuffer()) });
+    const r = await call('share', { title: data.title || '', text: data.text || '', url: data.url || '', files });
+    if (!r || !r.completed) { const e = new Error('Delingen ble avbrutt'); e.name = 'AbortError'; throw e; }
+  });
+  define(navigator, 'canShare', () => true);
+  define(navigator, 'vibrate', p => { call('haptic', { pattern: Array.isArray(p) ? p : [p] }); return true; });
+  define(window, 'print', async () => {
+    window.dispatchEvent(new Event('beforeprint'));
+    await call('print');
+    window.dispatchEvent(new Event('afterprint'));
+  });
 })();

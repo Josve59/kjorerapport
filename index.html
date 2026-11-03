@@ -43,15 +43,8 @@
     <div id="backup-banner" class="banner" hidden></div>
     <div id="install-hint" class="card install-hint" hidden></div>
 
-    <section class="card howto-card" id="howto" hidden>
-      <h2>Slik fungerer det</h2>
-      <ol class="steps-list">
-        <li><span class="step-num">1</span><span><strong>Fest telefonen</strong> i en holder med skjermen mot ledsageren.</span></li>
-        <li><span class="step-num">2</span><span><strong>Ledsageren trykker «Start»</strong> når sjekkene er grønne. Føreren rører ikke telefonen.</span></li>
-        <li><span class="step-num">3</span><span><strong>Hold «Stopp» inne</strong> i ett sekund når turen er over. Rapporten kommer med én gang.</span></li>
-      </ol>
-      <p class="muted small">Under turen vises bare fartsgrensen, og det piper før fotobokser. Rapporten med neste øvingstur kommer når dere stopper.</p>
-    </section>
+    <!-- Guide (0.10.1): én om gangen når den er nyttig, kan lukkes med × (js/guides.js) -->
+    <section class="card guide-card" id="guide-card" hidden></section>
 
     <div class="chips" id="driver-chips" role="group" aria-label="Vis turer for" hidden></div>
     <section id="last-drive" hidden></section>
@@ -153,11 +146,13 @@
       <button type="button" class="btn secondary small-btn undo-mark" id="btn-undo-mark" hidden><span data-icon="undo"></span>Angre siste merke</button>
       <p class="muted small" id="rec-marks" aria-live="polite"></p>
     </div>
-    <button type="button" class="stop" id="btn-stop" aria-label="Stopp (hold inne i ett sekund)">
-      <span class="progress" aria-hidden="true"></span>
-      <span class="stop-label">Stopp</span>
-      <span class="stop-hint">Hold inne i 1 sekund</span>
+    <!-- Stoppknappen står alltid nederst på skjermen (0.10.1), også når merkeknappene rulles -->
+    <div class="stop-dock">
+    <button type="button" class="stop" id="btn-stop" aria-label="Stopp opptaket (hold inne i ett sekund)">
+      <svg class="stop-ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="stop-track" cx="50" cy="50" r="47"/><circle class="stop-fill" cx="50" cy="50" r="47" pathLength="100"/></svg>
+      <span class="stop-face" aria-hidden="true"><span class="stop-ico"></span><span class="stop-label">Stopp</span><span class="stop-hint">Hold inne</span></span>
     </button>
+    </div>
   </section>
 
   <!-- Rapport -->
@@ -262,6 +257,18 @@
   </section>
 
   <!-- Innstillinger -->
+  <!-- Guider og tips (0.10.1) -->
+  <section id="guides" class="screen" hidden>
+    <header class="appbar">
+      <button type="button" class="btn-back icon-btn" aria-label="Tilbake" data-icon="back"></button>
+      <h1>Guider og tips</h1>
+      <span class="appbar-spacer"></span>
+    </header>
+    <p class="muted guides-lead">Korte veiledninger for elev og ledsager. De dukker opp på Hjem når de passer, og kan lukkes med ×.</p>
+    <div id="guide-list"></div>
+    <button type="button" class="btn secondary" id="btn-guides-reset">Vis guidene på Hjem igjen</button>
+  </section>
+
   <section id="settings" class="screen" hidden>
     <header class="appbar">
       <button type="button" class="btn-back icon-btn" aria-label="Tilbake" data-icon="back"></button>
@@ -322,6 +329,7 @@
       </div>
       <p class="small mt"><a href="./trafikkskole/" target="_blank" rel="noopener">Informasjon for trafikkskoler</a></p>
       <p class="small"><a href="./lisenser/" target="_blank" rel="noopener">Lisenser og kilder</a></p>
+      <p class="small"><a href="#/guider">Guider og tips</a></p>
       <p class="small"><button type="button" class="link" id="btn-show-intro">Vis introen igjen</button></p>
     </section>
 
@@ -405,7 +413,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.10.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.10.1</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

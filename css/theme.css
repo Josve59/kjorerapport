@@ -106,7 +106,7 @@ input.switch:checked { background: var(--good); }
 /* Rekkefølge etter det man oftest vil: starte, se siste tur, vise trafikklæreren, så oversikt og resten */
 #home:not([hidden]) { display: flex; flex-direction: column; }
 #home > .appbar { order: 0; } #home > #update-banner { order: 1; } #home > .start-card { order: 2; }
-#home > #backup-banner { order: 3; } #home > #install-hint { order: 4; } #home > #howto { order: 5; }
+#home > #backup-banner { order: 3; } #home > #install-hint { order: 4; } #home > #guide-card { order: 5; }
 #home > #driver-chips { order: 6; } #home > #last-drive { order: 7; } #home > #more-cards { order: 8; }
 #home > #summary { order: 9; display: none !important; }   /* samme tall står i kjøreloggen og utviklingen */ #home > #log-card { order: 10; } #home > #goals { order: 11; } #home > #trend { order: 12; }
 #home > .cam-card { order: 13; } #home > #drive-section { order: 14; } #home > .report-foot { order: 15; }

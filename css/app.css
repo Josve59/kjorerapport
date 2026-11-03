@@ -41,7 +41,7 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; background: var(--bg); }   /* også når siden dras forbi kanten */
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font-family: 'Overpass', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -116,15 +116,28 @@ button { font: inherit; color: inherit; }
 .rec-gps { font-size: 1.1rem; font-weight: 700; color: var(--muted); }
 .rec-gps[data-state="ok"] { color: var(--good); } .rec-gps[data-state="fail"] { color: var(--brake); }
 .stop {
-  position: relative; width: 220px; height: 220px; border-radius: 50%; border: 0; background: var(--sign); color: #fff;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin: 20px 0 24px;
-  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer;
-  box-shadow: 0 0 0 10px var(--surface), 0 0 0 14px var(--line);
+  /* Stoppknappen (0.10.1): rund og rød med et hvitt stopp-symbol. En ring rundt fylles mens den holdes inne (1 s).
+     touch-action: pan-y: siden kan rulles med en finger på knappen, og rulling avbryter holdet (pointercancel). */
+  position: relative; width: 196px; height: 196px; border-radius: 50%; border: 0; padding: 0; background: none; color: #fff; margin: 20px 0 24px;
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.stop-label { font-size: 2.6rem; font-weight: 800; line-height: 1; }
-.stop-hint { font-size: 0.9rem; font-weight: 700; opacity: 0.85; }
-.stop .progress { position: absolute; inset: -14px; border-radius: 50%; background: conic-gradient(var(--good) calc(var(--p, 0) * 360deg), transparent 0); z-index: -1; }
-.stop.pressing { transform: scale(0.97); }
+.stop-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.stop-track { fill: none; stroke: color-mix(in srgb, var(--sign) 18%, transparent); stroke-width: 5; }
+.stop-fill { fill: none; stroke: var(--sign); stroke-width: 5; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; }
+.stop-face {
+  position: absolute; inset: 12px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--sign) 78%, #fff) 0%, var(--sign) 55%, color-mix(in srgb, var(--sign) 82%, #000) 100%);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--sign) 40%, transparent), inset 0 -4px 10px rgba(0,0,0,.18), inset 0 2px 0 rgba(255,255,255,.18);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+}
+.stop-ico { width: 30px; height: 30px; border-radius: 7px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: border-radius .2s var(--ease); }
+.stop-label { font-size: 2rem; font-weight: 800; line-height: 1; letter-spacing: .01em; }
+.stop-hint { font-size: .85rem; font-weight: 700; opacity: .9; }
+.stop.pressing .stop-face { transform: scale(.94); box-shadow: 0 4px 12px color-mix(in srgb, var(--sign) 35%, transparent), inset 0 -2px 8px rgba(0,0,0,.25); }
+.stop.pressing .stop-ico { border-radius: 50%; }
+.stop.done .stop-fill { stroke: var(--good); }
+.stop:focus-visible { outline: 3px solid var(--ink); outline-offset: 6px; }
+@media (prefers-reduced-motion: reduce) { .stop-face, .stop-ico { transition: none; } }
 .record.busy { opacity: 0.6; pointer-events: none; }
 
 /* Rapport */
@@ -616,7 +629,7 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .mark-n { position: absolute; top: 6px; right: 8px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--ink); color: var(--bg); font-size: .75rem; display: grid; place-items: center; padding: 0 5px; }
 .mark-n:empty { display: none; }
 .mark-btn.flash .mark-n { background: var(--bg); color: var(--ink); }
-.record .stop { width: 180px; height: 180px; margin: 16px 0 20px; }
+.record .stop { width: 188px; height: 188px; margin: 16px 0 20px; }
 .record .rec-elapsed { margin: 10px 0 4px; }
 
 /* Øvingsmål */
@@ -916,3 +929,60 @@ body.intro-open .tabbar { display: none; }
 .cam-full-switch { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom)); min-height: 44px; padding: 0 18px;
   border-radius: 22px; border: 0; background: rgba(0,0,0,.65); color: #fff; font: 700 1rem system-ui, sans-serif; cursor: pointer; }
 .cam-full-switch[hidden] { display: none; }
+
+/* ---------- Kartet i rapporten (0.10.1) ---------- */
+.lmap-toggle { position: absolute; right: 10px; bottom: 26px; z-index: 500; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px;
+  border: 0; border-radius: 20px; background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); font: inherit; font-weight: 800; font-size: .92rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,.22); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); cursor: pointer; }
+.lmap-top { display: none; }
+.lmap-wrap.expanded .lmap-toggle { display: none; }
+.lmap-wrap.expanded .lmap-top { display: flex; position: absolute; z-index: 600; left: 0; right: 0; top: 0; align-items: center; gap: 8px;
+  padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 12px) 10px calc(env(safe-area-inset-left) + 12px); background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 92%, transparent), color-mix(in srgb, var(--bg) 0%, transparent)); }
+.lmap-title { flex: 1; text-align: center; font-weight: 800; font-size: 1rem; color: var(--muted); }
+.lmap-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 0; border-radius: 22px; background: var(--surface); color: var(--ink);
+  font: inherit; font-weight: 800; font-size: .92rem; box-shadow: 0 2px 10px rgba(0,0,0,.2); cursor: pointer; }
+.lmap-close { background: var(--ink); color: var(--bg); }
+.lmap-wrap.expanded .leaflet-top { top: calc(env(safe-area-inset-top) + 64px); }
+.lmap-wrap.expanded .replay-hud { top: calc(env(safe-area-inset-top) + 70px); }
+.leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+.leaflet-popup-content { margin: 10px 14px; font: 500 .95rem/1.4 inherit; }
+@media (max-width: 560px) { .lmap { height: 320px; } }
+@media print { .lmap-toggle, .lmap-top { display: none !important; } }
+
+/* ---------- Guider (0.10.1) ---------- */
+.guide-card { position: relative; border: 2px solid color-mix(in srgb, var(--primary) 55%, transparent); transition: opacity .2s var(--ease), transform .2s var(--ease); }
+.guide-card.closing { opacity: 0; transform: translateY(-6px) scale(.98); }
+.guide-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.guide-head h2 { margin: 2px 0 0; }
+.guide-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.guide-ico { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--primary) 22%, var(--surface)); color: var(--ink); }
+.guide-close { flex: none; width: 44px; height: 44px; margin: -8px -8px 0 0; border: 0; border-radius: 22px; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.guide-close:active { background: var(--bg); }
+.guide-more { display: inline-block; margin-top: 2px; font-weight: 800; }
+.guides-lead { margin: 4px 4px 14px; }
+.guide-item summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; min-height: 44px; }
+.guide-item summary::-webkit-details-marker { display: none; }
+.guide-item summary > svg:last-child { flex: none; color: var(--muted); transition: transform .2s var(--ease); }
+.guide-item[open] summary > svg:last-child { transform: rotate(90deg); }
+.guide-item[open] summary { margin-bottom: 12px; }
+#guides > .btn { width: 100%; margin-top: 4px; }
+@media (prefers-reduced-motion: reduce) { .guide-card, .guide-item summary > svg:last-child { transition: none; } }
+.guide-lead { margin: 0 0 8px; }
+.guide-steps summary { list-style: none; display: inline-flex; align-items: center; min-height: 44px; font-weight: 800; color: var(--accel); cursor: pointer; }
+.guide-steps summary::-webkit-details-marker { display: none; }
+.guide-steps .when-open, .guide-steps[open] .when-closed { display: none; }
+.guide-steps[open] .when-open { display: inline; }
+.guide-steps[open] summary { margin-bottom: 6px; }
+.guide-more { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; font-weight: 700; font-size: .92rem; color: var(--muted); text-decoration: none; }
+/* Meldinger over fanelinjen, ikke oppå den (0.10.1) */
+body.has-tabbar .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+
+/* Stoppknappen alltid synlig nederst under opptak (0.10.1) */
+.stop-dock { position: sticky; bottom: 0; z-index: 30; width: calc(100% + 32px); margin: 8px -16px 0; display: flex; justify-content: center;
+  padding: 26px 0 calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent) 0, var(--bg) 24px); }
+.record .stop-dock .stop { width: 156px; height: 156px; margin: 0; }
+.record .stop-dock .stop-label { font-size: 1.7rem; }
+.record .stop-dock .stop-ico { width: 24px; height: 24px; border-radius: 6px; }
+@media (min-height: 900px) { .record .stop-dock .stop { width: 184px; height: 184px; } .record .stop-dock .stop-label { font-size: 2rem; } }
+.guide-item summary::before, .guide-steps summary::before { display: none; }

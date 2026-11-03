@@ -14,7 +14,7 @@ for (const name of SHARED) {
 
 test('service workeren forhåndslagrer veikameraets moduler', () => {
   const sw = read('sw.js');
-  for (const name of ['nativecam', 'road', 'track', 'lanes', 'flow', 'signs', 'sign-tpl']) assert.ok(sw.includes(`'./js/${name}.js'`), name);
+  for (const name of ['nativecam', 'guides', 'road', 'track', 'lanes', 'flow', 'signs', 'sign-tpl']) assert.ok(sw.includes(`'./js/${name}.js'`), name);
 });
 
 test('nativecam: utenfor iPhone-appen finnes ingen egne kameraer', async () => {

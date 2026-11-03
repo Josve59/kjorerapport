@@ -142,6 +142,52 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.10.1 – guides, a better map, the stop button, and scrolling fixed
+
+**Scrolling fixed** (found in the simulator):
+- **Locked page after the map:** «Tilbake» from a report while the map was in full screen left `body.map-open`, so nothing in the app could be scrolled. Every screen change now closes overlays first (`releaseOverlays`).
+- **Full-screen map squeezed into a strip:** the screen animation (`transform`) stayed on after it finished, which locks `position: fixed` inside the screen. The animation class is now removed when it ends, and the full-screen map is moved into `<body>` while open.
+- **Stop button:** `touch-action: none` meant a finger on the big stop button could not scroll the recording screen. It is now `pan-y`, and scrolling cancels the hold.
+- **Long dialogs:** dialogs can now scroll on small screens.
+
+**The map in the report:**
+- On the phone, the page scrolls past the map, and a tap on the map opens it in full screen.
+- The full-screen view has «Lukk» on the left, the distance in the middle and «Hele ruten».
+- Event numbers show a bubble with the name, time and speed.
+- «Utforsk kartet» is a floating button with an icon.
+
+**Guides** (`js/guides.js`, Innstillinger › Guider og tips):
+- Seven short guides, chosen by situation, one at a time on Hjem:
+  - «Slik fungerer det» before the first drive
+  - preparing the phone
+  - the camera, when it is on
+  - reading the report
+  - backup
+  - sharing with the driving teacher
+  - night driving in the dark season
+- Close one with ×. The guides screen lists all of them and can show them on Hjem again.
+- They replace the old «Slik fungerer det» card.
+
+**Stop button:**
+- New design: a round red button with a white stop symbol and a ring around it that fills while held (1 s). It says «Hold …» during the hold and turns green when stopped.
+- It is always at the bottom of the recording screen (`.stop-dock`), so the companion never has to scroll to stop.
+
+**The iPhone app (native):**
+- **Sharing:** `navigator.share` gives the iPhone share sheet with text and files: backup, export and driving log go to Files, AirDrop or email.
+- **Printing:** `window.print` gives iPhone printing, also «Save as PDF».
+- **Vibration:** `vibrate` becomes haptics.
+- **App Store review:** asked after the 5th, 15th and 40th drive, if the drive went well.
+- **Lock-screen hint:** the first three drives say the screen can be locked.
+
+**Smaller things:**
+- **Backup:** it no longer counts as taken when sharing is cancelled.
+- **Storage text:** the storage note in the iPhone app is correct.
+- **Error message:** «Statens vegvesen svarte 503» is now «Statens vegvesen svarer ikke akkurat nå. Prøv igjen om litt».
+- **Situations:** say «Ved 9 km/t» instead of «I 9 km/t».
+- **Small fixes:** messages sit above the tab bar, and the area beyond the page edge has the app's colour.
+
+**Testing:** `#/demotur` starts the demo drive straight into recording. 143 tests pass.
+
 ## What's new in 0.10.0 – both cameras at once in the iPhone app, D-FINE xlarge on the phone
 
 The iPhone app now uses the driver camera (front) and the road camera (back) **at the same time**. Safari can only use one camera at a time; the native app uses `AVCaptureMultiCamSession` (iPhone XS and newer). Safari is unchanged: driver camera only.

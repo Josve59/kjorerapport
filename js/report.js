@@ -195,7 +195,12 @@ export function renderReport(root, r, ctx = {}) {
       <h2 class="card-title">${icon('map')}Ruten</h2>
       ${useReal ? `<div class="lmap-wrap" id="lmap-wrap">
           <div id="lmap" class="lmap" role="region" aria-label="Kart over ruten med ${r.events.length} hendelser"></div>
-          <button type="button" class="btn small-btn secondary lmap-toggle" id="btn-map-expand">Utforsk kartet</button>
+          <div class="lmap-top" aria-hidden="true">
+            <button type="button" class="lmap-btn lmap-close" id="btn-map-close">${icon('close', 18)}Lukk</button>
+            <span class="lmap-title">${km(r.stats.km)}</span>
+            <button type="button" class="lmap-btn" id="btn-map-fit">${icon('fit', 18)}Hele ruten</button>
+          </div>
+          <button type="button" class="lmap-toggle" id="btn-map-expand">${icon('expand', 16)}Utforsk kartet</button>
           <div class="replay-hud" id="replay-hud" hidden aria-live="off"><span id="replay-time">0:00</span><span id="replay-speed">0 km/t</span><span id="replay-ev"></span></div>
         </div>
         <div class="replay-bar">
@@ -213,7 +218,7 @@ export function renderReport(root, r, ctx = {}) {
         ${marks.length ? '<li><span class="dot diamond" style="background:var(--ink)"></span>Merke</li>' : ''}
         ${useReal && sp && sp.episodes.length ? '<li><span class="dot line" style="background:var(--sign)"></span>Over fartsgrensen</li>' : ''}
       </ul>
-      <p class="muted small">Trykk på et nummer i kartet for å se hendelsen. ${useReal ? 'Knip for å zoome, eller trykk «Utforsk kartet» for å flytte rundt.' : ''}</p>
+      <p class="muted small">${useReal ? 'Trykk på kartet for å utforske det i full skjerm: flytt, zoom og trykk på et nummer for å se hendelsen.' : 'Trykk på et nummer i kartet for å se hendelsen.'}</p>
     </section>
 
     ${sits.length ? situationSection(sits, sitSum) : ''}
@@ -716,7 +721,15 @@ function thTxt(r, k) {
 }
 
 /* Ekte kart (Leaflet + Kartverket). Ruten tegnes som vei med gul midtlinje, hendelser som nummer. */
+let mapCloser = null;
+/* Lukker kartet i fullskjerm (ved skjermbytte og når rapporten tegnes på nytt) */
+export function closeMapOverlay() {
+  if (mapCloser) { const c = mapCloser; mapCloser = null; c(); }
+  document.body.classList.remove('map-open');
+}
+
 function initRealMap(root, r, marks, sp, onEventTap) {
+  closeMapOverlay();
   const L = window.L;
   const el = root.querySelector('#lmap');
   const mobile = L.Browser.mobile;
@@ -747,20 +760,36 @@ function initRealMap(root, r, marks, sp, onEventTap) {
   for (const e of r.events) {
     const mk = L.marker([e.lat, e.lon], { icon: icon(`<span class="lm-ev lm-${KIND_CSS[e.kind]}" data-n="${e.n}">${e.n}</span>`, 'lm-ev-wrap', 36),
       title: `${e.n}. ${eventLabel(e)}`, riseOnHover: true, zIndexOffset: 1000 }).addTo(map);
-    mk.on('click', () => onEventTap(String(e.n)));
+    mk.bindPopup(`<strong>${e.n}. ${esc(eventLabel(e))}</strong><br>${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}`, { closeButton: false, autoPan: true });
+    mk.on('click', () => { if (map.isExpanded && map.isExpanded()) mk.openPopup(); else { mk.closePopup(); onEventTap(String(e.n)); } });
   }
-  map.fitBounds(L.latLngBounds(ll), { padding: [28, 28] });
+  const bounds = L.latLngBounds(ll);
+  map.fitBounds(bounds, { padding: [28, 28] });
   setupReplay(root, r, map);
-  // «Utforsk kartet»: fullskjerm med flytting (på mobil er dra av ellers, så siden kan rulles)
-  const wrap = root.querySelector('#lmap-wrap'), btn = root.querySelector('#btn-map-expand');
-  btn.addEventListener('click', () => {
-    const on = !wrap.classList.contains('expanded');
+  // «Utforsk kartet» (0.10.1): fullskjerm med flytting, lukkeknapp og «Hele ruten». På mobil er dra av i rapporten,
+  // så siden kan rulles forbi kartet; et trykk på kartet åpner fullskjerm. Hendelsene får en boble med navnet der.
+  const wrap = root.querySelector('#lmap-wrap'), top = wrap.querySelector('.lmap-top');
+  // I fullskjerm flyttes kartet ut i <body>, så ingen forelder (animasjon, kort) kan låse det inne
+  const home = document.createComment('kart');
+  const setOpen = on => {
+    if (on === wrap.classList.contains('expanded')) return;
+    if (on) { wrap.replaceWith(home); document.body.appendChild(wrap); }
+    else if (home.parentNode) home.replaceWith(wrap);
+    else wrap.remove();   // rapporten er tegnet på nytt i mellomtiden
     wrap.classList.toggle('expanded', on);
     document.body.classList.toggle('map-open', on);
-    btn.textContent = on ? 'Lukk kartet' : 'Utforsk kartet';
+    top.setAttribute('aria-hidden', String(!on));
     if (on || !mobile) map.dragging.enable(); else map.dragging.disable();
-    setTimeout(() => { if (leafletMap === map) map.invalidateSize(); }, 50);
-  });
+    if (!on) map.closePopup();
+    setTimeout(() => { if (leafletMap === map) { map.invalidateSize(); if (on) map.fitBounds(bounds, { padding: [48, 48] }); } }, 60);
+  };
+  root.querySelector('#btn-map-expand').addEventListener('click', () => setOpen(true));
+  root.querySelector('#btn-map-close').addEventListener('click', () => setOpen(false));
+  root.querySelector('#btn-map-fit').addEventListener('click', () => map.fitBounds(bounds, { padding: [48, 48] }));
+  wrap.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
+  map.on('click', () => { if (mobile && !wrap.classList.contains('expanded')) setOpen(true); });
+  map.isExpanded = () => wrap.classList.contains('expanded');
+  mapCloser = () => setOpen(false);
   setTimeout(() => { if (leafletMap === map) map.invalidateSize(); }, 100);
 }
 

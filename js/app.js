@@ -2,7 +2,7 @@
 import { analyze, makeDemo, SENSITIVITY, TH } from './analysis.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
-import { renderReport, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel } from './report.js';
+import { renderReport, closeMapOverlay, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel } from './report.js';
 import { enrichDrive, evaluateRoad, ROAD_V, LIMITS_V } from './enrich.js';
 import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } from './insights.js';
 import { esc, km, n0, n1, date, duration } from './format.js';
@@ -15,8 +15,9 @@ import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
 import { roadSummary } from './road.js';
 import { createCamLimit } from './signs.js';
+import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 
-export const APP_VERSION = '0.10.0';
+export const APP_VERSION = '0.10.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -31,7 +32,9 @@ function show(name) {
   const changed = target.hidden;
   Object.values(screens).forEach(s => { if (s !== target) s.hidden = true; });
   target.hidden = false;
-  if (changed) { target.classList.remove('enter'); void target.offsetWidth; target.classList.add('enter'); }
+  // Animasjonen fjernes når den er ferdig: en transform-animasjon som står igjen, gjør at «position: fixed» inni skjermen
+  // (fullskjerm kart) låses til skjermen i stedet for vinduet (0.10.1)
+  if (changed) { target.classList.remove('enter'); void target.offsetWidth; target.classList.add('enter'); target.addEventListener('animationend', () => target.classList.remove('enter'), { once: true }); }
   window.scrollTo(0, 0);
 }
 
@@ -140,7 +143,7 @@ async function renderHome() {
   const calibrated = !!getCalib();
   $('#btn-go-camera').classList.toggle('warn', !!settings.cameraOn && !calibrated);
   $('#cam-card-text').textContent = !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
-    : calibrated ? 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.'
+    : calibrated ? (roadWanted() ? 'Kalibrert og slått på, med veikameraet samtidig. Trykk for å teste.' : 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.')
     : 'Ikke kalibrert. Trykk her og kalibrer før turen – det tar 30 sekunder.';
   const allDrives = await listDrives();
   for (const d of allDrives) if (d.status === 'recording') { d.status = 'done'; d.interrupted = true; await putDrive(d); }
@@ -270,7 +273,6 @@ async function renderHome() {
       </div></div>
       ${mode === 'cats' ? categoryTrendChart(chrono) : trendChart(chrono.map(r => r.overall), Number.isFinite(gScore) ? gScore : null)}` : '';
   $('#trend').querySelectorAll('.mini-seg button').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), trendMode: b.dataset.m }); renderHome(); });
-  $('#howto').hidden = allDrives.some(isReal);   // demoturer teller ikke
   if (!allDrives.length && !settings.introSeen) openIntro();
 
   // Dagens forslag i startkortet
@@ -291,6 +293,10 @@ async function renderHome() {
     $('#btn-bb-now').onclick = async () => { await backupAll(await listDrives()); bb.hidden = true; };
     $('#btn-bb-later').onclick = () => { saveSettings({ ...getSettings(), backupSnoozeUntil: new Date(Date.now() + 7 * 86400000).toISOString() }); bb.hidden = true; };
   } else bb.hidden = true;
+
+  // Guide (0.10.1): den første som passer og ikke er lukket (demoturer teller ikke som turer)
+  renderGuideCard({ real: realCount, cameraOn: !!settings.cameraOn, calibrated, roadCam: roadWanted(), native: !!window.kjNative,
+    unbacked: bb.hidden ? newSince : 0, dark: isDarkSeason() });
 
   // Faresteder og opplæring
   const more = $('#more-cards');
@@ -332,6 +338,37 @@ async function gatherRows(driver = null) {
     rows.push({ d, res, sp, road, log: logFor(d, res), marks: markRows(d.marks || [], res) });
   }
   return rows;
+}
+
+/* ---------- Guider (0.10.1) ---------- */
+const guideSteps = g => `<ol class="steps-list">${g.steps.map(([b, t], i) => `<li><span class="step-num">${i + 1}</span><span><strong>${esc(b)}</strong> ${esc(t)}</span></li>`).join('')}</ol>`;
+
+function renderGuideCard(ctx) {
+  const card = $('#guide-card');
+  const g = guideFor(ctx, getSettings().guidesClosed || {});
+  card.hidden = !g;
+  if (!g) return;
+  card.innerHTML = `<div class="guide-head"><span class="guide-ico">${icon(g.icon, 20)}</span><div class="guide-titles"><span class="eyebrow">Guide</span><h2>${esc(g.title)}</h2></div>
+      <button type="button" class="guide-close" aria-label="Lukk guiden «${esc(g.title)}»">${icon('close', 20)}</button></div>
+    <p class="muted guide-lead">${esc(g.lead)}</p>
+    <details class="guide-steps"${g.id === 'start' ? ' open' : ''}><summary><span class="when-closed">Les guiden (${g.steps.length} punkter)</span><span class="when-open">Skjul</span></summary>${guideSteps(g)}</details>
+    <a class="guide-more" href="#/guider">Alle guider og tips ${icon('chev', 14)}</a>`;
+  card.querySelector('.guide-close').onclick = () => {
+    const s = getSettings();
+    saveSettings({ ...s, guidesClosed: { ...(s.guidesClosed || {}), [g.id]: true } });
+    card.classList.add('closing');
+    setTimeout(() => { card.hidden = true; card.classList.remove('closing'); }, 220);
+    toast('Guiden er lukket. Du finner den under Innstillinger › Guider og tips.', { type: 'ok', ms: 3200 });
+  };
+}
+
+function renderGuides() {
+  show('guides');
+  const closed = getSettings().guidesClosed || {};
+  $('#guide-list').innerHTML = GUIDES.map(g => `<details class="card guide-item" id="guide-${g.id}">
+      <summary><span class="guide-ico">${icon(g.icon, 20)}</span><span class="guide-titles"><strong>${esc(g.title)}</strong><span class="muted small">${esc(g.lead)}</span></span>${icon('chev', 18)}</summary>
+      ${guideSteps(g)}${closed[g.id] ? '<p class="muted small">Lukket på Hjem.</p>' : ''}</details>`).join('');
+  $('#btn-guides-reset').onclick = () => { saveSettings({ ...getSettings(), guidesClosed: {} }); toast('Guidene vises på Hjem igjen når de passer.', { type: 'ok' }); renderGuides(); };
 }
 
 /* ---------- Kamera ---------- */
@@ -570,7 +607,7 @@ async function exportLogCsv(rows, filter) {
   }
   const name = `kjorelogg${filter ? '-' + filter.toLowerCase().replace(/[^a-z0-9æøå]+/g, '-') : ''}-${new Date().toISOString().slice(0, 10)}.csv`;
   const file = new File(['\ufeff' + lines.join('\r\n')], name, { type: 'text/csv' });
-  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'Kjørelogg' }); return; } catch { /* avbrutt */ } }
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'Kjørelogg' }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -1046,6 +1083,11 @@ async function startRecording(replay = null) {
   try {
     await recorder.start();
     vibrate(80);
+    // iPhone-appen: opptaket tåler låst skjerm (0.10.1), så si det første gangene
+    if (!replay && window.kjNative && (getSettings().lockTipShown || 0) < 3) {
+      saveSettings({ ...getSettings(), lockTipShown: (getSettings().lockTipShown || 0) + 1 });
+      toast('Du kan låse skjermen. Opptaket fortsetter, og tiden vises på låseskjermen.', { type: 'ok', ms: 5000 });
+    }
   } catch (err) {
     infoDialog({ title: 'Kunne ikke starte opptaket', text: err.message });
     location.hash = '#/';
@@ -1326,29 +1368,54 @@ async function finishRecording() {
   $('#record').classList.remove('busy');
   if (getSettings().autoSpeak) speakNext = drive.id;
   location.hash = '#/rapport/' + drive.id;
+  askForReview(drive);
 }
 
-/* Langt trykk (1 s) på Stopp */
+/* Vurdering i App Store (iPhone-appen, 0.10.1): etter 5., 15. og 40. ekte tur, bare når turen gikk greit
+   (minst 70 poeng). Apple bestemmer selv om spørsmålet vises. Vent til rapporten har vært oppe en stund. */
+async function askForReview(drive) {
+  if (!window.kjNative || !window.kjNative.review || drive.demo) return;
+  const n = (await listDrives()).filter(isReal).length;
+  if (![5, 15, 40].includes(n)) return;
+  setTimeout(async () => {
+    const d = await getDrive(drive.id);
+    if (d && d.result && d.result.overall >= 70 && location.hash === '#/rapport/' + drive.id) window.kjNative.review();
+  }, 8000);
+}
+
+/* Langt trykk (1 s) på Stopp: ringen rundt knappen fylles, og «Hold inne» blir «Hold …». Slipper man før,
+   eller ruller siden, avbrytes det. */
 function setupLongPress(btn, onDone) {
   let timer = null, startAt = 0, raf = null;
-  const ring = btn.querySelector('.progress');
+  const fill = btn.querySelector('.stop-fill'), hint = btn.querySelector('.stop-hint');
+  const set = p => { fill.style.strokeDashoffset = String(100 - p * 100); };
   const reset = () => {
     if (timer) clearTimeout(timer); timer = null;
     if (raf) cancelAnimationFrame(raf); raf = null;
     btn.classList.remove('pressing');
-    ring.style.setProperty('--p', 0);
+    hint.textContent = 'Hold inne';
+    set(0);
   };
   const tick = () => {
     const p = Math.min(1, (performance.now() - startAt) / 1000);
-    ring.style.setProperty('--p', p);
+    set(p);
     if (p < 1) raf = requestAnimationFrame(tick);
   };
-  const begin = () => { startAt = performance.now(); btn.classList.add('pressing'); tick(); timer = setTimeout(() => { reset(); onDone(); }, 1000); };
-  btn.addEventListener('pointerdown', e => { e.preventDefault(); btn.setPointerCapture?.(e.pointerId); begin(); });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => btn.addEventListener(ev, reset));
+  const begin = () => {
+    startAt = performance.now(); btn.classList.add('pressing'); hint.textContent = 'Hold …'; vibrate(15); tick();
+    timer = setTimeout(() => {
+      timer = null;
+      if (raf) cancelAnimationFrame(raf); raf = null;
+      set(1); btn.classList.remove('pressing'); btn.classList.add('done'); hint.textContent = 'Stoppet';
+      setTimeout(() => { btn.classList.remove('done'); hint.textContent = 'Hold inne'; set(0); }, 1500);
+      onDone();
+    }, 1000);
+  };
+  btn.addEventListener('pointerdown', e => { if (e.button > 0) return; btn.setPointerCapture?.(e.pointerId); begin(); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => btn.addEventListener(ev, () => { if (timer) reset(); }));
   btn.addEventListener('contextmenu', e => e.preventDefault());
-  btn.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !timer) { e.preventDefault(); begin(); } });
-  btn.addEventListener('keyup', reset);
+  btn.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !timer && !e.repeat) { e.preventDefault(); begin(); } });
+  btn.addEventListener('keyup', () => { if (timer) reset(); });
 }
 
 /* ---------- Rapport ---------- */
@@ -1366,7 +1433,7 @@ function feedbackHref(r = null, tag = '') {
 
 async function shareText(text) {
   if (navigator.share) {
-    try { await navigator.share({ title: 'Kjørerapport', text }); return; } catch { /* avbrutt */ }
+    try { await navigator.share({ title: 'Kjørerapport', text }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
   }
   try { await navigator.clipboard.writeText(text); toast('Oppsummeringen er kopiert. Lim den inn i en melding.', { type: 'ok' }); }
   catch { infoDialog({ title: 'Kunne ikke dele', text: 'Merk teksten i rapporten og kopier den manuelt.' }); }
@@ -1454,7 +1521,12 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
         await putDrive(drive);
         enriching = false;
         const yy = window.scrollY;
-        draw({ text: 'Kunne ikke hente: ' + err.message, error: true });
+        // Vanlige feil sagt med vanlige ord (0.10.1): 5xx er Statens vegvesen, ellers som regel nettet
+        const m = String(err && err.message || err);
+        const why = /svarte 5\d\d/.test(m) ? 'Statens vegvesen svarer ikke akkurat nå. Prøv igjen om litt.'
+          : /Failed to fetch|NetworkError|Load failed|network|offline/i.test(m) || !navigator.onLine ? 'Fant ikke nettet. Fartsgrensene hentes når du er på nett igjen.'
+          : 'Kunne ikke hente fartsgrensene (' + m + ').';
+        draw({ text: why, error: true });
         window.scrollTo(0, yy);
       }
     };
@@ -1532,7 +1604,8 @@ async function renderSettings() {
   sel.innerHTML = drives.length ? drives.map(d => `<option value="${d.id}">${esc(date(d.startedAt))}${d.demo ? ' (demo)' : ''}${d.note ? ' – ' + esc(d.note.slice(0, 30)) : ''}</option>`).join('') : '<option value="">Ingen turer</option>';
   $('#btn-export').disabled = !drives.length;
   $('#btn-export').onclick = () => exportDrive(sel.value);
-  $('#persist-status').textContent = persistState === true ? 'Varig lagring er på. Nettleseren skal ikke slette turene dine.'
+  $('#persist-status').textContent = window.kjNative ? 'Turene lagres i appen på denne telefonen. De slettes bare hvis du sletter dem selv eller fjerner appen. Ta kopi før du bytter telefon.'
+    : persistState === true ? 'Varig lagring er på. Nettleseren skal ikke slette turene dine.'
     : persistState === false ? 'Varig lagring: nettleseren sa nei. Legg appen på Hjem-skjermen og ta sikkerhetskopi.'
     : 'Varig lagring: ukjent i denne nettleseren. Ta sikkerhetskopi jevnlig.';
   $('#btn-backup').disabled = !drives.length;
@@ -1660,19 +1733,22 @@ async function backupAll(drives) {
   for (const d of drives) items.push(await exportPayload(d));
   const { lastBackupAt, backupSnoozeUntil, ...settings } = getSettings();
   const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), settings, drives: items };
-  await shareFile(toJSON(payload), `kjorerapport-sikkerhetskopi-${new Date().toISOString().slice(0, 10)}.json`);
+  if (!(await shareFile(toJSON(payload), `kjorerapport-sikkerhetskopi-${new Date().toISOString().slice(0, 10)}.json`))) { toast('Sikkerhetskopien ble ikke lagret.', { type: 'info' }); return; }
   saveSettings({ ...getSettings(), lastBackupAt: new Date().toISOString() });
   toast(`Sikkerhetskopi med ${items.length} ${items.length === 1 ? 'tur' : 'turer'} og innstillinger er laget.`, { type: 'ok' });
 }
 
+/* Deler filen (delearket: Filer, AirDrop, e-post), ellers lastes den ned. Svarer false hvis delingen ble avbrutt. */
 async function shareFile(json, name) {
   const file = new File([json], name, { type: 'application/json' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: 'Kjørerapport' }); return; } catch { /* avbrutt */ }
+    try { await navigator.share({ files: [file], title: 'Kjørerapport' }); return true; }
+    catch (e) { if (e && e.name === 'AbortError') return false; }
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  return true;
 }
 
 /* ---------- Intro ved første start ---------- */
@@ -1731,7 +1807,7 @@ function updateTabbar(h) {
   bar.hidden = hide;
   document.body.classList.toggle('has-tabbar', !hide);
   if (TAB_ROOTS[h]) lastTab = h;
-  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
+  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/guider': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -1741,12 +1817,25 @@ function updateTabbar(h) {
 /* Tilbake: fra en rapport til fanen den kom fra, fra Faresteder til Opplæring, ellers til Hjem */
 function goBack() {
   const h = location.hash;
-  location.hash = h === '#/faresteder' ? '#/opplaering' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
+  location.hash = h === '#/faresteder' ? '#/opplaering' : h === '#/guider' ? (guidesFrom || '#/') : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
 }
 
+/* Overlegg som låser siden (fullskjerm kart og kamera) lukkes ved hvert skjermbytte. Før 0.10.1 kunne «Tilbake»
+   med kartet i fullskjerm la body stå med overflow: hidden, og da kunne ingenting i appen rulles. */
+function releaseOverlays() {
+  document.body.classList.remove('map-open');
+  if (!introOpen) document.body.classList.remove('intro-open');
+  closeMapOverlay();
+  closeCamView();
+}
+
+let guidesFrom = null, prevHash = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
 function route() {
   const h = location.hash || '#/';
+  if (h === '#/guider' && prevHash !== '#/guider') guidesFrom = prevHash;
+  prevHash = h;
   if (recorder && recorder.running && h !== '#/opptak') { location.hash = '#/opptak'; return; }
+  releaseOverlays();
   updateTabbar(h);
   if (stopPrecheck && h !== '#/sjekk') { stopPrecheck(); stopPrecheck = null; }
   if (!h.startsWith('#/rapport/') && h !== '#/kamera' && h !== '#/sjekk') stopSpeaking();
@@ -1757,12 +1846,14 @@ function route() {
   else if (h === '#/sjekk') renderPrecheck();
   else if (h === '#/opptak') { if (!recorder) location.hash = '#/'; }
   else if (h === '#/demo') renderDemoReport();
+  else if (h === '#/demotur') { location.replace('#/opptak'); startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 }); }   // demoturen direkte (Avansert, testing)
   else if (h === '#/innstillinger') renderSettings();
   else if (h === '#/logg') renderLog();
   else if (h === '#/trafikklaerer') renderTeacher();
   else if (h === '#/faresteder') renderSpots();
   else if (h === '#/opplaering') renderPlan();
   else if (h === '#/kamera') renderCamera();
+  else if (h === '#/guider') renderGuides();
   else if (h.startsWith('#/rapport/')) renderDriveReport(h.slice('#/rapport/'.length));
   else location.hash = '#/';
 }
@@ -1770,7 +1861,7 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
   $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };

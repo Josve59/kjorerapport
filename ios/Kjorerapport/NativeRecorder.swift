@@ -55,6 +55,20 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             let model = detect && started.active.contains(.environment) ? await startDetector() : nil
             if model == nil { CameraHub.shared.onRoadFrame = nil }
             return (["active": started.active.map(\.rawValue), "multi": started.multi, "error": started.error.map { $0 as Any } ?? NSNull(), "model": model.map { $0 as Any } ?? NSNull()], nil)
+        case "share":
+            return (["completed": await share(body)], nil)
+        case "print":
+            await printPage()
+        case "review":
+            // Apple bestemmer selv om spørsmålet vises (høyst tre ganger i året)
+            if let scene = webView?.window?.windowScene { AppStore.requestReview(in: scene) }
+        case "haptic":
+            let pattern = (body["pattern"] as? [Double]) ?? [30]
+            if pattern.count > 1 { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+            else {
+                let ms = pattern.first ?? 30
+                UIImpactFeedbackGenerator(style: ms >= 70 ? .heavy : ms >= 35 ? .medium : .light).impactOccurred()
+            }
         case "log":
             #if DEBUG
             print("[web \(body["level"] as? String ?? "log")] \(body["text"] as? String ?? "")")
@@ -111,6 +125,53 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         }
         CameraHub.shared.onRoadFrame = { frame in detector.feed(frame) }
         return detector.name
+    }
+
+    // MARK: Deling og utskrift
+
+    /// iPhone-delearket med tekst og/eller filer (sikkerhetskopi, eksport, kjørelogg). Svarer om noe ble delt.
+    private func share(_ body: [String: Any]) async -> Bool {
+        var items: [Any] = []
+        if let text = body["text"] as? String, !text.isEmpty { items.append(text) }
+        for file in body["files"] as? [[String: Any]] ?? [] {
+            guard let name = file["name"] as? String, let b64 = file["data"] as? String, let data = Data(base64Encoded: b64) else { continue }
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("deling", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let url = dir.appendingPathComponent(name.replacingOccurrences(of: "/", with: "-"))
+            guard (try? data.write(to: url, options: .atomic)) != nil else { continue }
+            items.append(url)
+        }
+        guard !items.isEmpty, let top = topViewController() else { return false }
+        return await withCheckedContinuation { done in
+            let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            var answered = false
+            sheet.completionWithItemsHandler = { _, completed, _, _ in
+                guard !answered else { return }
+                answered = true
+                done.resume(returning: completed)
+            }
+            top.present(sheet, animated: true)
+        }
+    }
+
+    /// Skriver ut rapporten (eller PDF via delearket i utskriftsvinduet)
+    private func printPage() async {
+        guard let web = webView else { return }
+        let info = UIPrintInfo.printInfo()
+        info.outputType = .general
+        info.jobName = "Kjørerapport"
+        let printer = UIPrintInteractionController.shared
+        printer.printInfo = info
+        printer.printFormatter = web.viewPrintFormatter()
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            printer.present(animated: true) { _, _, _ in done.resume() }
+        }
+    }
+
+    private func topViewController() -> UIViewController? {
+        var top = webView?.window?.rootViewController
+        while let next = top?.presentedViewController { top = next }
+        return top
     }
 
     /// Utviklerdelen i Innstillinger finnes bare i Xcode og TestFlight, ikke i App Store-utgaven.
