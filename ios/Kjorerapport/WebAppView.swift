@@ -18,6 +18,10 @@ struct WebAppView: UIViewRepresentable {
             content.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
         content.addScriptMessageHandler(recorder, contentWorld: .page, name: "kj")
+        #if DEBUG
+        // Testbygg: nettappens console.log/warn/error og feil i Xcode-loggen
+        content.addUserScript(WKUserScript(source: Self.consoleBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        #endif
         #if targetEnvironment(simulator)
         // Simulatoren har ingen bevegelsessensor: en telefon som ligger i ro, så sjekken før kjøring og opptaket kan testes
         content.addUserScript(WKUserScript(source: Self.simulatorMotion, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
@@ -35,11 +39,29 @@ struct WebAppView: UIViewRepresentable {
         web.isInspectable = true
         #endif
         recorder.webView = web
-        web.load(URLRequest(url: URL(string: "http://127.0.0.1:\(WebServer.port)/index.html")!))
+        var start = "http://127.0.0.1:\(WebServer.port)/index.html"
+        #if DEBUG
+        // Testbygg: SIMCTL_CHILD_KJ_HASH=#/kamera åpner en side direkte
+        if let hash = ProcessInfo.processInfo.environment["KJ_HASH"] { start += hash }
+        #endif
+        web.load(URLRequest(url: URL(string: start)!))
         return web
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    #if DEBUG
+    private static let consoleBridge = """
+    (() => {
+      const h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.kj;
+      if (!h) return;
+      const send = (level, args) => { try { h.postMessage({ cmd: 'log', level, text: args.map(a => a instanceof Error ? a.stack || a.message : typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ').slice(0, 2000) }); } catch (e) {} };
+      for (const level of ['log', 'warn', 'error']) { const orig = console[level].bind(console); console[level] = (...a) => { send(level, a); orig(...a); }; }
+      window.addEventListener('error', e => send('error', [e.message + ' @ ' + e.filename + ':' + e.lineno]));
+      window.addEventListener('unhandledrejection', e => send('error', ['unhandled: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)]));
+    })();
+    """
+    #endif
 
     #if targetEnvironment(simulator)
     private static let simulatorMotion = """

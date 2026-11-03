@@ -5,7 +5,10 @@
   const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.kj;
   if (!handler) return;
   const call = (cmd, arg) => handler.postMessage({ cmd, ...(arg || {}) }).catch(() => null);
-  window.kjNative = { platform: 'ios', recStart: () => call('recStart'), recStop: () => call('recStop'), info: () => call('info'), status: s => call('recStatus', s) };
+  window.kjNative = { platform: 'ios', recStart: () => call('recStart'), recStop: () => call('recStop'), info: () => call('info'), status: s => call('recStatus', s),
+    // Kameraene (CameraHub.swift): bildene hentes fra /cam/user.jpg og /cam/environment.jpg, bilene kommer som «kjcamdets»
+    camInfo: () => call('camInfo'), camStart: o => call('camStart', o), camStop: () => call('camStop'), camConfig: o => call('camConfig', o) };
+  window.__kjCamDets = r => { window.dispatchEvent(new CustomEvent('kjcamdets', { detail: r })); };
 
   const watchers = new Map();
   let nextId = 1;

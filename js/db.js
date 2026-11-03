@@ -76,9 +76,9 @@ export async function getRaw(driveId) {
   const idx = db.transaction('chunks').objectStore('chunks').index('driveId');
   const chunks = await reqToPromise(idx.getAll(driveId));
   chunks.sort((a, b) => a.seq - b.seq);
-  const raw = { loc: [], gyro: [], grav: [], acc: [], head: [] };
+  const raw = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [] };
   for (const c of chunks) {
-    for (const k of ['loc', 'gyro', 'grav', 'acc', 'head']) if (c[k]) for (const s of c[k]) raw[k].push(s);
+    for (const k of ['loc', 'gyro', 'grav', 'acc', 'head', 'road']) if (c[k]) for (const s of c[k]) raw[k].push(s);
   }
   // I tidsrekkefølge: målinger fra låst skjerm (iPhone-appen) kan havne i en senere bit enn tiden tilsier
   for (const k of Object.keys(raw)) raw[k].sort((a, b) => a.t - b.t);
@@ -101,7 +101,10 @@ export async function importDrive(payload, { keepId = false } = {}) {
   const raw = {
     loc: input.loc.map(p => ({ t: num(p.t), lat: num(p.lat), lon: num(p.lon), speed: num(p.speed), bearing: num(p.bearing), acc: num(p.acc) })),
     gyro: xyz(input.gyro), grav: xyz(input.grav), acc: xyz(input.acc),
-    head: (input.head || []).map(h => ({ t: num(h.t), yaw: num(h.yaw), pitch: num(h.pitch), ok: !!h.ok }))
+    head: (input.head || []).map(h => ({ t: num(h.t), yaw: num(h.yaw), pitch: num(h.pitch), ...(Number.isFinite(num(h.ex)) ? { ex: num(h.ex), ey: num(h.ey) } : {}), ok: !!h.ok })),
+    road: (input.road || []).map(r => ({ t: num(r.t), cars: num(r.cars) || 0, people: num(r.people) || 0, lead: r.lead && Number.isFinite(num(r.lead.dist)) ? { cls: String(r.lead.cls || 'car'), dist: num(r.lead.dist), wpx: num(r.lead.wpx), ...(r.lead.src === 'baklys' ? { src: 'baklys' } : {}) } : null,
+      lane: r.lane ? { l: !!r.lane.l, r: !!r.lane.r, offset: Number.isFinite(num(r.lane.offset)) ? num(r.lane.offset) : null } : null, lum: Number.isFinite(num(r.lum)) ? num(r.lum) : null, ...(r.night ? { night: true } : {}), ...(Number.isFinite(num(r.best)) ? { best: num(r.best) } : {}),
+      ...(typeof r.img === 'string' && r.img.startsWith('data:image/jpeg;base64,') && r.img.length < 250000 ? { img: r.img } : {}) }))
   };
   const meta = payload && payload.drive ? payload.drive : {};
   const id = keepId && typeof meta.id === 'string' && meta.id ? meta.id : newId();
@@ -119,8 +122,9 @@ export async function importDrive(payload, { keepId = false } = {}) {
     marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
     focus: Array.isArray(meta.focus) ? meta.focus.filter(f => typeof f === 'string').slice(0, 3) : [],
     liveLimits: Array.isArray(meta.liveLimits) ? meta.liveLimits.filter(x => x && Number.isFinite(x.t)).map(x => ({ t: x.t, limit: Number.isFinite(x.limit) ? x.limit : null })).slice(0, 5000) : [],
-    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length },
+    counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length, road: raw.road.length },
     calib: meta.calib && typeof meta.calib === 'object' ? meta.calib : null,
+    cameraPlan: meta.cameraPlan && typeof meta.cameraPlan === 'object' ? meta.cameraPlan : null,
     diag: meta.diag && typeof meta.diag === 'object' ? meta.diag : null,
     driver: typeof meta.driver === 'string' ? meta.driver.slice(0, 40) : '',
     appVersion: 3
@@ -137,7 +141,7 @@ export async function exportPayload(drive) {
   return {
     drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
       marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '',
-      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], calib: drive.calib || null, liveLimits: drive.liveLimits || [] },
+      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], calib: drive.calib || null, cameraPlan: drive.cameraPlan || null, liveLimits: drive.liveLimits || [] },
     input: raw
   };
 }

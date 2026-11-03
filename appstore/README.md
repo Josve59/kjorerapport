@@ -120,7 +120,7 @@ Contact information: your name, phone and email. No demo account is needed (no l
 | **5.1.1 Privacy** | Missing privacy policy or unclear permission texts | Section 3 and 5, link in the app (Innstillinger › Om appen) |
 | **2.1 App Completeness** | Words like «testversjon», developer buttons and empty screens | Remove «Testversjon» from the text and hide developer features in the App Store version (keep them in TestFlight) |
 | **2.3 Accurate Metadata** | Screenshots that show something the app does not do, or other brands | Screenshots from the real app, no car brands |
-| **5.2 Intellectual Property** | Third-party data and fonts | NVDB and Kartverket: open data under NLOD/CC BY 4.0, the source credited in the app. Overpass (OFL), Leaflet (BSD), D-FINE (Apache 2.0), ONNX Runtime (MIT): list them in Innstillinger › Om appen › Lisenser |
+| **5.2 Intellectual Property** | Third-party data and fonts | NVDB and Kartverket: open data under NLOD/CC BY 4.0, the source credited in the app. Overpass (OFL), Leaflet (BSD), MediaPipe and D-FINE (Apache 2.0): listed under Om appen › Lisenser og kilder (D-FINE added in 0.10.0) |
 | **4.0 Design** | Text that does not scale, small touch targets | Already fixed in 0.9.15 (Dynamic Type, 44 pt) |
 
 ---
@@ -155,7 +155,7 @@ Use the demo drive or a real drive without personal place names in a visible pos
 - **Done in 0.9.19: the button «Spill av en demotur»** under Innstillinger › Avansert, visible to everyone, so Apple can test without driving.
 - **Done in 0.9.18: a short intro on first launch** (3 screens): the phone in a holder, the companion operates it, the driver does not touch it. The permission prompts come when Start is pressed, not at launch.
 - **Done in 0.9.20: «Testversjon» removed from the texts.** The developer section exists only in Xcode and TestFlight (`AppTransaction` environment), not in the App Store version.
-- **Done in 0.9.21: Om appen › «Lisenser og kilder»** (`lisenser/`): Leaflet (BSD-2), MediaPipe (Apache 2.0), Overpass (OFL 1.1), Kartverket (CC BY 4.0), NVDB (NLOD 2.0). D-FINE and ONNX Runtime are only in the camera test app, not in the iPhone app.
+- **Done in 0.9.21: Om appen › «Lisenser og kilder»** (`lisenser/`): Leaflet (BSD-2), MediaPipe (Apache 2.0), Overpass (OFL 1.1), Kartverket (CC BY 4.0), NVDB (NLOD 2.0). D-FINE (Apache 2.0) was added in 0.10.0, when the road camera came into the iPhone app. ONNX Runtime is only in the camera test app.
 
 ## 11. Architecture for phase 1 (summary)
 
@@ -163,4 +163,4 @@ Use the demo drive or a real drive without personal place names in a visible pos
 - **Recording natively:** CoreLocation (1 Hz, background during recording) and CoreMotion (100 Hz), saved in the same JSON format as today. That gives one data format, and old drives can be imported.
 - **Analysis and report:** today's `js/` files bundled in the app and shown in a `WebView` (SwiftUI, iOS 26) without the network. Native and web talk via JavaScript calls (`callJavaScript`) and a custom URL scheme. No duplicate code to maintain.
 - **Data:** drives in the app's own storage (not Safari). iCloud backup can come later (then the privacy label must be checked again).
-- **Later (phase 2):** the camera on the Neural Engine (Core ML/Vision) instead of WebGPU in the browser.
+- **Done in 0.10.0 (phase 2):** both cameras at once (`AVCaptureMultiCamSession`), with car detection as Core ML on the phone (D-FINE xlarge, GPU). The face model still runs in the web view on frames from the app. The app is about 157 MB because of the model.

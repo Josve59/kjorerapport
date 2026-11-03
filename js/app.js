@@ -12,9 +12,11 @@ import { teacherSummary, teacherText, teacherHtml } from './teacher.js';
 import * as cam from './facecam.js';
 import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
-import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
+import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
+import { roadSummary } from './road.js';
+import { createCamLimit } from './signs.js';
 
-export const APP_VERSION = '0.9.22';
+export const APP_VERSION = '0.10.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -110,6 +112,9 @@ async function analyzeDrive(drive) {
   let result;
   try {
     result = analyze(raw, opts);
+    // Veikameraet (0.10.0): bildebredden gjør at bilens eget dashbord (over 70 % av bredden) ikke regnes som en bil
+    const frameW = drive.cameraPlan && /^\d+x\d+$/.test(drive.cameraPlan.roadSize || '') ? +drive.cameraPlan.roadSize.split('x')[0] : null;
+    if (raw.road && raw.road.length > 10) result.road = roadSummary(raw.road, result.points, { t0: result.t0, frameW });
     if (raw.head && raw.head.length > 20) result.camera = evaluateMirrors(raw.head, drive.calib, { points: result.points, t0: result.t0, laneChanges: result.maneuvers.laneChanges,
       markedLanes: (drive.marks || []).filter(m => m.cat === 'felt').map(m => m.t - result.t0) });
   } catch (err) {
@@ -342,12 +347,23 @@ function saveCalib(c) { const s = getSettings(); saveSettings({ ...s, calib: { .
 let camUnsub = null;
 let calibForDrive = null;   // tur som skal få kalibreringen når den er ferdig (fra rapporten)
 
-/* Starter kameraet og ansiktsgjenkjenningen hvis de ikke allerede går. */
+/* Veikameraet samtidig (0.10.0): bare i iPhone-appen, på telefoner som kan ha begge kameraene på (iPhone XS og nyere) */
+let roadOk = false;
+cam.roadSupported().then(v => { roadOk = v; }).catch(() => {});
+const roadWanted = () => roadOk && getSettings().roadCam !== false;
+
+/* Starter kameraet (og veikameraet når det er valgt) og ansiktsgjenkjenningen hvis de ikke allerede går. */
 async function ensureCamera(videoEl, onStatus = () => {}) {
-  if (cam.state().running) { await cam.attachVideo(videoEl); return; }
-  await cam.startCamera(videoEl);
+  if (cam.state().running && cam.state().road === roadWanted()) { await cam.attachVideo(videoEl); return; }
+  await cam.startCamera(videoEl, { road: roadWanted() });
   await cam.loadModel(onStatus);
   cam.startLoop(8);
+}
+
+/* Kort tekst om hva veikameraet ser nå */
+function roadText(r) {
+  if (!r) return 'Veikameraet starter …';
+  return `Veikamera på · ${r.lead ? `bil ${Math.round(r.lead.dist)} m foran${r.lead.src === 'baklys' ? ' (baklys)' : ''}` : `${r.cars} ${r.cars === 1 ? 'bil' : 'biler'}`}${r.lane && (r.lane.l || r.lane.r) ? ' · feltlinjer' : ''}${Number.isFinite(r.lum) && r.lum < 60 ? ' · mørkt' : ''}`;
 }
 
 /* Gir en lagret tur kalibreringen og ber om ny analyse. */
@@ -358,6 +374,7 @@ async function applyCalibToDrive(id, c) {
 
 async function renderCamera() {
   show('camera');
+  roadOk = await cam.roadSupported().catch(() => false);
   const settings = getSettings();
   const video = $('#cam-video'), label = $('#cam-label'), nums = $('#cam-nums'), status = $('#cam-status'), log = $('#cam-log');
   const calibInfo = () => {
@@ -374,6 +391,27 @@ async function renderCamera() {
   }
   const on = $('#cameraOn'); on.checked = !!settings.cameraOn;
   on.onchange = () => { saveSettings({ ...getSettings(), cameraOn: on.checked }); toast(on.checked ? 'Kameraet brukes under kjøring.' : 'Kameraet brukes ikke under kjøring.', { type: 'ok', ms: 2000 }); };
+  const roadOn = $('#roadCam');
+  $('#roadCam-row').hidden = !roadOk; $('#cam-road-intro').hidden = !roadOk;
+  roadOn.checked = roadWanted();
+  roadOn.onchange = async () => {
+    saveSettings({ ...getSettings(), roadCam: roadOn.checked });
+    toast(roadOn.checked ? 'Veikameraet brukes samtidig.' : 'Bare førerkameraet brukes.', { type: 'ok', ms: 2000 });
+    if (cam.state().running) await startCam();   // start på nytt med eller uten veikameraet
+  };
+  const roadBox = $('#cam-road'), roadVideo = $('#cam-road-video'), roadTxt = $('#cam-road-text');
+  let roadUnsubCam = null;
+  const showRoad = async () => {
+    if (roadUnsubCam) { roadUnsubCam(); roadUnsubCam = null; }
+    roadBox.hidden = !cam.state().road;
+    if (!cam.state().road) return;
+    await cam.attachRoadVideo(roadVideo);
+    roadTxt.textContent = roadText(null);
+    let n = 0;
+    roadUnsubCam = cam.onRoad(r => { if (++n % 5 === 0) roadTxt.textContent = roadText(r); });
+  };
+  video.closest('.cam-view').onclick = () => openCamView('user');
+  roadBox.onclick = () => openCamView('environment');
   const recent = [];
   let lastCls = null, run = 0;
   const listen = () => {
@@ -397,6 +435,7 @@ async function renderCamera() {
       status.textContent = 'Starter kameraet …';
       await ensureCamera(video, t => { status.textContent = t; });
       listen();
+      await showRoad();
       status.textContent = 'Kameraet er på. Bildene lagres ikke.';
       $('#cam-stage').hidden = false;
       $('#btn-cam-start').hidden = true; $('#btn-cam-stop').hidden = false;
@@ -409,7 +448,7 @@ async function renderCamera() {
     }
   };
   $('#btn-cam-start').onclick = startCam;
-  $('#btn-cam-stop').onclick = () => { cam.stopCamera(); if (camUnsub) camUnsub(); camUnsub = null; $('#cam-stage').hidden = true; $('#btn-cam-start').hidden = false; $('#btn-cam-stop').hidden = true; status.textContent = 'Kameraet er av.'; calibInfo(); };
+  $('#btn-cam-stop').onclick = () => { cam.stopCamera(); if (camUnsub) camUnsub(); camUnsub = null; if (roadUnsubCam) roadUnsubCam(); roadUnsubCam = null; $('#cam-stage').hidden = true; $('#btn-cam-start').hidden = false; $('#btn-cam-stop').hidden = true; status.textContent = 'Kameraet er av.'; calibInfo(); };
   $('#btn-cam-calib').onclick = async () => {
     unlockSpeech();
     if (!cam.state().running && !(await startCam())) return;
@@ -422,7 +461,7 @@ async function renderCamera() {
       location.hash = '#/rapport/' + id;
     }
   };
-  if (cam.state().running) { await cam.attachVideo(video); listen(); $('#cam-stage').hidden = false; $('#btn-cam-start').hidden = true; $('#btn-cam-stop').hidden = false; status.textContent = 'Kameraet er på. Bildene lagres ikke.'; }
+  if (cam.state().running) { await cam.attachVideo(video); listen(); await showRoad(); $('#cam-stage').hidden = false; $('#btn-cam-start').hidden = true; $('#btn-cam-stop').hidden = false; status.textContent = 'Kameraet er på. Bildene lagres ikke.'; }
   else { $('#cam-stage').hidden = true; $('#btn-cam-start').hidden = false; $('#btn-cam-stop').hidden = true; }
 }
 
@@ -723,8 +762,15 @@ function renderPrecheck() {
   renderDriverPicker();
   renderFocusChips();
   renderFocusSuggestions();
-  const camCheck = $('#check-camera');
+  const camCheck = $('#check-camera'), roadCheck = $('#check-road');
   camCheck.hidden = !getSettings().cameraOn;
+  const showRoadCheck = () => {
+    roadCheck.hidden = !(getSettings().cameraOn && roadWanted());
+    if (!roadCheck.hidden && !roadCheck.dataset.state) setCheck(roadCheck, null, 'Starter sammen med førerkameraet');
+  };
+  roadCheck.dataset.state = '';
+  showRoadCheck();
+  cam.roadSupported().then(v => { roadOk = v; showRoadCheck(); }).catch(() => {});
   const preCalib = $('#btn-pre-calib');
   preCalib.hidden = true;
   if (getSettings().cameraOn) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
@@ -751,12 +797,20 @@ function renderPrecheck() {
     }
     if (getSettings().cameraOn) {
       try {
-        await cam.startCamera($('#pre-video'));
+        await cam.startCamera($('#pre-video'), { road: roadWanted() });
         await cam.loadModel(t => setCheck(camCheck, null, t));
         cam.startLoop(8);
         if (camUnsub) camUnsub();
         let seen = 0, n = 0;
-        camUnsub = cam.onPose(p => { n++; if (p) seen++; if (n % 8 === 0) { const share = seen / 8; seen = 0; setCheck(camCheck, share > 0.6 ? true : null, share > 0.6 ? (getCalib() ? 'Ser føreren · kalibrert' : 'Ser føreren – men ikke kalibrert. Trykk «Kalibrer nå».') : 'Ser ikke ansiktet – juster holderen'); } });
+        const offPose = cam.onPose(p => { n++; if (p) seen++; if (n % 8 === 0) { const share = seen / 8; seen = 0; setCheck(camCheck, share > 0.6 ? true : null, share > 0.6 ? (getCalib() ? 'Ser føreren · kalibrert' : 'Ser føreren – men ikke kalibrert. Trykk «Kalibrer nå».') : 'Ser ikke ansiktet – juster holderen'); } });
+        // Veikameraet: ser det noe? (biler eller feltlinjer, eller lys nok til å se veien)
+        let offRoad = null;
+        if (cam.state().road) {
+          await cam.attachRoadVideo($('#pre-road-video'));
+          let k = 0;
+          offRoad = cam.onRoad(r => { if (++k % 8) return; setCheck(roadCheck, r.cars > 0 || (r.lane && (r.lane.l || r.lane.r)) ? true : null, roadText(r) + (cam.state().roadModel ? ` · ${cam.state().roadModel}` : '')); });
+        } else if (!roadCheck.hidden) setCheck(roadCheck, false, 'Veikameraet startet ikke – bare førerkameraet brukes');
+        camUnsub = () => { offPose(); if (offRoad) offRoad(); };
         preCalib.lastChild.textContent = getCalib() ? 'Kalibrer på nytt' : 'Kalibrer nå';
         preCalib.hidden = false;
       } catch (err) { setCheck(camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : 'Kameraet startet ikke'); }
@@ -862,7 +916,7 @@ async function startRecording(replay = null) {
   // Aktiv fartsgrense fra NVDB (v0.9.4), når «Veidata» er på. Endringene lagres med turen for sammenligning.
   const live = !replay && settings.netLimits !== false ? createLiveLimit({ atk: true }) : null;
   const liveLog = [];
-  liveLimitNow = null;
+  liveLimitNow = null; camLimit.reset(); camSignNew = null;
   const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed'), atkEl = $('#rec-atk');
   const atkPop = $('#atk-pop');
   atkEl.hidden = true; atkPop.hidden = true;
@@ -879,12 +933,19 @@ async function startRecording(replay = null) {
     replay,
     onStatus: st => {
       if (st.replayDone) { finishRecording(); return; }
+      cam.setSpeed(st.kmh);   // fartsskilt leses bare når bilen kjører
       if (live) {
         const res = live.update(st.pos);
-        liveLimitNow = res.limit;
-        limitSign.textContent = res.limit ?? '–';
-        limitSign.classList.toggle('none', res.limit === null);
-        limitNote.textContent = res.limit !== null ? 'Fartsgrense (Statens vegvesen)' : res.status === 'feil' ? 'Fartsgrense: ingen nett' : res.status === 'ukjent' ? 'Fartsgrense ukjent her' : 'Henter fartsgrense …';
+        // Skilt fra veikameraet (midlertidige og digitale skilt) går foran NVDB til neste skilt, 3 km eller ny NVDB-strekning
+        if (camSignNew) { camLimit.sign(camSignNew.limit, st.distanceM, res.limit); liveLog.push({ t: Math.round(st.elapsed), limit: camSignNew.limit, src: 'kamera' }); camSignNew = null; }
+        const cl = camLimit.current(st.distanceM, res.limit);
+        const lim = cl ? cl.limit : res.limit;
+        liveLimitNow = lim;
+        limitSign.textContent = lim ?? '–';
+        limitSign.classList.toggle('none', lim === null);
+        limitSign.classList.toggle('cam', !!cl && !cl.agree);
+        limitNote.textContent = cl ? (cl.agree ? 'Fartsgrense (Statens vegvesen) · kameraet så samme skilt' : `Skilt sett av kameraet${cl.nvdb ? ` · Statens vegvesen: ${cl.nvdb}` : ''}`)
+          : res.limit !== null ? 'Fartsgrense (Statens vegvesen)' : res.status === 'feil' ? 'Fartsgrense: ingen nett' : res.status === 'ukjent' ? 'Fartsgrense ukjent her' : 'Henter fartsgrense …';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
         // Fotoboks foran eller strekningsmåling (v0.9.7)
         // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
@@ -941,18 +1002,45 @@ async function startRecording(replay = null) {
       warn.innerHTML = msgs.map(m => `<p class="notice">${esc(m)}</p>`).join('');
     }
   });
-  const camPill = $('#rec-cam'), recVideo = $('#rec-video');
-  camPill.hidden = true; recVideo.hidden = true;
+  const camPill = $('#rec-cam'), recVideo = $('#rec-video'), recRoad = $('#rec-road-video'), hitV = $('#rec-video-hit'), hitR = $('#rec-road-hit');
+  camPill.hidden = true; recVideo.hidden = true; recRoad.hidden = true; hitV.hidden = true; hitR.hidden = true;
+  hitV.onclick = () => openCamView('user');
+  hitR.onclick = () => openCamView('environment');
   if (!replay && settings.cameraOn && cam.state().running) {
     await cam.attachVideo(recVideo);
-    recVideo.hidden = false; camPill.hidden = false;
+    recVideo.hidden = false; hitV.hidden = false; camPill.hidden = false;
     if (camUnsub) camUnsub();
-    let seen = 0, n = 0;
-    camUnsub = cam.onPose(p => {
+    let seen = 0, n = 0, face = 'Kamera: på', lastRoad = null;
+    const pillText = () => {
+      const st = cam.state();
+      camPill.textContent = st.perf.slow ? 'Kamera: telefonen er treg (varm?)' : face + (st.road && lastRoad ? ` · ${lastRoad.lead ? `bil ${Math.round(lastRoad.lead.dist)} m foran${lastRoad.lead.src === 'baklys' ? ' (baklys)' : ''}` : 'vei'}` : '');
+    };
+    const offPose = cam.onPose(p => {
       if (recorder) recorder.addHead(p);
       n++; if (p) seen++;
-      if (n % 16 === 0) { const ok = seen / 16 > 0.5; camPill.textContent = ok ? 'Kamera: ser føreren' : 'Kamera: ser ikke ansiktet'; camPill.dataset.state = ok ? 'ok' : 'wait'; seen = 0; }
+      if (n % 16 === 0) { const ok = seen / 16 > 0.5; face = ok ? 'Kamera: ser føreren' : 'Kamera: ser ikke ansiktet'; camPill.dataset.state = ok ? 'ok' : 'wait'; seen = 0; pillText(); }
     });
+    let offRoad = null;
+    // Veikameraet samtidig (0.10.0): tall om veien foran til opptaket, og fartsskilt til skiltet på skjermen
+    if (cam.state().road) {
+      await cam.attachRoadVideo(recRoad);
+      recRoad.hidden = false; hitR.hidden = false;
+      let lastThumbAt = -Infinity, lastBigAt = -Infinity, k = 0;
+      const startedAt = performance.now() / 1000;
+      offRoad = cam.onRoad(r => {
+        // Testbilder (utviklerdelen): et stort bilde (480 px) hvert 30. s, små (160 px) når det er en bil foran (høyst hvert 8. s)
+        const nowS = performance.now() / 1000;
+        const big = nowS - startedAt > 3 && nowS - lastBigAt >= 30;
+        const small = !big && r.lead && nowS - lastThumbAt >= 8;
+        if (settings.roadThumbs && (big || small)) { const img = cam.snapshot(big ? 480 : 160); if (img) { r.img = img; lastThumbAt = nowS; if (big) lastBigAt = nowS; } }
+        if (r.sign) camSignNew = r.sign;
+        if (r.signImg && !settings.roadThumbs) delete r.signImg;
+        if (recorder) recorder.addRoad(r);
+        lastRoad = r;
+        if (++k % 5 === 0) pillText();
+      });
+    }
+    camUnsub = () => { offPose(); if (offRoad) offRoad(); };
     camPill.textContent = 'Kamera: på'; camPill.dataset.state = 'ok';
   }
   try {
@@ -992,6 +1080,233 @@ function fmtClock(sec) {
 }
 
 let liveLimitNow = null;   // aktiv fartsgrense under opptak (km/t eller null)
+// Fartsskilt lest av veikameraet (k0.7.6): gjelder foran NVDB til neste skilt, 3 km eller ny NVDB-strekning
+const camLimit = createCamLimit();
+let camSignNew = null;
+/* Fullskjerm kamera (k0.7.2, i hovedappen fra 0.10.0): kamerabildet med det modellene ser tegnet oppå. Veikameraet:
+   biler og folk (bokser), bilen foran med avstand og tidsluke, feltlinjene, dashbordkanten, plasseringen i feltet og
+   fartsskilt. Førerkameraet: ansiktet, øynene og hvor føreren ser. Trykk på et lite kamerabilde; knappen nederst bytter
+   kamera, ✕ eller et trykk hvor som helst lukker. Ingenting av dette lagres. */
+let camViewRaf = null, camViewFacing = 'user';
+// Myk visning (k0.7.5): boksene, feltlinjene og avstanden glir mot nye verdier (boksene på rundt 70 ms) i stedet for
+// å hoppe hver gang et nytt svar kommer. Følgingen sier hvor bilen er nå; dette jevner bare ut det som tegnes.
+const camEase = { boxes: new Map(), lanes: {}, dist: null, leadId: null, t: 0, face: null };
+let camPoseUnsub = null, faceRun = { cls: null, n: 0, t0: 0 };
+const faceLog = [];   // siste blikk i speil og over skulderen mens fullskjerm er åpen
+// Ansiktets omriss og øynene (MediaPipe Face Mesh-punkter), og regnbuehinnene (468–477)
+const FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+const EYE_A = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+const EYE_B = [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466];
+const CLASS_COLOR = { forward: '#3ddc84', left: '#4fc3f7', right: '#ff4fd8', rear: '#ffd400', shoulderL: '#4fc3f7', shoulderR: '#ff4fd8', other: '#ff8a65', none: '#9e9e9e' };
+async function openCamView(facing = 'user') {
+  const box = $('#cam-full'), v = $('#cam-full-video'), sw = $('#cam-full-switch');
+  if (!cam.state().running) return;
+  camViewFacing = facing === 'environment' && cam.state().road ? 'environment' : 'user';
+  box.hidden = false;
+  v.classList.toggle('road', camViewFacing === 'environment');
+  if (camViewFacing === 'environment') await cam.attachRoadVideo(v); else await cam.attachVideo(v);
+  box.onclick = () => closeCamView();
+  sw.hidden = !cam.state().road;
+  sw.textContent = camViewFacing === 'environment' ? 'Vis førerkamera' : 'Vis veikamera';
+  sw.onclick = e => { e.stopPropagation(); const other = camViewFacing === 'environment' ? 'user' : 'environment'; stopCamViewDraw(); openCamView(other); };
+  // Førerkameraet: logg over blikkene mens visningen er åpen (to like klassifiseringer på rad = et blikk)
+  faceLog.length = 0; faceRun = { cls: null, n: 0, t0: 0 };
+  if (camPoseUnsub) camPoseUnsub();
+  camPoseUnsub = cam.onPose(p => {
+    const c = getCalib(), cls = c ? classifyPose(toGaze(p, c), gazeCalib(c)) : (p ? 'forward' : 'none'), now = performance.now() / 1000;
+    if (cls === faceRun.cls) faceRun.n++;
+    else {
+      if (faceRun.n >= 2 && !['forward', 'other', 'none'].includes(faceRun.cls)) { faceLog.unshift({ cls: faceRun.cls, t: faceRun.t0, dur: now - faceRun.t0 }); faceLog.length = Math.min(faceLog.length, 6); }
+      faceRun = { cls, n: 1, t0: now };
+    }
+  });
+  const draw = () => { drawCamView(); camViewRaf = requestAnimationFrame(draw); };
+  camViewRaf = requestAnimationFrame(draw);
+}
+// Testkrok når appen kjører lokalt (utvikling): åpne visningen uten et opptak
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !window.kjNative) {
+  window.kjCamView = openCamView;
+  // Tegner førervisningen fra et oppdiktet ansikt (test uten ekte ansikt foran kameraet)
+  window.kjFaceView = v => { const box = $('#cam-full'), cv = $('#cam-full-canvas'); box.hidden = false; const dpr = window.devicePixelRatio || 1; cv.width = Math.round(cv.clientWidth * dpr); cv.height = Math.round(cv.clientHeight * dpr); const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cv.clientWidth, cv.clientHeight); drawFaceView(g, cv.clientWidth, cv.clientHeight, v, cam.state(), $('#cam-full-info')); };
+}
+function stopCamViewDraw() {
+  if (camViewRaf) cancelAnimationFrame(camViewRaf);
+  camViewRaf = null;
+  if (camPoseUnsub) { camPoseUnsub(); camPoseUnsub = null; }
+  camEase.face = null;
+  camEase.boxes.clear(); camEase.lanes = {}; camEase.dist = null; camEase.t = 0;
+}
+async function closeCamView() {
+  const box = $('#cam-full');
+  if (box.hidden) return;
+  box.hidden = true;
+  stopCamViewDraw();
+  $('#cam-full-video').srcObject = null;
+  // I Safari leser ansiktsgjenkjenningen fra bildet som vises, så det må tilbake til skjermen bak
+  if (cam.state().running && !cam.state().native) await cam.attachVideo(recorder ? $('#rec-video') : $('#cam-video'));
+}
+function drawCamView() {
+  const cv = $('#cam-full-canvas'), info = $('#cam-full-info');
+  const dpr = window.devicePixelRatio || 1, cw = cv.clientWidth, ch = cv.clientHeight;
+  if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, cw, ch);
+  const v = cam.view(camViewFacing), st = cam.state();
+  if (v.facing !== 'environment') { drawFaceView(g, cw, ch, v, st, info); return; }
+  if (!v.w) { info.innerHTML = '<div>Veikamera</div><div class="muted">Venter på første bilde …</div>'; return; }
+  // Kamerabildet vises med «contain»: skala og forskyvning fra kamerabildets piksler til skjermen
+  const s = Math.min(cw / v.w, ch / v.h), ox = (cw - v.w * s) / 2, oy = (ch - v.h * s) / 2;
+  const X = x => ox + x * s, Y = y => oy + y * s;
+  const kmh = recorder && Number.isFinite(recorder.speed) ? recorder.speed * 3.6 : NaN;
+  const now = performance.now(), dt = Math.min(250, Math.max(0, now - (camEase.t || now)));
+  camEase.t = now;
+  const ease = tau => 1 - Math.exp(-dt / tau), aBox = ease(70), aLane = ease(120), aDist = ease(400);
+  const seen = new Set();
+  const smooth = d => {
+    if (d.id == null) return d;
+    seen.add(d.id);
+    const o = camEase.boxes.get(d.id);
+    const n = o ? { x: o.x + (d.x - o.x) * aBox, y: o.y + (d.y - o.y) * aBox, w: o.w + (d.w - o.w) * aBox, h: o.h + (d.h - o.h) * aBox } : { x: d.x, y: d.y, w: d.w, h: d.h };
+    camEase.boxes.set(d.id, n);
+    return { ...d, ...n };
+  };
+  const dets = (v.dets || []).map(smooth);
+  const L = v.lead ? { ...v.lead } : null;
+  if (L && L.box && L.id != null) L.box = camEase.boxes.get(L.id) || L.box;
+  for (const id of camEase.boxes.keys()) if (!seen.has(id)) camEase.boxes.delete(id);
+  // Avstanden til bilen foran glattes (ny bil: start på nytt)
+  if (L && Number.isFinite(L.dist)) { camEase.dist = camEase.leadId === (L.id ?? L.src) && camEase.dist !== null ? camEase.dist + (L.dist - camEase.dist) * aDist : L.dist; camEase.leadId = L.id ?? L.src; L.dist = camEase.dist; }
+  else { camEase.dist = null; camEase.leadId = null; }
+  g.lineWidth = 2; g.font = '600 13px system-ui, sans-serif'; g.textBaseline = 'bottom';
+  // Dashbordkanten
+  if (v.roadBottom) { g.save(); g.setLineDash([8, 6]); g.strokeStyle = 'rgba(0,200,255,.9)'; g.beginPath(); g.moveTo(X(0), Y(v.roadBottom * v.h)); g.lineTo(X(v.w), Y(v.roadBottom * v.h)); g.stroke(); g.restore(); }
+  // Feltlinjer (regnet på et lite bilde, skaleres opp)
+  if (v.lane) {
+    const k = v.w / v.lane.W;
+    g.lineWidth = 5; g.lineCap = 'round';
+    for (const [side, col] of [['left', '#3ddc84'], ['right', '#ff4fd8']]) {
+      const raw = v.lane[side], o = camEase.lanes[side];
+      if (!raw) { delete camEase.lanes[side]; continue; }
+      const Ln = o ? Object.fromEntries(['xBottom', 'xTop', 'yBottom', 'yTop'].map(q => [q, o[q] + (raw[q] - o[q]) * aLane])) : { ...raw };
+      camEase.lanes[side] = Ln;
+      g.strokeStyle = col; g.beginPath(); g.moveTo(X(Ln.xBottom * k), Y(Ln.yBottom * k)); g.lineTo(X(Ln.xTop * k), Y(Ln.yTop * k)); g.stroke();
+    }
+    g.lineWidth = 2;
+  }
+  // Biler og folk
+  const isLead = d => L && L.box && (L.id != null ? d.id === L.id : Math.abs(d.x - L.box.x) < 2 && Math.abs(d.w - L.box.w) < 2);
+  for (const d of dets) {
+    if (isLead(d)) continue;   // tegnes grønt under
+    const person = d.cls === 'person' || d.cls === 'bicycle';
+    g.strokeStyle = person ? '#ff4fd8' : '#ffd400'; g.fillStyle = g.strokeStyle;
+    g.strokeRect(X(d.x), Y(d.y), d.w * s, d.h * s);
+    g.fillText(`${{ car: 'bil', truck: 'lastebil', bus: 'buss', motorcycle: 'MC', bicycle: 'sykkel', person: 'person' }[d.cls] || d.cls} ${Math.round(d.score * 100)}`, X(d.x) + 2, Y(d.y) - 2);
+  }
+  // Bilen foran
+  if (L && L.box) {
+    g.lineWidth = 4; g.strokeStyle = '#00e676'; g.strokeRect(X(L.box.x), Y(L.box.y), L.box.w * s, L.box.h * s);
+    g.font = '800 16px system-ui, sans-serif'; g.fillStyle = '#00e676';
+    g.fillText(`${Math.round(L.dist)} m${kmh >= 20 ? ` · ${(L.dist / (kmh / 3.6)).toFixed(1).replace('.', ',')} s` : ''}`, X(L.box.x), Y(L.box.y) - 4);
+  }
+  // Fartsskilt (k0.7.6): røde rammer med tallet som ble lest
+  for (const r of v.signReads || []) {
+    g.lineWidth = 3; g.strokeStyle = '#ff1744'; g.strokeRect(X(r.box.x), Y(r.box.y), r.box.w * s, r.box.h * s);
+    g.font = '800 16px system-ui, sans-serif'; g.fillStyle = '#ff1744'; g.fillText(`${r.limit}`, X(r.box.x), Y(r.box.y) - 3);
+  }
+  // Plassering i feltet: strek med midten av feltet og bilen
+  const off = v.lane && Number.isFinite(v.lane.offset) ? v.lane.offset : null;
+  if (off !== null) {
+    const bw = Math.min(220, cw - 40), bx = (cw - bw) / 2, by = ch - Math.max(40, oy + 30);
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(bx - 8, by - 14, bw + 16, 28);
+    g.fillStyle = '#fff'; g.fillRect(bx, by - 1, bw, 2); g.fillRect(bx + bw / 2 - 1, by - 8, 2, 16);
+    const px = bx + bw / 2 + Math.max(-1, Math.min(1, off / 1.6)) * bw / 2;
+    g.fillStyle = Math.abs(off) > 0.75 ? '#ff5252' : '#3ddc84'; g.beginPath(); g.arc(px, by, 7, 0, Math.PI * 2); g.fill();
+  }
+  const n = a => (a || []).length;
+  const cars = dets.filter(d => !['person', 'bicycle'].includes(d.cls)), ppl = dets.filter(d => ['person', 'bicycle'].includes(d.cls));
+  info.innerHTML = [
+    `<div>Veikamera · ${esc(st.perf.dfine || v.dfine || 'ingen bilgjenkjenning')}${v.night ? ' · mørkt' : ''}</div>`,
+    `<div>${n(cars)} ${n(cars) === 1 ? 'bil' : 'biler'} · ${n(ppl)} ${n(ppl) === 1 ? 'person' : 'personer'}</div>`,
+    `<div>${L ? `Bil foran ${Math.round(L.dist)} m${kmh >= 20 ? ` · ${(L.dist / (kmh / 3.6)).toFixed(1).replace('.', ',')} s` : ''}${L.src === 'baklys' ? ' (baklys)' : ''}` : 'Ingen bil rett foran'}</div>`,
+    `<div>${v.lane && v.lane.left && v.lane.right ? `Begge feltlinjer · ${off !== null ? `${Math.abs(off).toFixed(2).replace('.', ',')} m ${off > 0.05 ? 'til høyre' : off < -0.05 ? 'til venstre' : 'midt i'}` : ''}` : v.lane && (v.lane.left || v.lane.right) ? 'Én feltlinje' : 'Ingen feltlinjer'}</div>`,
+    `<div>Skilt: ${v.lastSign ? `<strong>${v.lastSign.limit}</strong> (lest ${v.lastSign.reads} ganger, ${Math.round((performance.now() - v.lastSign.at) / 1000)} s siden)` : 'ingen lest ennå'}${liveLimitNow ? ` · grense nå ${liveLimitNow}` : ''}</div>`,
+    `<div class="muted">${v.roadBottom ? `Dashbordkant ${Math.round(v.roadBottom * 100)} % (blå strek)` : 'Dashbordkant ikke funnet ennå'}${Number.isFinite(v.lum) ? ` · lys ${v.lum}` : ''}${Number.isFinite(st.perf.dfineMs) && st.perf.dfineMs ? ` · D-FINE ${Math.round(st.perf.dfineMs)} ms` : ''}${st.perf.flowTries ? ` · følger i bildet ${Math.round(100 * st.perf.flowHits / st.perf.flowTries)} %` : ''}</div>`
+  ].join('');
+}
+/* Fullskjerm for førerkameraet (k0.7.6): ansiktet med omriss, øyne og regnbuehinner, en pil for blikket, et kart
+   over speilene fra kalibreringen med en prikk for hvor føreren ser nå (fylt: blikket med øynene, ring: bare hodet),
+   hva appen tror føreren ser på, og de siste blikkene. Alt glir mykt (punktene 50 ms, blikket 90 ms). */
+function drawFaceView(g, cw, ch, v, st, info) {
+  if (!v.lm || !v.pose) {
+    camEase.face = null;
+    info.innerHTML = '<div>Førerkamera</div><div class="muted">Ser ikke ansiktet – juster holderen</div>';
+    return;
+  }
+  const now = performance.now(), dt = Math.min(250, Math.max(0, now - (camEase.t || now)));
+  camEase.t = now;
+  const a = tau => 1 - Math.exp(-dt / tau);
+  // Kamerabildet vises speilvendt med «contain»
+  const s = Math.min(cw / v.w, ch / v.h), ox = (cw - v.w * s) / 2, oy = (ch - v.h * s) / 2;
+  const X = x => ox + (1 - x) * v.w * s, Y = y => oy + y * v.h * s;
+  const c = getCalib(), gz = c ? toGaze(v.pose, c) : v.pose, gc = c ? gazeCalib(c) : null;
+  // Glatting av punktene og blikket
+  let F = camEase.face;
+  if (!F || F.lm.length !== v.lm.length) F = camEase.face = { lm: v.lm.map(p => ({ x: p.x, y: p.y })), yaw: gz.yaw, pitch: gz.pitch, hy: v.pose.yaw, hp: v.pose.pitch };
+  else {
+    const al = a(50), ag = a(90);
+    for (let i = 0; i < v.lm.length; i++) { F.lm[i].x += (v.lm[i].x - F.lm[i].x) * al; F.lm[i].y += (v.lm[i].y - F.lm[i].y) * al; }
+    F.yaw += (gz.yaw - F.yaw) * ag; F.pitch += (gz.pitch - F.pitch) * ag; F.hy += (v.pose.yaw - F.hy) * ag; F.hp += (v.pose.pitch - F.hp) * ag;
+  }
+  const cls = c ? classifyPose({ yaw: F.yaw, pitch: F.pitch }, gc) : 'forward', col = CLASS_COLOR[cls] || '#fff';
+  const P = i => [X(F.lm[i].x), Y(F.lm[i].y)];
+  const poly = (idx, close = true) => { g.beginPath(); idx.forEach((i, k) => { const [x, y] = P(i); if (k) g.lineTo(x, y); else g.moveTo(x, y); }); if (close) g.closePath(); g.stroke(); };
+  // Prikker for hele ansiktet, svakt
+  g.fillStyle = 'rgba(255,255,255,.35)';
+  for (let i = 0; i < Math.min(468, F.lm.length); i += 2) { const [x, y] = P(i); g.fillRect(x - 0.75, y - 0.75, 1.5, 1.5); }
+  g.lineWidth = 2; g.strokeStyle = col; poly(FACE_OVAL);
+  g.strokeStyle = '#fff'; poly(EYE_A); poly(EYE_B);
+  // Regnbuehinnene: midten og ring
+  if (F.lm.length >= 478) for (const [cI, rI] of [[468, 469], [473, 474]]) {
+    const [x, y] = P(cI), [x2, y2] = P(rI), r = Math.max(2, Math.hypot(x2 - x, y2 - y));
+    g.strokeStyle = '#4fc3f7'; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#4fc3f7'; g.beginPath(); g.arc(x, y, 2, 0, Math.PI * 2); g.fill();
+  }
+  // Pil fra nesetippen: blikket i forhold til rett fram (eller hodet uten kalibrering)
+  const fwd = gc && gc.forward ? gc.forward : { yaw: 0, pitch: 0 };
+  const sx = gc && gc.left ? (gc.left.yaw - fwd.yaw < 0 ? 1 : -1) : 1, sp = gc && gc.rear ? (gc.rear.pitch - fwd.pitch > 0 ? 1 : -1) : 1;
+  const rx = (F.yaw - fwd.yaw) * sx, ry = (F.pitch - fwd.pitch) * sp;   // rx < 0: mot førerens venstre (venstre på skjermen)
+  const [nx, ny] = P(1), L = 3.2 * s * v.w / 100;
+  g.lineWidth = 4; g.strokeStyle = col; g.beginPath(); g.moveTo(nx, ny); g.lineTo(nx + rx * L / 10, ny - ry * L / 10); g.stroke();
+  // Kart over speilene: x = sidelengs, y = opp/ned, i grader fra rett fram
+  const mw = Math.min(260, cw - 32), mh = 150, mx = (cw - mw) / 2, my = ch - mh - Math.max(24, oy + 16), k = mw / 100;
+  const M = (yy, pp) => [mx + mw / 2 + yy * k, my + mh * 0.62 - pp * k];
+  g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(mx - 8, my - 8, mw + 16, mh + 16);
+  g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(mx, M(0, 0)[1]); g.lineTo(mx + mw, M(0, 0)[1]); g.moveTo(M(0, 0)[0], my); g.lineTo(M(0, 0)[0], my + mh); g.stroke();
+  g.font = '600 12px system-ui, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'center';
+  if (gc && gc.ok) {
+    for (const id of ['forward', ...MIRRORS]) {
+      const t = gc[id], [x, y] = M((t.yaw - fwd.yaw) * sx, (t.pitch - fwd.pitch) * sp), on = cls === id;
+      g.strokeStyle = CLASS_COLOR[id]; g.lineWidth = on ? 3 : 1.5; g.globalAlpha = on ? 1 : 0.7;
+      g.beginPath(); g.arc(x, y, on ? 16 : 12, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#fff'; g.fillText({ forward: 'Fram', left: 'V', right: 'H', rear: 'Bak' }[id], x, y - 22);
+      g.globalAlpha = 1;
+    }
+  } else { g.fillStyle = '#fff'; g.fillText('Ikke kalibrert', mx + mw / 2, my + 12); }
+  // Hodet (ring) og blikket (fylt)
+  const hx = (F.hy - (c ? c.forward.yaw : 0)) * sx, hp = (F.hp - (c ? c.forward.pitch : 0)) * sp;
+  const clampM = (x, y) => [Math.max(mx, Math.min(mx + mw, x)), Math.max(my, Math.min(my + mh, y))];
+  { const [x, y] = clampM(...M(hx, hp)); g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.stroke(); }
+  { const [x, y] = clampM(...M(rx, ry)); g.fillStyle = col; g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill(); }
+  g.textAlign = 'start'; g.textBaseline = 'bottom';
+  const p = v.pose, nowS = now / 1000;
+  info.innerHTML = [
+    `<div>Førerkamera · <strong style="color:${col}">${c ? CLASS_LABEL[cls] : 'Ser ansiktet'}</strong></div>`,
+    `<div>Hode ${Math.round(p.yaw)}° / ${Math.round(p.pitch)}° · ${Number.isFinite(p.ex) ? `øyne ${Math.round(p.ex)}° / ${Math.round(p.ey)}°` : p.blink > 0.55 ? 'øyne lukket' : 'øyne –'}</div>`,
+    `<div class="muted">${useGaze(c) ? 'Blikket = hode + øyne' : c ? 'Bare hodet – kalibrer på nytt for å ta med øynene' : 'Ikke kalibrert'} · ${st.fps.toFixed(0)} bilder/s · ${v.faceMs} ms</div>`,
+    faceLog.length ? `<div class="muted">${faceLog.map(l => `${CLASS_LABEL[l.cls]} ${l.dur.toFixed(1).replace('.', ',')} s (${Math.round(nowS - l.t)} s siden)`).join('<br>')}</div>` : ''
+  ].join('');
+}
 async function finishRecording() {
   if (!recorder || !recorder.running) return;
   const rec = recorder;
@@ -999,8 +1314,13 @@ async function finishRecording() {
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
   $('#atk-pop').hidden = true;
+  closeCamView();
+  // Veikameraet: bildestørrelse, modell og hvor rask telefonen var, lagret med turen
+  const cs = cam.state();
+  const camInfo = cs.road ? { mode: 'begge', roadSize: cs.roadSize, roadBottom: cs.roadBottom, model: cs.roadModel, perf: cs.perf } : null;
   const drive = await rec.stop();
   if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
+  if (camInfo) { await updateDrive(drive.id, { cameraPlan: camInfo }); drive.cameraPlan = camInfo; }
   if (camUnsub) { camUnsub(); camUnsub = null; }
   cam.stopCamera();
   $('#record').classList.remove('busy');
@@ -1093,6 +1413,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       sameRoute: routeRows,
       onSpeak: text => { if (!speak(text)) toast('Telefonen støtter ikke opplesning.', { type: 'error' }); },
       hasCalib: !!getCalib(),
+      cameraPlan: drive.cameraPlan || null,
       onCalibrate: async useSaved => {
         if (useSaved && getCalib()) { await applyCalibToDrive(id, getCalib()); renderDriveReport(id, { keepScroll: true }); }
         else { calibForDrive = id; location.hash = '#/kamera'; }
@@ -1273,6 +1594,9 @@ async function renderSettings() {
   // Demoen spilles av med telefonen «montert» skrått, så akselerometerdata og v3-motoren også testes.
   $('#btn-play-demo').onclick = () => { startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 }); location.hash = '#/opptak'; };
   $('#btn-dev-demo').onclick = () => startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 60 });
+  const thumbs = $('#roadThumbs');
+  thumbs.checked = !!getSettings().roadThumbs;
+  thumbs.onchange = () => saveSettings({ ...getSettings(), roadThumbs: thumbs.checked });
 }
 
 function renderDriverSettings() {

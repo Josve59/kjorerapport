@@ -47,8 +47,21 @@ nonisolated final class WebServer: @unchecked Sendable {
         let request = head.split(separator: "\r\n").first?.split(separator: " ") ?? []
         let method = request.first.map(String.init) ?? "GET"
         var path = request.count > 1 ? String(request[1]) : "/"
-        if let cut = path.firstIndex(where: { $0 == "?" || $0 == "#" }) { path = String(path[..<cut]) }
+        var query: [String: String] = [:]
+        if let cut = path.firstIndex(where: { $0 == "?" || $0 == "#" }) {
+            for pair in path[path.index(after: cut)...].split(separator: "&") {
+                let kv = pair.split(separator: "=", maxSplits: 1)
+                if kv.count == 2 { query[String(kv[0])] = String(kv[1]) }
+            }
+            path = String(path[..<cut])
+        }
         path = path.removingPercentEncoding ?? path
+        if path.hasPrefix("/cam/") {
+            // JPEG-kodingen tar noen millisekunder: utenfor serverens egen kø, så filene ikke venter
+            let (p, q, head) = (path, query, method == "HEAD")
+            DispatchQueue.global(qos: .userInitiated).async { self.cameraFrame(connection, path: p, query: q, head: head) }
+            return
+        }
         if path.hasSuffix("/") { path += "index.html" }
         let file = root.appendingPathComponent(String(path.drop(while: { $0 == "/" }))).standardizedFileURL
 
@@ -64,6 +77,24 @@ nonisolated final class WebServer: @unchecked Sendable {
         let header = "HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"
         var out = Data(header.utf8)
         if method != "HEAD" { out.append(body) }
+        connection.send(content: out, completion: .contentProcessed { _ in connection.cancel() })
+    }
+
+    /// Siste bilde fra et kamera (CameraHub): /cam/user.jpg eller /cam/environment.jpg, valgfritt ?max=<lengste side>
+    /// og ?after=<nummer> (204 hvis det ikke har kommet et nyere bilde). X-Age er bildets alder i millisekunder.
+    private func cameraFrame(_ connection: NWConnection, path: String, query: [String: String], head: Bool) {
+        let name = path.dropFirst("/cam/".count).replacingOccurrences(of: ".jpg", with: "")
+        var header: String, body = Data()
+        if let facing = CameraHub.Facing(rawValue: name),
+           let f = CameraHub.shared.jpeg(facing, maxSide: Int(query["max"] ?? "") ?? 0, quality: Double(query["q"] ?? "") ?? 0.8, after: Int(query["after"] ?? "") ?? -1) {
+            body = f.data
+            header = "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: \(body.count)\r\nX-Age: \(f.ageMs)\r\nX-Seq: \(f.seq)\r\nX-Size: \(f.width)x\(f.height)\r\n"
+        } else {
+            header = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n"
+        }
+        header += "Cache-Control: no-store\r\nConnection: close\r\n\r\n"
+        var out = Data(header.utf8)
+        if !head { out.append(body) }
         connection.send(content: out, completion: .contentProcessed { _ in connection.cancel() })
     }
 

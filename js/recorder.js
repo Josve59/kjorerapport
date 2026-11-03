@@ -82,8 +82,8 @@ export class Recorder {
   reset() {
     this.drive = null;
     this.t0 = 0;
-    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [] };
-    this.headOk = 0; this.headN = 0; this.speed = NaN;
+    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [] };
+    this.headOk = 0; this.headN = 0; this.roadN = 0; this.roadLead = 0; this.speed = NaN;
     this.seq = 0;
     this.lastMotionT = -1;
     this.grav = null;
@@ -129,7 +129,7 @@ export class Recorder {
       calib: this.calib || null,
       gaps: [],
       marks: [],
-      counts: { loc: 0, gyro: 0, grav: 0, acc: 0, head: 0 },
+      counts: { loc: 0, gyro: 0, grav: 0, acc: 0, head: 0, road: 0 },
       appVersion: 3
     };
     await putDrive(this.drive);
@@ -287,8 +287,19 @@ export class Recorder {
     const t = this.now();
     this.headN++;
     if (pose) this.headOk++;
-    this.buf.head.push(pose ? { t, yaw: Math.round(pose.yaw * 10) / 10, pitch: Math.round(pose.pitch * 10) / 10, ok: true } : { t, ok: false });
+    const r1 = v => Math.round(v * 10) / 10;
+    // Øynene (k0.7.6): ex/ey i grader når de er åpne
+    this.buf.head.push(pose ? { t, yaw: r1(pose.yaw), pitch: r1(pose.pitch), ...(Number.isFinite(pose.ex) ? { ex: r1(pose.ex), ey: r1(pose.ey) } : {}), ok: true } : { t, ok: false });
   }
+  /* Veikameraet: tall om veien foran (aldri bilder). */
+  addRoad(r) {
+    if (!this.running) return;
+    this.roadN++;
+    if (r.lead) this.roadLead++;
+    this.buf.road.push({ t: this.now(), cars: r.cars, people: r.people, lead: r.lead ? { cls: r.lead.cls, dist: r.lead.dist, wpx: r.lead.wpx, ...(r.lead.src ? { src: r.lead.src } : {}) } : null,
+      lane: r.lane ? { l: r.lane.l, r: r.lane.r, offset: r.lane.offset } : null, lum: Number.isFinite(r.lum) ? r.lum : null, ...(r.night ? { night: true } : {}), ...(typeof r.img === 'string' ? { img: r.img } : {}), ...(Number.isFinite(r.best) ? { best: r.best } : {}) });
+  }
+
 
   mark(cat = 'annet') {
     if (!this.running) return null;
@@ -313,13 +324,14 @@ export class Recorder {
   async checkpoint() {
     if (!this.drive) return;
     const b = this.buf;
-    if (!b.loc.length && !b.gyro.length && !b.grav.length && !b.acc.length && !b.head.length) return;
-    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [] };
+    if (!b.loc.length && !b.gyro.length && !b.grav.length && !b.acc.length && !b.head.length && !b.road.length) return;
+    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [] };
     this.drive.counts.loc += b.loc.length;
     this.drive.counts.gyro += b.gyro.length;
     this.drive.counts.grav += b.grav.length;
     this.drive.counts.acc += b.acc.length;
     this.drive.counts.head = (this.drive.counts.head || 0) + b.head.length;
+    this.drive.counts.road = (this.drive.counts.road || 0) + b.road.length;
     this.drive.marks = this.marks;
     this.drive.distanceM = this.distance;
     this.drive.duration = this.now();
@@ -370,6 +382,7 @@ export class Recorder {
       wakeLock: d.wakeLock, standalone: d.standalone, replay: d.replay,
       gaps: this.gaps.length, marks: this.marks.length,
       camera: this.headN ? { samples: this.headN, faceShare: Math.round(this.headOk / this.headN * 100) / 100, hz: Math.round(this.headN / sec * 10) / 10 } : null, staleStartFixes: d.staleStartFixes || 0,
+      road: this.roadN ? { samples: this.roadN, leadShare: Math.round(this.roadLead / this.roadN * 100) / 100 } : null,
       userAgent: d.userAgent, appVersion: this.appVersion || null
     };
   }

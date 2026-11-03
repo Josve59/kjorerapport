@@ -120,7 +120,7 @@ export function renderReport(root, r, ctx = {}) {
   const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events, enrich.limits), fromNvdb: true } : null;
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null) : null;
   const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
-  const sits = buildSituations(r, { camera: r.camera, marks, sp, nvdb: road });
+  const sits = buildSituations(r, { camera: r.camera, marks, sp, nvdb: road, road: r.road || null });
   const sitSum = situationSummary(sits);
 
   // Datakvalitet: alt teknisk samlet ett sted
@@ -187,7 +187,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
 
     <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}
+      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${r.road ? '<a href="#road-section">Veien</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}
     </nav>
 
 
@@ -265,6 +265,7 @@ export function renderReport(root, r, ctx = {}) {
     ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}
 
     ${r.camera ? cameraSection(r, ctx) : ''}
+    ${r.road ? roadSection(r, ctx) : ''}
 
     ${marks.length ? `<section class="card" id="marks-section">
       <h2 class="card-title">${icon('flag')}Ledsagerens merker</h2>
@@ -637,6 +638,36 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
 
 /* Kamera-testversjonen: speil- og skulderblikk fra hodets retning */
 const GLANCE_LABEL = { left: 'Venstre speil', right: 'Høyre speil', rear: 'Bakspeil', shoulderL: 'Skulder venstre', shoulderR: 'Skulder høyre' };
+/* Veikameraet (iPhone-appen, samtidig med førerkameraet): avstand til bilen foran, sammen med GPS-farten. */
+function roadSection(r, ctx = {}) {
+  const rd = r.road, cp = ctx.cameraPlan || null, ln = rd.lane || null;
+  const pc = v => Math.round(v * 100) + ' %';
+  const REASON = { veiblikk: 'jevne veiblikk', nedbremsing: 'ved nedbremsing', 'bil nær foran': 'bil nær foran' };
+  const HOLD = { 'kryss nærmer seg': 'inn mot kryss', igangkjøring: 'ved igangkjøring', speilblikk: 'etter speilblikk' };
+  const holds = cp && cp.holds ? Object.entries(cp.holds).filter(([, n]) => n > 0) : [];
+  const blindRoad = rd.seenShare === 0 && rd.samples >= 10;
+  const cov = Math.round(rd.coverage * 100);
+  return `<section class="card" id="road-section">
+      <h2 class="card-title">${icon('layers')}Veien foran <span class="beta-tag">Ny</span></h2>
+      ${blindRoad ? `<p class="notice">Veikameraet fant verken biler eller feltlinjer i ${rd.samples} bilder.${rd.darkShare === null || rd.darkShare >= 0.5 ? `${rd.darkShare === null ? ' Var det mørkt?' : ' Bildene var mørke.'} Sett telefonen så nær frontruta som mulig og demp skjermen i bilen: refleks i ruta er det største problemet om kvelden.` : ' Sjekk at bakkameraet ser fram gjennom frontruta og ikke er dekket.'}</p>` : ''}
+      ${!blindRoad && rd.darkShare !== null && rd.darkShare >= 0.5 ? `<p class="muted small">Kjørt i mørket (${pc(rd.darkShare)} av veibildene). Baklys-par ble funnet i ${rd.tailLeads || 0} bilder. De brukes ikke til avstand ennå: de må først sjekkes mot testbilder.</p>` : ''}
+      <div class="road-stats">
+        <div><strong>${rd.medianHeadway !== null ? n1(rd.medianHeadway) + ' s' : '–'}</strong><span class="muted small">vanlig avstand i tid</span></div>
+        <div><strong>${rd.medianDist !== null ? rd.medianDist + ' m' : '–'}</strong><span class="muted small">vanlig avstand</span></div>
+        <div><strong>${rd.close.length}</strong><span class="muted small">ganger for nær</span></div>
+      </div>
+      <p>${rd.close.length ? `For kort avstand til bilen foran ${rd.close.length === 1 ? 'én gang' : rd.close.length + ' ganger'}. Se Situasjoner.` : rd.medianHeadway !== null ? 'Ingen perioder med for kort avstand til bilen foran.' : 'Det var sjelden en bil rett foran når veikameraet så veien.'} Hold minst 2 sekunder, og 3 i mørke eller på glatt vei.</p>
+      ${ln ? `<h3 class="mt">Plassering i feltet <span class="beta-tag">Ny</span></h3>
+      <p>${ln.medianOffset !== null ? `Bilen lå typisk ${Math.abs(ln.medianOffset).toFixed(2).replace('.', ',')} m ${ln.medianOffset > 0.05 ? 'til høyre for' : ln.medianOffset < -0.05 ? 'til venstre for' : 'fra'} midten av feltet, og varierte rundt ${ln.spread.toFixed(2).replace('.', ',')} m.${ln.nearEdge ? ` Nær en feltlinje i ${ln.nearEdge} bilder.` : ''}` : 'For få bilder med begge feltlinjene til å si noe om plasseringen.'}</p>
+      <p class="muted small">Begge feltlinjene ble funnet i ${pc(ln.share)} av veibildene i minst 40 km/t. Forutsetter at telefonen står midt i bilen; står den til siden, forskyves tallene.</p>` : ''}
+      ${cp && cp.share ? `<h3 class="mt">Kameratid</h3>
+      <p>Førerkameraet så føreren ${pc(cp.share.front)} av tiden, veikameraet veien ${pc(cp.share.road)}, og ${pc(cp.share.blind)} gikk med til bytting (snitt ${cp.switchAvg ?? '–'} ms). ${cp.looks} veiblikk: ${Object.entries(cp.byReason || {}).map(([k, n]) => `${n} ${REASON[k] || k}`).join(', ') || 'ingen'}. Ingen veiblikk i svinger eller under 15 km/t${holds.length ? `, og førerkameraet ble holdt på ${holds.map(([k, n]) => `${n} ${n === 1 ? "gang" : "ganger"} ${HOLD[k] || k}`).join(' og ')}` : ''}.${Number.isFinite(cp.darkLooks) && cp.darkLooks ? ` ${cp.darkLooks} veiblikk var for mørke, så veien ble sjekket sjeldnere.` : ''}</p>
+      ${cp.settings && cp.settings.reasons && cp.settings.reasons.length ? `<p class="muted small">${cp.settings.reasons.map(esc).join('. ')}.</p>` : ''}
+      ${cp.perf && cp.perf.drops ? `<p class="notice">Telefonen ble treg ${cp.perf.drops} ${cp.perf.drops === 1 ? 'gang' : 'ganger'} (varm?), og kameraet gikk ned til 5 bilder i sekundet. Unngå direkte sol, og ha lader i.</p>` : ''}` : ''}
+      <p class="muted small">Veikameraet så veien ${cov} % av tiden${cp && cp.model ? ` (bilgjenkjenning: ${esc(cp.model)})` : ''}. Opptil ${rd.maxCars} biler i bildet samtidig${rd.peopleSeen ? `, folk eller syklister i ${rd.peopleSeen} bilder` : ''}. Avstanden anslås ut fra hvor bred bilen ser ut og kan bomme med 20–30 %.</p>
+    </section>`;
+}
+
 function cameraSection(r, ctx = {}) {
   const c = r.camera;
   const T = Math.max(1, r.points.length ? r.points[r.points.length - 1].t : 1);

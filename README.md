@@ -142,6 +142,61 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.10.0 – both cameras at once in the iPhone app, D-FINE xlarge on the phone
+
+The iPhone app now uses the driver camera (front) and the road camera (back) **at the same time**. Safari can only use one camera at a time; the native app uses `AVCaptureMultiCamSession` (iPhone XS and newer). Safari is unchanged: driver camera only.
+
+**How it fits together:**
+- **`ios/Kjorerapport/CameraHub.swift`:** both cameras at 15 frames per second, portrait. The driver camera is 640×480 and not mirrored, like in Safari. The road camera is 1280×720.
+- **The local server:** gives the latest frame as JPEG at `/cam/user.jpg` and `/cam/environment.jpg`. The query `?after=` gives 204 if no new frame has come, and the header `X-Age` gives the frame's age in ms.
+- **`ios/Kjorerapport/RoadDetector.swift`:** cars and people with **D-FINE xlarge (Objects365 + COCO, COCO AP about 59)** as Core ML on the phone's graphics processor.
+  - Same crop and decoding as `dfine.js`: a square above the dashboard edge, 640×640, gamma in the dark.
+  - At most 10 times a second, 3 when the phone is hot.
+  - The first 8 answers time the GPU and «all» (Core ML chooses), and the faster one is used for the rest of the session.
+  - The answers go to the web app as the event `kjcamdets`, with the time the frame was taken.
+- **`js/nativecam.js`:** fetches the frames into a canvas, and gives a `captureStream` to the small camera images.
+- **`js/facecam.js`:** rewritten.
+  - The driver camera runs as before (MediaPipe Face Landmarker), now with the eyes (blendshapes), like the camera test app.
+  - The road camera has everything from the test app: tracking between answers (`track.js`), image tracking (`flow.js`), lane lines and dashboard edge (`lanes.js`), taillights in the dark and speed signs (`signs.js`).
+  - The road modules are copied from `kamera/js/`, and `tests/shared.test.mjs` checks that the copies are identical.
+- **In the app:**
+  - **Kamera:** a «Veikamera samtidig» switch, a road preview with a status line, and tap a camera image for full screen.
+  - **Before the drive:** a «Veikamera ser veien» check.
+  - **Recording:** two small camera images, and the pill says «bil 23 m foran». Speed signs read by the camera take priority over NVDB, as in the test app.
+  - **Report:** a «Veien foran» section (time gap, distance, too close, position in the lane) with a «Veien» shortcut.
+  - **Developer section:** «Testbilder fra veikameraet».
+- **Saved with the drive:** `road` samples (numbers only), and `cameraPlan` with frame size, model and speed.
+
+**Choosing the model** (`ios/Models/README.md`):
+- Converted from PyTorch (Hugging Face `ustc-community/dfine-*-obj2coco`) to Core ML fp16, and checked against PyTorch fp32 on 42 night snapshots from the drives on 2 Nov.
+
+| Model | Speed on the Mac GPU | Same detections as PyTorch |
+| --- | --- | --- |
+| Small | 5 ms | 55 of 56 |
+| Medium | 7 ms | 83 of 85 |
+| Large | 9.5 ms | 66 of 66 |
+| Xlarge | 15 ms | 57 of 57 |
+
+- The Neural Engine was 8–14 times slower than the GPU for this model (the deformable attention does not run there).
+- 8-bit weights halved the size but matched only 52 of 57, so fp16 is used.
+- **Size:** the compiled model is 120 MB. It lies in `ios/Models/DFine.mlmodelc` with the weights split into parts under 50 MB, because GitHub refuses files over 100 MB. `copy-web.sh` joins them at build time. The app is about 157 MB.
+
+**Two bugs found and fixed in the simulator test:**
+- **Zero output:** Core ML gave all zeros every other run, because the rows in the answer are padded.
+  - The decoding now reads with Core ML's own strides.
+  - An all-zero answer is reported as an error, not as «no cars».
+  - In the simulator the model runs on the CPU, because the simulator's GPU gives only zeros.
+- **Taps:** iPhone does not pass taps on `<video>` elements on, so tap targets now sit around or over the camera images.
+
+**Tested in the simulator with a fake camera** (`KJ_SIMCAM`, night snapshots from 2 Nov) and the Trondheim route:
+- Both cameras started, and D-FINE xlarge loaded in 0.7 s.
+- Full screen showed «3 biler · Bil foran 54 m», one lane line and the dashboard edge at 72 % (as on the real drive).
+- The report got «Veien foran»: lane position 0.12 m right, both lines in 42 % of frames.
+- On the Mac with the same Swift code, xlarge took 17–25 ms per frame and found the same cars as PyTorch.
+- **Not tested yet: real cameras on a phone.** Speed, heat and battery with both cameras and xlarge must be measured on a drive. The full-screen view shows the time per answer.
+
+**Testing in the simulator:** in testbygg (Debug), `SIMCTL_CHILD_KJ_SIMCAM=<folder with user/ and environment/>` gives fake camera images. `SIMCTL_CHILD_KJ_HASH=#/kamera` opens a page directly, and the web app's `console` goes to the Xcode log.
+
 ## What's new in 0.9.22 – Live Activity in the iPhone app
 
 While a recording is running, the lock screen and the Dynamic Island show:

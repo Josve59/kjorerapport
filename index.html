@@ -104,6 +104,7 @@
             <li id="check-gps" data-state="wait"><span class="check-icon" aria-hidden="true"></span><span><strong>GPS-nøyaktighet 20 m eller bedre</strong><br><span class="check-text muted"></span></span></li>
             <li id="check-motion" data-state="wait"><span class="check-icon" aria-hidden="true"></span><span><strong>Bevegelsesdata</strong><br><span class="check-text muted"></span></span></li>
             <li id="check-camera" data-state="wait" hidden><span class="check-icon" aria-hidden="true"></span><span><strong>Kamera ser føreren</strong> <span class="muted small">(test)</span><br><span class="check-text muted"></span><br><button type="button" class="btn secondary small-btn pre-calib" id="btn-pre-calib" hidden><span data-icon="target"></span>Kalibrer nå</button></span><video id="pre-video" class="pre-video" playsinline muted></video></li>
+            <li id="check-road" data-state="wait" hidden><span class="check-icon" aria-hidden="true"></span><span><strong>Veikamera ser veien</strong> <span class="muted small">(test)</span><br><span class="check-text muted"></span></span><video id="pre-road-video" class="pre-video road" playsinline muted></video></li>
             <li id="check-holder" data-state="wait"><span class="check-icon" aria-hidden="true"></span><span><strong>Telefonen står stødig</strong> <span class="muted small">(anbefalt)</span><br><span class="check-text muted"></span></span></li>
           </ul>
         </div>
@@ -120,6 +121,10 @@
   <!-- Opptak -->
   <section id="record" class="screen record" hidden>
     <video id="rec-video" class="rec-video" playsinline muted hidden></video>
+    <video id="rec-road-video" class="rec-video road rec-road" playsinline muted hidden></video>
+    <!-- Trykkflater over kamerabildene: iPhone sender ikke trykk på video-elementer videre -->
+    <button type="button" class="rec-video-hit" id="rec-video-hit" aria-label="Vis førerkameraet i full skjerm" hidden></button>
+    <button type="button" class="rec-video-hit rec-road" id="rec-road-hit" aria-label="Vis veikameraet i full skjerm" hidden></button>
     <div class="rec-top">
       <span class="rec-dot" aria-hidden="true"></span><span>Opptak pågår</span>
     </div>
@@ -204,7 +209,8 @@
     </header>
     <section class="card">
       <p>Frontkameraet følger hvor føreren ser: rett fram, i speilene eller over skulderen. Bildene vises bare her og lagres aldri. Under kjøring lagres bare hodets vinkler.</p>
-      <p class="muted small">Eksperimentelt. Kameraet ser hodet, ikke øynene, så korte blikk med bare øynene kan bli borte. Sett telefonen i holderen der den står under kjøring, med ansiktet godt synlig.</p>
+      <p class="muted small">Eksperimentelt. Kameraet ser hodet og øynene, men korte blikk kan bli borte. Sett telefonen i holderen der den står under kjøring, med ansiktet godt synlig.</p>
+      <p class="muted small" id="cam-road-intro" hidden>I iPhone-appen kan bakkameraet se veien samtidig: bilen foran, feltlinjene og fartsskiltene. Også her lagres bare tall, aldri bilder.</p>
       <p class="notice" id="cam-for-drive" hidden></p>
       <p class="cam-calib-status" id="cam-calib-status"></p>
       <button type="button" class="btn primary" id="btn-cam-calib"><span data-icon="target"></span>Kalibrer</button>
@@ -219,12 +225,18 @@
         <p class="cam-label" id="cam-label" data-cls="none" aria-live="polite">Ser ikke ansiktet</p>
       </div>
       <p class="muted small center" id="cam-nums"></p>
+      <div class="cam-road" id="cam-road" hidden>
+        <video id="cam-road-video" class="road" playsinline muted></video>
+        <p class="small" id="cam-road-text" aria-live="polite">Veikameraet starter …</p>
+      </div>
+      <p class="muted small center">Trykk på et kamerabilde for å se hva appen ser, i full skjerm.</p>
       <h3 class="mt">Siste blikk</h3>
       <ul class="cam-log" id="cam-log"><li class="muted small">Se i et speil, så dukker det opp her.</li></ul>
     </section>
     <section class="card">
       <div class="toggle-list">
         <label class="toggle"><span><strong>Bruk kamera under kjøring</strong><br><span class="muted small">Kameraet starter når ledsageren gir tilgang før turen, og rapporten får en del om speil- og skulderblikk.</span></span><input type="checkbox" class="switch" id="cameraOn"></label>
+        <label class="toggle" id="roadCam-row" hidden><span><strong>Veikamera samtidig</strong><br><span class="muted small">Bakkameraet ser bilen foran, feltlinjene og fartsskiltene mens frontkameraet ser føreren. Rapporten får en del om avstand og plassering i feltet. Bruker mer strøm: ha laderen i.</span></span><input type="checkbox" class="switch" id="roadCam"></label>
       </div>
     </section>
   </section>
@@ -386,15 +398,26 @@
       <h3>Utvikler</h3>
       <p class="muted small">Spiller demoturen gjennom opptakeren, lagringen og rapporten, som om sensorene leverte dataene.</p>
       <button type="button" class="btn secondary" id="btn-dev-demo">Kjør demotur gjennom opptakeren (60×)</button>
+      <div class="toggle-list mt">
+        <label class="toggle"><span><strong>Testbilder fra veikameraet</strong><br><span class="muted small">Lagrer små bilder av veien med turen (et stort hvert 30. s, små når det er en bil foran), så bilgjenkjenningen kan sjekkes etterpå. Turene blir større.</span></span><input type="checkbox" class="switch" id="roadThumbs"></label>
+      </div>
     </section>
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.9.22</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.10.0</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 
 </main>
+<!-- Fullskjerm kamera med det modellene ser (k0.7.2, i hovedappen fra 0.10.0) -->
+<div class="cam-full" id="cam-full" hidden>
+  <video id="cam-full-video" playsinline muted></video>
+  <canvas id="cam-full-canvas"></canvas>
+  <div class="cam-full-info" id="cam-full-info" aria-live="off"></div>
+  <button type="button" class="cam-full-close" id="cam-full-close" aria-label="Lukk kameravisningen">✕</button>
+  <button type="button" class="cam-full-switch" id="cam-full-switch" hidden>Vis veikamera</button>
+</div>
 <!-- Fanelinje (v0.9.16): de fire hoveddelene av appen, alltid synlig unntatt før og under kjøring -->
 <nav class="tabbar" id="tabbar" aria-label="Hovedmeny" hidden>
   <a href="#/" data-tab="home"><span data-icon="home"></span><span>Hjem</span></a>

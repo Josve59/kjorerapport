@@ -23,6 +23,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     private var lastLocation: CLLocation?
     private var lastActivityUpdate = Date.distantPast
     private let gravity = 9.80665
+    private let detector = RoadDetector()   // bilgjenkjenning for veikameraet (CameraHub)
 
     override init() {
         super.init()
@@ -44,6 +45,25 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         switch cmd {
         case "info":
             return (["devTools": await Self.devTools()], nil)
+        case "camInfo":
+            return (["multi": CameraHub.multiSupported, "model": Bundle.main.url(forResource: "DFine", withExtension: "mlmodelc") != nil], nil)
+        case "camStart":
+            // Begge kameraene samtidig når telefonen kan (iPhone XS og nyere), ellers det første i listen
+            let facings = (body["facings"] as? [String] ?? ["user"]).compactMap(CameraHub.Facing.init(rawValue:))
+            let detect = (body["detect"] as? Bool ?? false) && facings.contains(.environment)
+            let started = await CameraHub.shared.start(facings)
+            let model = detect && started.active.contains(.environment) ? await startDetector() : nil
+            if model == nil { CameraHub.shared.onRoadFrame = nil }
+            return (["active": started.active.map(\.rawValue), "multi": started.multi, "error": started.error.map { $0 as Any } ?? NSNull(), "model": model.map { $0 as Any } ?? NSNull()], nil)
+        case "log":
+            #if DEBUG
+            print("[web \(body["level"] as? String ?? "log")] \(body["text"] as? String ?? "")")
+            #endif
+        case "camStop":
+            CameraHub.shared.onRoadFrame = nil
+            CameraHub.shared.stop()
+        case "camConfig":
+            detector.configure(roadBottom: body["roadBottom"] as? Double, dark: body["dark"] as? Bool ?? false)
         case "geoStart":
             watching = true
             startLocation()
@@ -73,6 +93,24 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             break
         }
         return (["auth": authorizationName], nil)
+    }
+
+    /// Laster bilgjenkjenningen (første gang tar det noen sekunder) og gir den veibildene. Svarene går til nettappen
+    /// som window.__kjCamDets({ dets, w, h, age, ms, backend }). Returnerer modellens navn, eller nil.
+    private func startDetector() async -> String? {
+        let detector = self.detector
+        let t0 = Date()
+        let loaded = await Task.detached(priority: .userInitiated) { detector.load() }.value
+        #if DEBUG
+        print("[cam] bilgjenkjenning lastet: \(loaded) \(detector.name) på \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
+        #endif
+        guard loaded else { return nil }
+        detector.onResult = { [weak self] result in
+            let js = "window.__kjCamDets && window.__kjCamDets(\(Self.jsonString(result)))"
+            Task { @MainActor in self?.send(js) }
+        }
+        CameraHub.shared.onRoadFrame = { frame in detector.feed(frame) }
+        return detector.name
     }
 
     /// Utviklerdelen i Innstillinger finnes bare i Xcode og TestFlight, ikke i App Store-utgaven.
@@ -224,7 +262,9 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         webView?.evaluateJavaScript(script, completionHandler: nil)
     }
 
-    private func json(_ value: Any) -> String {
+    private func json(_ value: Any) -> String { Self.jsonString(value) }
+
+    nonisolated private static func jsonString(_ value: Any) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: value) else { return "null" }
         return String(decoding: data, as: UTF8.self)
     }
