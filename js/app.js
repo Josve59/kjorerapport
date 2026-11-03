@@ -14,7 +14,7 @@ import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.13';
+export const APP_VERSION = '0.9.14';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};

@@ -128,6 +128,28 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.14 / k0.7.9 – new visual style
+
+`css/theme.css` (the same file in both apps) is loaded after `app.css` and sets a common style. The direction is still road and signs, but calmer.
+
+- **Colours:**
+  - Signal yellow (`--primary`) for everything you press: Start, «Ta kopi», «Oppdater nå» and other primary buttons. Before, primary buttons were black.
+  - Sign blue (`--link`) for links and information.
+  - Green and red only for good and bad.
+  - Light mode: warm off-white background, and white cards with soft shadow and no lines.
+  - Dark mode: dark surfaces with a thin line and no shadow.
+  - All text, including grey, has a contrast of at least 4.5:1.
+- **Typography:** Overpass as before (similar to road signs), with a clearer scale. Small text is never under about 15 px.
+- **Components:**
+  - card titles have a coloured icon chip
+  - choices with several buttons have a calm background, with the chosen one lifted out
+  - filter and quick-navigation pills fill, and buttons and fields are filled with no frame
+  - all touch targets are at least 44–48 px, including text links
+  - a clear focus ring
+  - movement is reduced for those who have asked for it
+- **Front page:** the order is now start, the last drive, «Til trafikklæreren», then overview, development and the camera card further down. The four number tiles are gone, since the same numbers are in the driving log and the development chart.
+- **Text:** the pre-drive screen now says what actually happens during the drive («Under kjøringen vises bare fartsgrensen …»).
+
 ## What's new in 0.9.13 / k0.7.8 – a page for the driving instructor
 
 New screen **«Til trafikklæreren»** (`js/teacher.js`, route `#/trafikklaerer`, card on the front page). It is one page with everything practised since the last driving lesson, ready to show on the phone, print or save as PDF, or share as a message.

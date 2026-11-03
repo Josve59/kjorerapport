@@ -1,11 +1,11 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.9.13';
+const VERSION = 'v0.9.14';
 const CACHE = 'kjorerapport-' + VERSION;
 const ML_CACHE = 'kjorerapport-ml';   // ansiktsgjenkjenningen, beholdes mellom versjoner
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
-  './css/app.css',
+  './css/app.css', './css/theme.css',
   './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js', './js/camera.js', './js/facecam.js', './js/situations.js', './js/livelimit.js', './js/liveatk.js', './js/teacher.js', './js/sound.js',
   './fonts/overpass-latin.woff2', './fonts/overpass-latin-ext.woff2',
   './vendor/leaflet/leaflet.js', './vendor/leaflet/leaflet.css',

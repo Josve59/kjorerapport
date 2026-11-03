@@ -17,6 +17,7 @@
   <link rel="preload" href="./fonts/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="./css/app.css">
+  <link rel="stylesheet" href="./css/theme.css">
 </head>
 <body>
 <main id="app">
@@ -112,7 +113,7 @@
     <div class="start-bar">
       <button type="button" class="btn primary big" id="btn-start-record" disabled>Venter på tilgang</button>
       <button type="button" class="btn secondary" id="btn-start-anyway" hidden>Start likevel</button>
-      <p class="muted small center">Ingen lyder, poeng eller tilbakemelding mens dere kjører.</p>
+      <p class="muted small center">Under kjøringen vises bare fartsgrensen, og det piper før fotobokser. Poeng og tips kommer når dere stopper.</p>
     </div>
   </section>
 
@@ -413,7 +414,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Testversjon – målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.7.8</p>
+    <p class="muted small center" id="version">Kjørerapport Kamera versjon k0.7.9</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

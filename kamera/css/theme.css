@@ -1,0 +1,130 @@
+/* Kjørerapport – visuell stil 1.0 (v0.9.14). Lastes etter app.css og overstyrer farger, typografi, former og de
+   vanligste komponentene, likt i begge appene.
+   Retning: vei og skilt, men rolig. Signalgult for det man skal trykke på, skiltblått for lenker og informasjon,
+   grønt og rødt bare for bra og dårlig. Hvite kort uten streker i lys modus, egne flater i mørk modus.
+   Brukervennlighet: kontrast minst 4,5:1 på all tekst (også grå), trykkflater minst 48 px, tydelig fokusring,
+   og liten tekst aldri under 15 px. */
+
+/* ---------- Farger ---------- */
+:root {
+  --bg: #f3f4f1; --surface: #ffffff; --surface-2: #eff1ee; --ink: #14181b; --muted: #545e66; --line: #e0e4df;
+  --primary: #f5c518; --on-primary: #14181b; --link: #1e5aa8; --focus: #1e5aa8;
+  --brake: #c0392b; --accel: #1e5aa8; --turn: #a15c0b; --good: #23784a; --sign: #c8102e;
+  --asphalt: #262c31; --road-edge: #1b2024; --lane: #f5c518;
+  --radius: 20px; --radius-sm: 14px;
+  --shadow: 0 1px 2px rgba(16, 24, 32, .04), 0 6px 20px rgba(16, 24, 32, .06);
+  --shadow-lg: 0 14px 34px rgba(16, 24, 32, .16);
+  --card-border: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1214; --surface: #181c1f; --surface-2: #22272b; --ink: #eceeed; --muted: #a5aeb5; --line: #2b3136;
+    --primary: #f5c518; --on-primary: #14181b; --link: #84b6f4; --focus: #84b6f4;
+    --brake: #f07a66; --accel: #84b6f4; --turn: #f0a257; --good: #5cc08a; --sign: #e0384f;
+    --asphalt: #3a4248; --road-edge: #4c555c; --lane: #f5c518;
+    --shadow: none; --shadow-lg: 0 14px 34px rgba(0, 0, 0, .5); --card-border: var(--line);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1214; --surface: #181c1f; --surface-2: #22272b; --ink: #eceeed; --muted: #a5aeb5; --line: #2b3136;
+  --primary: #f5c518; --on-primary: #14181b; --link: #84b6f4; --focus: #84b6f4;
+  --brake: #f07a66; --accel: #84b6f4; --turn: #f0a257; --good: #5cc08a; --sign: #e0384f;
+  --asphalt: #3a4248; --road-edge: #4c555c; --lane: #f5c518;
+  --shadow: none; --shadow-lg: 0 14px 34px rgba(0, 0, 0, .5); --card-border: var(--line);
+}
+
+/* ---------- Typografi ---------- */
+body { font-size: 17px; line-height: 1.5; letter-spacing: .005em; -webkit-font-smoothing: antialiased; }
+h1 { font-size: 1.65rem; letter-spacing: -.01em; }
+h2, .card-title { font-size: 1.08rem; font-weight: 800; letter-spacing: -.005em; }
+.small, .muted.small { font-size: .9rem; }          /* 15,3 px */
+.eyebrow { font-size: .8rem; letter-spacing: .08em; }
+.muted { color: var(--muted); }
+a, .link { color: var(--link); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 6px; }
+
+/* ---------- Flater ---------- */
+.card, .tile, .banner { background: var(--surface); border: 1px solid var(--card-border); box-shadow: var(--shadow); }
+.card { border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+.tile { border-radius: var(--radius-sm); }
+.card .tile, .stat-chips div, .last-tip { background: var(--surface-2); box-shadow: none; border: 0; }
+.notice { border-radius: 12px; border-left-width: 4px; }
+
+/* Korttitler: ikonet i en farget brikke, så kortene er lette å skille fra hverandre */
+.card-title { display: flex; align-items: center; gap: 10px; }
+.card-title .ico { width: 32px; height: 32px; padding: 6px; border-radius: 10px; color: var(--link); background: color-mix(in srgb, var(--link) 13%, transparent); }
+.group-title { color: var(--muted); font-size: .8rem; letter-spacing: .08em; margin: 26px 6px 10px; }
+.group-title .ico { color: var(--muted); }
+.section-title { font-size: 1.12rem; margin: 22px 4px 10px; }
+
+/* ---------- Knapper ---------- */
+.btn { border-radius: 16px; min-height: 54px; font-weight: 800; border-width: 0; }
+.btn.primary { background: var(--primary); color: var(--on-primary); box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 35%, transparent); }
+.btn.secondary { background: var(--surface-2); color: var(--ink); border: 1px solid var(--card-border); }
+.btn.danger { background: transparent; color: var(--brake); border: 2px solid color-mix(in srgb, var(--brake) 55%, transparent); }
+.btn.small-btn { min-height: 48px; border-radius: 14px; }
+.link { min-height: 48px; display: inline-flex; align-items: center; }
+.icon-btn { border: 0; background: transparent; }
+.icon-btn:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+
+/* Valg med flere knapper: rolig bakgrunn, valgt knapp løftet fram */
+.segment { border: 0; background: var(--surface-2); padding: 4px; border-radius: 16px; gap: 4px; }
+.segment span { min-height: 48px; border-radius: 12px; color: var(--muted); transition: background .15s, color .15s; }
+.segment input:checked + span { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(16, 24, 32, .14); }
+:root[data-theme="dark"] .segment input:checked + span { background: #343b41; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .segment input:checked + span { background: #343b41; } }
+.chip { border: 0; background: var(--surface-2); min-height: 44px; }
+.chip.on { background: var(--ink); color: var(--bg); }
+.quicknav { background: color-mix(in srgb, var(--bg) 92%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.quicknav a { min-height: 44px; border: 0; background: var(--surface-2); }
+.quicknav a.on { background: var(--ink); color: var(--bg); }
+input.switch { background: color-mix(in srgb, var(--muted) 35%, var(--surface-2)); }
+input.switch:checked { background: var(--good); }
+
+/* Skjemafelt */
+.field input, .field select, .add-row input, select, textarea, input[type="date"], input[inputmode] {
+  font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--card-border); border-radius: 12px; min-height: 48px; padding: 10px 12px;
+}
+
+/* ---------- Appens topp ---------- */
+.appbar { background: color-mix(in srgb, var(--bg) 85%, transparent); border-bottom-color: transparent; }
+.appbar .brand { font-size: 1.25rem; letter-spacing: -.01em; }
+
+/* ---------- Forsiden ---------- */
+/* Rekkefølge etter det man oftest vil: starte, se siste tur, vise trafikklæreren, så oversikt og resten */
+#home:not([hidden]) { display: flex; flex-direction: column; }
+#home > .appbar { order: 0; } #home > #update-banner { order: 1; } #home > .start-card { order: 2; }
+#home > #backup-banner { order: 3; } #home > #install-hint { order: 4; } #home > #howto { order: 5; }
+#home > #driver-chips { order: 6; } #home > #last-drive { order: 7; } #home > #more-cards { order: 8; }
+#home > #summary { order: 9; display: none !important; }   /* samme tall står i kjøreloggen og utviklingen */ #home > #log-card { order: 10; } #home > #goals { order: 11; } #home > #trend { order: 12; }
+#home > .cam-card { order: 13; } #home > #drive-section { order: 14; } #home > .report-foot { order: 15; }
+.start-card { background: radial-gradient(120% 90% at 0% 0%, #343c42 0%, #20262a 55%, #171b1e 100%); border-radius: 24px; padding: 24px 20px 16px; }
+.start-hello { font-size: 1.75rem; letter-spacing: -.01em; }
+.start-btn { background: var(--primary); color: var(--on-primary); border-radius: 18px; min-height: 64px; box-shadow: 0 8px 22px rgba(245, 197, 24, .35); }
+.start-demo { color: #f2f4f3; display: flex; justify-content: center; margin: 0 auto; }
+.start-suggest { background: rgba(255, 255, 255, .08); border-radius: 12px; padding: 8px 12px; font-size: .95rem; }
+.mini-grid { gap: 12px; }
+.mini-card, .t-cta, .log-card-btn, .last-card, .cam-card { transition: transform .12s var(--ease); }
+.mini-card:active, .t-cta:active, .log-card-btn:active, .cam-card:active { transform: scale(.985); }
+.t-cta { background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 22%, var(--surface)) 0%, var(--surface) 70%); }
+.t-cta .card-title .ico { color: #6b5300; background: color-mix(in srgb, var(--primary) 45%, transparent); }
+:root[data-theme="dark"] .t-cta .card-title .ico { color: var(--primary); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .t-cta .card-title .ico { color: var(--primary); } }
+.drives.card, .drive-section .drives { padding: 4px 14px; }
+.drives li + li { border-top-color: var(--line); }
+
+/* ---------- Rapporten ---------- */
+.hero { padding: 20px; }
+.hero .rating { font-size: 1.3rem; font-weight: 800; letter-spacing: -.01em; }
+.stat-chips div { border-radius: 12px; }
+.summary-list { gap: 12px; }
+.practice-list li::before { background: var(--primary); color: var(--on-primary); }
+.more-details > summary.btn { background: var(--surface); border: 1px dashed var(--line); box-shadow: none; }
+
+/* ---------- Under kjøring ---------- */
+.stop { box-shadow: 0 0 0 10px var(--surface), 0 0 0 12px var(--line), 0 18px 40px rgba(200, 16, 46, .25); }
+
+/* Mindre bevegelse for de som har bedt om det */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
