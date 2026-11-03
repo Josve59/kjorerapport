@@ -12,7 +12,8 @@ test('oppsummeringsteksten inneholder poeng, hendelser og tips', () => {
   assert.match(text, /Hendelser \(3\):/);
   assert.match(text, /1\. Kraftig akselerasjon – 1:52/);
   assert.match(text, /Notat: Rundkjøringer/);
-  assert.match(text, /Testversjon/);
+  assert.match(text, /Målingene er veiledende/);
+  assert.doesNotMatch(text, /Testversjon/);
 });
 
 test('hendelser per 10 km', () => {

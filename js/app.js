@@ -14,7 +14,7 @@ import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.19';
+export const APP_VERSION = '0.9.20';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1257,12 +1257,16 @@ async function renderSettings() {
   $('#btn-delete-all').onclick = async () => {
     if (await confirmDialog({ title: 'Slette alle turer?', text: 'Alle turer og rådata slettes fra telefonen. Ta en sikkerhetskopi først hvis du vil beholde dem.', ok: 'Slett alt', danger: true })) { await deleteAll(); toast('Alle turer er slettet.', { type: 'ok' }); location.hash = '#/'; }
   };
-  // Skjult utvikleralternativ: trykk 7 ganger på versjonsnummeret
+  // Utvikleralternativ: trykk 7 ganger på versjonsnummeret. I iPhone-appen bare i Xcode og TestFlight
+  // (Apple tillater ikke skjulte funksjoner i App Store-utgaven).
   let taps = 0, last = 0;
-  $('#version').onclick = () => {
+  $('#version').onclick = async () => {
     const now = Date.now();
     taps = now - last < 1500 ? taps + 1 : 1; last = now;
-    if (taps >= 7) { $('#dev-section').hidden = false; taps = 0; }
+    if (taps < 7) return;
+    taps = 0;
+    if (window.kjNative) { const info = window.kjNative.info ? await window.kjNative.info() : null; if (!info || !info.devTools) return; }
+    $('#dev-section').hidden = false;
   };
   // Demoen spilles av med telefonen «montert» skrått, så akselerometerdata og v3-motoren også testes.
   $('#btn-play-demo').onclick = () => { startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 }); location.hash = '#/opptak'; };
@@ -1314,7 +1318,7 @@ function renderThresholdSettings() {
       renderThresholdSettings();
     };
   });
-  $('#th-status').textContent = s.th ? 'Egne terskler er i bruk.' : 'Standard terskler fra prototypen.';
+  $('#th-status').textContent = s.th ? 'Egne terskler er i bruk.' : 'Standard terskler.';
   $('#btn-th-reset').onclick = () => { const cur = getSettings(); delete cur.th; saveSettings(cur); renderThresholdSettings(); toast('Standard terskler er tilbake.', { type: 'ok', ms: 2000 }); };
 }
 
@@ -1459,6 +1463,7 @@ function init() {
     else toast(`Du har siste versjon (${APP_VERSION}).`, { type: 'ok' });
   };
   $('#version').textContent = `Kjørerapport versjon ${APP_VERSION}`;
+  if (window.kjNative) $('#btn-check-update').parentElement.hidden = true;   // iPhone-appen oppdateres via App Store
   window.addEventListener('hashchange', route);
   let printOpened = [];
   window.addEventListener('beforeprint', () => {

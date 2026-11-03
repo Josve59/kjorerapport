@@ -880,3 +880,7 @@ body.intro-open .tabbar { display: none; }
 .intro-demo { justify-content: center; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { .intro-dots button::after { transition: none; } }
 @media (max-height: 760px) { .intro-hero { max-height: 20vh; } .intro-page h2 { margin-top: 16px; font-size: 1.5rem; } .intro-ico { width: 72px; height: 72px; } .intro-ico svg { width: 40px; height: 40px; } }
+
+/* Utviklerdelen: 7 trykk på versjonsnummeret. Uten touch-action tolker iOS raske trykk som dobbelttrykk-zoom og
+   sender bare det første som click. */
+#version { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }

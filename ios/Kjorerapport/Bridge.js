@@ -5,7 +5,7 @@
   const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.kj;
   if (!handler) return;
   const call = (cmd, arg) => handler.postMessage({ cmd, ...(arg || {}) }).catch(() => null);
-  window.kjNative = { platform: 'ios', recStart: () => call('recStart'), recStop: () => call('recStop') };
+  window.kjNative = { platform: 'ios', recStart: () => call('recStart'), recStop: () => call('recStop'), info: () => call('info') };
 
   const watchers = new Map();
   let nextId = 1;

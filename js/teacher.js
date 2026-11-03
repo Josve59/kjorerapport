@@ -77,7 +77,7 @@ export function teacherText(s, { note = '' } = {}) {
   if (mk.length) L.push(`Ledsageren merket: ${mk.map(([c, n]) => `${(MARK_CATS[c] ? MARK_CATS[c].label : c).toLowerCase()} ${n}`).join(', ')}.`);
   for (const n of s.notes) L.push(`– ${dateFmt(n.at)}: ${n.text}`);
   if (note) L.push(`Spørsmål til trafikklæreren: ${note}`);
-  L.push('Fra Kjørerapport (testversjon). Målingene er veiledende.');
+  L.push('Fra Kjørerapport. Målingene er veiledende.');
   return L.join('\n');
 }
 
@@ -143,5 +143,5 @@ export function teacherHtml(s, { note = '' } = {}) {
     </section>
 
     ${note ? `<section class="card"><h2 class="card-title">${icon('note')}Spørsmål til trafikklæreren</h2><p class="t-q">${esc(note)}</p></section>` : ''}
-    <p class="muted small center">Fra Kjørerapport (testversjon). Målt med telefonens GPS og bevegelsessensorer. Målingene er veiledende.</p>`;
+    <p class="muted small center">Fra Kjørerapport. Målt med telefonens GPS og bevegelsessensorer. Målingene er veiledende.</p>`;
 }

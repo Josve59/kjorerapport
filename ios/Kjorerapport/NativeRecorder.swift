@@ -1,5 +1,6 @@
 import CoreLocation
 import CoreMotion
+import StoreKit
 import UIKit
 import WebKit
 
@@ -32,6 +33,8 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) async -> (Any?, String?) {
         guard let body = message.body as? [String: Any], let cmd = body["cmd"] as? String else { return (nil, "ukjent melding") }
         switch cmd {
+        case "info":
+            return (["devTools": await Self.devTools()], nil)
         case "geoStart":
             watching = true
             startLocation()
@@ -56,6 +59,19 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             break
         }
         return (["auth": authorizationName], nil)
+    }
+
+    /// Utviklerdelen i Innstillinger finnes bare i Xcode og TestFlight, ikke i App Store-utgaven.
+    private static func devTools() async -> Bool {
+        #if DEBUG
+        return true
+        #else
+        guard let result = try? await AppTransaction.shared else { return false }
+        switch result.unsafePayloadValue.environment {
+        case .sandbox, .xcode: return true
+        default: return false
+        }
+        #endif
     }
 
     private var authorizationName: String {

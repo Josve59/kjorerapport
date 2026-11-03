@@ -128,6 +128,40 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.20 – no more «Testversjon»
+
+**Texts:**
+- «Testversjon» is gone from the app:
+  - the footer on Hjem;
+  - Om appen;
+  - the report (screen, shared text and PDF);
+  - the summary for the driving instructor.
+- The sentence that remains: «Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.»
+- «Appen er i testfase» is gone from Om appen.
+- «prototypen» is gone from Avansert (analysis engine and thresholds).
+- The camera tag in the report is now called «Ny» instead of «Test».
+- **The page and info sheet for driving schools:**
+  - «testversjon» is gone.
+  - «Ærlig status» is now called «Viktig å vite».
+  - The PDF has been regenerated from `ark.html` with headless Chrome. It is checked: one A4 page.
+- The camera test app (`kamera/`) is still labelled as a test app. It is not included in the iPhone app.
+
+**The developer section (7 taps on the version number) is gone from the App Store version:**
+- Apple does not allow hidden features.
+- The iPhone app answers `kjNative.info()` with `devTools`:
+  - `true` in Debug (Xcode) and TestFlight (`AppTransaction` environment `sandbox`/`xcode`);
+  - `false` otherwise.
+- The web app still has the section.
+- **Tested in the simulator** (via a temporary test log): Debug gives `devTools=true`, Release gives `devTools=false`.
+- **Bug found along the way:** iOS read 7 quick taps on the version number as a double-tap zoom, so only the first one counted. The version line now has `touch-action: manipulation` and `cursor: pointer`.
+  - The simulator test tool still could not deliver 7 separate taps. The counting is therefore tested in the browser, and the answer from the app with one tap.
+  - **Test on a real iPhone.**
+
+**iPhone app, other:**
+- «Se etter ny versjon» is hidden in the app, which is updated through the App Store.
+- **The driving-school page was missing from the app:** «Informasjon for trafikkskoler» gave «Fant ikke filen». `trafikkskole/` is now copied in by `copy-web.sh`. Tested: the page opens in the app.
+- **Swipe back** (`allowsBackForwardNavigationGestures`) is turned on, so you can get back from Personvern and the driving-school page. Not confirmed in the simulator. «Åpne appen» at the bottom of the pages always works.
+
 ## What's new in 0.9.19 – demo trip under Avansert
 
 **«Spill av en demotur»** is now under Innstillinger › Avansert, visible to everyone. Before, it was a hidden developer button. It lets App Review (and curious users) see the live screen and the stop flow without driving.

@@ -28,6 +28,7 @@ struct WebAppView: UIViewRepresentable {
         web.isOpaque = false
         web.backgroundColor = .systemBackground
         web.scrollView.contentInsetAdjustmentBehavior = .never   // nettappen bruker safe-area selv
+        web.allowsBackForwardNavigationGestures = true   // sveip tilbake fra Personvern og siden for trafikkskoler
         web.uiDelegate = context.coordinator
         web.navigationDelegate = context.coordinator
         #if DEBUG

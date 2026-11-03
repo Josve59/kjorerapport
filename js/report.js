@@ -100,7 +100,7 @@ export function buildSummary(r, ctx = {}) {
     for (const f of ctx.focusResults) lines.push(`– ${f.label}: ${f.state === 'ok' ? 'nådd' : f.state === 'no' ? 'ikke nådd' : 'ikke målt'} (${f.text})`);
   }
   if (ctx.note) lines.push(`Notat: ${ctx.note}`);
-  lines.push('Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.');
+  lines.push('Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.');
   return lines.join('\n');
 }
 
@@ -341,7 +341,7 @@ export function renderReport(root, r, ctx = {}) {
 
     ${onDelete ? `<button type="button" class="btn danger" id="btn-delete-drive">${icon('trash', 20)}Slett denne turen</button>` : ''}
     ${feedbackHref ? `<a class="btn secondary feedback-btn" href="${esc(feedbackHref)}">${icon('mail', 20)}Stemte rapporten? Si fra</a>` : ''}
-    <footer class="report-foot">Testversjon. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer. <a href="./personvern/" target="_blank" rel="noopener">Personvern</a></footer>
+    <footer class="report-foot">Målingene er veiledende og erstatter ikke ledsager eller trafikklærer. <a href="./personvern/" target="_blank" rel="noopener">Personvern</a></footer>
   `;
 
   const smooth = prefersReduced() ? 'auto' : 'smooth';
@@ -642,7 +642,7 @@ function cameraSection(r, ctx = {}) {
   const T = Math.max(1, r.points.length ? r.points[r.points.length - 1].t : 1);
   const cov = Math.round(c.coverage * 100);
   if (!c.calibrated) return `<section class="card" id="camera-section">
-      <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Test</span></h2>
+      <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Ny</span></h2>
       <p>Kameraet var på og så ansiktet ${cov} % av tiden, men det var ikke kalibrert. Hodets vinkler er lagret, så turen kan vurderes nå: sett telefonen i holderen akkurat der den sto under turen, og kalibrer.</p>
       ${ctx.onCalibrate ? `<button type="button" class="btn primary" id="btn-calib-drive">${icon('target', 20)}Kalibrer og vurder turen</button>
       ${ctx.hasCalib ? `<button type="button" class="btn secondary" id="btn-use-calib">Bruk kalibreringen jeg har</button><p class="muted small">Passer bare hvis holderen sto på samme sted.</p>` : ''}` : ''}
@@ -656,7 +656,7 @@ function cameraSection(r, ctx = {}) {
   const laneOk = c.lane.filter(l => l.mirror && l.shoulder).length;
   const verdict = c.perMin >= 6 ? 'Hyppige speilblikk – bra!' : c.perMin >= 3 ? 'Jevnlige speilblikk. Prøv å sjekke speilene litt oftere.' : 'Få speilblikk registrert. Øv på å sjekke speilene hvert 5.–8. sekund.';
   return `<section class="card" id="camera-section">
-      <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Test</span></h2>
+      <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Ny</span></h2>
       ${c.calibOff > 12 ? `<p class="notice">Kalibreringen passet ikke: i fart så føreren ${c.calibOff}° unna kalibreringens «rett fram». Tallene for speil og skulderblikk under er derfor usikre. Kalibrer på nytt med telefonen i holderen der den skal stå, og se rett fram på veien i første steg.</p>` : ''}
       <div class="cam-stats">
         <div><strong>${n1(c.perMin)}</strong><span class="muted small">speilblikk per minutt</span></div>
