@@ -128,6 +128,23 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.19 – demo trip under Avansert
+
+**«Spill av en demotur»** is now under Innstillinger › Avansert, visible to everyone. Before, it was a hidden developer button. It lets App Review (and curious users) see the live screen and the stop flow without driving.
+
+- **The replay:**
+  - The simulated tour of Trondheim (5 min 27 s) is played through the recorder at 10× speed, about half a minute.
+  - It stops by itself and opens the report.
+  - Holding Stopp also works.
+- **Speed limit sign during the replay:**
+  - `makeDemo()` now also gives `limits`: the speed limits along the imagined route (50, 60, 50, 70, 50).
+  - The sign shows them with the text «Fartsgrense i demoturen».
+  - Nothing is fetched from NVDB during the replay, and nothing is saved as live limits.
+- **The record screen** says it is a demo trip, played back at ten times speed. The auto-lock warning is not shown during the replay.
+- **The trip** is tagged «demotur». It does not count in the overview, the development or the comparisons. The «Slik fungerer det» card on Hjem still shows until the first real trip.
+- **The developer section** (7 taps on the version number) keeps only 60×. The 10× button is now the public one.
+- **Tested** in the browser and in the iPhone app (simulator): the button, the sign (50 → 60), the demo message, and the report tagged «Demotur».
+
 ## What's new in 0.9.18 – intro on first launch
 
 Three short screens appear the first time the app opens, before the first trip. They can be swiped, and «Hopp over» closes them:

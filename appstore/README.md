@@ -98,7 +98,7 @@ Paste into «Notes» under App Review Information (in English, since the reviewe
 >
 > **Safety by design:** the phone sits in a car mount. The companion in the passenger seat starts and stops recording; the driver never touches the phone. During a drive the screen shows only the current speed limit and a large stop button; speed camera warnings are audible. All feedback comes after the drive.
 >
-> **How to review without driving:** on the home screen tap «Se en demotur» to open a full sample report (map, events, practice suggestions). Settings › «Avansert» › «Spill av en demotur» replays a recorded drive through the recorder so you can see the live screen and the stop flow.
+> **How to review without driving:** on the home screen tap «Se en demotur» to open a full sample report (map, events, practice suggestions). Settings (gear icon) › «Avansert» › «Spill av en demotur» replays a simulated 5-minute drive through the recorder at 10× speed (about 30 seconds), with the speed limit sign on screen. It stops by itself and opens the report.
 >
 > **Background location:** used only while a recording that the user started is running, so the drive is not cut off when the screen locks. Authorization is «While Using»; no «Always» permission is requested.
 >
@@ -152,7 +152,7 @@ Use the demo drive or a real drive without personal place names in a visible pos
 
 ## 11. Must be in the app before submission (phase 1)
 
-- The button **«Spill av en demotur»** under Innstillinger › Avansert, visible in the App Store version too, so Apple can test without driving (today it is a hidden developer button).
+- **Done in 0.9.19: the button «Spill av en demotur»** under Innstillinger › Avansert, visible to everyone, so Apple can test without driving.
 - **Done in 0.9.18: a short intro on first launch** (3 screens): the phone in a holder, the companion operates it, the driver does not touch it. The permission prompts come when Start is pressed, not at launch.
 - **«Testversjon»** removed from the texts. Developer features shown only in TestFlight.
 - **Om appen › Lisenser** with open data and code (NVDB, Kartverket, Overpass, Leaflet, D-FINE, ONNX Runtime, MediaPipe).

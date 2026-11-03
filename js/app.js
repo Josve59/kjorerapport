@@ -14,7 +14,7 @@ import { createLiveLimit } from './livelimit.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { CLASS_LABEL, CALIB_STEPS, calibrationFromSamples, classifyPose, evaluateMirrors } from './camera.js';
 
-export const APP_VERSION = '0.9.18';
+export const APP_VERSION = '0.9.19';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -265,7 +265,7 @@ async function renderHome() {
       </div></div>
       ${mode === 'cats' ? categoryTrendChart(chrono) : trendChart(chrono.map(r => r.overall), Number.isFinite(gScore) ? gScore : null)}` : '';
   $('#trend').querySelectorAll('.mini-seg button').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), trendMode: b.dataset.m }); renderHome(); });
-  $('#howto').hidden = allDrives.length > 0;
+  $('#howto').hidden = allDrives.some(isReal);   // demoturer teller ikke
   if (!allDrives.length && !settings.introSeen) openIntro();
 
   // Dagens forslag i startkortet
@@ -867,7 +867,9 @@ async function startRecording(replay = null) {
   const atkPop = $('#atk-pop');
   atkEl.hidden = true; atkPop.hidden = true;
   let popUntil = 0;
-  limitBox.hidden = !live;
+  // Demoturen (v0.9.19) har egne fartsgrenser langs den tenkte ruta, så skiltet vises også under avspilling
+  const demoLimits = replay && replay.data && replay.data.limits ? replay.data.limits : null;
+  limitBox.hidden = !live && !demoLimits;
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
     appVersion: APP_VERSION,
@@ -903,6 +905,14 @@ async function startRecording(replay = null) {
         const last = liveLog[liveLog.length - 1];
         if (!last || last.limit !== res.limit) liveLog.push({ t: Math.round(st.elapsed), limit: res.limit });
         if (recorder) recorder.liveLimits = liveLog;
+      } else if (demoLimits) {
+        let z = demoLimits[0];
+        for (const x of demoLimits) if (st.elapsed >= x.t) z = x;
+        liveLimitNow = z.limit;
+        limitSign.textContent = z.limit;
+        limitSign.classList.remove('none');
+        limitNote.textContent = 'Fartsgrense i demoturen';
+        speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
       }
       elapsed.textContent = fmtClock(st.elapsed);
       dist.textContent = km(st.distanceM / 1000);
@@ -921,7 +931,8 @@ async function startRecording(replay = null) {
       if (st.returnedFromGap) { gapShown = st.returnedFromGap; gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`; }
       if (gapShown && recorder && !recorder.gaps.includes(gapShown)) { gapShown = null; gapMsg = ''; }   // iPhone-appen fylte inn hullet
       const msgs = [];
-      if (st.wakeLockFailed) msgs.push('Sett Autolås til Aldri mens du kjører.');
+      if (replay) msgs.push(`Demotur: en tenkt tur i Trondheim spilles av i ${replay.speed || 60} ganger fart. Den stopper av seg selv, eller hold inne Stopp.`);
+      if (st.wakeLockFailed && !replay) msgs.push('Sett Autolås til Aldri mens du kjører.');
       if (!(st.kmh >= 3) && st.gpsFresh) { if (stillSince === null) stillSince = st.elapsed; } else if (st.kmh >= 3) stillSince = null;
       if (stillSince !== null && st.elapsed - stillSince >= 600) msgs.push(`Dere har stått stille i ${Math.round((st.elapsed - stillSince) / 60)} minutter. Er dere framme eller tar pause? Hold inne Stopp for å avslutte turen, og start en ny etterpå. Da blir rapportene ryddigere.`);
       if (gapMsg) msgs.push(gapMsg);
@@ -1053,7 +1064,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     for (let i = idx + 1; i < drives.length; i++) if (drives[i].result && isReal(drives[i]) && (drives[i].driver || '') === (drive.driver || '')) { prev = drives[i].result; break; }
   }
   const sens = currentSensitivity();
-  const tags = [drive.demo ? 'demotur via opptakeren' : '', drive.imported ? 'importert' : ''].filter(Boolean);
+  const tags = [drive.demo ? 'demotur' : '', drive.imported ? 'importert' : ''].filter(Boolean);
   const routeRows = [];
   try {
     const r = await analyzeDrive(drive);
@@ -1254,8 +1265,8 @@ async function renderSettings() {
     if (taps >= 7) { $('#dev-section').hidden = false; taps = 0; }
   };
   // Demoen spilles av med telefonen «montert» skrått, så akselerometerdata og v3-motoren også testes.
+  $('#btn-play-demo').onclick = () => { startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 }); location.hash = '#/opptak'; };
   $('#btn-dev-demo').onclick = () => startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 60 });
-  $('#btn-dev-demo-slow').onclick = () => startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 });
 }
 
 function renderDriverSettings() {

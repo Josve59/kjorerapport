@@ -634,11 +634,14 @@ export function makeDemo(seed = 7, mount = null) {
   const cruise = sec => { for (let i = 0; i < sec / dt; i++) step(0, 0); };
   const turn = (deg, yr) => { const k = Math.abs(deg) * Math.PI / 180 / Math.abs(yr) / dt; for (let i = 0; i < k; i++) step(0, Math.sign(deg) * Math.abs(yr)); };
   const hold = sec => { for (let i = 0; i < sec / dt; i++) step(0, 0); };
+  // Fartsgrensene langs den tenkte ruta (km/t fra tid t), til skiltet når demoturen spilles av gjennom opptaket
+  const limits = [{ t: 0, limit: 50 }];
+  const zone = limit => limits.push({ t: Math.round(t * 10) / 10, limit });
   hold(3); to(13.9, 1.6); cruise(40); to(8, 1.8); turn(90, 0.3); to(13.9, 1.5); cruise(30);
-  to(0, 1.9); hold(8); to(13.9, 3.9); cruise(35); to(16.7, 1.2); cruise(30);
-  to(5, 4.6); cruise(4); to(11.1, 2.0); turn(80, 0.43); to(7, 1.8); turn(-270, 0.28);
-  to(19.4, 1.4); cruise(60); to(13.9, 1.6); cruise(20); to(8.3, 2.9); cruise(10); to(0, 1.7); hold(5);
-  return rot ? { loc, gyro, grav, acc } : { loc, gyro, grav };
+  to(0, 1.9); hold(8); to(13.9, 3.9); cruise(35); zone(60); to(16.7, 1.2); cruise(30);
+  zone(50); to(5, 4.6); cruise(4); to(11.1, 2.0); turn(80, 0.43); to(7, 1.8); turn(-270, 0.28);
+  zone(70); to(19.4, 1.4); cruise(60); zone(50); to(13.9, 1.6); cruise(20); to(8.3, 2.9); cruise(10); to(0, 1.7); hold(5);
+  return rot ? { loc, gyro, grav, acc, limits } : { loc, gyro, grav, limits };
 }
 
 function rotation(yaw, pitch) {
