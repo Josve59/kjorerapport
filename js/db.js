@@ -80,6 +80,8 @@ export async function getRaw(driveId) {
   for (const c of chunks) {
     for (const k of ['loc', 'gyro', 'grav', 'acc', 'head']) if (c[k]) for (const s of c[k]) raw[k].push(s);
   }
+  // I tidsrekkefølge: målinger fra låst skjerm (iPhone-appen) kan havne i en senere bit enn tiden tilsier
+  for (const k of Object.keys(raw)) raw[k].sort((a, b) => a.t - b.t);
   return raw;
 }
 

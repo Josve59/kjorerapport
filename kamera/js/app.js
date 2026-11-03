@@ -17,7 +17,7 @@ import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.11';
+export const APP_VERSION = 'k0.7.12';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -82,7 +82,8 @@ function applyTheme() {
 }
 
 function isStandalone() {
-  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  // I iPhone-appen (window.kjNative) er appen alltid «installert»
+  return !!window.kjNative || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 }
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -1860,7 +1861,8 @@ function init() {
 }
 
 function registerSW() {
-  if (!('serviceWorker' in navigator)) return;
+  // iPhone-appen har filene i seg og oppdateres via App Store: ingen service worker
+  if (!('serviceWorker' in navigator) || window.kjNative) return;
   navigator.serviceWorker.register('./sw.js').then(reg => {
     swReg = reg;
     const ready = w => { swUpdateReady = w; $('#update-banner').hidden = false; };

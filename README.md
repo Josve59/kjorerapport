@@ -128,6 +128,36 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
 
+## What's new in 0.9.17 / k0.7.12 – the iPhone app (phase 1, first version)
+
+A real iPhone app in `ios/` (Xcode 27, SwiftUI, iOS 26 or newer). It is built in Xcode by opening `ios/Kjorerapport.xcodeproj` and pressing Run, or from the command line:
+`xcodebuild -project ios/Kjorerapport.xcodeproj -target Kjorerapport -sdk iphonesimulator`.
+
+**Structure:**
+- **`KjorerapportApp.swift`:** starts the local server and shows the app.
+- **`WebServer.swift`:** a small HTTP server on `127.0.0.1:51789`. It serves the web app from the app's own files (`web/`, copied in at build time by `copy-web.sh`: the main app with `css`, `js`, `fonts`, `icons`, `personvern`, Leaflet and MediaPipe). Everything works without the network. The port is fixed so that the web app's storage stays the same between launches, and 127.0.0.1 counts as secure, so the camera and sensors work.
+- **`WebAppView.swift`:** WKWebView with permission answers (camera, motion), links out of the app (email, Safari), alert/confirm, and a restart if iPhone stops the web content.
+- **`NativeRecorder.swift`:**
+  - Location always comes from CoreLocation (navigator.geolocation is replaced by `Bridge.js`).
+  - During a recording, location is measured with the screen locked too («Når appen er i bruk» + `UIBackgroundModes: location`, blue indicator), and the screen is kept on (`isIdleTimerDisabled`).
+  - In the background, motion is also measured with CoreMotion at 20 Hz, with the same units and axes as WebKit gives the web app.
+  - Everything measured in the background goes to the recorder when the app is visible again.
+- **`Bridge.js`:** is loaded before the web app. It provides `window.kjNative`, the geolocation replacement and the `kjbackfill` event.
+
+**The web app (both apps, only active inside the iPhone app):**
+- **`Recorder.backfill()`** fills in measurements from the locked screen with the correct time. The gap is removed when it is covered. Motion downsampling starts over for the fill-in.
+- **The recorder** tells the app when recording starts and stops (`recStart`/`recStop`).
+- **No service worker** in the app (the files are in the app and are updated through the App Store). No «Legg til på Hjem-skjerm».
+- **`getRaw()`** sorts measurements by time (backfill can end up in a later chunk).
+
+**Tested in the simulator (iPhone 18 Pro, iOS 27.2):**
+- The app starts and shows the front page with the tab bar, offline, from the local server.
+- The demo report works.
+- The pre-drive check shows. The tab bar is hidden there.
+- The motion permission answer had to use WebKit's completion-block variant: it has no async version, so the async method was never called, and the permission waited forever.
+- Not tested yet: recording with a simulated route and a locked screen. The simulator lost its iOS runtime after an interrupted runtime download (`xcodebuild -downloadPlatform iOS` exit 70); usually fixed by restarting the Mac.
+- On a physical iPhone: requires the developer account (or a free Apple ID for 7-day test installation from Xcode).
+
 ## What's new in 0.9.16 / k0.7.11 – tab bar
 
 A fixed **tab bar** at the bottom with the four main parts (`tab-bars.md › Best practices`): **Hjem**, **Turer** (the driving log with all drives, before «Kjørelogg»), **Opplæring** and **Trafikklærer**.

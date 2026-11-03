@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Det Xcode ikke lager selv: tillatelsestekster (appstore/README.md, del 3), opptak med låst skjerm og lokal server. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Kjørerapport bruker posisjonen under kjøreturen for å måle fart og rute og vise fartsgrensen. Posisjonen lagres bare på telefonen.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Bevegelsessensorene måler bremsing, akselerasjon og svinger under kjøreturen. Målingene lagres bare på telefonen.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Kameraet er valgfritt. Det ser på veien foran eller på føreren (speil og skulderblikk). Bildene analyseres på telefonen og lagres eller sendes aldri.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>

@@ -142,6 +142,12 @@ export class Recorder {
     if (this.replay) {
       this.startReplay();
     } else {
+      // iPhone-appen (v0.9.17): måler videre med låst skjerm og gir målingene tilbake når appen er synlig igjen
+      if (window.kjNative) {
+        this._onBackfill = e => this.backfill(e.detail);
+        window.addEventListener('kjbackfill', this._onBackfill);
+        window.kjNative.recStart();
+      }
       window.addEventListener('devicemotion', this._onMotion);
       this.watchId = navigator.geolocation.watchPosition(
         pos => this.handlePosition(pos),
@@ -241,6 +247,32 @@ export class Recorder {
     if (lin) this.buf.acc.push({ t, x: lin.x, y: lin.y, z: lin.z });
   }
 
+  /* Målinger iPhone-appen tok mens den var i bakgrunnen (låst skjerm). ts er klokketid i ms. Fylles inn med
+     riktig tid, og hullet appen var skjult fjernes når det er dekket. */
+  backfill(list) {
+    if (!this.running || !Array.isArray(list) || !list.length) return;
+    const t0Epoch = performance.timeOrigin + this.t0;
+    const prevMotionT = this.lastMotionT;
+    this.lastMotionT = -Infinity;   // eldre enn siste måling: nedsamplingen starter på nytt for innfyllingen
+    let first = Infinity, last = -Infinity;
+    for (const s of list) {
+      const t = (s.ts - t0Epoch) / 1000;
+      if (!(t >= 0)) continue;
+      first = Math.min(first, t); last = Math.max(last, t);
+      if (s.type === 'loc') this.handlePosition({ coords: { latitude: s.lat, longitude: s.lon, accuracy: s.acc, speed: s.speed, heading: s.heading }, timestamp: s.ts }, t);
+      else if (s.type === 'mot') this.handleMotion({ acceleration: { x: s.ax, y: s.ay, z: s.az }, accelerationIncludingGravity: { x: s.gx, y: s.gy, z: s.gz }, rotationRate: { alpha: s.ra, beta: s.rb, gamma: s.rg } }, t);
+    }
+    this.lastMotionT = Math.max(Number.isFinite(prevMotionT) ? prevMotionT : -Infinity, this.lastMotionT);
+    if (Number.isFinite(first)) {
+      for (const k of Object.keys(this.buf)) this.buf[k].sort((a, b) => a.t - b.t);
+      this.gaps = this.gaps.filter(g => !(g.from >= first - 5 && g.to <= last + 5));
+      this.drive.gaps = this.gaps;
+      if (this.returnedFromGap && this.returnedFromGap.from >= first - 5) this.returnedFromGap = null;
+      this.diag.backfilled = (this.diag.backfilled || 0) + list.length;
+    }
+    this.emit();
+  }
+
   /* Ledsagerens merke: et tidspunkt å kommentere etterpå. Ingen tilbakemelding til føreren. */
   /* Hodets retning fra kameraet (grader). pose = null når ansiktet ikke ses. */
   addHead(pose) {
@@ -303,6 +335,8 @@ export class Recorder {
     if (this.replayTimer) { clearInterval(this.replayTimer); this.replayTimer = null; }
     window.removeEventListener('devicemotion', this._onMotion);
     document.removeEventListener('visibilitychange', this._onVis);
+    if (this._onBackfill) { window.removeEventListener('kjbackfill', this._onBackfill); this._onBackfill = null; }
+    if (window.kjNative && !this.replay) window.kjNative.recStop();
     if (this.watchId !== undefined && this.watchId !== null) navigator.geolocation.clearWatch(this.watchId);
     if (this.wakeLock) { try { await this.wakeLock.release(); } catch { /* ignorer */ } this.wakeLock = null; }
     await this.checkpoint();
@@ -391,6 +425,6 @@ export class Recorder {
 }
 
 function isStandalone() {
-  try { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  try { return !!window.kjNative || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
   catch { return false; }
 }
