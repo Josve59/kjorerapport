@@ -110,6 +110,7 @@ export function toast(text, { type = 'info', ms = 3200 } = {}) {
     document.body.appendChild(el);
   }
   el.className = `toast toast-${type}`;
+  el.onclick = () => { clearTimeout(toastTimer); el.classList.remove('show'); };   // trykk for å lukke
   el.innerHTML = `${icon(type === 'error' ? 'warn' : type === 'ok' ? 'check' : 'info', 20)}<span></span>`;
   el.querySelector('span').textContent = text;
   clearTimeout(toastTimer);

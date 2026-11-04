@@ -21,7 +21,7 @@ import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
 
-export const APP_VERSION = '0.11.2';
+export const APP_VERSION = '0.11.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -39,7 +39,8 @@ function show(name) {
   // Animasjonen fjernes når den er ferdig: en transform-animasjon som står igjen, gjør at «position: fixed» inni skjermen
   // (fullskjerm kart) låses til skjermen i stedet for vinduet (0.10.1)
   if (changed) { target.classList.remove('enter'); void target.offsetWidth; target.classList.add('enter'); target.addEventListener('animationend', () => target.classList.remove('enter'), { once: true }); }
-  window.scrollTo(0, 0);
+  // Bare til toppen når skjermen byttes: før 0.11.3 hoppet Opplæring til toppen for hvert kryss (skjermen tegnes på nytt)
+  if (changed) window.scrollTo(0, 0);
 }
 
 /* Fyller [data-icon]-elementer med SVG-ikoner. */
@@ -386,6 +387,7 @@ async function renderPlus(feature = null) {
       if (r.error === 'avbrutt') return;
       if (fn === startTrial ? r.owned : r.bought) { vibrate([30, 60, 30]); toast(okText, { type: 'ok' }); if (gateFor(location.hash)) route(); else draw(); return; }
       if (r.error === 'avbrutt') return;
+      if (!r.error && fn === redeemPlus) { toast('Koden behandles. Pluss låses opp av seg selv når App Store har godkjent den.', { ms: 5000 }); return; }
       if (r.error === 'venter') { infoDialog({ title: 'Venter på godkjenning', text: 'Kjøpet må godkjennes (for eksempel av en forelder med «Spør før kjøp»). Pluss låses opp av seg selv når det er godkjent.' }); return; }
       if (r.error) infoDialog({ title: 'Kjøpet gikk ikke', text: r.error });
       else if (fn === restorePlus) infoDialog({ title: 'Fant ikke Pluss', text: 'Det er ikke kjøpt Pluss med denne Apple-ID-en. Er det kjøpt av noen andre i familien, må Familiedeling være slått på.' });
@@ -460,6 +462,15 @@ cam.roadSupported().then(v => { roadOk = v; }).catch(() => {});
 const roadWanted = () => roadOk && getSettings().roadCam !== false;
 
 /* Starter kameraet (og veikameraet når det er valgt) og ansiktsgjenkjenningen hvis de ikke allerede går. */
+/* Gikk brukeren fra siden mens kameraet startet? Da slås det av igjen (0.11.3), ellers sto kamera og GPS på i
+   bakgrunnen til neste sidebytte. Svarer true når siden er forlatt. */
+function leftDuringStart(hash) {
+  if (location.hash === hash || (recorder && recorder.running)) return false;
+  if (cam.state().running) cam.stopCamera();
+  if (camUnsub) { camUnsub(); camUnsub = null; }
+  return true;
+}
+
 async function ensureCamera(videoEl, onStatus = () => {}) {
   if (cam.state().running && cam.state().road === roadWanted()) { await cam.attachVideo(videoEl); return; }
   await cam.startCamera(videoEl, { road: roadWanted() });
@@ -541,6 +552,7 @@ async function renderCamera() {
     try {
       status.textContent = 'Starter kameraet …';
       await ensureCamera(video, t => { status.textContent = t; });
+      if (leftDuringStart('#/kamera')) return false;
       listen();
       await showRoad();
       status.textContent = 'Kameraet er på. Bildene lagres ikke.';
@@ -577,11 +589,13 @@ function unlockSpeech() { if ('speechSynthesis' in window) speak(' '); }
 
 /* Kalibrering: fire blikk med nedtelling over hele skjermen. Instruksjonene leses opp,
    fordi føreren ser i speilene og ikke på skjermen. Returnerer kalibreringen, eller null. */
+let calibAbort = null;   // releaseOverlays avbryter kalibreringen når brukeren går til en annen side (0.11.3)
 async function runCalibration() {
   const overlay = $('#calib-overlay'), stepEl = $('#calib-step'), count = $('#calib-count'), progress = $('#calib-progress'), face = $('#calib-face');
   const wait = ms => new Promise(r => setTimeout(r, ms));
   let cancelled = false;
   $('#calib-cancel').onclick = () => { cancelled = true; };
+  calibAbort = () => { cancelled = true; overlay.hidden = true; stopSpeaking(); };
   overlay.hidden = false;
   const offFace = cam.onPose(p => { face.textContent = p ? 'Kameraet ser ansiktet' : 'Kameraet ser ikke ansiktet – snu deg litt tilbake'; face.dataset.ok = p ? '1' : '0'; });
   const byTarget = {};
@@ -598,9 +612,10 @@ async function runCalibration() {
       const off = cam.onPose(p => { if (p) got.push(p); });
       await wait(2200);
       off();
+      if (cancelled) break;
       byTarget[step.id] = got;
     }
-  } finally { offFace(); overlay.hidden = true; }
+  } finally { offFace(); overlay.hidden = true; calibAbort = null; }
   if (cancelled) { stopSpeaking(); return null; }
   vibrate([30, 60, 30]);
   const c = calibrationFromSamples(byTarget);
@@ -937,6 +952,7 @@ function renderPrecheck() {
     } catch (err) {
       setCheck(gps, false, err.code === 1 ? 'Posisjonstilgang avslått. Tillat posisjon for denne appen i Innstillinger.' : 'Fikk ikke posisjon. Gå ut i friluft og prøv igjen.');
     }
+    if (leftDuringStart('#/sjekk')) return;
     if (camWanted()) {
       try {
         await cam.startCamera($('#pre-video'), { road: roadWanted() });
@@ -957,6 +973,7 @@ function renderPrecheck() {
         preCalib.hidden = false;
       } catch (err) { setCheck(camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : 'Kameraet startet ikke'); }
     }
+    if (leftDuringStart('#/sjekk')) return;
     btnPerm.hidden = true;
     $('#step-perm').dataset.state = 'done';
     $('#perm-text').textContent = 'Tilgang gitt.';
@@ -1605,13 +1622,18 @@ async function shareText(text) {
   catch { infoDialog({ title: 'Kunne ikke dele', text: 'Merk teksten i rapporten og kopier den manuelt.' }); }
 }
 
+/* En rapport som blir ferdig etter at brukeren har gått videre, skal ikke tegnes over neste side (0.11.3) */
+let reportSeq = 0;
 async function renderDriveReport(id, { keepScroll = false } = {}) {
+  const tok = ++reportSeq, stale = () => tok !== reportSeq || location.hash !== '#/rapport/' + id;
   const y = window.scrollY;
   if (!keepScroll) { show('report'); $('#report-root').innerHTML = '<p class="muted">Analyserer turen …</p>'; }
   const root = $('#report-root');
   const drive = await getDrive(id);
+  if (stale()) return;
   if (!drive) { root.innerHTML = '<p class="notice">Fant ikke turen.</p>'; return; }
   const drives = await listDrives();
+  if (stale()) return;
   // Pluss (0.11.0): rapportene for de eldre turene er låst uten Pluss. Turen ligger der og kan eksporteres.
   if (reportLocked(drives, id, hasPlus())) {
     show('report');
@@ -1637,6 +1659,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
   const routeRows = [];
   try {
     const r = await analyzeDrive(drive);
+    if (stale()) return;
     const settings = getSettings();
     // Samme rute: andre ekte turer (samme fører) som har kjørt samme strekning
     if (isReal(drive)) {
@@ -1700,6 +1723,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
         drive.enrich = { ...(drive.enrich || {}), attemptedAt: new Date().toISOString(), error: err.message };
         await putDrive(drive);
         enriching = false;
+        if (location.hash !== '#/rapport/' + id) return;   // brukeren har gått videre
         const yy = window.scrollY;
         // Vanlige feil sagt med vanlige ord (0.10.1): 5xx er Statens vegvesen, ellers som regel nettet
         const m = String(err && err.message || err);
@@ -1715,6 +1739,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     if (speakNext === id) { speakNext = null; const b = document.getElementById('btn-speak'); if (b) setTimeout(() => b.click(), 600); }
     if (missing && navigator.onLine) runEnrich(false);
   } catch (err) {
+    if (stale()) return;
     root.innerHTML = `<section class="card"><h2>Ikke nok data</h2><p>${esc(err.message)}</p>
       <p class="muted">Turen startet ${esc(date(drive.startedAt))}. Rådataene er lagret, så du kan slette turen eller beholde den.</p>
       <button type="button" class="btn danger" id="btn-del-drive">Slett denne turen</button></section>`;
@@ -2021,12 +2046,14 @@ function releaseOverlays() {
   if (!introOpen) document.body.classList.remove('intro-open');
   closeMapOverlay();
   closeCamView();
+  if (calibAbort) calibAbort();
 }
 
 let guidesFrom = null, prevHash = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
 function route() {
   const h = location.hash || '#/';
   if ((h === '#/guider' || h === '#/pluss') && prevHash !== h) guidesFrom = prevHash;
+  if (h !== prevHash) window.scrollTo(0, 0);   // ny side (også rapport til rapport) begynner øverst
   prevHash = h;
   if (recorder && recorder.running && h !== '#/opptak') { location.hash = '#/opptak'; return; }
   releaseOverlays();
@@ -2038,7 +2065,10 @@ function route() {
   if (!['#/kamera', '#/sjekk', '#/opptak'].includes(h) && cam.state().running && !(recorder && recorder.running)) { cam.stopCamera(); if (camUnsub) { camUnsub(); camUnsub = null; } }
   // Pluss (0.11.0): skjermene som hører til Pluss viser Pluss-siden i stedet, med den funksjonen øverst
   const gate = gateFor(h);
-  if (gate && !hasPlus()) { renderPlus(gate); return; }
+  if (gate && !hasPlus()) {
+    if (cam.state().running && !(recorder && recorder.running)) { cam.stopCamera(); if (camUnsub) { camUnsub(); camUnsub = null; } }   // f.eks. prøven gikk ut på kameraskjermen
+    renderPlus(gate); return;
+  }
   if (h === '#/') renderHome();
   else if (h === '#/pluss') renderPlus();
   else if (h === '#/sjekk') renderPrecheck();
@@ -2077,9 +2107,10 @@ function init() {
     plusWas = plus;
     // Bare skjermene som ser annerledes ut med og uten Pluss tegnes på nytt (ikke sjekken før kjøring eller opptaket)
     const h = location.hash || '#/';
-    if (!(recorder && recorder.running) && (gateFor(h) || h.startsWith('#/rapport/') || ['#/', '#/logg', '#/innstillinger'].includes(h))) route();
+    if (!(recorder && recorder.running) && (gateFor(h) || h.startsWith('#/rapport/') || ['#/', '#/logg', '#/innstillinger', '#/pluss'].includes(h))) route();
   });
-  refreshPlus().then(updatePlusMarks).catch(() => {});
+  // Første status fra App Store kommer etter at Hjem er tegnet: tegn Hjem på nytt hvis prøveperioden kan tilbys
+  refreshPlus().then(() => { updatePlusMarks(); if (!hasPlus() && plusState().trialAvailable && !screens.home.hidden) renderHome(); }).catch(() => {});
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
   $('#btn-check-update').onclick = async () => {
     if (!swReg) { toast('Oppdatering virker bare i appen fra nettadressen, ikke lokalt.', { type: 'info' }); return; }

@@ -113,12 +113,18 @@ export function toast(text, { type = 'info', ms = 3200 } = {}) {
     document.body.appendChild(el);
   }
   el.className = `toast toast-${type}`;
+  el.onclick = () => { clearTimeout(toastTimer); el.classList.remove('show'); };   // trykk for å lukke
   el.innerHTML = `${icon(type === 'error' ? 'warn' : type === 'ok' ? 'check' : 'info', 20)}<span></span>`;
   el.querySelector('span').textContent = text;
   clearTimeout(toastTimer);
   // Tidtakeren starter først når meldingen vises, ellers kan den bli stående hvis siden var skjult
   requestAnimationFrame(() => { el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms); });
 }
+/* Lukker meldingen når appen går i bakgrunnen, så den ikke står igjen når man kommer tilbake */
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
+  const el = document.getElementById('toast');
+  if (document.hidden && el) { clearTimeout(toastTimer); el.classList.remove('show'); }
+});
 
 /* ---------- Dialoger (erstatter alert/confirm/prompt) ---------- */
 function dialogShell() {

@@ -142,6 +142,21 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.11.3 – bug fixes
+
+**Messages at the bottom no longer get stuck:**
+- Short messages (for example «Guiden er lukket») could stay on screen, half over the tab bar.
+- The cause was in how they were hidden. Each one only moved down by 140 % of its own height. A message over three lines did not move far enough to leave the screen.
+- Now a message fades out completely. It also uses the full width, so it wraps into fewer lines. You can tap it to close it, and it closes when the app goes to the background.
+
+**Other bugs found and fixed:**
+- **The page jumped to the top:** this happened after every tick in Opplæring, the trend switch and the driver chips on Home, and changes on Trafikklærer. Now only a new page starts at the top.
+- **The Pluss page now updates by itself:** for example when a parent approves «Spør før kjøp», or when the trial runs out. «Kode fra trafikkskolen» now says that the code is being processed.
+- **The camera and GPS no longer keep running in the background:** this used to happen if you left the pre-drive check or the camera screen while the camera was still starting.
+- **Calibration stops when you leave the page:** before, it kept talking over Home and then reported a failed calibration.
+- **A report that is slow to load can no longer replace another report:** for example when the speed-limit fetch failed after you had opened another drive.
+- **The home screen offers «Prøv Pluss gratis i 14 dager» right after launch,** not only after you visited another page first.
+
 ## What's new in 0.11.2 – free trial and «Klar for oppkjøring?»
 
 **Free 14-day trial of Pluss (iPhone app):**
