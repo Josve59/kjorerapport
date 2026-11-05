@@ -1187,3 +1187,13 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
 .dev-zoom .btn { min-width: 56px; font-size: 1.2rem; }
 /* Grafen tegnes på nytt mens fingrene beveger seg: berøringen må høre til rammen rundt, ellers kommer ikke «slipp» fram */
 .dev-chart .dev-svg { pointer-events: none; }
+/* 0.12.3: småting */
+.stat-chips dd { white-space: nowrap; }
+.ring-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ring-stats > span { display: flex; flex-direction: column; align-items: flex-start; }
+.ring-stats strong { display: flex; align-items: center; gap: 6px; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.ring-stats .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.ring-stats > span { position: relative; padding-left: 16px; }
+.ring-stats > span > .dot { position: absolute; left: 0; top: 8px; }
+.how-calc summary { font-weight: 700; cursor: pointer; }
+.how-calc p { margin: 8px 0 0; }

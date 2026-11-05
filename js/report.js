@@ -141,7 +141,6 @@ export function renderReport(root, r, ctx = {}) {
   if (barTitle) barTitle.textContent = title;
   if (reportActions) {
     reportActions.innerHTML = `${onSpeak ? `<button type="button" class="icon-btn" id="btn-speak" aria-label="Les opp oppsummeringen">${icon('volume', 22)}</button>` : ''}
-      <button type="button" class="icon-btn" id="btn-print" aria-label="Skriv ut eller lagre som PDF">${icon('print', 22)}</button>
       ${onShare ? `<button type="button" class="icon-btn" id="btn-share" aria-label="Del oppsummering">${icon('share', 22)}</button>` : ''}`;
   }
   const tipsAll = r.tips.filter(t => t.cat !== 'good');
@@ -168,7 +167,7 @@ export function renderReport(root, r, ctx = {}) {
       ${scoreRing(r.overall)}
       <div class="hero-text">
         <p class="rating">${esc(rating(r.overall))}</p>
-        ${prevScore !== null ? `<p class="delta-pill ${r.overall > prevScore ? 'up' : r.overall < prevScore ? 'down' : ''}">${r.overall > prevScore ? '▲ ' + (r.overall - prevScore) : r.overall < prevScore ? '▼ ' + (prevScore - r.overall) : '='} fra forrige tur (${n0(prevScore)})</p>` : ''}
+        ${prevScore !== null && r.overall !== prevScore ? `<p class="delta-pill ${r.overall > prevScore ? 'up' : r.overall < prevScore ? 'down' : ''}">${r.overall > prevScore ? '▲ ' + (r.overall - prevScore) : r.overall < prevScore ? '▼ ' + (prevScore - r.overall) : '='} fra forrige tur (${n0(prevScore)})</p>` : ''}
         ${qualitySev >= 2 ? `<p class="hero-warn">${icon('warn', 18)}<span>${esc(quality.find(q => q.sev >= 2).text)}</span></p>` : ''}
       </div>
       <dl class="stat-chips">

@@ -173,15 +173,18 @@ input.switch:checked { background: var(--good); }
 /* De fem hoveddelene (0.12.0: Guide er den femte) alltid nederst, der tommelen når (tab-bars.md › Best practices) */
 .tabbar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 720px; z-index: 70;
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
-  padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  padding: 0 max(4px, env(safe-area-inset-right)) 0 max(4px, env(safe-area-inset-left));
   background: color-mix(in srgb, var(--surface) 86%, transparent); -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px);
   border-top: 1px solid var(--line); }
-.tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; border-radius: 12px;
+/* Trykkflaten (0.12.3) er hele høyden av linjen, også ned mot kanten, men ikke bredere enn sin egen femdel */
+.tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; min-height: calc(54px + env(safe-area-inset-bottom)); border-radius: 0;
+  padding: 8px 0 max(6px, env(safe-area-inset-bottom)); touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
   color: var(--muted); text-decoration: none; font-size: .74rem; font-weight: 700; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
 .tabbar a .ico { width: 26px; height: 26px; }
 .tabbar a.on { color: var(--link); }
 .tabbar a.on .ico { stroke-width: 2.4; }
-.tabbar a:active { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.tabbar a:active, .tabbar a.press { background: none; }
+.tabbar a.press > span { opacity: .55; transform: scale(.94); transition: transform .08s, opacity .08s; }
 body.has-tabbar #app { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 body.has-tabbar .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-transparency: reduce) { .tabbar { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; } }

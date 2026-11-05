@@ -28,7 +28,7 @@ export function readiness(rows, { plan = {} } = {}) {
   // 1. Mengde
   const km = sum(x => x.res.stats.km);
   items.push({ id: 'km', group: 'Øving', label: 'Mengde øvelseskjøring', ok: km >= READY.km, have: `${nf(km)} km`, need: `${nf(READY.km)} km`,
-    progress: Math.min(1, km / READY.km), tip: `Kjør mer: ${nf(Math.max(0, READY.km - km))} km igjen til ${nf(READY.km)} km, som også er kravet for rabatt på bilforsikringen hos flere selskaper.` });
+    progress: Math.min(1, km / READY.km), tip: `${nf(Math.max(0, READY.km - km))} km igjen til ${nf(READY.km)} km.` });
 
   // 2. Variasjon: by, landevei, motorvei
   const sec = k => sum(x => (x.log ? x.log.sec[k] : 0));
@@ -50,7 +50,7 @@ export function readiness(rows, { plan = {} } = {}) {
     const harsh = recent.slice(0, 3).reduce((s, x) => s + x.res.events.filter(e => e.level === 'harsh').length, 0);
     items.push({ id: 'smooth', group: 'Kjøringen', label: 'Jevn og rolig kjøring', ok: avg >= READY.score && harsh === 0,
       have: `snitt ${avg} poeng siste ${recent.length} turer${harsh ? ` · ${harsh} kraftige hendelser siste 3` : ''}`, need: `minst ${READY.score} poeng, ingen kraftige hendelser`,
-      progress: Math.min(1, avg / READY.score) * (harsh ? 0.8 : 1), tip: harsh ? 'Se på de kraftige hendelsene i rapportene: hvor skjedde de, og hva kunne vært gjort tidligere?' : 'Øv på å bremse og gi gass mykere: se langt fram og slipp gassen tidlig.' });
+      progress: Math.min(1, avg / READY.score) * (harsh ? 0.8 : 1), tip: harsh ? 'Se på de kraftige hendelsene i rapportene, og hva som kunne vært gjort tidligere.' : 'Øv på å bremse og gi gass mykere: se langt fram og slipp gassen tidlig.' });
   } else items.push({ id: 'smooth', group: 'Kjøringen', label: 'Jevn og rolig kjøring', ok: null, have: `${recent.length} ${recent.length === 1 ? 'tur' : 'turer'}`, need: `${READY.minDrives} turer`, progress: recent.length / READY.minDrives, tip: '' });
 
   // 5. Fart: tid over fartsgrensen (krever Veidata)
@@ -102,7 +102,7 @@ export function readiness(rows, { plan = {} } = {}) {
 
 export const READY_TEXT = {
   tidlig: { title: 'For tidlig å si', text: 'Kjør noen turer til, så viser appen hva som er på plass og hva dere bør øve på.' },
-  ikke: { title: 'Ikke klar ennå', text: 'Fortsett å øve. Punktene under viser hva som gjenstår.' },
+  ikke: { title: 'Ikke klar ennå', text: '' },
   nesten: { title: 'Nesten der', text: 'Det meste er på plass. Øv på det som gjenstår, og snakk med trafikklæreren om når oppkjøringen kan bestilles.' },
   klar: { title: 'Ser klar ut', text: 'Alt appen kan måle, er på plass. Snakk med trafikklæreren om å bestille oppkjøring.' }
 };

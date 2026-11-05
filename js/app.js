@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.12.2';
+export const APP_VERSION = '0.12.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -238,7 +238,7 @@ async function renderHome() {
       <span class="last-body">${scoreBadge(r.overall, 76)}
         <span class="last-text"><strong>${esc(ratingShort(r.overall))}</strong>
           <span class="muted">${[km(r.stats.km), duration(r.stats.duration), `${r.events.length} ${r.events.length === 1 ? 'hendelse' : 'hendelser'}`].join(SEP)}</span>
-          ${diff !== null ? `<span class="delta-pill ${diff > 0 ? 'up' : diff < 0 ? 'down' : ''}">${diff > 0 ? '▲ ' + diff : diff < 0 ? '▼ ' + -diff : '='} fra forrige</span>` : ''}</span></span>
+          ${diff ? `<span class="delta-pill ${diff > 0 ? 'up' : diff < 0 ? 'down' : ''}">${diff > 0 ? '▲ ' + diff : diff < 0 ? '▼ ' + -diff : '='} fra forrige</span>` : ''}</span></span>
       ${tip ? `<span class="last-tip">${icon('info', 18)}<span>${esc(tip)}</span></span>` : ''}
       <span class="last-cta">Se rapporten ${icon('chev', 18)}</span>
     </button>`;
@@ -705,15 +705,17 @@ async function renderLog() {
       <div class="tile"><span class="tile-val">${fmtHours(tot.light.dark)}</span><span class="tile-label">i mørke</span></div>
     </section>
     <section class="card"><h2 class="card-title">${icon('map')}Veityper</h2>${bar(tot.sec, ['by', 'land', 'motor'], ROAD_LABEL, 'mix')}
-      <p class="muted small">Ut fra fartsgrensen når Veidata er på, ellers anslått ut fra farten.</p></section>
+</section>
     <section class="card"><h2 class="card-title">${icon('moon')}Lysforhold</h2>${bar(tot.light, ['day', 'twilight', 'dark'], LIGHT_LABEL, 'light')}
-      <p class="muted small">Regnet ut fra solhøyden der og da. Mørke er når sola står mer enn 6° under horisonten.</p></section>
+</section>
     <section class="card"><h2 class="card-title">${icon('snow')}Føre</h2>${bar(tot.surface, ['dry', 'wet', 'snow', 'ice'], SURFACE_LABEL, 'surf')}
-      <p class="muted small">${tot.surface.unknown > 0 ? `${fmtHours(tot.surface.unknown)} er kjørt før føre kunne velges. ` : ''}Velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></section>
+      ${tot.surface.unknown > 0 ? `<p class="muted small">${fmtHours(tot.surface.unknown)} er kjørt før føre kunne velges.</p>` : ''}</section>
     <section class="card"><h2 class="card-title">${icon('chart')}Siste åtte uker</h2>
       <div class="week-bars" role="img" aria-label="Kjøretid per uke">${weeks.map(w => `<div class="wk"><span class="wk-val">${w.sec ? Math.round(w.sec / 60) : ''}</span><span class="wk-bar" style="height:${Math.max(2, w.sec / maxW * 100)}%"></span><span class="wk-lbl"><strong>${isoWeek(w.start)}</strong>${new Date(w.start).getDate()}.${new Date(w.start).getMonth() + 1}.</span></div>`).join('')}</div>
-      <p class="muted small">Ukenummer, med mandagens dato under. Tallet over søylen er minutter kjørt.</p></section>
+      <p class="muted small">Minutter per uke. Under: ukenummer og mandagens dato.</p></section>
     ${spotsCard}
+    <details class="card how-calc"><summary>Slik regnes det</summary>
+      <p class="muted small"><strong>Veitype</strong> ut fra fartsgrensen (Statens vegvesen), ellers anslått ut fra farten. <strong>Mørke</strong> er når sola står mer enn 6° under horisonten, skumring mellom 0 og 6°. <strong>Føre</strong> velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></details>
     <h2 class="section-title">Alle turer</h2>
     <ul class="drives log-list card">${rows.map(x => `<li><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${x.d.id}">
       <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
@@ -883,7 +885,7 @@ function gameCardHtml(g) {
         <span class="game-text"><span class="eyebrow">Nivå ${g.level.n}</span><strong>${esc(g.level.name)}</strong>
           <span class="goal-bar xp"><span style="width:${Math.round(g.level.progress * 100)}%"></span></span>
           <span class="muted small">${g.level.to - g.level.xp} XP til nivå ${g.level.n + 1}</span></span></span>
-      <span class="game-row">${g.rings.map(r => `<span class="ring-lbl"><span class="dot" style="background:${RING_COLOR[r.id]}"></span>${esc(r.label)} <strong>${r.value}${r.unit && r.id === 'minutes' ? ' min' : ''}</strong><span class="muted">/${r.goal}</span></span>`).join('')}</span>
+      <span class="ring-stats">${g.rings.map(r => `<span><span class="dot" style="background:${RING_COLOR[r.id]}"></span><strong>${r.value}${r.id === 'minutes' ? ' min' : ''}</strong><span class="muted small">${esc(r.label.toLowerCase())}</span></span>`).join('')}</span>
       <span class="game-row"><span class="streak">${icon('flame', 18)}<strong>${g.streak}</strong> ${g.streak === 1 ? 'uke' : 'uker'} på rad</span><span class="badge-count">${icon('award', 18)}<strong>${nb}</strong> av ${g.badges.length} merker</span></span>
       <span class="last-cta">Se fremgangen ${icon('chev', 18)}</span>
     </button>`;
@@ -899,14 +901,15 @@ async function renderProgress() {
   root.innerHTML = `
     <section class="card level-hero"><span class="level-num">${g.level.n}</span><span><span class="eyebrow">Nivå ${g.level.n}</span><h2>${esc(g.level.name)}</h2>
       <span class="goal-bar xp"><span style="width:${Math.round(g.level.progress * 100)}%"></span></span>
-      <span class="muted small">${g.level.xp} XP · ${g.level.to - g.level.xp} til nivå ${g.level.n + 1}. Du får 1 XP per minutt øving og 25 XP per merke.</span></span></section>
+      <span class="muted small">${g.level.to - g.level.xp} XP til nivå ${g.level.n + 1}</span></span></section>
     <section class="card"><h2 class="card-title">${icon('target')}Denne uka</h2>
       <div class="rings-big">${ringsSvg(g.rings, 132)}<ul class="ring-list">${g.rings.map(r => `<li><span class="dot" style="background:${RING_COLOR[r.id]}"></span><span><strong>${esc(r.label)}</strong> ${r.value}${r.id === 'minutes' ? ' min' : ''} av ${r.goal}${r.id === 'minutes' ? ' min' : r.id === 'smooth' ? ' i snitt' : ''}
         <span class="muted small">${r.id === 'minutes' ? 'Minutter øvelseskjøring' : r.id === 'variety' ? (r.have.length ? `Har kjørt: ${esc(r.have.join(', '))}` : 'By, landevei, motorvei, mørke, rundkjøring eller glatt føre') : 'Snittpoeng på ukas turer'}</span></span></li>`).join('')}</ul></div>
       <p class="streak big">${icon('flame', 22)}<span><strong>${g.streak} ${g.streak === 1 ? 'uke' : 'uker'} på rad</strong><span class="muted small">${g.streak ? 'Kjør minst én tur i uka for å holde rekka.' : 'Kjør en tur denne uka for å starte en rekke.'}</span></span></p></section>
     ${g.records.length ? `<section class="card"><h2 class="card-title">${icon('star')}Rekorder</h2><ul class="record-list">${g.records.map(r => `<li${r.driveId ? ` data-id="${r.driveId}" class="tap"` : ''}><span>${esc(r.label)}<span class="muted small">${esc(date(r.at))}</span></span><strong>${esc(r.value)}</strong></li>`).join('')}</ul></section>` : ''}
     <h2 class="group-title">${icon('award', 18)}Merker · ${got.length} av ${g.badges.length}</h2>
-    <ul class="badge-grid">${got.map(badgeHtml).join('')}${locked.map(badgeHtml).join('')}</ul>`;
+    <ul class="badge-grid">${got.map(badgeHtml).join('')}${locked.map(badgeHtml).join('')}</ul>
+    <p class="muted small center">Du får 1 XP per minutt øving og 25 XP per merke.</p>`;
   root.querySelectorAll('.record-list li.tap').forEach(li => li.onclick = () => { location.hash = '#/rapport/' + li.dataset.id; });
 }
 /* Det turen låste opp, øverst i rapporten (med en liten feiring første gang den åpnes) */
@@ -1018,9 +1021,9 @@ async function renderReady() {
       <h2>${esc(t.title)}</h2>
       <p class="plan-prog"><strong>${r.done}</strong> av ${r.counted} punkter på plass</p>
       <span class="goal-bar"><span style="width:${r.counted ? Math.round(r.done / r.counted * 100) : 0}%"></span></span>
-      <p>${esc(t.text)}</p>
+      ${t.text ? `<p>${esc(t.text)}</p>` : ''}
     </section>
-    ${groups.map(g => `<h2 class="group-title">${esc(g)}</h2><section class="card"><ul class="rd-list">${r.items.filter(i => i.group === g).map(i => `<li class="rd-item">${mark(i)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.have)}${i.need ? ` · mål ${esc(i.need)}` : ''}</span>${i.ok === null && i.tip ? `<span class="muted small">${esc(i.tip)}</span>` : ''}${i.ok !== null ? `<span class="goal-bar thin"><span style="width:${Math.round(i.progress * 100)}%"></span></span>` : ''}</span></li>`).join('')}</ul></section>`).join('')}
+    ${groups.map(g => `<h2 class="group-title">${esc(g)}</h2><section class="card"><ul class="rd-list">${r.items.filter(i => i.group === g).map(i => `<li class="rd-item">${mark(i)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.have)}${i.need && i.need.length <= 24 ? ` · mål ${esc(i.need)}` : ''}</span>${i.ok === null && i.tip ? `<span class="muted small">${esc(i.tip)}</span>` : ''}${i.ok !== null ? `<span class="goal-bar thin"><span style="width:${Math.round(i.progress * 100)}%"></span></span>` : ''}</span></li>`).join('')}</ul></section>`).join('')}
     <p class="muted small ready-note">Målene er appens egne, satt ut fra vanlige råd for øvelseskjøring. Det er trafikklæreren som vurderer når du er klar for oppkjøring, og ingen app kan love at du består.</p>
     <button type="button" class="btn secondary" id="btn-ready-teacher">${icon('school', 20)}Vis trafikklæreren</button>`;
   $('#btn-ready-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
@@ -1053,7 +1056,7 @@ async function renderPlan() {
       <p class="eyebrow">${driver ? esc(driver) : esc(s.name || 'Din opplæring')}</p>
       <p class="plan-prog"><strong>${prog.done}</strong> av ${prog.total} punkter krysset av</p>
       <span class="goal-bar"><span style="width:${(prog.done / prog.total * 100).toFixed(0)}%"></span></span>
-      <p class="muted small">Etter læreplanen for klasse B. Trafikkskolen avgjør hva som er gjennomført. Teksten under et punkt er det appen har sett på turene.</p>
+      <p class="muted small">Etter læreplanen for klasse B. Trafikkskolen avgjør hva som er gjennomført.</p>
     </section>
     ${CURRICULUM.map(st => `<h2 class="group-title">${esc(st.stage)}</h2><section class="card"><ul class="plan-list">${st.items.map(it => {
       const e = it.auto ? ev[it.auto] : null;
@@ -2338,7 +2341,31 @@ function updateTabbar(h) {
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
 }
-/* Tilbake: fra en rapport til fanen den kom fra, fra Faresteder til Opplæring, ellers til Hjem */
+/* Fanelinjen reagerer på første trykk (0.12.3). Mens siden ruller etter et sveip, brukte iPhone det første trykket
+   til å stoppe rullingen, og lenken trengte et trykk til. Nå byttes fanen når fingeren slippes (hvis den ikke har
+   flyttet seg), uavhengig av rullingen. Trykk på fanen du er på: tilbake til toppen, som i iPhone-apper. */
+function wireTabbar() {
+  const bar = $('#tabbar');
+  let down = null;
+  const go = a => {
+    const h = a.getAttribute('href');
+    if ((location.hash || '#/') === h) window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    else location.hash = h;
+  };
+  bar.addEventListener('touchstart', e => { const t = e.touches[0]; down = { x: t.clientX, y: t.clientY, a: e.target.closest('a'), at: Date.now() }; if (down.a) down.a.classList.add('press'); }, { passive: true });
+  bar.addEventListener('touchmove', e => { const t = e.touches[0]; if (down && Math.hypot(t.clientX - down.x, t.clientY - down.y) > 12) { if (down.a) down.a.classList.remove('press'); down = null; } }, { passive: true });
+  bar.addEventListener('touchend', e => {
+    const d = down; down = null;
+    bar.querySelectorAll('a.press').forEach(x => x.classList.remove('press'));
+    if (!d || !d.a || Date.now() - d.at > 800) return;
+    e.preventDefault();   // ingen ekstra «klikk» etterpå
+    go(d.a);
+  });
+  bar.addEventListener('touchcancel', () => { down = null; bar.querySelectorAll('a.press').forEach(x => x.classList.remove('press')); });
+  bar.addEventListener('click', e => { const a = e.target.closest('a'); if (!a) return; e.preventDefault(); go(a); });   // mus og tastatur
+}
+
+/* Tilbake: fra en rapport til fanen den kom fra, fra Faresteder til Turer, ellers til Hjem */
 function goBack() {
   const h = location.hash;
   location.hash = h === '#/faresteder' ? '#/logg' : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
@@ -2403,6 +2430,7 @@ function init() {
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
   document.querySelectorAll('.btn-gear').forEach(b => b.onclick = () => { location.hash = '#/innstillinger'; });
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = goBack);
+  wireTabbar();
   setupLongPress($('#btn-stop'), finishRecording);
   // Pluss: status fra App Store ved start; endres den (kjøp, Familiedeling, refusjon), tegnes skjermen på nytt
   // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke

@@ -142,6 +142,21 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.12.3 – tab bar and small things
+- **The tab bar responds on the first tap.**
+  - Before, iPhone used the first tap to stop the scrolling after a swipe, so you had to tap twice.
+  - The tab now changes when the finger lifts, if it hasn't moved more than 12 px.
+  - Each tab's tap area covers the full height of the bar, down to the edge, but is no wider than its own fifth.
+  - Tapping the tab you are on scrolls to the top.
+- **Less text and less clutter:**
+  - «= fra forrige» only shows when there is a change.
+  - On Turer, the explanations under road types, light and road surface are gathered in one «Slik regnes det» at the bottom.
+  - The XP explanation sits under the badges.
+  - The «Hva må du øve mer på?» tips and Opplæring are shorter, and long target texts are hidden.
+  - The weekly rings on Home are three short numbers.
+  - The report's print button is gone; the share button is still there. «48 km/t» no longer wraps.
+  - The bottom text in «Før du kjører» is shorter.
+
 ## What's new in 0.12.2 – sound, zoom and small fixes
 - **Sound works in the iPhone app:**
   - WebKit muted the app's Web Audio, especially with the silent switch on.
