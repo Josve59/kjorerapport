@@ -1051,3 +1051,15 @@ body.has-tabbar .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
 .focus-box[open] .focus-edit { visibility: hidden; }
 .focus-box > :not(summary) { margin-left: 14px; margin-right: 14px; }
 .focus-box > :last-child { margin-bottom: 14px; }
+
+/* Datofelt (0.11.6): iPhone gir datofeltet sin egen bredde, så det stakk ut av kortet, og et tomt felt var blankt */
+input[type="date"] { box-sizing: border-box; display: block; width: 100%; max-width: 100%; min-width: 0; -webkit-appearance: none; appearance: none; text-align: left; }
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+.date-wrap { position: relative; display: block; margin-top: 6px; }
+.date-ph { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 400; pointer-events: none; }
+.date-wrap.has-value .date-ph { display: none; }
+/* Startkortet uten holder-linjen (0.11.6): forslaget fikk negativ avstand og la seg nesten oppå hilsenen */
+.start-sub[hidden] + .start-suggest { margin-top: 14px; }
+.start-sub[hidden] + .start-suggest[hidden] + .start-btn { margin-top: 18px; }
+/* «Se hvor ›» midt i en setning */
+.link.sum-goto { display: inline; min-height: 0; padding: 0 0 0 4px; font-size: inherit; }

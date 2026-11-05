@@ -21,7 +21,7 @@ import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
 
-export const APP_VERSION = '0.11.5';
+export const APP_VERSION = '0.11.6';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -767,6 +767,7 @@ async function renderTeacher() {
   });
   const dateIn = $('#t-lesson'), noteIn = $('#t-note');
   dateIn.value = lesson;
+  $('#t-lesson-wrap').classList.toggle('has-value', !!lesson);   // tomt datofelt viser «Velg dato» (iPhone viser ellers et blankt felt)
   dateIn.onchange = () => {
     const cur = getSettings();
     saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: dateIn.value }, teacherPeriod: dateIn.value ? 'lesson' : '30' });

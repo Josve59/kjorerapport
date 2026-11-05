@@ -186,7 +186,7 @@ export function renderReport(root, r, ctx = {}) {
         ${tipsAll.map(t => `<li class="sum-work sum-${t.cat}">${icon('chev', 20)}<span>${esc(t.text)}</span></li>`).join('')}
         ${!positives.length && !tipsAll.length ? r.tips.map(t => `<li class="sum-good">${icon('check', 20)}<span>${esc(t.text)}</span></li>`).join('') : ''}
         ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.</span></li>` : ''}
-        ${sitSum.high ? `<li class="sum-work sum-brake">${icon('warn', 20)}<span><strong>${sitSum.high} ${sitSum.high === 1 ? 'alvorlig situasjon' : 'alvorlige situasjoner'}</strong> – se «Det som skjedde».</span></li>` : ''}
+        ${sitSum.high ? `<li class="sum-work sum-brake">${icon('warn', 20)}<span><strong>${sitSum.high} ${sitSum.high === 1 ? 'alvorlig situasjon' : 'alvorlige situasjoner'}</strong> <button type="button" class="link sum-goto" data-goto="situation-section">Se hvor ›</button></span></li>` : ''}
         ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket: ${Object.entries(marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {})).map(([c, n]) => `${MARK_CATS[c].label.toLowerCase()} ${n}`).join(', ')}.</span></li>` : ''}
       </ul>
     </section>
@@ -453,6 +453,11 @@ export function renderReport(root, r, ctx = {}) {
       const more = el.closest('.more-details'); if (more) more.open = true;
     }
   }));
+  // «Se hvor ›» (0.11.6): hopper til listen i stedet for å be leseren lete etter en overskrift
+  root.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => {
+    const el = root.querySelector('#' + b.dataset.goto);
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 118, behavior: smooth });
+  }));
   countUp(root.querySelector('.score-ring .score-num'), r.overall);
   if (onDelete) root.querySelector('#btn-delete-drive').addEventListener('click', onDelete);
   const fetchBtn = root.querySelector('#btn-fetch');
@@ -666,7 +671,7 @@ function roadSection(r, ctx = {}) {
         <div><strong>${rd.medianDist !== null ? rd.medianDist + ' m' : '–'}</strong><span class="muted small">vanlig avstand</span></div>
         <div><strong>${rd.close.length}</strong><span class="muted small">ganger for nær</span></div>
       </div>
-      <p>${rd.close.length ? `For kort avstand til bilen foran ${rd.close.length === 1 ? 'én gang' : rd.close.length + ' ganger'}. Se «Det som skjedde».` : rd.medianHeadway !== null ? 'Ingen perioder med for kort avstand til bilen foran.' : 'Det var sjelden en bil rett foran når veikameraet så veien.'} Hold minst 2 sekunder, og 3 i mørke eller på glatt vei.</p>
+      <p>${rd.close.length ? `For kort avstand til bilen foran ${rd.close.length === 1 ? 'én gang' : rd.close.length + ' ganger'}. <button type="button" class="link sum-goto" data-goto="situation-section">Se hvor ›</button>` : rd.medianHeadway !== null ? 'Ingen perioder med for kort avstand til bilen foran.' : 'Det var sjelden en bil rett foran når veikameraet så veien.'} Hold minst 2 sekunder, og 3 i mørke eller på glatt vei.</p>
       ${ln ? `<h3 class="mt">Plassering i feltet <span class="beta-tag">Ny</span></h3>
       <p>${ln.medianOffset !== null ? `Bilen lå typisk ${Math.abs(ln.medianOffset).toFixed(2).replace('.', ',')} m ${ln.medianOffset > 0.05 ? 'til høyre for' : ln.medianOffset < -0.05 ? 'til venstre for' : 'fra'} midten av feltet, og varierte rundt ${ln.spread.toFixed(2).replace('.', ',')} m.${ln.nearEdge ? ` Nær en feltlinje i ${ln.nearEdge} bilder.` : ''}` : 'For få bilder med begge feltlinjene til å si noe om plasseringen.'}</p>
       <p class="muted small">Begge feltlinjene ble funnet i ${pc(ln.share)} av veibildene i minst 40 km/t. Forutsetter at telefonen står midt i bilen; står den til siden, forskyves tallene.</p>` : ''}

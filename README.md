@@ -142,6 +142,12 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.11.6 – three fixes from the phone
+
+- **Til trafikklæreren:** the date field «Forrige kjøretime» stuck out of the card on the iPhone (iOS gives date fields their own width), and was blank when empty. It now fits, and shows «Velg dato».
+- **Report:** «– se «Det som skjedde»» pointed to a heading you had to look for. It is now a link, «Se hvor ›», that jumps there.
+- **Home:** once the line about the phone holder was hidden (0.11.5), «Forslag i dag» lay almost on top of «Hei, …!». It now has proper spacing.
+
 ## What's new in 0.11.5 – simpler to use (before the UX tests)
 
 A critical look at the app, measured against Apple's own apps and the design guidelines (clarity, the most important first, details on request, one main action per screen, plain words). The result is fewer things on screen, and the same functions.
