@@ -2,7 +2,7 @@ Kjørerapport gjør øvelseskjøringen mer konkret. Fest telefonen i holderen, l
 
 SLIK FUNGERER DET
 • Telefonen står i en holder. Ledsageren starter og stopper opptaket, og føreren rører ikke telefonen.
-• Under turen vises bare fartsgrensen, og det piper før fotobokser og strekningsmåling.
+• Under turen vises bare fartsgrensen og farten. Kjører dere for fort, lyser kanten på skjermen rødt, og dere kan slå på pip. Det piper også før fotobokser og strekningsmåling.
 • Opptaket fortsetter med låst skjerm, og turen vises på låseskjermen og i Dynamic Island.
 • Etter turen kommer rapporten med en gang.
 
@@ -14,12 +14,14 @@ RAPPORTEN ETTER HVER TUR
 • «Neste øvingstur»: to konkrete ting å øve på, med hvordan og hvor.
 
 FØLG FREMGANGEN
-• Kjørelogg med tid, kilometer, veityper og mørkekjøring.
+• Kjørelogg med tid, kilometer, veityper, lysforhold og føre (tørt, vått, snø eller is).
+• Merker, nivåer, ukesringer og uker på rad gjør det gøy å øve jevnlig.
+• Kjøreutviklingen fra 0 til 100, som kan zoomes og vises for valgfri periode.
 • Utvikling fra tur til tur, og steder der det gjentatte ganger skjer noe.
 • Opplæringsplan etter læreplanen for klasse B, der appen viser hva dere har øvd på.
 
-KLAR FOR OPPKJØRING?
-Se hva som er på plass før oppkjøringen, og hva dere bør øve mer på: mengde, variasjon, mørkekjøring, jevn kjøring, fartsgrenser, situasjoner, speilblikk og den obligatoriske opplæringen. Det er trafikklæreren som avgjør når du er klar.
+HVA MÅ DU ØVE MER PÅ?
+Se hva dere bør øve mer på før oppkjøringen, og hva som er på plass: mengde, variasjon, mørkekjøring, jevn kjøring, fartsgrenser, situasjoner, speilblikk og den obligatoriske opplæringen. Det er trafikklæreren som avgjør når du er klar.
 
 TIL TRAFIKKLÆREREN
 • Én side med alt som er øvd siden forrige kjøretime: tid, veityper, manøvrer, hva som går bra og hva som bør jobbes med.
@@ -32,7 +34,7 @@ KAMERAENE (VALGFRITT)
 Frontkameraet ser om føreren sjekker speil og gjør skulderblikk. Bakkameraet kan samtidig se bilen foran, feltlinjene og fartsskiltene. Analysen skjer på telefonen. Bilder lagres og sendes aldri.
 
 GRATIS OG PLUSS
-Opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg og eksport er gratis. Kjørerapport Pluss er ett kjøp, ikke abonnement, og kan deles med familien. Pluss gir kameraene, opplæringsplanen med faresteder, siden til trafikklæreren, «Klar for oppkjøring?» og rapportene for alle eldre turer. Prøv Pluss gratis i 14 dager. Ingenting trekkes, og prøven fornyes ikke.
+Opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg og eksport er gratis. Kjørerapport Pluss er ett kjøp, ikke abonnement, og kan deles med familien. Pluss gir kameraene, opplæringsplanen med faresteder, siden til trafikklæreren, «Hva må du øve mer på?» og rapportene for alle eldre turer. Prøv Pluss gratis i 14 dager. Ingenting trekkes, og prøven fornyes ikke.
 
 PERSONVERN
 Ingen konto, ingen reklame og ingen sporing. Turene lagres bare på telefonen din. Fartsgrenser og kart hentes fra Statens vegvesen og Kartverket, og det kan slås av.

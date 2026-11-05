@@ -649,10 +649,6 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 /* Veier og manøvrer */
 .road-mix { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--bg); margin: 4px 0 6px; }
 .road-mix span { display: block; height: 100%; }
-.mix-by { background: var(--accel); } .mix-land { background: var(--good); } .mix-motor { background: var(--turn); }
-.light-day { background: #f2be22; } .light-twilight { background: var(--muted); } .light-dark { background: #2a2f33; }
-:root[data-theme="dark"] .light-dark { background: #5b6369; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .light-dark { background: #5b6369; } }
 .legend .mix-dot { border-radius: 3px; }
 .man-list { list-style: none; margin: 10px 0 0; padding: 0; }
 .man-list li + li { border-top: 1px solid var(--line); }
@@ -1063,3 +1059,123 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .start-sub[hidden] + .start-suggest[hidden] + .start-btn { margin-top: 18px; }
 /* «Se hvor ›» midt i en setning */
 .link.sum-goto { display: inline; min-height: 0; padding: 0 0 0 4px; font-size: inherit; }
+
+/* 0.12.0: «Kjørerapport» og innstillingene står øverst på alle faner. Sidens tittel og knapper ligger på siden. */
+.appbar .btn-back + .brand { padding-left: 0; }
+.page-head { display: flex; align-items: center; gap: 8px; margin: 2px 0 12px; }
+.page-title { flex: 1; margin: 0; font-size: 1.75rem; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; }
+.page-actions { display: flex; gap: 2px; margin-right: -8px; }
+.page-actions:empty { display: none; }
+@media print { .page-actions { display: none !important; } }
+/* Opptaket (0.12.0): fartsgrensen er det store, kilometerne en liten linje under */
+.record .rec-stats { padding-top: 8px; }
+.record .limit-sign { width: 112px; height: 112px; border-width: 12px; font-size: 2.9rem; }
+.record .rec-speed { font-size: 3rem; }
+.record .rec-dist { font-size: 1rem; font-weight: 700; color: var(--muted); margin: 10px 0 4px; font-variant-numeric: tabular-nums; }
+#rec-limit-note:empty { display: none; }
+/* «Hva må du øve mer på?» (0.12.0) */
+.ready-next { display: block; font-weight: 800; font-size: 1.05rem; margin: 2px 0 6px; }
+.rd-next li > span { display: flex; flex-direction: column; gap: 2px; }
+/* Fartsvarsel (0.12.0): rød kant rundt skjermen, sterkere jo mer over grensen (--speed-warn 0–1, se speedwarn.js) */
+.record::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: 0; transition: opacity .35s;
+  box-shadow: inset 0 0 calc(18px + 46px * var(--speed-warn, 0)) calc(4px + 14px * var(--speed-warn, 0)) rgba(230, 0, 30, .85); }
+.record.speeding::after { opacity: calc(.45 + .55 * var(--speed-warn, 0)); }
+.record.speeding .limit-sign { animation: limit-pulse 1s ease-in-out infinite; }
+@keyframes limit-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+.record.speeding .rec-speed { color: #e6001e; }
+@media (prefers-reduced-motion: reduce) { .record.speeding .limit-sign { animation: none; } }
+/* Føre før turen (0.12.0) */
+.surface-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.sp-label { font-weight: 700; }
+.surface-seg.need { outline: 2px dashed var(--turn); outline-offset: 3px; border-radius: 14px; }
+#surface-note:empty { display: none; }
+/* Kalibreringen passer ikke lenger (0.12.0): et punkt å gjøre før turen */
+.checks li.todo { background: color-mix(in srgb, var(--turn) 12%, transparent); border-radius: 12px; padding: 8px; margin: 0 -8px; }
+.checks li.todo .pre-calib { margin-top: 8px; }
+/* Kjøreutvikling (0.12.0): grafen på Hjem kan trykkes, og åpnes i full skjerm med zoom og perioder */
+.trend-open { display: block; width: 100%; border: 0; background: none; padding: 0; color: inherit; font: inherit; cursor: zoom-in; text-align: left; -webkit-tap-highlight-color: transparent; }
+.trend-zoom { display: flex; align-items: center; gap: 6px; justify-content: center; color: var(--link); font-size: .85rem; font-weight: 700; margin-top: 4px; }
+.dev-full { position: fixed; inset: 0; z-index: 120; background: var(--bg); color: var(--ink); overflow-y: auto;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 16px); display: flex; flex-direction: column; gap: 12px; }
+.dev-head { display: flex; align-items: center; justify-content: space-between; }
+.dev-head h2 { margin: 0; font-size: 1.6rem; font-weight: 800; }
+.dev-mode { align-self: flex-start; }
+.dev-periods { margin: 0; }
+.dev-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+.dev-stats > span { display: flex; flex-direction: column; background: var(--surface); border-radius: 14px; padding: 10px 4px; }
+.dev-stats strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.dev-stats strong.up { color: var(--good); } .dev-stats strong.down { color: var(--brake); }
+.dev-chart { background: var(--surface); border-radius: 18px; padding: 8px 4px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.dev-svg { width: 100%; height: auto; display: block; }
+.dev-svg .axis { font-size: 11px; }
+.dev-pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; }
+.dev-pick > span { display: flex; flex-direction: column; }
+.dev-help { margin: 0; }
+/* Fremgang (0.12.0): nivå, ukesringer, uker på rad, rekorder og merker */
+.game-card { display: flex; flex-direction: column; gap: 10px; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.game-top { display: flex; align-items: center; gap: 16px; }
+.game-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.game-text strong { font-size: 1.2rem; }
+.goal-bar.xp > span { background: var(--lv1); }
+.game-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .9rem; }
+.ring-lbl { display: inline-flex; align-items: center; gap: 5px; }
+.ring-lbl .dot, .ring-list .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.streak, .badge-count { display: inline-flex; align-items: center; gap: 5px; }
+.streak .ico { color: var(--lv2); } .badge-count .ico { color: var(--lv1); }
+.rings .ring-fill { transition: stroke-dasharray .9s var(--ease); }
+.level-hero { display: flex; align-items: center; gap: 16px; }
+.level-hero > span:last-child { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.level-hero h2 { margin: 0; }
+.level-num { flex: none; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 1.9rem; font-weight: 800; background: var(--lv1); color: #1b1f22; }
+.rings-big { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ring-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; flex: 1; min-width: 180px; }
+.ring-list li { display: flex; gap: 8px; align-items: flex-start; }
+.ring-list li .dot { margin-top: 6px; }
+.ring-list li > span:last-child { display: flex; flex-direction: column; }
+.streak.big { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; }
+.streak.big > span { display: flex; flex-direction: column; }
+.record-list { list-style: none; margin: 0; padding: 0; }
+.record-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.record-list li:first-child { border-top: 0; }
+.record-list li > span { display: flex; flex-direction: column; }
+.record-list li.tap { cursor: pointer; }
+.record-list strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.badge-grid { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.badge { background: var(--surface); border-radius: 16px; padding: 14px 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.badge-ico { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--lv1) 30%, transparent); color: var(--ink); margin-bottom: 4px; flex: none; }
+.badge.locked { opacity: .55; }
+.badge.locked .badge-ico { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.badge-at { margin-top: 2px; }
+.unlock-card { border: 2px solid var(--lv1); animation: unlock-in .6s var(--ease) both; }
+.unlock-card .eyebrow { display: flex; align-items: center; gap: 6px; }
+.unlock-level { font-size: 1.1rem; margin: 4px 0 8px; }
+.unlock-badges { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 10px; }
+.unlock-badges li { display: flex; align-items: center; gap: 12px; }
+.unlock-badges li > span:last-child { display: flex; flex-direction: column; }
+.unlock-badges .badge-ico { width: 44px; height: 44px; margin: 0; animation: badge-pop .7s .2s var(--ease) both; }
+.unlock-rec { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+@keyframes unlock-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes badge-pop { 0% { transform: scale(.3); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 130; overflow: hidden; }
+.confetti i { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px; animation: confetti-fall 2.2s cubic-bezier(.2,.6,.4,1) forwards; }
+@keyframes confetti-fall { to { transform: translate(var(--dx), 105vh) rotate(calc(var(--r) + 540deg)); opacity: .9; } }
+/* Lekser og skole (0.12.0) */
+.school-card h2 { margin: 2px 0 4px; }
+.school-card .eyebrow, .sync-line { display: flex; align-items: center; gap: 6px; }
+.sync-line { color: var(--good); font-weight: 700; font-size: .92rem; margin: 6px 0 0; }
+.homework-card { border-left: 4px solid var(--lv2); }
+.students-card .student-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.student { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.student.on { border-color: var(--link); }
+.student > span:nth-child(2) { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.student-ava { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--lv1); color: #1b1f22; flex: none; }
+.add-student { display: grid; gap: 8px; margin: 6px 0 8px; }
+.add-student input { margin: 0; }
+.chip.add { display: inline-flex; align-items: center; gap: 4px; border-style: dashed; }
+.mode-list { display: grid; gap: 6px; }
+.mode-opt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 4px; -webkit-tap-highlight-color: transparent; }
+.mode-opt input { margin-top: 4px; width: 20px; height: 20px; accent-color: var(--link); }
+.mode-opt > span { display: flex; flex-direction: column; }
+.view-mode { border: 2px dashed var(--turn); }
+.cam-card { display: flex; align-items: center; gap: 12px; width: 100%; }
+.cam-card .cam-chev { margin-left: auto; color: var(--muted); }

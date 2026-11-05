@@ -74,6 +74,7 @@ export class Recorder {
     this.appVersion = opts.appVersion || null;
     this.driver = opts.driver || '';
     this.focus = Array.isArray(opts.focus) ? opts.focus.slice(0, 3) : [];
+    this.surface = typeof opts.surface === 'string' ? opts.surface : '';   // føre (0.12.0)
     this.calib = opts.calib || null;
     this.replay = opts.replay || null;        // { data, speed } – utvikleralternativ: spill av demotur
     this.reset();
@@ -126,6 +127,7 @@ export class Recorder {
       demo: !!this.replay,
       driver: this.driver,
       focus: this.focus,
+      surface: this.surface,
       calib: this.calib || null,
       gaps: [],
       marks: [],

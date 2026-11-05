@@ -38,7 +38,9 @@ export function poseFromMatrix(m) {
   return {
     yaw: Math.atan2(r02, r22) * deg,
     pitch: Math.asin(Math.max(-1, Math.min(1, -r12))) * deg,
-    roll: Math.atan2(r10, r11) * deg
+    roll: Math.atan2(r10, r11) * deg,
+    // Hvor ansiktet er i forhold til kameraet (cm), til sjekken av kalibreringen før turen (0.12.0)
+    ...(Number.isFinite(m[14]) ? { x: m[12], y: m[13], z: m[14] } : {})
   };
 }
 

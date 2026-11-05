@@ -8,7 +8,7 @@ Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). H
 
 ## Allerede ferdig
 
-- [x] Appen: opptak, rapport, Pluss med prøveperiode, «Klar for oppkjøring?», demotur for Apple
+- [x] Appen: opptak, rapport, Pluss med prøveperiode, «Hva må du øve mer på?», demotur for Apple
 - [x] Ikon (lyst og mørkt), tillatelsestekster, personvernmanifest, eksportsvar (ingen kryptering)
 - [x] 7 App Store-bilder i [`skjermbilder/`](skjermbilder/) (6,9", riktig størrelse)
 - [x] Beskrivelse ([`beskrivelse.txt`](beskrivelse.txt)), navn, undertittel, nøkkelord, kampanjetekst (README del 2)

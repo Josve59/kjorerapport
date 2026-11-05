@@ -142,6 +142,67 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.12.0 – feedback from a test user
+
+**While driving:**
+- **Less on the recording screen.** The timer, «Opptak pågår» and the «Statens vegvesen» label under the sign are gone. The speed-limit sign and the speed are bigger. Kilometres are a small line.
+  - The camera status only shows when something is wrong.
+  - The lock screen and Dynamic Island show kilometres, not a clock.
+- **Speed warning (`js/speedwarn.js`).**
+  - The screen edge glows red when the speed is too high. The glow grows exponentially with how far over the limit you are: 1 − e^(−over/7).
+  - Pips are optional and come faster the further over you are.
+  - **When it starts:** more than 3 km/t over the limit (3 % over 100 km/t) for 2 seconds. This is the same margin the police deduct.
+  - Turn it on and off under Innstillinger › Under kjøring.
+- **Road surface (`js/surface.js`).**
+  - The ledsager picks Tørt, Vått, Snø or Is before the drive. It is suggested from earlier the same day; in winter it must be picked.
+  - On slippery surfaces the limits for harsh braking, acceleration and turns are lower. The factor is √(μ/0,9), never below 0,4.
+  - Friction values come from Statens vegvesen's Teknologirapport 2493 «Salting av veger» (SINTEF 2007, table 3). Håndbok R610 is the reference for winter requirements.
+  - Turer has a new «Føre» scale.
+- **Calibration check before the drive (`js/calibcheck.js`).**
+  - The calibration now stores where the face was, as a position from the face model.
+  - In «Før du kjører» the app compares that with where the face is now. If the holder or seat has moved more than 8 cm sideways or 12 cm in depth, «Kalibrer på nytt» becomes a step to do.
+  - Older calibrations without a position are checked with head angles.
+  - The camera button moved from Home to Innstillinger › Kamera.
+
+**Navigation and layout:**
+- «Kjørerapport» and the settings gear are at the top of every tab. Page titles and buttons (share, print) are on the page itself.
+- **New Guide tab at the bottom (5 tabs).** The guide that fits best right now is open at the top. Guides no longer pop up on Home.
+- **A camera intro** (3 pages) appears the first time Pluss is unlocked.
+- «Klar for oppkjøring?» is renamed **«Hva må du øve mer på?»**. What to practise now comes first.
+- Road types, light and road surface use the same colour scale in the same order (`--lv1`…`--lv4` in `css/theme.css`).
+- **Kjøreutvikling** always runs from 0 to 100. Tap it for full screen (`js/devchart.js`):
+  - pick a period (2 uker, måned, 3 mnd, år, alt);
+  - pinch to zoom and drag to pan;
+  - a rolling 3-drive trend line;
+  - average, best and change for the period;
+  - tap a point to open that report.
+
+**Game feel (`js/game.js`):**
+- **Badges:** 19, for practice volume, variety, darkness, slippery roads and smooth driving. None for speed.
+- **Weekly rings:** practice minutes, variety and smooth driving.
+- **Levels:** 1 XP per minute plus 25 per badge.
+- **Records:** best score, longest drive, longest drive without harsh events, most practice in a week.
+- **Weeks in a row.**
+- The Home card and a new **Fremgang** page (`#/fremgang`) show all of this.
+- The report shows what the drive unlocked, with confetti the first time.
+
+**The phone holder:**
+- Norwegian law (forskrift om bruk av mobiltelefon under kjøring § 2) says the holder must be fixed «i umiddelbar nærhet av rattet», as close to the driver's normal field of view as practical.
+- Guides, help and the pre-drive text now say: a fixed holder right by the steering wheel. Not in the middle of the dashboard toward the passenger side, and not on the airbags.
+
+**Two app versions (`js/modes.js`, temporary switch):**
+- **Students:**
+  - private users have no driver list, only «Navnet ditt»;
+  - students connected to a driving school get the school, the teacher, the next lesson and homework from the teacher, and Pluss is included.
+- **Driving teachers:**
+  - a student list (name and Apple ID e-mail), switching between students on Home;
+  - each student's profile (all screens filtered to the student);
+  - homework for the next lesson;
+  - recording lessons on the selected student;
+  - «Legg inn tre testelever med turer» (`js/testdata.js`).
+- **The «Visning (midlertidig)» switch.** It sits under Innstillinger and switches between App Store, Gratis, Pluss, Koblet til trafikkskole and Trafikklærer. It only shows in builds from Xcode and TestFlight, never in the App Store version.
+- **Not built yet:** automatic sharing between student and school (iCloud/CloudKit) needs the Apple Developer account. Until then the school and teacher data are local test data.
+
 ## What's new in 0.11.6 – three fixes from the phone
 
 - **Til trafikklæreren:** the date field «Forrige kjøretime» stuck out of the card on the iPhone (iOS gives date fields their own width), and was blank when empty. It now fits, and shows «Velg dato».

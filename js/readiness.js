@@ -1,4 +1,4 @@
-/* «Klar for oppkjøring?» (0.11.2): appens oversikt over hva som er på plass før oppkjøringen, og hva dere bør øve mer
+/* «Hva må du øve mer på?» (0.12.0, før «Klar for oppkjøring?» fra 0.11.2): appens oversikt over hva som er på plass før oppkjøringen, og hva dere bør øve mer
    på. Bygger på turene (mengde, variasjon, mørke, jevn kjøring, fart, situasjoner, speilblikk) og opplæringsplanen
    (den obligatoriske opplæringen). Det er ikke en vurdering av om eleven består: trafikklæreren avgjør når eleven er
    klar, og sier det tydelig. Målene er appens egne, satt ut fra vanlige råd, og er ment som veiledning.

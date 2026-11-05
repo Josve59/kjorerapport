@@ -11,7 +11,7 @@ export const PLUS_FEATURES = {
   camera: { icon: 'mirror', title: 'Kameraene', text: 'Speil- og skulderblikk med frontkameraet, og bilen foran, feltlinjene og fartsskiltene med bakkameraet samtidig.' },
   plan: { icon: 'book', title: 'Opplæringsplanen', text: 'Hele læreplanen for klasse B, med det appen har sett på turene, og faresteder på kartet.' },
   teacher: { icon: 'school', title: 'Til trafikklæreren', text: 'Oppsummering av øvingen siden forrige kjøretime, klar til å vise eller dele.' },
-  ready: { icon: 'flag', title: 'Klar for oppkjøring', text: 'Hva som er på plass før oppkjøringen, og hva dere bør øve mer på: mengde, variasjon, mørke, fart og speil.' },
+  ready: { icon: 'flag', title: 'Hva må du øve mer på?', text: 'Det du bør øve mer på før oppkjøringen, og det som er på plass: mengde, variasjon, mørke, fart og speil.' },
   history: { icon: 'list', title: 'Alle rapportene', text: `Rapportene for alle turene, ikke bare de ${FREE_REPORTS} siste.` }
 };
 

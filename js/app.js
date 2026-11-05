@@ -13,6 +13,8 @@ import * as cam from './facecam.js';
 import { createLiveLimit, createLiveRoad } from './livelimit.js';
 import { trackCurvature, aheadCurvature, kappaPrior } from './roadshape.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
+import { createSpeedWarn } from './speedwarn.js';
+import { SURFACES, SURFACE_LABEL, surfaceFactor, suggestSurface, surfaceSplit, dayKey } from './surface.js';
 import { CLASS_LABEL, CALIB_STEPS, MIRRORS, closeMirrorText, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
 import { roadSummary } from './road.js';
 import { laneX, scaleLane } from './lanes.js';
@@ -20,8 +22,13 @@ import { createCamLimit } from './signs.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
+import { checkCalibration, facePosition } from './calibcheck.js';
+import { openDevChart } from './devchart.js';
+import { gameState, unlockedBy, BADGES } from './game.js';
+import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
+import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.11.6';
+export const APP_VERSION = '0.12.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -113,6 +120,9 @@ function analysisOptions() {
 
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
+  // Føre (0.12.0): på glatt føre er grensene for brå bremsing, gass og sving lavere
+  const sf = surfaceFactor(drive.surface);
+  if (sf !== 1) opts.factor = +(opts.factor * sf).toFixed(3);
   const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15`;
   if (drive.result && drive.resultKey === key) return drive.result;
   const { getRaw } = await import('./db.js');
@@ -138,33 +148,46 @@ async function analyzeDrive(drive) {
 const isReal = d => !d.demo && !d.imported;
 const num = v => (v === '' || v === null || v === undefined ? NaN : Number(String(v).replace(',', '.')));
 
-/* ---------- Hjem ---------- */
-async function renderHome() {
-  show('home');
-  const settings = getSettings();
-  const list = $('#drive-list');
-  if (!list.children.length || list.querySelector('.empty')) list.innerHTML = '<li class="skeleton-row"></li><li class="skeleton-row"></li><li class="skeleton-row"></li>';
-  $('#start-hello').textContent = settings.activeDriver ? `Hei, ${settings.activeDriver}!` : 'Klar for en tur?';
-  const calibrated = !!getCalib();
+/* Kamerakortet under Innstillinger (0.12.0, før på Hjem) */
+function updateCamCard() {
+  const settings = getSettings(), calibrated = !!getCalib();
   $('#btn-go-camera').classList.toggle('warn', hasPlus() && !!settings.cameraOn && !calibrated);
   $('#cam-card-text').textContent = !hasPlus() ? (plusState().trialAvailable ? 'Prøv Pluss gratis i 14 dager: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.' : 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.')
     : !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
     : calibrated ? (roadWanted() ? 'Kalibrert og slått på, med veikameraet samtidig. Trykk for å teste.' : 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.')
     : 'Ikke kalibrert. Trykk her og kalibrer før turen – det tar 30 sekunder.';
+}
+
+/* ---------- Hjem ---------- */
+let homeSeq = 0;
+async function renderHome() {
+  show('home');
+  const tok = ++homeSeq, stale = () => tok !== homeSeq;   // en eldre tegning skal ikke skrive over en nyere (0.12.0)
+  ensureStudent();
+  const settings = getSettings();
+  const list = $('#drive-list');
+  if (!list.children.length || list.querySelector('.empty')) list.innerHTML = '<li class="skeleton-row"></li><li class="skeleton-row"></li><li class="skeleton-row"></li>';
+  const me = settings.name || settings.activeDriver || '';
+  $('#start-hello').textContent = isTeacher() ? (settings.activeStudent ? `Kjøretime med ${settings.activeStudent}` : 'Velg en elev') : me ? `Hei, ${me}!` : 'Klar for en tur?';
+  $('#btn-go-precheck').lastChild.textContent = isTeacher() ? 'Start kjøretime' : 'Start kjøretur';
+  const calibrated = !!getCalib();
+  updateCamCard();
   const allDrives = await listDrives();
+  if (stale()) return;
   for (const d of allDrives) if (d.status === 'recording') { d.status = 'done'; d.interrupted = true; await putDrive(d); }
 
-  // Førerfilter
-  const driverNames = [...new Set([...(settings.drivers || []), ...allDrives.map(d => d.driver).filter(Boolean)])];
-  let filter = settings.homeDriver || '';
-  if (filter && !driverNames.includes(filter)) filter = '';
+  // Elever (0.12.0): bare trafikklæreren bytter mellom elever. Eleven ser alle sine egne turer.
+  const studs = isTeacher() ? students(settings) : [];
+  const filter = isTeacher() ? (settings.activeStudent || '') : '';
   const chips = $('#driver-chips');
-  if (driverNames.length > 1) {   // med én fører er det ingenting å velge mellom (0.11.5)
-    chips.innerHTML = ['', ...driverNames].map(n => `<button type="button" class="chip ${n === filter ? 'on' : ''}" data-d="${esc(n)}" aria-pressed="${n === filter}">${n ? esc(n) : 'Alle'}</button>`).join('');
+  if (isTeacher()) {
+    chips.innerHTML = studs.map(x => `<button type="button" class="chip ${x.name === filter ? 'on' : ''}" data-d="${esc(x.name)}" aria-pressed="${x.name === filter}">${esc(x.name)}</button>`).join('')
+      + `<button type="button" class="chip add" id="btn-chip-add">${icon('plus', 16)}Elev</button>`;
     chips.hidden = false;
-    chips.querySelectorAll('.chip').forEach(c => c.onclick = () => { saveSettings({ ...getSettings(), homeDriver: c.dataset.d }); renderHome(); });
+    chips.querySelectorAll('.chip[data-d]').forEach(c => c.onclick = () => { saveSettings({ ...getSettings(), activeStudent: c.dataset.d }); renderHome(); });
+    $('#btn-chip-add').onclick = () => { location.hash = '#/trafikklaerer'; };
   } else chips.hidden = true;
-  const drives = filter ? allDrives.filter(d => d.driver === filter) : allDrives;
+  const drives = isTeacher() ? allDrives.filter(d => (d.driver || '') === filter) : allDrives;
 
   const rows = [];
   const results = [];     // bare ekte opptak – demo og importerte turer holdes utenfor oppsummering og trend
@@ -180,13 +203,14 @@ async function renderHome() {
     }
     rows.push({ d, res });
   }
+  if (stale()) return;
 
   // Liste gruppert etter tid
   let html = '', lastGroup = '';
   for (const { d, res } of rows) {
     const g = groupLabel(d.startedAt);
     if (g !== lastGroup) { html += `<li class="group-head">${esc(g)}</li>`; lastGroup = g; }
-    const tags = [d.driver && !filter ? d.driver : '', d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : ''].filter(Boolean);
+    const tags = [d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : ''].filter(Boolean);
     const meta = res ? [km(res.stats.km), duration(res.stats.duration)] : ['For lite data'];
     html += `<li>
       <button type="button" class="drive" data-id="${d.id}">
@@ -199,7 +223,7 @@ async function renderHome() {
       </button>
     </li>`;
   }
-  list.innerHTML = rows.length ? html : `<li class="empty"><span class="empty-ico">${icon('wheel', 40)}</span><strong>${filter ? `Ingen turer for ${esc(filter)} enda` : 'Ingen turer enda'}</strong><span class="muted small">Første rapport kommer når dere har kjørt en tur.</span></li>`;
+  list.innerHTML = rows.length ? html : `<li class="empty"><span class="empty-ico">${icon('wheel', 40)}</span><strong>${isTeacher() ? (filter ? `Ingen kjøretimer med ${esc(filter)} enda` : 'Velg eller legg til en elev') : 'Ingen turer enda'}</strong><span class="muted small">Første rapport kommer når dere har kjørt en tur.</span></li>`;
   list.querySelectorAll('.drive').forEach(b => b.addEventListener('click', () => { location.hash = '#/rapport/' + b.dataset.id; }));
   $('#drive-section').hidden = false;
 
@@ -269,20 +293,38 @@ async function renderHome() {
     goalCard.hidden = false;
   } else goalCard.hidden = true;
 
-  // Trend: samlet eller per kategori
+  // Kjøreutvikling (0.12.0): 0–100, trykk for full skjerm med zoom og perioder (js/devchart.js)
   const chrono = results.slice().reverse();
   const mode = settings.trendMode === 'cats' ? 'cats' : 'total';
-  $('#trend').innerHTML = chrono.length >= 2 ? `<div class="trend-head"><h2 class="card-title">${icon('chart')}Utvikling</h2>
+  const devData = rows.filter(x => x.res && isReal(x.d)).reverse().map(x => ({ id: x.d.id, t: Date.parse(x.d.startedAt), overall: x.res.overall, scores: x.res.scores, km: x.res.stats.km }));
+  $('#trend').innerHTML = chrono.length >= 2 ? `<div class="trend-head"><h2 class="card-title">${icon('chart')}Kjøreutvikling</h2>
       <div class="mini-seg" role="group" aria-label="Vis">
         <button type="button" data-m="total" class="${mode === 'total' ? 'on' : ''}" aria-pressed="${mode === 'total'}">Samlet</button>
         <button type="button" data-m="cats" class="${mode === 'cats' ? 'on' : ''}" aria-pressed="${mode === 'cats'}">Kategorier</button>
       </div></div>
-      ${mode === 'cats' ? categoryTrendChart(chrono) : trendChart(chrono.map(r => r.overall), Number.isFinite(gScore) ? gScore : null)}` : '';
+      <button type="button" class="trend-open" aria-label="Åpne kjøreutviklingen i full skjerm">${mode === 'cats' ? categoryTrendChart(chrono) : trendChart(chrono.map(r => r.overall), Number.isFinite(gScore) ? gScore : null)}
+      <span class="trend-zoom">${icon('zoom', 16)}Trykk for å zoome og velge periode</span></button>` : '';
   $('#trend').querySelectorAll('.mini-seg button').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), trendMode: b.dataset.m }); renderHome(); });
+  const to = $('#trend .trend-open');
+  if (to) to.onclick = () => openDevChart(devData, { goal: Number.isFinite(gScore) ? gScore : null, mode, onOpen: id => { location.hash = '#/rapport/' + id; } });
   if (!allDrives.length && !settings.introSeen) openIntro();
 
   // Dagens forslag i startkortet
-  const sugRows = await gatherRows(settings.activeDriver || '');
+  const sugRows = await gatherRows(scopeDriver(settings));
+  if (stale()) return;
+  // Fremgang (0.12.0): nivå, ukesringer, uker på rad og merker
+  const gc = $('#game-card');
+  if (sugRows.length) {
+    const g = gameState(sugRows);
+    gc.innerHTML = gameCardHtml(g);
+    gc.hidden = false;
+    gc.querySelector('button').onclick = () => { location.hash = '#/fremgang'; };
+  } else gc.hidden = true;
+  // Lekser fra læreren (skolevisningen)
+  const hh = $('#homework-home');
+  const hw = isSchool() ? homeworkFor(settings) : null;
+  hh.innerHTML = hw ? homeworkCardHtml(hw, false) : '';
+  hh.hidden = !hw;
   const sug = suggestFocus(sugRows);
   const sl = $('#suggest-line');
   if (sug.length) { sl.textContent = `Forslag i dag: ${sug.map(x => (FOCUS.find(f => f.id === x.id) || {}).label).join(', ').toLowerCase()}`; sl.hidden = false; } else sl.hidden = true;
@@ -303,18 +345,14 @@ async function renderHome() {
     $('#btn-bb-later').onclick = () => { saveSettings({ ...getSettings(), backupSnoozeUntil: new Date(Date.now() + 7 * 86400000).toISOString() }); bb.hidden = true; };
   } else bb.hidden = true;
 
-  // Guide (0.10.1): den første som passer og ikke er lukket (demoturer teller ikke som turer)
-  renderGuideCard({ real: realCount, cameraOn: !!settings.cameraOn, calibrated, roadCam: roadWanted(), native: !!window.kjNative,
-    unbacked: bb.hidden ? newSince : 0, dark: isDarkSeason() });
 
   // Faresteder og opplæring
   const more = $('#more-cards');
   if (sugRows.length || realCount) {
-    const allRows = filter ? sugRows : await gatherRows(null);
+    const allRows = sugRows;
     const spots = hotspots(allRows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
     const plan = planProgress(allRows);
-    const full = filter ? await gatherRows(null) : allRows;
-    const rd = readiness(settings.activeDriver ? full.filter(x => (x.d.driver || '') === settings.activeDriver) : full, { plan: planState().mine });
+    const rd = readiness(allRows, { plan: planState().mine });
     more.innerHTML = `<button type="button" class="card t-cta" id="btn-go-teacher"><span class="card-title">${icon('school')}Til trafikklæreren</span><span class="muted small">Det som er øvd siden forrige kjøretime, klart til å vise fram eller dele</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
       ${spots.length ? `<button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>` : ''}
       <button type="button" class="card mini-card" id="btn-go-plan"${spots.length ? '' : ' style="grid-column: 1 / -1"'}><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
@@ -322,9 +360,9 @@ async function renderHome() {
     if (spots.length) $('#btn-go-spots').onclick = () => { location.hash = '#/faresteder'; };
     $('#btn-go-plan').onclick = () => { location.hash = '#/opplaering'; };
     $('#btn-go-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
-    // Klar for oppkjøring? (0.11.2): eget kort på Hjem, gratis å se, skjermen hører til Pluss
+    // «Hva må du øve mer på?» (0.12.0, før «Klar for oppkjøring?»): eget kort på Hjem, gratis å se, skjermen hører til Pluss
     const rc = $('#ready-card');
-    rc.innerHTML = `<button type="button" class="card t-cta ready-cta lv-${rd.level}" id="btn-go-ready"><span class="card-title">${icon('flag')}Klar for oppkjøring?${hasPlus() ? '' : `<span class="lock-tag">${icon('lock', 14)}Pluss</span>`}</span><span class="ready-mini"><strong>${rd.done} av ${rd.counted}</strong> <span class="muted small">på plass · ${esc(READY_TEXT[rd.level].title.toLowerCase())}</span></span><span class="goal-bar"><span style="width:${rd.counted ? Math.round(rd.done / rd.counted * 100) : 0}%"></span></span><span class="last-cta">Se hva som gjenstår ${icon('chev', 18)}</span></button>`;
+    rc.innerHTML = `<button type="button" class="card t-cta ready-cta lv-${rd.level}" id="btn-go-ready"><span class="card-title">${icon('flag')}${esc(practiceTitle())}${hasPlus() ? '' : `<span class="lock-tag">${icon('lock', 14)}Pluss</span>`}</span>${rd.next[0] ? `<span class="ready-next">${esc(rd.next[0].label)}</span>` : ''}<span class="ready-mini"><strong>${rd.done} av ${rd.counted}</strong> <span class="muted small">på plass før oppkjøringen</span></span><span class="goal-bar"><span style="width:${rd.counted ? Math.round(rd.done / rd.counted * 100) : 0}%"></span></span><span class="last-cta">Se alt ${icon('chev', 18)}</span></button>`;
     rc.hidden = false;
     $('#btn-go-ready').onclick = () => { location.hash = '#/klar'; };
   } else { more.hidden = true; $('#ready-card').hidden = true; }
@@ -334,7 +372,9 @@ async function renderHome() {
 
 function logFor(d, res) {
   const limits = d.enrich && Array.isArray(d.enrich.limits) && d.enrich.limits.length === res.points.length ? d.enrich.limits.map(v => (v === null ? NaN : v)) : null;
-  return driveLog(res, Date.parse(d.startedAt), limits);
+  const log = driveLog(res, Date.parse(d.startedAt), limits);
+  log.surface = surfaceSplit(d.surface, log.total.sec);   // føre (0.12.0)
+  return log;
 }
 function fmtHours(sec) {
   const m = Math.round(sec / 60);
@@ -418,36 +458,22 @@ function updatePlusMarks() {
 /* ---------- Guider (0.10.1) ---------- */
 const guideSteps = g => `<ol class="steps-list">${g.steps.map(([b, t], i) => `<li><span class="step-num">${i + 1}</span><span><strong>${esc(b)}</strong> ${esc(t)}</span></li>`).join('')}</ol>`;
 
-function renderGuideCard(ctx) {
-  const card = $('#guide-card');
-  const g = guideFor(ctx, getSettings().guidesClosed || {});
-  card.hidden = !g;
-  if (!g) return;
-  card.innerHTML = `<div class="guide-head"><span class="guide-ico">${icon(g.icon, 20)}</span><div class="guide-titles"><span class="eyebrow">Guide</span><h2>${esc(g.title)}</h2></div>
-      <button type="button" class="guide-close" aria-label="Lukk guiden «${esc(g.title)}»">${icon('close', 20)}</button></div>
-    <p class="muted guide-lead">${esc(g.lead)}</p>
-    <details class="guide-steps"${g.id === 'start' ? ' open' : ''}><summary><span class="when-closed">Les guiden (${g.steps.length} punkter)</span><span class="when-open">Skjul</span></summary>${guideSteps(g)}</details>
-    <a class="guide-more" href="#/guider">Alle guider og tips ${icon('chev', 14)}</a>`;
-  card.querySelector('.guide-close').onclick = () => {
-    const s = getSettings();
-    saveSettings({ ...s, guidesClosed: { ...(s.guidesClosed || {}), [g.id]: true } });
-    card.classList.add('closing');
-    setTimeout(() => { card.hidden = true; card.classList.remove('closing'); }, 220);
-    toast('Guiden er lukket. Du finner den under Innstillinger › Guider og tips.', { type: 'ok', ms: 3200 });
-  };
-}
-
-function renderGuides() {
+/* Guide-fanen (0.12.0): alle guidene på ett sted nederst i appen, i stedet for kort som dukker opp på Hjem.
+   Den som passer best nå (js/guides.js) står øverst og er åpen. */
+async function renderGuides() {
   show('guides');
-  const closed = getSettings().guidesClosed || {};
-  $('#guide-list').innerHTML = GUIDES.map(g => `<details class="card guide-item" id="guide-${g.id}">
-      <summary><span class="guide-ico">${icon(g.icon, 20)}</span><span class="guide-titles"><strong>${esc(g.title)}</strong><span class="muted small">${esc(g.lead)}</span></span>${icon('chev', 18)}</summary>
-      ${guideSteps(g)}${closed[g.id] ? '<p class="muted small">Lukket på Hjem.</p>' : ''}</details>`).join('');
-  $('#btn-guides-reset').onclick = () => { saveSettings({ ...getSettings(), guidesClosed: {} }); toast('Guidene vises på Hjem igjen når de passer.', { type: 'ok' }); renderGuides(); };
+  const s = getSettings(), drives = await listDrives();
+  const real = drives.filter(isReal).length;
+  const best = guideFor({ real, cameraOn: !!s.cameraOn && hasPlus(), calibrated: !!getCalib(), roadCam: roadWanted(), native: !!window.kjNative, unbacked: 0, dark: isDarkSeason() }, {});
+  const order = best ? [best, ...GUIDES.filter(g => g !== best)] : GUIDES;
+  $('#guide-list').innerHTML = order.map(g => `<details class="card guide-item" id="guide-${g.id}"${g === best ? ' open' : ''}>
+      <summary><span class="guide-ico">${icon(g.icon, 20)}</span><span class="guide-titles">${g === best ? '<span class="eyebrow">Passer nå</span>' : ''}<strong>${esc(g.title)}</strong><span class="muted small">${esc(g.lead)}</span></span>${icon('chev', 18)}</summary>
+      ${guideSteps(g)}</details>`).join('');
+  $('#btn-guides-intro').onclick = () => openIntro();
 }
 
 /* ---------- Kamera ---------- */
-const calibKey = () => getSettings().activeDriver || '_';
+const calibKey = () => personKey(getSettings());
 /* Kalibreringen for valgt fører. Finnes ingen, brukes den nyeste (holderen står som regel likt). */
 function getCalib() {
   const all = getSettings().calib || {};
@@ -623,14 +649,16 @@ async function runCalibration() {
   vibrate([30, 60, 30]);
   const c = calibrationFromSamples(byTarget);
   if (c.ok) {
+    const pos = facePosition(byTarget.forward || []);   // hvor ansiktet sto, så appen ser om holderen flytter seg (0.12.0)
+    if (pos) c.pos = pos;
     c.at = new Date().toISOString(); saveCalib(c); speak('Ferdig. Kalibreringen er lagret.');
     // To speil nær hverandre (v0.11.1): lagret, men si fra, så de kan kalibrere på nytt med tydeligere hodebevegelser
-    if (c.close) infoDialog({ title: 'Kalibreringen er lagret, men …', text: `${closeMirrorText(c.close)}, så appen kan blande dem. Kalibrer gjerne på nytt og snu hodet tydelig mot hvert speil. Flytt holderen mer mot midten av bilen hvis det ikke hjelper.` });
+    if (c.close) infoDialog({ title: 'Kalibreringen er lagret, men …', text: `${closeMirrorText(c.close)}, så appen kan blande dem. Kalibrer gjerne på nytt og snu hodet tydelig mot hvert speil. Hjelper ikke det, vinkle holderen litt mer mot føreren (den skal fortsatt stå ved rattet).` });
     else toast('Kalibreringen er lagret.', { type: 'ok' });
     return c;
   }
   speak('Kalibreringen ble ikke god nok.');
-  infoDialog({ title: 'Kalibreringen ble ikke god nok', text: c.problem === 'missing' ? 'Kameraet så ikke ansiktet lenge nok i ett eller flere trinn. Sjekk at ansiktet er godt synlig og at det er lyst nok.' : c.problem === 'close' ? 'Telefonen ser for liten forskjell mellom rett fram og et av speilene. Flytt holderen mer mot midten av bilen, og snu hodet tydelig mot speilet.' : 'Venstre og høyre speil ble ikke skilt fra hverandre. Prøv igjen, og snu hodet tydelig.' });
+  infoDialog({ title: 'Kalibreringen ble ikke god nok', text: c.problem === 'missing' ? 'Kameraet så ikke ansiktet lenge nok i ett eller flere trinn. Sjekk at ansiktet er godt synlig og at det er lyst nok.' : c.problem === 'close' ? 'Telefonen ser for liten forskjell mellom rett fram og et av speilene. Vinkle holderen litt mer mot føreren (den skal stå ved rattet), og snu hodet tydelig mot speilet.' : 'Venstre og høyre speil ble ikke skilt fra hverandre. Prøv igjen, og snu hodet tydelig.' });
   return null;
 }
 
@@ -640,7 +668,7 @@ async function renderLog() {
   const root = $('#log-root');
   root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
   const settings = getSettings();
-  const filter = settings.homeDriver || '';
+  const filter = isTeacher() ? (settings.activeStudent || '') : '';
   const all = await listDrives(), plus = hasPlus();
   const drives = all.filter(d => isReal(d) && (!filter || d.driver === filter));
   const lockedIds = new Set(drives.filter(d => reportLocked(all, d.id, plus)).map(d => d.id));   // rapporter som krever Pluss
@@ -663,7 +691,7 @@ async function renderLog() {
   const maxW = Math.max(...weeks.map(w => w.sec), 1);
   const wkFmt = new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short' });
   root.innerHTML = `
-    ${filter ? `<p class="eyebrow pad">Fører: ${esc(filter)}</p>` : ''}
+    ${filter ? `<p class="eyebrow pad">Elev: ${esc(filter)}</p>` : ''}
     <section class="tiles">
       <div class="tile"><span class="tile-val">${fmtHours(tot.total.sec)}</span><span class="tile-label">kjøretid</span></div>
       <div class="tile"><span class="tile-val">${km(tot.total.km)}</span><span class="tile-label">kjørt</span></div>
@@ -674,6 +702,8 @@ async function renderLog() {
       <p class="muted small">Ut fra fartsgrensen når Veidata er på, ellers anslått ut fra farten.</p></section>
     <section class="card"><h2 class="card-title">${icon('moon')}Lysforhold</h2>${bar(tot.light, ['day', 'twilight', 'dark'], LIGHT_LABEL, 'light')}
       <p class="muted small">Regnet ut fra solhøyden der og da. Mørke er når sola står mer enn 6° under horisonten.</p></section>
+    <section class="card"><h2 class="card-title">${icon('snow')}Føre</h2>${bar(tot.surface, ['dry', 'wet', 'snow', 'ice'], SURFACE_LABEL, 'surf')}
+      <p class="muted small">${tot.surface.unknown > 0 ? `${fmtHours(tot.surface.unknown)} er kjørt før føre kunne velges. ` : ''}Velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></section>
     <section class="card"><h2 class="card-title">${icon('chart')}Siste åtte uker</h2>
       <div class="week-bars" role="img" aria-label="Kjøretid per uke">${weeks.map(w => `<div class="wk"><span class="wk-val">${w.sec ? Math.round(w.sec / 60) : ''}</span><span class="wk-bar" style="height:${Math.max(2, w.sec / maxW * 100)}%"></span><span class="wk-lbl">${wkFmt.format(new Date(w.start))}</span></div>`).join('')}</div>
       <p class="muted small">Minutter per uke, fra mandag.</p></section>
@@ -681,12 +711,11 @@ async function renderLog() {
     <ul class="drives log-list card">${rows.map(x => `<li><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${x.d.id}">
       <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
       <span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.log.light.dark > 60 ? `${fmtHours(x.log.light.dark)} mørke` : ''].filter(Boolean).join(SEP)}</span>
-      ${x.d.driver && !filter ? `<span class="tags"><span class="tag">${esc(x.d.driver)}</span></span>` : ''}</span>
+</span>
       ${scoreBadge(x.res.overall, 40)}</button></li>`).join('')}</ul>
     <button type="button" class="btn secondary" id="btn-log-csv2">${icon('download', 20)}Eksporter loggen (regneark)</button>`;
   root.querySelectorAll('.drive').forEach(b => b.onclick = () => { location.hash = '#/rapport/' + b.dataset.id; });
   const csv = () => exportLogCsv(rows, filter);
-  $('#btn-log-csv').onclick = csv;
   root.querySelector('#btn-log-csv2').onclick = csv;
 }
 
@@ -721,8 +750,8 @@ async function renderSpots() {
   show('spots');
   const root = $('#spots-root');
   root.innerHTML = '<div class="skeleton-row"></div>';
-  const filter = getSettings().homeDriver || '';
-  const rows = await gatherRows(filter || null);
+  const filter = isTeacher() ? (getSettings().activeStudent || '') : '';
+  const rows = await gatherRows(scopeDriver(getSettings()));
   const spots = hotspots(rows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
   if (spotsMap) { spotsMap.remove(); spotsMap = null; }
   const KIND = { brake: 'Bremsing', accel: 'Akselerasjon', turn: 'Sving', mark: 'Ledsagerens merker' };
@@ -754,10 +783,26 @@ async function renderSpots() {
 }
 
 /* ---------- Til trafikklæreren (v0.9.13) ---------- */
+let teacherSeq = 0;
+/* Trafikklæreren har alltid en elev valgt når det finnes elever (0.12.0) */
+function ensureStudent() {
+  if (!isTeacher()) return;
+  const s = getSettings(), list = students(s);
+  if (list.length && !list.some(x => x.name === s.activeStudent)) saveSettings({ ...s, activeStudent: list[0].name });
+}
 async function renderTeacher() {
   show('teacher');
+  const tok = ++teacherSeq;   // en eldre tegning (f.eks. før visningen ble byttet) skal ikke skrive over denne
+  ensureStudent();
   const root = $('#teacher-root');
-  const s = getSettings(), key = s.activeDriver || '_', driver = s.activeDriver || '';
+  const s = getSettings(), key = personKey(s), driver = isTeacher() ? (s.activeStudent || '') : '';
+  // Fanen er ulik i hver utgave (0.12.0): eleven viser fram, skoleeleven ser skolen og leksene, læreren har elevene
+  $('#teacher-title').textContent = isTeacher() ? 'Elever' : 'Til trafikklæreren';
+  $('#t-lead').textContent = isTeacher() ? (driver ? `Det ${driver} har øvd siden forrige time.` : 'Velg en elev over.') : isSchool() ? 'Skolen ser dette automatisk. Du kan også vise det fram eller dele det.' : 'Vis trafikklæreren hva som er øvd siden forrige kjøretime, eller del det som en melding.';
+  $('#teacher-top').innerHTML = isTeacher() ? teacherStudentsHtml(s) : isSchool() ? schoolCardHtml(s) : '';
+  if (isTeacher()) wireTeacherStudents();
+  $('.t-controls').hidden = isTeacher() && !driver;
+  $('#btn-teacher-done').hidden = isTeacher() && !driver;
   const lesson = (s.lessons || {})[key] || '';
   let mode = s.teacherPeriod || (lesson ? 'lesson' : '30');
   if (mode === 'lesson' && !lesson) mode = '30';
@@ -779,7 +824,10 @@ async function renderTeacher() {
   noteIn.oninput = () => { clearTimeout(noteTimer); noteTimer = setTimeout(() => { const cur = getSettings(); saveSettings({ ...cur, teacherNotes: { ...(cur.teacherNotes || {}), [key]: noteIn.value.trim() } }); }, 500); };
   noteIn.onchange = () => { const cur = getSettings(); saveSettings({ ...cur, teacherNotes: { ...(cur.teacherNotes || {}), [key]: noteIn.value.trim() } }); renderTeacher(); };
   root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
-  const rows = await gatherRows(driver || null);
+  document.querySelector('#teacher .page-actions').hidden = isTeacher() && !driver;
+  if (isTeacher() && !driver) { root.innerHTML = ''; return; }
+  const rows = await gatherRows(scopeDriver(s));
+  if (tok !== teacherSeq) return;
   // Fra starten av dagen for forrige time (lokal tid)
   const from = mode === 'lesson' ? new Date(lesson + 'T00:00:00').getTime() : mode === '30' ? Date.now() - 30 * 86400000 : null;
   const sum = teacherSummary(rows, { from, driver, plan: planState().mine });
@@ -796,26 +844,174 @@ async function renderTeacher() {
   };
 }
 
-/* ---------- Klar for oppkjøring? (0.11.2) ---------- */
+async function addTestStudents() {
+  await createTestDrives();
+  const cur = getSettings(), list = students(cur).filter(x => !TEST_STUDENTS.some(t => t.name === x.name));
+  saveSettings({ ...cur, students: [...list, ...TEST_STUDENTS.map(t => ({ name: t.name, email: t.email, test: true }))], activeStudent: cur.activeStudent || TEST_STUDENTS[0].name,
+    homework: { ...(cur.homework || {}), Emma: { focus: ['roundabout', 'brake'], note: 'Kjør rundkjøringene ved Moholt et par ganger, og brems tidlig før rødt lys.', from: 'trafikklæreren', setAt: new Date().toISOString() } } });
+  toast('Tre testelever med turer er lagt inn.', { type: 'ok', ms: 2500 });
+}
+async function removeTestStudents() {
+  await removeTestDrives();
+  const cur = getSettings(), list = students(cur).filter(x => !x.test);
+  saveSettings({ ...cur, students: list, drivers: (cur.drivers || []).filter(n => !TEST_STUDENTS.some(t => t.name === n)), activeStudent: list[0] ? list[0].name : '' });
+  toast('Testelevene er fjernet.', { type: 'ok', ms: 2000 });
+}
+/* ---------- Fremgang (0.12.0) ---------- */
+/* Tre ringer inni hverandre, som Aktivitet på Apple Watch: øving (ytterst), variasjon og myk kjøring */
+const RING_COLOR = { minutes: 'var(--lv1)', variety: 'var(--lv2)', smooth: 'var(--good)' };
+function ringsSvg(rings, size = 96) {
+  const c = size / 2, w = size * 0.11;
+  return `<svg class="rings" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="${rings.map(r => `${r.label} ${Math.round(r.progress * 100)} %`).join(', ')}">${rings.map((r, i) => {
+    const rad = c - w / 2 - i * (w + 2), len = 2 * Math.PI * rad;
+    return `<circle cx="${c}" cy="${c}" r="${rad}" fill="none" stroke="${RING_COLOR[r.id]}" stroke-opacity=".2" stroke-width="${w}"/>
+      <circle class="ring-fill" cx="${c}" cy="${c}" r="${rad}" fill="none" stroke="${RING_COLOR[r.id]}" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${(len * Math.max(0.001, r.progress)).toFixed(1)} ${len.toFixed(1)}" transform="rotate(-90 ${c} ${c})"/>`;
+  }).join('')}</svg>`;
+}
+function gameCardHtml(g) {
+  const nb = g.badges.filter(b => b.earned).length;
+  return `<button type="button" class="card game-card">
+      <span class="game-top">${ringsSvg(g.rings, 92)}
+        <span class="game-text"><span class="eyebrow">Nivå ${g.level.n}</span><strong>${esc(g.level.name)}</strong>
+          <span class="goal-bar xp"><span style="width:${Math.round(g.level.progress * 100)}%"></span></span>
+          <span class="muted small">${g.level.to - g.level.xp} XP til nivå ${g.level.n + 1}</span></span></span>
+      <span class="game-row">${g.rings.map(r => `<span class="ring-lbl"><span class="dot" style="background:${RING_COLOR[r.id]}"></span>${esc(r.label)} <strong>${r.value}${r.unit && r.id === 'minutes' ? ' min' : ''}</strong><span class="muted">/${r.goal}</span></span>`).join('')}</span>
+      <span class="game-row"><span class="streak">${icon('flame', 18)}<strong>${g.streak}</strong> ${g.streak === 1 ? 'uke' : 'uker'} på rad</span><span class="badge-count">${icon('award', 18)}<strong>${nb}</strong> av ${g.badges.length} merker</span></span>
+      <span class="last-cta">Se fremgangen ${icon('chev', 18)}</span>
+    </button>`;
+}
+const badgeHtml = b => `<li class="badge ${b.earned ? 'got' : 'locked'}"><span class="badge-ico">${icon(b.earned ? b.icon : 'lock', 26)}</span><strong>${esc(b.title)}</strong><span class="muted small">${esc(b.text)}</span>${b.earned ? `<span class="muted small badge-at">${esc(date(b.earned.at))}</span>` : ''}</li>`;
+async function renderProgress() {
+  show('progress');
+  const root = $('#progress-root');
+  const rows = await gatherRows(scopeDriver(getSettings()));
+  if (!rows.length) { root.innerHTML = `<div class="empty card"><span class="empty-ico">${icon('award', 40)}</span><strong>Ingen turer ennå</strong><span class="muted small">Kjør en tur, så får du det første merket.</span></div>`; return; }
+  const g = gameState(rows);
+  const got = g.badges.filter(b => b.earned), locked = g.badges.filter(b => !b.earned);
+  root.innerHTML = `
+    <section class="card level-hero"><span class="level-num">${g.level.n}</span><span><span class="eyebrow">Nivå ${g.level.n}</span><h2>${esc(g.level.name)}</h2>
+      <span class="goal-bar xp"><span style="width:${Math.round(g.level.progress * 100)}%"></span></span>
+      <span class="muted small">${g.level.xp} XP · ${g.level.to - g.level.xp} til nivå ${g.level.n + 1}. Du får 1 XP per minutt øving og 25 XP per merke.</span></span></section>
+    <section class="card"><h2 class="card-title">${icon('target')}Denne uka</h2>
+      <div class="rings-big">${ringsSvg(g.rings, 132)}<ul class="ring-list">${g.rings.map(r => `<li><span class="dot" style="background:${RING_COLOR[r.id]}"></span><span><strong>${esc(r.label)}</strong> ${r.value}${r.id === 'minutes' ? ' min' : ''} av ${r.goal}${r.id === 'minutes' ? ' min' : r.id === 'smooth' ? ' i snitt' : ''}
+        <span class="muted small">${r.id === 'minutes' ? 'Minutter øvelseskjøring' : r.id === 'variety' ? (r.have.length ? `Har kjørt: ${esc(r.have.join(', '))}` : 'By, landevei, motorvei, mørke, rundkjøring eller glatt føre') : 'Snittpoeng på ukas turer'}</span></span></li>`).join('')}</ul></div>
+      <p class="streak big">${icon('flame', 22)}<span><strong>${g.streak} ${g.streak === 1 ? 'uke' : 'uker'} på rad</strong><span class="muted small">${g.streak ? 'Kjør minst én tur i uka for å holde rekka.' : 'Kjør en tur denne uka for å starte en rekke.'}</span></span></p></section>
+    ${g.records.length ? `<section class="card"><h2 class="card-title">${icon('star')}Rekorder</h2><ul class="record-list">${g.records.map(r => `<li${r.driveId ? ` data-id="${r.driveId}" class="tap"` : ''}><span>${esc(r.label)}<span class="muted small">${esc(date(r.at))}</span></span><strong>${esc(r.value)}</strong></li>`).join('')}</ul></section>` : ''}
+    <h2 class="group-title">${icon('award', 18)}Merker · ${got.length} av ${g.badges.length}</h2>
+    <ul class="badge-grid">${got.map(badgeHtml).join('')}${locked.map(badgeHtml).join('')}</ul>`;
+  root.querySelectorAll('.record-list li.tap').forEach(li => li.onclick = () => { location.hash = '#/rapport/' + li.dataset.id; });
+}
+/* Det turen låste opp, øverst i rapporten (med en liten feiring første gang den åpnes) */
+async function unlockHtml(drive) {
+  if (!isReal(drive)) return '';
+  const rows = await gatherRows(isTeacher() ? (drive.driver || '') : null);
+  const u = unlockedBy(rows, drive.id);
+  if (!u || (!u.badges.length && !u.levelUp && !u.records.length)) return '';
+  return `<section class="card unlock-card">
+      <p class="eyebrow">${icon('star', 16)}Nytt på denne turen · +${u.xpGain} XP</p>
+      ${u.levelUp ? `<p class="unlock-level">Nivå ${u.levelUp.n}: <strong>${esc(u.levelUp.name)}</strong></p>` : ''}
+      ${u.badges.length ? `<ul class="unlock-badges">${u.badges.map(b => `<li><span class="badge-ico">${icon(b.icon, 24)}</span><span><strong>${esc(b.title)}</strong><span class="muted small">${esc(b.text)}</span></span></li>`).join('')}</ul>` : ''}
+      ${u.records.length ? `<p class="unlock-rec">${icon('star', 18)}Ny rekord: ${u.records.map(r => `${esc(r.label.toLowerCase())} (${esc(r.value)})`).join(', ')}</p>` : ''}
+      <a class="last-cta" href="#/fremgang">Se fremgangen ${icon('chev', 16)}</a>
+    </section>`;
+}
+function celebrate() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const box = document.createElement('div');
+  box.className = 'confetti';
+  const colors = ['var(--lv1)', 'var(--lv2)', 'var(--good)', 'var(--link)', 'var(--brake)'];
+  box.innerHTML = Array.from({ length: 36 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${colors[i % colors.length]};animation-delay:${(i % 9) * 60}ms;--dx:${((i * 53) % 80) - 40}px;--r:${(i * 97) % 360}deg"></i>`).join('');
+  document.body.appendChild(box);
+  setTimeout(() => box.remove(), 2600);
+}
+
+/* Skolekortet (0.12.0): trafikkskolen eleven er koblet til, neste time og leksene fra læreren */
+function schoolCardHtml(s) {
+  const sc = schoolInfo(s);
+  if (!sc) return '';
+  const next = sc.nextLesson ? new Date(sc.nextLesson) : null;
+  return `<section class="card school-card">
+      <p class="eyebrow">${icon('school', 16)}Koblet til trafikkskole</p>
+      <h2>${esc(sc.name)}</h2>
+      <p class="muted">Lærer: <strong>${esc(sc.teacher)}</strong>${next ? ` · neste time ${esc(cap(dayFmt.format(next)))} kl. ${timeFmt.format(next)}` : ''}</p>
+      <p class="sync-line">${icon('check', 16)}<span>Turene deles automatisk med skolen${sc.test ? ' (kommer når delingen er klar – nå er dette en test)' : ''}</span></p>
+    </section>${homeworkCardHtml(homeworkFor(s), false)}`;
+}
+/* Lekser fra læreren: hva eleven skal øve på til neste time */
+function homeworkCardHtml(hw, edit) {
+  if (!hw && !edit) return '';
+  const sel = new Set(hw ? hw.focus || [] : []);
+  if (!edit) return `<section class="card homework-card"><h2 class="card-title">${icon('book')}Lekser til neste time</h2>
+      <div class="chips wrap">${FOCUS.filter(f => sel.has(f.id)).map(f => `<span class="chip on">${esc(f.label)}</span>`).join('')}</div>
+      ${hw.note ? `<p>${esc(hw.note)}</p>` : ''}<p class="muted small">Fra ${esc(hw.from || 'trafikklæreren')}. Velges som dagens øvingsmål når du starter en tur.</p></section>`;
+  return `<section class="card homework-card"><h2 class="card-title">${icon('book')}Lekser til neste time</h2>
+      <p class="muted small">Velg opptil tre. Eleven ser dem på Hjem og får dem som øvingsmål før turen.</p>
+      <div class="chips wrap" id="hw-chips">${FOCUS.map(f => `<button type="button" class="chip ${sel.has(f.id) ? 'on' : ''}" data-f="${f.id}" aria-pressed="${sel.has(f.id)}">${esc(f.label)}</button>`).join('')}</div>
+      <label class="field">Beskjed til eleven<textarea id="hw-note" rows="2" placeholder="F.eks. «Kjør gjerne rundkjøringene ved Moholt flere ganger.»">${esc(hw && hw.note || '')}</textarea></label>
+    </section>`;
+}
+/* Trafikklæreren: elevlisten, legg til elev og leksene til eleven som er valgt */
+function teacherStudentsHtml(s) {
+  const list = students(s), cur = s.activeStudent || '';
+  return `<section class="card students-card">
+      <h2 class="card-title">${icon('users')}Elevene dine</h2>
+      ${list.length ? `<ul class="student-list">${list.map(x => `<li><button type="button" class="student ${x.name === cur ? 'on' : ''}" data-d="${esc(x.name)}"><span class="student-ava" aria-hidden="true">${esc(x.name.slice(0, 1).toUpperCase())}</span><span><strong>${esc(x.name)}</strong><span class="muted small">${x.email ? esc(x.email) : 'Ingen Apple-ID lagt inn'}</span></span>${x.name === cur ? `<span class="tag">Valgt</span>` : ''}</button></li>`).join('')}</ul>`
+        : '<p class="muted">Ingen elever ennå. Legg til en elev med navn og e-posten til Apple-ID-en deres.</p>'}
+      <div class="add-student"><input id="new-student" type="text" maxlength="40" placeholder="Navn" aria-label="Navn på ny elev"><input id="new-student-mail" type="email" inputmode="email" autocomplete="off" placeholder="E-post (Apple-ID)" aria-label="E-post til elevens Apple-ID"><button type="button" class="btn secondary" id="btn-add-student">${icon('plus', 18)}Legg til</button></div>
+      <p class="muted small">Med e-posten deles elevens turer automatisk med deg når delingen er klar. Fram til da kan du ta opp kjøretimer på eleven her, og legge inn testelever for å prøve.</p>
+      ${list.some(x => x.test) ? '<button type="button" class="link" id="btn-test-students-del">Fjern testelevene</button>' : '<button type="button" class="link" id="btn-test-students">Legg inn tre testelever med turer</button>'}
+    </section>${cur ? homeworkCardHtml(homeworkFor(s, cur), true) : ''}`;
+}
+function wireTeacherStudents() {
+  document.querySelectorAll('#teacher-top .student').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), activeStudent: b.dataset.d }); renderTeacher(); });
+  $('#btn-add-student').onclick = () => {
+    const name = $('#new-student').value.trim().slice(0, 40), email = $('#new-student-mail').value.trim().slice(0, 80);
+    if (!name) { toast('Skriv navnet til eleven.', { ms: 2000 }); return; }
+    const cur = getSettings(), list = students(cur).filter(x => x.name !== name);
+    saveSettings({ ...cur, students: [...list, { name, email }], activeStudent: name });
+    toast(`${name} er lagt til.`, { type: 'ok', ms: 2000 });
+    renderTeacher();
+  };
+  const t = $('#btn-test-students'), td = $('#btn-test-students-del');
+  if (t) t.onclick = async () => { t.disabled = true; t.textContent = 'Lager turer …'; await addTestStudents(); renderTeacher(); };
+  if (td) td.onclick = async () => { await removeTestStudents(); renderTeacher(); };
+  const chips = $('#hw-chips');
+  if (!chips) return;
+  const name = getSettings().activeStudent;
+  const save = patch => { const cur = getSettings(), hw = { focus: [], note: '', ...(homeworkFor(cur, name) || {}), ...patch, from: 'trafikklæreren', setAt: new Date().toISOString() }; saveSettings({ ...cur, homework: { ...(cur.homework || {}), [name]: hw } }); };
+  chips.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+    const sel = new Set((homeworkFor(getSettings(), name) || {}).focus || []);
+    if (sel.has(c.dataset.f)) sel.delete(c.dataset.f);
+    else { if (sel.size >= 3) { toast('Velg høyst tre.', { ms: 2000 }); return; } sel.add(c.dataset.f); }
+    save({ focus: [...sel] });
+    c.classList.toggle('on', sel.has(c.dataset.f)); c.setAttribute('aria-pressed', sel.has(c.dataset.f));
+  });
+  $('#hw-note').onchange = e => save({ note: e.target.value.trim().slice(0, 300) });
+}
+
+/* ---------- Hva må du øve mer på? (0.12.0, før «Klar for oppkjøring?» fra 0.11.2) ---------- */
+const practiceTitle = () => isTeacher() ? 'Hva må eleven øve mer på?' : 'Hva må du øve mer på?';
 async function renderReady() {
   show('ready');
+  $('#ready-title').textContent = practiceTitle();
   const root = $('#ready-root');
-  const driver = getSettings().activeDriver || '';
+  const driver = isTeacher() ? (getSettings().activeStudent || '') : '';
   root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
-  const rows = await gatherRows(driver || null);
+  const rows = await gatherRows(scopeDriver(getSettings()));
   const r = readiness(rows, { plan: planState().mine });
   const t = READY_TEXT[r.level];
   const groups = [...new Set(r.items.map(i => i.group))];
   const mark = i => i.ok === true ? `<span class="rd-ok">${icon('check', 18)}</span>` : i.ok === false ? '<span class="rd-no"></span>' : '<span class="rd-na">–</span>';
+  // Det som bør øves på står først (0.12.0), så hvor mye som er på plass før oppkjøringen
   root.innerHTML = `
+    ${r.next.length ? `<section class="card rd-next-card"><h2 class="card-title">${icon('target')}Øv på dette nå</h2><ul class="rd-next">${r.next.map(i => `<li>${icon('chev', 18)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.tip)}</span></span></li>`).join('')}</ul></section>` : ''}
     <section class="card ready-head lv-${r.level}">
-      <p class="eyebrow">${driver ? esc(driver) : 'Alle turer'}</p>
+      <p class="eyebrow">${driver ? esc(driver) : 'Før oppkjøringen'}</p>
       <h2>${esc(t.title)}</h2>
       <p class="plan-prog"><strong>${r.done}</strong> av ${r.counted} punkter på plass</p>
       <span class="goal-bar"><span style="width:${r.counted ? Math.round(r.done / r.counted * 100) : 0}%"></span></span>
       <p>${esc(t.text)}</p>
     </section>
-    ${r.next.length ? `<h2 class="group-title">Øv på dette nå</h2><section class="card"><ul class="rd-next">${r.next.map(i => `<li>${icon('chev', 18)}<span>${esc(i.tip)}</span></li>`).join('')}</ul></section>` : ''}
     ${groups.map(g => `<h2 class="group-title">${esc(g)}</h2><section class="card"><ul class="rd-list">${r.items.filter(i => i.group === g).map(i => `<li class="rd-item">${mark(i)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.have)}${i.need ? ` · mål ${esc(i.need)}` : ''}</span>${i.ok === null && i.tip ? `<span class="muted small">${esc(i.tip)}</span>` : ''}${i.ok !== null ? `<span class="goal-bar thin"><span style="width:${Math.round(i.progress * 100)}%"></span></span>` : ''}</span></li>`).join('')}</ul></section>`).join('')}
     <p class="muted small ready-note">Målene er appens egne, satt ut fra vanlige råd for øvelseskjøring. Det er trafikklæreren som vurderer når du er klar for oppkjøring, og ingen app kan love at du består.</p>
     <button type="button" class="btn secondary" id="btn-ready-teacher">${icon('school', 20)}Vis trafikklæreren</button>`;
@@ -824,7 +1020,7 @@ async function renderReady() {
 
 function planState() {
   const s = getSettings();
-  const key = s.activeDriver || '_';
+  const key = personKey(s);
   return { key, all: s.curriculum || {}, mine: (s.curriculum || {})[key] || {} };
 }
 function planProgress() {
@@ -920,6 +1116,10 @@ function renderPrecheck() {
   const hold = $('#check-holder');
   setCheck(hold, null, 'Venter på bevegelsesdata');
   renderDriverPicker();
+  renderSurfacePicker();
+  // Lekser fra læreren (0.12.0) blir dagens øvingsmål, én gang per nye lekse
+  { const st = getSettings(), hw = (isSchool() || isTeacher()) ? homeworkFor(st) : null;
+    if (hw && hw.focus && hw.focus.length && st.hwApplied !== hw.setAt) { saveSettings({ ...st, focus: hw.focus.slice(0, 3), hwApplied: hw.setAt }); toast('Leksene fra læreren er valgt som dagens øvingsmål.', { type: 'ok', ms: 2500 }); } }
   renderFocusChips();
   renderFocusSuggestions();
   const camCheck = $('#check-camera'), roadCheck = $('#check-road');
@@ -938,6 +1138,7 @@ function renderPrecheck() {
   preCalib.onclick = async () => {
     unlockSpeech();
     await runCalibration();
+    camCheck.classList.remove('todo');
     preCalib.lastChild.textContent = getCalib() ? 'Kalibrer på nytt' : 'Kalibrer nå';
   };
   $('#precheck-error').textContent = '';
@@ -966,8 +1167,21 @@ function renderPrecheck() {
         await cam.loadModel(t => setCheck(camCheck, null, t));
         cam.startLoop(8);
         if (camUnsub) camUnsub();
+        // Kalibreringssjekk (0.12.0): stemmer kalibreringen med der telefonen og føreren er nå? Hvis ikke blir
+        // «Kalibrer på nytt» et punkt å gjøre før turen.
         let seen = 0, n = 0;
-        const offPose = cam.onPose(p => { n++; if (p) seen++; if (n % 8 === 0) { const share = seen / 8; seen = 0; setCheck(camCheck, share > 0.6 ? true : null, share > 0.6 ? (getCalib() ? 'Ser føreren · kalibrert' : 'Ser føreren – men ikke kalibrert. Trykk «Kalibrer nå».') : 'Ser ikke ansiktet – juster holderen'); } });
+        const recent = [];
+        const offPose = cam.onPose(p => {
+          n++; if (p) { seen++; recent.push(p); if (recent.length > 40) recent.shift(); }
+          if (n % 8) return;
+          const share = seen / 8; seen = 0;
+          if (share <= 0.6) { setCheck(camCheck, null, 'Ser ikke ansiktet – juster holderen'); return; }
+          const chk = checkCalibration(getCalib(), recent);
+          const todo = chk.state === 'moved' || chk.state === 'none';
+          setCheck(camCheck, chk.state === 'ok' || chk.state === 'old' ? true : chk.state === 'wait' ? null : false, chk.text);
+          camCheck.classList.toggle('todo', todo);
+          preCalib.classList.toggle('primary', todo); preCalib.classList.toggle('secondary', !todo);
+        });
         // Veikameraet: ser det noe? (biler eller feltlinjer, eller lys nok til å se veien)
         let offRoad = null;
         if (cam.state().road) {
@@ -1016,7 +1230,7 @@ function renderPrecheck() {
 /* Dagens øvingsmål: opptil tre, huskes til neste tur. */
 async function renderFocusSuggestions() {
   const el = $('#focus-suggest');
-  const rows = await gatherRows(getSettings().activeDriver || '');
+  const rows = await gatherRows(scopeDriver(getSettings()));
   const sug = suggestFocus(rows);
   if (!sug.length) { el.hidden = true; return; }
   const label = id => (FOCUS.find(f => f.id === id) || {}).label || id;
@@ -1045,24 +1259,33 @@ function renderFocusChips() {
   });
 }
 
-/* Hvem kjører? Velges før start og lagres på turen. */
+/* Føre (0.12.0): velges før turen. Forslaget er det som ble valgt tidligere i dag (om vinteren må det velges). */
+const currentSurface = () => suggestSurface(getSettings().lastSurface);
+function renderSurfacePicker() {
+  const seg = $('#surface-seg'), cur = currentSurface();
+  seg.innerHTML = SURFACES.map(x => `<label><input type="radio" name="surface" value="${x.id}" ${x.id === cur ? 'checked' : ''}><span>${esc(x.short)}</span></label>`).join('');
+  seg.classList.toggle('need', !cur);
+  $('#surface-note').textContent = !cur ? 'Velg føret, så blir vurderingen riktig på glatt vei.' : cur === 'snow' || cur === 'ice' ? 'Glatt føre: grensene for brå bremsing og svinger er lavere i dag.' : '';
+  seg.querySelectorAll('input').forEach(r => r.onchange = () => { saveSettings({ ...getSettings(), lastSurface: { id: r.value, day: dayKey(new Date()) } }); renderSurfacePicker(); });
+}
+
+/* Elev (0.12.0): bare trafikklæreren velger hvem som kjører. Eleven kjører alltid selv. */
 function renderDriverPicker() {
   const s = getSettings();
-  const sel = $('#driver-select');
-  const drivers = s.drivers || [];
-  sel.innerHTML = `<option value="">Ikke valgt</option>${drivers.map(d => `<option value="${esc(d)}" ${d === s.activeDriver ? 'selected' : ''}>${esc(d)}</option>`).join('')}<option value="__new">Legg til fører …</option>`;
+  const wrap = $('.driver-pick'), sel = $('#driver-select');
+  wrap.hidden = !isTeacher();
+  if (!isTeacher()) return;
+  const list = students(s);
+  sel.innerHTML = `<option value="">Velg elev</option>${list.map(x => `<option value="${esc(x.name)}" ${x.name === s.activeStudent ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}<option value="__new">Ny elev …</option>`;
   sel.onchange = async () => {
     if (sel.value === '__new') {
-      const name = ((await promptDialog({ title: 'Ny fører', placeholder: 'Navn', ok: 'Legg til', maxLength: 40 })) || '').trim().slice(0, 40);
-      if (name) {
-        const list = [...new Set([...(getSettings().drivers || []), name])];
-        saveSettings({ ...getSettings(), drivers: list, activeDriver: name });
-      }
+      const name = ((await promptDialog({ title: 'Ny elev', placeholder: 'Navn', ok: 'Legg til', maxLength: 40 })) || '').trim().slice(0, 40);
+      if (name) { const cur = getSettings(); saveSettings({ ...cur, students: [...students(cur).filter(x => x.name !== name), { name, email: '' }], activeStudent: name }); }
       renderDriverPicker();
       renderFocusSuggestions();
       return;
     }
-    saveSettings({ ...getSettings(), activeDriver: sel.value });
+    saveSettings({ ...getSettings(), activeStudent: sel.value });
     renderFocusSuggestions();
   };
 }
@@ -1080,7 +1303,21 @@ async function startRecording(replay = null) {
   // Lyd ved fotobokser (v0.9.10 / k0.7.5): låses opp nå, i trykket på «Start», ellers spiller ikke iPhone lyden
   const atkSound = !replay && settings.netLimits !== false && settings.atkSound !== false ? createAtkSounds() : null;
   if (atkSound) unlockSound();
-  const elapsed = $('#rec-elapsed'), dist = $('#rec-dist'), gps = $('#rec-gps'), warn = $('#rec-warn'), saved = $('#rec-saved'), markCount = $('#rec-marks');
+  // Fartsvarsel (0.12.0): rød kant (og pip hvis valgt) når farten er for høy
+  const speedWarn = settings.speedWarn !== false || settings.speedSound ? createSpeedWarn() : null;
+  const speedBeep = !!settings.speedSound;
+  if (speedBeep) unlockSound();
+  const recEl = $('#record');
+  recEl.style.setProperty('--speed-warn', 0); recEl.classList.remove('speeding');
+  const warnSpeed = (kmh, limit, t) => {
+    if (!speedWarn) return;
+    const w = speedWarn.step({ kmh, limit, t });
+    const show = settings.speedWarn !== false ? w.level : 0;
+    recEl.style.setProperty('--speed-warn', show.toFixed(2));
+    recEl.classList.toggle('speeding', show > 0);
+    if (w.beep && speedBeep) playSound('fart');
+  };
+  const dist = $('#rec-dist'), gps = $('#rec-gps'), warn = $('#rec-warn'), saved = $('#rec-saved'), markCount = $('#rec-marks');
   warn.innerHTML = '';
   saved.textContent = '';
   markCount.textContent = '';
@@ -1100,8 +1337,9 @@ async function startRecording(replay = null) {
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
     appVersion: APP_VERSION,
-    driver: replay ? '' : (settings.activeDriver || ''),
+    driver: replay ? '' : recordDriver(settings),
     focus: replay ? [] : (settings.focus || []),
+    surface: replay ? '' : currentSurface(),
     calib: replay ? null : getCalib(),
     replay,
     onStatus: st => {
@@ -1118,9 +1356,11 @@ async function startRecording(replay = null) {
         limitSign.textContent = lim ?? '–';
         limitSign.classList.toggle('none', lim === null);
         limitSign.classList.toggle('cam', !!cl && !cl.agree);
-        limitNote.textContent = cl ? (cl.agree ? 'Fartsgrense (Statens vegvesen) · kameraet så samme skilt' : `Skilt sett av kameraet${cl.nvdb ? ` · Statens vegvesen: ${cl.nvdb}` : ''}`)
-          : res.limit !== null ? 'Fartsgrense (Statens vegvesen)' : res.status === 'feil' ? 'Fartsgrense: ingen nett' : res.status === 'ukjent' ? 'Fartsgrense ukjent her' : 'Henter fartsgrense …';
+        // Under kjøring (0.12.0): teksten under skiltet vises bare når skiltet ikke er det vanlige
+        limitNote.textContent = cl ? (cl.agree ? '' : 'Skilt sett av kameraet')
+          : res.limit !== null ? '' : res.status === 'feil' ? 'Ingen nett' : res.status === 'ukjent' ? 'Ukjent fartsgrense' : 'Henter fartsgrense …';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
+        warnSpeed(st.kmh, lim, st.elapsed);
         // Fotoboks foran eller strekningsmåling (v0.9.7)
         // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
         // 2 s etter at bilen har passert, og forsvinner så av seg selv.
@@ -1146,10 +1386,10 @@ async function startRecording(replay = null) {
         liveLimitNow = z.limit;
         limitSign.textContent = z.limit;
         limitSign.classList.remove('none');
-        limitNote.textContent = 'Fartsgrense i demoturen';
+        limitNote.textContent = '';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
+        warnSpeed(st.kmh, z.limit, st.elapsed);
       }
-      elapsed.textContent = fmtClock(st.elapsed);
       dist.textContent = km(st.distanceM / 1000);
       // iPhone-appen: avstanden til Live Activity på låseskjermen (v0.9.22)
       if (window.kjNative && window.kjNative.status && !replay && st.elapsed - lastNativeStatus >= 10) { lastNativeStatus = st.elapsed; window.kjNative.status({ distanceM: st.distanceM }); }
@@ -1161,12 +1401,9 @@ async function startRecording(replay = null) {
       gps.hidden = gps.dataset.state === 'ok';
       const behind = st.lastCheckpoint !== null && st.elapsed - st.lastCheckpoint > 90;
       saved.textContent = behind ? `Sist lagret for ${n0(st.elapsed - st.lastCheckpoint)} s siden` : '';
-      const pill = $('#rec-marks-pill');
-      pill.hidden = !st.marks;
       const undoBtn = $('#btn-undo-mark'), lastMark = recorder && recorder.marks[recorder.marks.length - 1];
       undoBtn.hidden = !lastMark;
       if (lastMark) undoBtn.lastChild.textContent = `Angre «${MARK_CATS[lastMark.cat].label}» (${fmtClock(lastMark.t)})`;
-      pill.textContent = st.marks ? `${st.marks} ${st.marks === 1 ? 'merke' : 'merker'}` : '';
       if (st.markCats) renderMarkCounts(st.markCats);
       if (st.returnedFromGap) { gapShown = st.returnedFromGap; gapMsg = `Appen var skjult i ${n0(st.returnedFromGap.to - st.returnedFromGap.from)} sekunder. Hullet er markert i dataene. Hold appen åpen under kjøring.`; }
       if (gapShown && recorder && !recorder.gaps.includes(gapShown)) { gapShown = null; gapMsg = ''; }   // iPhone-appen fylte inn hullet
@@ -1185,11 +1422,13 @@ async function startRecording(replay = null) {
   hitR.onclick = () => openCamView('environment');
   if (!replay && settings.cameraOn && cam.state().running) {
     await cam.attachVideo(recVideo);
-    recVideo.hidden = false; hitV.hidden = false; camPill.hidden = false;
+    recVideo.hidden = false; hitV.hidden = false;
     if (camUnsub) camUnsub();
     let seen = 0, n = 0, face = 'Kamera: på', lastRoad = null;
     const pillText = () => {
       const st = cam.state();
+      // Kamerapillen vises bare når noe er galt (0.12.0)
+      camPill.hidden = camPill.dataset.state === 'ok' && !st.stalled && !st.perf.slow;
       camPill.textContent = st.stalled ? 'Kamera: får ingen bilder – starter på nytt …' : st.perf.slow ? 'Kamera: telefonen er treg (varm?)' : face + (st.road && lastRoad ? ` · ${lastRoad.lead ? `bil ${Math.round(lastRoad.lead.dist)} m foran${lastRoad.lead.src === 'baklys' ? ' (baklys)' : ''}` : 'vei'}` : '');
     };
     const offPose = cam.onPose(p => {
@@ -1220,7 +1459,7 @@ async function startRecording(replay = null) {
       });
     }
     camUnsub = () => { offPose(); if (offRoad) offRoad(); };
-    camPill.textContent = 'Kamera: på'; camPill.dataset.state = 'ok';
+    camPill.textContent = 'Kamera: på'; camPill.dataset.state = 'ok'; camPill.hidden = true;
   }
   try {
     await recorder.start();
@@ -1555,6 +1794,7 @@ async function finishRecording() {
   recorder = null;
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
+  $('#record').classList.remove('speeding'); $('#record').style.setProperty('--speed-warn', 0);
   $('#atk-pop').hidden = true;
   closeCamView();
   // Veikameraet: bildestørrelse, modell og hvor rask telefonen var, lagret med turen
@@ -1689,12 +1929,15 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     }
     const wants = { limits: settings.netLimits !== false, names: settings.netNames !== false };   // på som standard
     const missing = (wants.limits && !(drive.enrich && drive.enrich.limits && drive.enrich.limitsV === LIMITS_V)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === ROAD_V)) || (wants.names && !(drive.enrich && drive.enrich.names));   // road v2: gangfelt, fartsdempere, lyskryss, skilt
-    const draw = (status) => renderReport(root, r, {
+    // Nytt på denne turen (0.12.0): merker, nivå og rekorder øverst i rapporten
+    const unlock = await unlockHtml(drive);
+    if (stale()) return;
+    const drawBase = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
       title: 'Kjørerapport', subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),
       realMap: settings.netMap !== false,
       customThresholds: !!(settings.th),
-      driver: drive.driver || '', drivers: settings.drivers || [],
+      driver: drive.driver || '', drivers: isTeacher() ? students(settings).map(x => x.name) : [],   // bare trafikklæreren flytter turer mellom elever (0.12.0)
       onDriverChange: async name => { await updateDrive(id, { driver: name }); renderDriveReport(id, { keepScroll: true }); },
       startedAt: drive.startedAt, focus: drive.focus || [],
       sameRoute: routeRows,
@@ -1719,6 +1962,13 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       onShare: shareText,
       onDelete: async () => { if (await confirmDialog({ title: 'Slette turen?', text: 'Turen og rådataene slettes fra telefonen. Dette kan ikke angres.', ok: 'Slett', danger: true })) { await deleteDrive(id); toast('Turen er slettet.', { type: 'ok' }); location.hash = '#/'; } }
     });
+    const draw = status => {
+      drawBase(status);
+      if (!unlock) return;
+      const hero = root.querySelector('.hero');
+      if (hero) hero.insertAdjacentHTML('beforebegin', unlock);
+    };
+    if (unlock) { const cur = getSettings(), seen = cur.celebrated || {}; if (!seen[id]) { saveSettings({ ...cur, celebrated: { ...seen, [id]: 1 } }); setTimeout(celebrate, 400); } }
     let enriching = false;
     const runEnrich = async (manual) => {
       if (enriching || !missing || !navigator.onLine) return;
@@ -1783,6 +2033,7 @@ async function renderDemoReport() {
 async function renderSettings() {
   show('settings');
   const settings = getSettings();
+  updateCamCard();
   // Pluss (0.11.0), bare i iPhone-appen
   const pr = $('#plus-row');
   pr.hidden = !plusState().native;
@@ -1794,9 +2045,7 @@ async function renderSettings() {
     const b = pr.querySelector('#btn-plus-row');
     if (b) b.onclick = () => { location.hash = '#/pluss'; };
   }
-  const devPlus = $('#dev-plus');
-  devPlus.value = settings.devPlus || '';
-  devPlus.onchange = () => { saveSettings({ ...getSettings(), devPlus: devPlus.value }); setDevPlus(({ on: true, off: false })[devPlus.value] ?? null); toast(devPlus.value ? `Pluss er ${devPlus.value === 'on' ? 'på' : 'av'} (test).` : 'Pluss følger App Store.', { type: 'ok', ms: 2000 }); };
+  renderViewModes();
   $('#btn-feedback').href = feedbackHref();
   document.querySelectorAll('input[name=sensitivity]').forEach(r => {
     r.checked = r.value === settings.sensitivity;
@@ -1812,6 +2061,9 @@ async function renderSettings() {
     el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
   // Lyd ved fotobokser: på som standard. Slås den på (eller trykkes «Prøv lyden»), spilles lyden for 300 m før.
+  // Fartsvarsel (0.12.0): synlig kant er på som standard, lyden velges selv. Krever fartsgrensen fra Statens vegvesen.
+  { const el = $('#speedWarn'); el.checked = settings.speedWarn !== false; el.onchange = () => saveSettings({ ...getSettings(), speedWarn: el.checked }); }
+  { const el = $('#speedSound'); el.checked = !!settings.speedSound; el.onchange = () => { saveSettings({ ...getSettings(), speedSound: el.checked }); if (el.checked) { unlockSound(); playSound('fart'); } }; }
   { const el = $('#atkSound'); el.checked = settings.atkSound !== false; el.onchange = () => { saveSettings({ ...getSettings(), atkSound: el.checked }); if (el.checked) { unlockSound(); playSound('naer'); } }; }
   $('#btn-test-sound').onclick = () => { unlockSound(); playSound('varsel'); setTimeout(() => playSound('naer'), 900); setTimeout(() => playSound('fart'), 1900); };
   // Kart og by-tilpasset jevn fart er på som standard
@@ -1908,28 +2160,44 @@ async function renderSettings() {
   thumbs.onchange = () => saveSettings({ ...getSettings(), roadThumbs: thumbs.checked });
 }
 
+/* Deg (0.12.0): eleven har bare sitt eget navn. Trafikklæreren har elevene i fanen Elever. */
 function renderDriverSettings() {
   const s = getSettings();
-  const list = $('#driver-list');
-  const drivers = s.drivers || [];
-  list.innerHTML = drivers.length ? drivers.map(d => `<li><span>${esc(d)}${d === s.activeDriver ? ' <span class="muted small">(valgt)</span>' : ''}</span>
-    <button type="button" class="link danger-link" data-d="${esc(d)}" aria-label="Fjern ${esc(d)}">Fjern</button></li>`).join('') : '<li class="muted small">Ingen førere lagt inn. Turer lagres da uten navn.</li>';
-  list.querySelectorAll('button[data-d]').forEach(b => b.onclick = async () => {
-    if (!(await confirmDialog({ title: `Fjerne ${b.dataset.d}?`, text: 'Turene beholder navnet.', ok: 'Fjern', danger: true }))) return;
-    const cur = getSettings();
-    saveSettings({ ...cur, drivers: (cur.drivers || []).filter(x => x !== b.dataset.d), activeDriver: cur.activeDriver === b.dataset.d ? '' : cur.activeDriver });
-    renderDriverSettings();
+  const inp = $('#my-name');
+  $('#name-field').hidden = isTeacher();
+  $('#students-note').hidden = !isTeacher();
+  $('#goals-title').hidden = false;
+  inp.value = s.name || s.activeDriver || '';
+  inp.onchange = () => saveSettings({ ...getSettings(), name: inp.value.trim().slice(0, 40) });
+}
+
+/* Visning (0.12.0, midlertidig): bytt mellom gratis, Pluss, koblet til trafikkskole og trafikklærer. Bare i
+   testbyggene (Xcode og TestFlight) og i nettversjonen; App Store-utgaven følger alltid App Store. */
+async function viewModesAllowed() {
+  if (!window.kjNative) return true;
+  const info = window.kjNative.info ? await window.kjNative.info().catch(() => null) : null;
+  return !!(info && info.devTools);
+}
+async function renderViewModes() {
+  const card = $('#view-mode-card');
+  if (!(await viewModesAllowed())) { card.hidden = true; return; }
+  card.hidden = false;
+  const box = $('#mode-list'), cur = viewMode();
+  box.innerHTML = VIEW_MODES.map(([id, label, text]) => `<label class="mode-opt"><input type="radio" name="viewmode" value="${id}" ${id === cur ? 'checked' : ''}><span><strong>${esc(label)}</strong><span class="muted small">${esc(text)}</span></span></label>`).join('');
+  box.querySelectorAll('input').forEach(r => r.onchange = () => {
+    applyViewMode(r.value);
+    saveSettings({ ...getSettings(), viewMode: r.value, devPlus: '' });
+    toast(`Visning: ${VIEW_MODES.find(x => x[0] === r.value)[1]}.`, { type: 'ok', ms: 2000 });
+    renderSettings();
   });
-  $('#btn-add-driver').onclick = () => {
-    const input = $('#new-driver');
-    const name = input.value.trim().slice(0, 40);
-    if (!name) return;
-    const cur = getSettings();
-    saveSettings({ ...cur, drivers: [...new Set([...(cur.drivers || []), name])], activeDriver: cur.activeDriver || name });
-    input.value = '';
-    renderDriverSettings();
-    toast(`${name} er lagt til.`, { type: 'ok', ms: 2000 });
-  };
+}
+function applyViewMode(m) {
+  setViewMode(m);
+  setDevPlus(plusFor(viewMode()));
+  document.body.dataset.mode = viewMode();
+  const t = document.querySelector('.tabbar a[data-tab="teacher"]');
+  if (t) { t.lastElementChild.textContent = isTeacher() ? 'Elever' : 'Trafikklærer'; }
+  updatePlusMarks();
 }
 
 function renderThresholdSettings() {
@@ -1991,11 +2259,16 @@ async function shareFile(json, name) {
 /* Vises én gang, før første tur. Sidene ligger side om side og sveipes (scroll-snap); knappen og prikkene
    blar i samme rad. Lukkes med «Kom i gang», «Hopp over» eller demoturen, og kan vises igjen fra Innstillinger. */
 let introOpen = false;
-function openIntro() {
+/* Introene (v0.9.18, kameraintro 0.12.0): sider som sveipes, med prikker, «Hopp over» og en knapp nederst.
+   #intro ved første start; #cam-intro første gang Pluss er låst opp (kameraene er det nye). */
+function openIntro(id = 'intro') {
   if (introOpen) return;
   introOpen = true;
-  const box = $('#intro'), pagesEl = $('#intro-pages'), pages = [...pagesEl.children], dots = $('#intro-dots');
-  const next = $('#intro-next'), skip = $('#intro-skip'), demo = $('#intro-demo');
+  const box = document.getElementById(id), q = sel => box.querySelector(sel);
+  const pagesEl = q('.intro-pages'), pages = [...pagesEl.children], dots = q('.intro-dots');
+  const next = q('.intro-next'), skip = q('.intro-skip'), alt = q('.intro-demo');
+  const seenKey = id === 'intro' ? 'introSeen' : 'camIntroSeen';
+  const lastText = id === 'intro' ? 'Kom i gang' : 'Kalibrer kameraet';
   const opener = document.activeElement;
   dots.innerHTML = pages.map((_, i) => `<button type="button" aria-label="Side ${i + 1} av ${pages.length}"></button>`).join('');
   let cur = -1;
@@ -2007,12 +2280,12 @@ function openIntro() {
     const last = i === pages.length - 1;
     pages.forEach((p, k) => { p.setAttribute('aria-hidden', k === i ? 'false' : 'true'); });
     [...dots.children].forEach((d, k) => { d.classList.toggle('on', k === i); if (k === i) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current'); });
-    next.textContent = last ? 'Kom i gang' : 'Fortsett';
-    demo.style.visibility = last ? '' : 'hidden';   // plassen holdes av, så knappen står stille
+    next.textContent = last ? lastText : 'Fortsett';
+    alt.style.visibility = last ? '' : 'hidden';   // plassen holdes av, så knappen står stille
     skip.style.visibility = last ? 'hidden' : '';
   };
   const close = then => {
-    saveSettings({ ...getSettings(), introSeen: true });
+    saveSettings({ ...getSettings(), [seenKey]: true });
     box.hidden = true; introOpen = false;
     document.body.classList.remove('intro-open');
     pagesEl.onscroll = null;
@@ -2020,21 +2293,29 @@ function openIntro() {
   };
   pagesEl.onscroll = () => setPage(Math.round(pagesEl.scrollLeft / Math.max(1, pagesEl.clientWidth)));
   [...dots.children].forEach((d, k) => { d.onclick = () => goTo(k); });
-  next.onclick = () => { if (cur < pages.length - 1) goTo(cur + 1); else close(); };
+  next.onclick = () => { if (cur < pages.length - 1) goTo(cur + 1); else close(id === 'intro' ? null : () => { location.hash = '#/kamera'; }); };
   skip.onclick = () => close();
-  demo.onclick = () => close(() => { location.hash = '#/demo'; });
+  alt.onclick = () => close(id === 'intro' ? () => { location.hash = '#/demo'; } : null);
   box.hidden = false;
   document.body.classList.add('intro-open');
   pagesEl.scrollLeft = 0;
   setPage(0);
-  $('#intro-t1').setAttribute('tabindex', '-1');
-  $('#intro-t1').focus({ preventScroll: true });
+  const h = q('h2');
+  h.setAttribute('tabindex', '-1');
+  h.focus({ preventScroll: true });
+}
+/* Kameraintroen kommer én gang når Pluss blir låst opp (kjøp, prøve, kode eller skolen), men ikke før eller under kjøring */
+function maybeCamIntro() {
+  const h = location.hash || '#/';
+  if (!hasPlus() || getSettings().camIntroSeen || introOpen || ['#/sjekk', '#/opptak', '#/kamera'].includes(h) || (recorder && recorder.running)) return;
+  if (!getSettings().introSeen) return;   // første start: den vanlige introen først
+  openIntro('cam-intro');
 }
 
 /* ---------- Ruting ---------- */
 /* Fanelinjen (v0.9.16): hvilken fane som er valgt, og om linjen vises. Skjult før og under kjøring og på
    kameraskjermen (en oppgave med fokus). En rapport hører til fanen den ble åpnet fra. */
-const TAB_ROOTS = { '#/': 'home', '#/logg': 'trips', '#/opplaering': 'plan', '#/trafikklaerer': 'teacher' };
+const TAB_ROOTS = { '#/': 'home', '#/logg': 'trips', '#/opplaering': 'plan', '#/trafikklaerer': 'teacher', '#/guider': 'guide' };
 let lastTab = '#/';
 function updateTabbar(h) {
   const bar = $('#tabbar');
@@ -2043,7 +2324,7 @@ function updateTabbar(h) {
   bar.hidden = hide;
   document.body.classList.toggle('has-tabbar', !hide);
   if (TAB_ROOTS[h]) lastTab = h;
-  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/guider': 'home', '#/pluss': 'home', '#/klar': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
+  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -2053,13 +2334,14 @@ function updateTabbar(h) {
 /* Tilbake: fra en rapport til fanen den kom fra, fra Faresteder til Opplæring, ellers til Hjem */
 function goBack() {
   const h = location.hash;
-  location.hash = h === '#/faresteder' ? '#/opplaering' : h === '#/guider' ? (guidesFrom || '#/') : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
+  location.hash = h === '#/faresteder' ? '#/opplaering' : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
 }
 
 /* Overlegg som låser siden (fullskjerm kart og kamera) lukkes ved hvert skjermbytte. Før 0.10.1 kunne «Tilbake»
    med kartet i fullskjerm la body stå med overflow: hidden, og da kunne ingenting i appen rulles. */
 function releaseOverlays() {
   document.body.classList.remove('map-open');
+  document.querySelectorAll('.dev-full').forEach(el => el.remove());   // kjøreutviklingen i full skjerm (0.12.0)
   if (!introOpen) document.body.classList.remove('intro-open');
   closeMapOverlay();
   closeCamView();
@@ -2069,7 +2351,7 @@ function releaseOverlays() {
 let guidesFrom = null, prevHash = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
 function route() {
   const h = location.hash || '#/';
-  if ((h === '#/guider' || h === '#/pluss') && prevHash !== h) guidesFrom = prevHash;
+  if (h === '#/pluss' && prevHash !== h) guidesFrom = prevHash;
   if (h !== prevHash) window.scrollTo(0, 0);   // ny side (også rapport til rapport) begynner øverst
   prevHash = h;
   if (recorder && recorder.running && h !== '#/opptak') { location.hash = '#/opptak'; return; }
@@ -2096,6 +2378,7 @@ function route() {
   else if (h === '#/logg') renderLog();
   else if (h === '#/trafikklaerer') renderTeacher();
   else if (h === '#/klar') renderReady();
+  else if (h === '#/fremgang') renderProgress();
   else if (h === '#/faresteder') renderSpots();
   else if (h === '#/opplaering') renderPlan();
   else if (h === '#/kamera') renderCamera();
@@ -2107,27 +2390,24 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress'].forEach(n => { screens[n] = document.getElementById(n); });
   $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
   $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
-  $('#btn-settings').onclick = () => { location.hash = '#/innstillinger'; };
-  $('#btn-show-intro').onclick = () => openIntro();
+  document.querySelectorAll('.btn-gear').forEach(b => b.onclick = () => { location.hash = '#/innstillinger'; });
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = goBack);
   setupLongPress($('#btn-stop'), finishRecording);
   // Pluss: status fra App Store ved start; endres den (kjøp, Familiedeling, refusjon), tegnes skjermen på nytt
   // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke
   // låse opp Pluss i App Store-utgaven (0.11.4).
-  const devWanted = ({ on: true, off: false })[getSettings().devPlus] ?? null;
-  if (devWanted !== null) {
-    if (!window.kjNative) setDevPlus(devWanted);
-    else if (window.kjNative.info) window.kjNative.info().then(i => { if (i && i.devTools) setDevPlus(devWanted); }).catch(() => {});
-  }
+  const wantedMode = modeFromLegacy(getSettings());
+  if (wantedMode !== 'app') viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {});
   let plusWas = hasPlus();
   onPlusChange(plus => {
     updatePlusMarks();
     if (plus === plusWas) return;
     plusWas = plus;
+    if (plus) setTimeout(maybeCamIntro, 600);
     // Bare skjermene som ser annerledes ut med og uten Pluss tegnes på nytt (ikke sjekken før kjøring eller opptaket)
     const h = location.hash || '#/';
     if (!(recorder && recorder.running) && (gateFor(h) || h.startsWith('#/rapport/') || ['#/', '#/logg', '#/innstillinger', '#/pluss'].includes(h))) route();

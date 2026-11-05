@@ -269,7 +269,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
 
     ${onNoteChange ? `<section class="card note-card">
-      ${onDriverChange && (drivers.length || driver) ? `<label class="driver-row">Fører
+      ${onDriverChange && drivers.length ? `<label class="driver-row">Elev
         <select id="drive-driver">
           <option value="">Ikke valgt</option>
           ${[...new Set([...(drivers || []), ...(driver ? [driver] : [])])].map(d => `<option value="${esc(d)}" ${d === driver ? 'selected' : ''}>${esc(d)}</option>`).join('')}
@@ -1117,13 +1117,13 @@ function nearest(pts, t) {
 /* Trend per kategori (fire linjer). results: eldste først. */
 export function categoryTrendChart(results) {
   if (results.length < 2) return '';
-  const W = 600, H = 230, pl = 40, pr = 16, pt = 16, pb = 30;
+  const W = 600, H = 230, pl = 44, pr = 16, pt = 16, pb = 30;
   const X = i => pl + (i / (results.length - 1)) * (W - pl - pr);
   const Y = v => pt + (1 - v / 100) * (H - pt - pb);
   const cats = [['brake', 'var(--brake)'], ['accel', 'var(--accel)'], ['turn', 'var(--turn)'], ['smooth', 'var(--good)']];
   const lines = cats.map(([k, c]) => `<path d="${results.map((r, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(r.scores[k]).toFixed(1)}`).join('')}" fill="none" stroke="${c}" stroke-width="3" stroke-linejoin="round"/>`).join('');
   return `<svg class="chart trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poeng per kategori over ${results.length} turer">
-    ${[50, 75, 90].map(l => `<line x1="${pl}" x2="${W - pr}" y1="${Y(l).toFixed(1)}" y2="${Y(l).toFixed(1)}" class="grid"/><text x="${pl - 6}" y="${(Y(l) + 4).toFixed(1)}" text-anchor="end" class="axis big">${l}</text>`).join('')}
+    ${[0, 25, 50, 75, 100].map(l => `<line x1="${pl}" x2="${W - pr}" y1="${Y(l).toFixed(1)}" y2="${Y(l).toFixed(1)}" class="grid"/><text x="${pl - 6}" y="${(Y(l) + 4).toFixed(1)}" text-anchor="end" class="axis big">${l}</text>`).join('')}
     ${lines}
     <text x="${pl}" y="${H - 6}" class="axis big">Eldste</text>
     <text x="${W - pr}" y="${H - 6}" text-anchor="end" class="axis big">Nyeste</text>
@@ -1131,16 +1131,16 @@ export function categoryTrendChart(results) {
   <ul class="legend">${cats.map(([k, c]) => `<li><span class="dot line" style="background:${c}"></span>${CATS[k]}</li>`).join('')}</ul>`;
 }
 
-/* Liten trendgraf på hjemskjermen */
+/* Liten trendgraf på hjemskjermen. Skalaen går alltid fra 0 til 100 (0.12.0). */
 export function trendChart(scores, goal = null) {
   if (scores.length < 2) return '';
-  const W = 600, H = 230, pl = 40, pr = 16, pt = 16, pb = 30;
+  const W = 600, H = 230, pl = 44, pr = 16, pt = 16, pb = 30;
   const X = i => pl + (i / (scores.length - 1)) * (W - pl - pr);
   const Y = v => pt + (1 - v / 100) * (H - pt - pb);
   const line = scores.map((s, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(s).toFixed(1)}`).join('');
   const dots = scores.map((s, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(s).toFixed(1)}" r="7" fill="${s >= 90 ? 'var(--good)' : s >= 75 ? 'var(--turn)' : 'var(--brake)'}" stroke="var(--surface)" stroke-width="2"/>`).join('');
   return `<svg class="chart trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poengtrend over ${scores.length} turer">
-    ${[50, 75, 90].map(l => `<line x1="${pl}" x2="${W - pr}" y1="${Y(l).toFixed(1)}" y2="${Y(l).toFixed(1)}" class="grid"/><text x="${pl - 6}" y="${(Y(l) + 4).toFixed(1)}" text-anchor="end" class="axis big">${l}</text>`).join('')}
+    ${[0, 25, 50, 75, 100].map(l => `<line x1="${pl}" x2="${W - pr}" y1="${Y(l).toFixed(1)}" y2="${Y(l).toFixed(1)}" class="grid"/><text x="${pl - 6}" y="${(Y(l) + 4).toFixed(1)}" text-anchor="end" class="axis big">${l}</text>`).join('')}
     ${Number.isFinite(goal) ? `<line x1="${pl}" x2="${W - pr}" y1="${Y(goal).toFixed(1)}" y2="${Y(goal).toFixed(1)}" class="goal-line"/><text x="${W - pr}" y="${(Y(goal) - 6).toFixed(1)}" text-anchor="end" class="axis big goal-text">Mål ${goal}</text>` : ''}
     <path d="${line}" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linejoin="round"/>
     ${dots}

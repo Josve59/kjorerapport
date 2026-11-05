@@ -19,8 +19,8 @@ export const GUIDES = [
     lead: 'Jo stødigere telefonen står, jo bedre blir målingene.',
     when: c => c.real < 3,
     steps: [
-      ['Fast holder', 'på dashbordet eller frontruta. En telefon som vipper eller ligger løst, gir falske bremser og svinger.'],
-      ['Stående og midt i bilen', 'så kameraet (hvis det er på) ser både føreren og veien.'],
+      ['Fast holder rett ved rattet', 'så nær førerens vanlige synsfelt som mulig, men uten å skjule utsynet gjennom frontruta. Det er kravet i forskriften om mobiltelefon i bil. Ikke midt på dashbordet mot passasjersiden, og ikke på kollisjonsputene.'],
+      ['Stødig og stående', 'En telefon som vipper eller ligger løst, gir falske bremser og svinger. Med kameraet på skal det se føreren.'],
       ['Lader i', 'på lange turer. GPS, skjerm og kamera bruker mye strøm.'],
       ['Gå ut av andre apper', 'og la Kjørerapport stå åpen. I iPhone-appen fortsetter opptaket også med låst skjerm.']
     ]
@@ -30,7 +30,7 @@ export const GUIDES = [
     lead: 'Kalibrer der telefonen faktisk står under kjøring.',
     when: c => c.cameraOn,
     steps: [
-      ['Kalibrer i holderen', 'med føreren i førersetet. Flyttes holderen, kalibrer på nytt (tar 30 sekunder).'],
+      ['Kalibrer i holderen', 'med føreren i førersetet. Flyttes holderen eller setet, sier appen fra før turen (kalibrering tar 30 sekunder).'],
       ['Ansiktet godt synlig', 'og ikke for mye motlys. Solbriller er greit, men kapse langt ned i pannen gjør det vanskeligere.'],
       ['Veikameraet ser best', 'når telefonen står nær frontruta. Demp skjermen om kvelden, så den ikke speiler seg i ruta.'],
       ['Ingen bilder lagres', 'bare vinkler og tall. Rapporten får «Speil og skulderblikk» og «Veien foran».']

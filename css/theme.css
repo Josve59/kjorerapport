@@ -94,7 +94,7 @@ input.switch { background: color-mix(in srgb, var(--muted) 35%, var(--surface-2)
 input.switch:checked { background: var(--good); }
 
 /* Skjemafelt */
-.field input, .field select, .add-row input, select, textarea, input[type="date"], input[inputmode] {
+.field input, .field select, .add-row input, .add-student input, select, textarea, input[type="date"], input[inputmode] {
   font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--card-border); border-radius: 12px; min-height: 48px; padding: 10px 12px;
 }
 
@@ -146,7 +146,6 @@ input.switch:checked { background: var(--good); }
 .last-tip .ico, .last-cta { color: var(--link); }
 .cam-card-ico { background: color-mix(in srgb, var(--link) 14%, transparent); color: var(--link); }
 .wk-bar, .t-bar span { background: var(--chart); }
-.mix-by { background: var(--chart); } .mix-land { background: var(--cat-2); } .mix-motor { background: var(--cat-3); }
 .segment input:focus-visible + span, input.switch:focus-visible, .file-btn:focus-within { outline-color: var(--focus); }
 
 /* Tekst og ikoner på fargede flater: hvite i lys modus, mørke i mørk modus (der er fargene lyse; hvitt ga 2,2:1) */
@@ -171,14 +170,14 @@ input.switch:checked { background: var(--good); }
 }
 
 /* ---------- Fanelinje (v0.9.16) ---------- */
-/* De fire hoveddelene alltid nederst, der tommelen når (tab-bars.md › Best practices) */
+/* De fem hoveddelene (0.12.0: Guide er den femte) alltid nederst, der tommelen når (tab-bars.md › Best practices) */
 .tabbar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 720px; z-index: 70;
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
   padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   background: color-mix(in srgb, var(--surface) 86%, transparent); -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px);
   border-top: 1px solid var(--line); }
 .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; border-radius: 12px;
-  color: var(--muted); text-decoration: none; font-size: .78rem; font-weight: 700; -webkit-tap-highlight-color: transparent; }
+  color: var(--muted); text-decoration: none; font-size: .74rem; font-weight: 700; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
 .tabbar a .ico { width: 26px; height: 26px; }
 .tabbar a.on { color: var(--link); }
 .tabbar a.on .ico { stroke-width: 2.4; }
@@ -192,3 +191,14 @@ body.has-tabbar .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 /* Forsiden: turlisten, kjøreloggen og snarveiene ligger nå i fanene */
 #home > #log-card, #home > #more-cards, #home > #drive-section { display: none !important; }
 .plan-spots { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; text-align: left; }
+
+/* Nivåskala (0.12.0): veityper, lysforhold og føre bruker de samme fargene i samme rekkefølge, fra lyst til mørkt.
+   By/dagslys/tørt = 1, landevei/skumring/vått = 2, motorvei/mørke/snø = 3, is = 4. */
+:root { --lv1: #f2be22; --lv2: #e8892b; --lv3: #34404b; --lv4: #c4262e; }
+:root[data-theme="dark"] { --lv3: #9aabba; --lv4: #ff5a5f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --lv3: #9aabba; --lv4: #ff5a5f; } }
+.mix-by, .light-day, .surf-dry { background: var(--lv1); }
+.mix-land, .light-twilight, .surf-wet { background: var(--lv2); }
+.mix-motor, .light-dark, .surf-snow { background: var(--lv3); }
+.surf-ice { background: var(--lv4); }
+#home > #homework-home { order: 6; } #home > #game-card { order: 8; }

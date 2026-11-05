@@ -3,5 +3,5 @@
  ["map", "Se hvor det skjedde", "Bråbremsing, svinger og fart over grensen, rett på kartet."],
  ["turer", "Hele øvingen samlet", "Kjørelogg med tid, kilometer, veityper og mørkekjøring."],
  ["teacher", "Klar til neste kjøretime", "Vis trafikklæreren hva dere har øvd på siden sist."],
- ["klar", "Klar for oppkjøring?", "Se hva som er på plass, og hva dere bør øve mer på."],
+ ["klar", "Hva må du øve mer på?", "Se hva som er på plass, og hva dere bør øve mer på."],
  ["precheck", "I gang på et halvt minutt", "Fest telefonen og trykk start. Appen sjekker GPS og sensorer først."]]

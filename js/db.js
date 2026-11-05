@@ -121,6 +121,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     gaps: Array.isArray(meta.gaps) ? meta.gaps : [],
     marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
     focus: Array.isArray(meta.focus) ? meta.focus.filter(f => typeof f === 'string').slice(0, 3) : [],
+    surface: typeof meta.surface === 'string' ? meta.surface.slice(0, 10) : '',
     liveLimits: Array.isArray(meta.liveLimits) ? meta.liveLimits.filter(x => x && Number.isFinite(x.t)).map(x => ({ t: x.t, limit: Number.isFinite(x.limit) ? x.limit : null })).slice(0, 5000) : [],
     counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length, road: raw.road.length },
     calib: meta.calib && typeof meta.calib === 'object' ? meta.calib : null,
@@ -141,7 +142,7 @@ export async function exportPayload(drive) {
   return {
     drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
       marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '',
-      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], calib: drive.calib || null, cameraPlan: drive.cameraPlan || null, liveLimits: drive.liveLimits || [] },
+      diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], surface: drive.surface || '', calib: drive.calib || null, cameraPlan: drive.cameraPlan || null, liveLimits: drive.liveLimits || [] },
     input: raw
   };
 }

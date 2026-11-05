@@ -60,10 +60,11 @@ export function driveLog(r, recStartMs, limits = null) {
 
 export function sumLogs(logs) {
   const z = () => ({ by: 0, land: 0, motor: 0 }), zl = () => ({ day: 0, twilight: 0, dark: 0 });
-  const out = { sec: z(), km: z(), light: zl(), lightKm: zl(), total: { sec: 0, km: 0 }, count: logs.length };
+  const out = { sec: z(), km: z(), light: zl(), lightKm: zl(), surface: { dry: 0, wet: 0, snow: 0, ice: 0, unknown: 0 }, total: { sec: 0, km: 0 }, count: logs.length };
   for (const l of logs) {
     for (const k of ['by', 'land', 'motor']) { out.sec[k] += l.sec[k]; out.km[k] += l.km[k]; }
     for (const k of ['day', 'twilight', 'dark']) { out.light[k] += l.light[k]; out.lightKm[k] += l.lightKm[k]; }
+    if (l.surface) for (const k of Object.keys(out.surface)) out.surface[k] += l.surface[k] || 0;   // føre (0.12.0)
     out.total.sec += l.total.sec; out.total.km += l.total.km;
   }
   return out;

@@ -115,7 +115,7 @@ Paste into «Notes» under App Review Information (in English, since the reviewe
 >
 > **Camera (optional):** off by default. When enabled, face and road analysis run on-device; no images or video are stored or transmitted.
 >
-> **In-app purchases.** «Kjørerapport Pluss» (non-consumable, one-time, Family Sharing on) unlocks the cameras, the training plan, the driving-teacher summary, «Klar for oppkjøring?» and reports for drives older than the 10 latest. «14-day Trial» is a free non-consumable, offered as described in guideline 3.1.1: it unlocks Pluss for 14 days from the purchase date, then the app returns to the free features. No charge, no renewal. Recording, the report, the map, speed limits and data export are always free. Both purchases and «Gjenopprett kjøp» (Restore) are on the Pluss screen: Settings (gear icon) › «Kjørerapport Pluss», or tap the «Opplæring» tab.
+> **In-app purchases.** «Kjørerapport Pluss» (non-consumable, one-time, Family Sharing on) unlocks the cameras, the training plan, the driving-teacher summary, «Hva må du øve mer på?» and reports for drives older than the 10 latest. «14-day Trial» is a free non-consumable, offered as described in guideline 3.1.1: it unlocks Pluss for 14 days from the purchase date, then the app returns to the free features. No charge, no renewal. Recording, the report, the map, speed limits and data export are always free. Both purchases and «Gjenopprett kjøp» (Restore) are on the Pluss screen: Settings (gear icon) › «Kjørerapport Pluss», or tap the «Opplæring» tab.
 >
 > **Cameras on the simulator or without a car:** the cameras need a real device mounted in a car to be useful. They can be started under Home › «Kamera: speil- og skulderblikk» › «Start kamera».
 
@@ -147,7 +147,7 @@ Contact information: your name, phone and email. No demo account is needed (no l
 3. «Se hvor det skjedde» – the map in full screen with numbered events.
 4. «Hele øvingen samlet» – Turer, the driving log.
 5. «Klar til neste kjøretime» – Til trafikklæreren.
-6. «Klar for oppkjøring?»
+6. «Hva må du øve mer på?»
 7. «I gang på et halvt minutt» – the check before driving.
 
 How they were made:
@@ -227,6 +227,6 @@ How they were made:
 
 **What is free and what is Pluss** (`js/plus.js`):
 - **Free:** recording, report, map, speed limit, speed-camera warnings, guides, driving log, export and backup, and reports for the 10 latest real drives.
-- **Pluss:** the cameras, the training plan (with hotspots), the driving-teacher page, «Klar for oppkjøring?» and reports for all older drives.
+- **Pluss:** the cameras, the training plan (with hotspots), the driving-teacher page, «Hva må du øve mer på?» and reports for all older drives.
 - **Nothing is ever deleted or held back:** a locked report shows «Eksporter turen».
 - **The web version in Safari** keeps everything free. It cannot record with the screen locked or use both cameras.

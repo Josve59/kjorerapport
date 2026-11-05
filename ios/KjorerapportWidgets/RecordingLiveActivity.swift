@@ -9,8 +9,8 @@ struct KjorerapportWidgets: WidgetBundle {
     }
 }
 
-/// Viser at et opptak pågår, hvor lenge og hvor langt, så ledsageren ser det med låst skjerm.
-/// Ingen fartsgrense her: den hentes i appen og kan være utdatert når appen er i bakgrunnen.
+/// Viser at turen tas opp og hvor langt dere har kjørt, så ledsageren ser det med låst skjerm.
+/// Ingen klokke (0.12.0: den tar bare oppmerksomhet under kjøring) og ingen fartsgrense (kan være utdatert i bakgrunnen).
 struct RecordingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RecordingAttributes.self) { context in
@@ -31,8 +31,6 @@ struct RecordingLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
-                        Text(distanceText(context.state.distanceM))
-                            .font(.title3.weight(.semibold))
                         Spacer()
                         Text(hint(context))
                             .font(.footnote)
@@ -66,13 +64,8 @@ private struct LockScreenView: View {
                     .foregroundStyle(.white.opacity(0.75))
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 2) {
-                ElapsedText(context: context)
-                    .font(.title.weight(.bold))
-                Text(distanceText(context.state.distanceM))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-            }
+            ElapsedText(context: context)
+                .font(.title.weight(.bold))
         }
         .foregroundStyle(.white)
         .padding(16)
@@ -85,13 +78,14 @@ private struct StatusLabel: View {
     var body: some View {
         let finished = context.state.finishedDuration != nil
         Label {
-            Text(finished ? "Turen er lagret" : "Opptak pågår")
+            Text(finished ? "Turen er lagret" : "Kjørerapport")
         } icon: {
             RecordDot(finished: finished)
         }
     }
 }
 
+/// Lengden på turen når den er ferdig, ellers kilometerne så langt (ingen klokke under kjøring)
 private struct ElapsedText: View {
     let context: ActivityViewContext<RecordingAttributes>
 
@@ -100,7 +94,7 @@ private struct ElapsedText: View {
             if let seconds = context.state.finishedDuration {
                 Text(Duration.seconds(seconds), format: .time(pattern: seconds >= 3600 ? .hourMinuteSecond : .minuteSecond))
             } else {
-                Text(timerInterval: context.attributes.startedAt...Date.distantFuture, countsDown: false)
+                Text(distanceText(context.state.distanceM))
             }
         }
         .monospacedDigit()
