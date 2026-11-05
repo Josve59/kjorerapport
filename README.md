@@ -142,6 +142,36 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.11.5 – simpler to use (before the UX tests)
+
+A critical look at the app, measured against Apple's own apps and the design guidelines (clarity, the most important first, details on request, one main action per screen, plain words). The result is fewer things on screen, and the same functions.
+
+**Home:**
+- New users get help (the line about the phone holder, «Se en demotur»). After 3 drives it disappears, and the demo drive is still under Innstillinger.
+- The driver chips («Alle / Emma») only show when there is more than one driver.
+- «Klar for oppkjøring?» moves up, right under the last drive.
+
+**Check before driving:**
+- The iPhone app remembers the access. The check then starts by itself, and it takes one tap from Home to recording.
+- «Hva øver dere på i dag?» (11 choices and a suggestion box) is now one line, «Øver på i dag», with the suggestions and an «Endre» button.
+- Shorter texts.
+
+**During the drive:**
+- The GPS pill only shows when the GPS is poor.
+- «Sist lagret …» only shows if saving falls behind. The companion sees only what needs a reaction.
+
+**Report:**
+- The events used to appear twice («Situasjoner» and «Hendelser»). Now there is one list, «Det som skjedde», with the 5 most important first and the rest behind «Vis … til».
+- The jump chips at the top are gone, since the report is short enough without them.
+- Speed limits, roads and manoeuvres, the events in detail and the technical explanations are under «Flere detaljer».
+- «Brå hendelser» is renamed «Hendelser», the same word throughout the app.
+
+**Camera page:** two short sentences instead of three paragraphs.
+
+**Fixed in the iPhone app:**
+- The web view's cache is emptied at start, and the local server sends `no-store`. After an update the app could otherwise show old files.
+- Note for testing: two simulators running the app at once share the port 51789, so the newest one can show the other one's pages. Close the other simulator.
+
 ## What's new in 0.11.4 – ready for the App Store
 
 Everything for the submission is ready. The step-by-step guide (in Norwegian) is [`appstore/innsending.md`](appstore/innsending.md).

@@ -96,7 +96,7 @@ nonisolated final class WebServer: @unchecked Sendable {
             status = "404 Not Found"
             body = Data("Fant ikke filen".utf8)
         }
-        let header = "HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"
+        let header = "HTTP/1.1 \(status)\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
         var out = Data(header.utf8)
         if method != "HEAD" { out.append(body) }
         connection.send(content: out, completion: .contentProcessed { _ in connection.cancel() })

@@ -145,6 +145,19 @@ export function renderReport(root, r, ctx = {}) {
       ${onShare ? `<button type="button" class="icon-btn" id="btn-share" aria-label="Del oppsummering">${icon('share', 22)}</button>` : ''}`;
   }
   const tipsAll = r.tips.filter(t => t.cat !== 'good');
+  // Én liste over det som skjedde i rapporten (0.11.5): situasjonene når de finnes, ellers hendelsene; hendelsene i detalj under «Flere detaljer»
+  const eventsHtml = `<section class="card" id="events-section">
+      <h2 class="card-title">${icon('warn')}${sits.length ? 'Hendelsene i detalj' : 'Hendelser'}</h2>
+      ${r.events.length ? `<ol class="events">${r.events.map(e => `
+        <li><button type="button" class="event" data-n="${e.n}" style="--c:${KIND_COLOR[e.kind]}">
+          <span class="num">${e.n}</span>
+          <span class="ev-text"><strong>${esc(eventLabel(e))}</strong><span class="muted">${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}</span>${names.events[e.n] ? `<span class="ev-place">${esc(names.events[e.n])}</span>` : ''}</span>
+          <span class="ev-g"><span class="g-word">${gWord(e.g)}</span></span>
+          <span class="ev-chev" aria-hidden="true">›</span>
+        </button>
+        <div class="ev-detail" id="ev-detail-${e.n}" hidden></div></li>`).join('')}</ol>
+        <p class="muted small">Trykk på en hendelse for detaljer.</p>` : '<p class="muted">Ingen brå hendelser registrert på denne turen.</p>'}
+    </section>`;
   root.innerHTML = `
     <header class="report-head">
       <p class="eyebrow">${esc(subtitle)}</p>
@@ -162,7 +175,7 @@ export function renderReport(root, r, ctx = {}) {
         <div><dt>Distanse</dt><dd>${km(r.stats.km)}</dd></div>
         <div><dt>Tid</dt><dd>${duration(r.stats.duration)}</dd></div>
         <div><dt>Toppfart</dt><dd>${kmh(r.stats.maxKmh)}</dd></div>
-        <div><dt>Brå hendelser</dt><dd>${r.events.length}</dd></div>
+        <div><dt>Hendelser</dt><dd>${r.events.length}</dd></div>
       </dl>
     </section>
 
@@ -173,7 +186,7 @@ export function renderReport(root, r, ctx = {}) {
         ${tipsAll.map(t => `<li class="sum-work sum-${t.cat}">${icon('chev', 20)}<span>${esc(t.text)}</span></li>`).join('')}
         ${!positives.length && !tipsAll.length ? r.tips.map(t => `<li class="sum-good">${icon('check', 20)}<span>${esc(t.text)}</span></li>`).join('') : ''}
         ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.</span></li>` : ''}
-        ${sitSum.high ? `<li class="sum-work sum-brake">${icon('warn', 20)}<span><strong>${sitSum.high} ${sitSum.high === 1 ? 'alvorlig situasjon' : 'alvorlige situasjoner'}</strong> – se Situasjoner.</span></li>` : ''}
+        ${sitSum.high ? `<li class="sum-work sum-brake">${icon('warn', 20)}<span><strong>${sitSum.high} ${sitSum.high === 1 ? 'alvorlig situasjon' : 'alvorlige situasjoner'}</strong> – se «Det som skjedde».</span></li>` : ''}
         ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket: ${Object.entries(marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {})).map(([c, n]) => `${MARK_CATS[c].label.toLowerCase()} ${n}`).join(', ')}.</span></li>` : ''}
       </ul>
     </section>
@@ -187,9 +200,6 @@ export function renderReport(root, r, ctx = {}) {
         <span class="f-state">${f.state === 'ok' ? 'Nådd' : f.state === 'no' ? 'Øv mer' : ''}</span></li>`).join('')}</ul>
     </section>` : ''}
 
-    <nav class="quicknav" aria-label="Hopp til">
-      <a href="#map-section">Rute</a>${sits.length ? `<a href="#situation-section">Situasjoner${sitSum.high + sitSum.medium ? ` <span class="count">${sitSum.high + sitSum.medium}</span>` : ''}</a>` : ''}<a href="#score-section">Poeng</a>${sameRoute.length > 1 ? '<a href="#route-section">Samme rute</a>' : ''}${sp ? '<a href="#limits-section">Fartsgrense</a>' : ''}<a href="#events-section">Hendelser${r.events.length ? ` <span class="count">${r.events.length}</span>` : ''}</a><a href="#maneuver-section">Manøvrer</a>${r.camera ? '<a href="#camera-section">Blikk</a>' : ''}${r.road ? '<a href="#road-section">Veien</a>' : ''}${marks.length ? `<a href="#marks-section">Merker <span class="count">${marks.length}</span></a>` : ''}
-    </nav>
 
 
     <section class="card" id="map-section">
@@ -219,15 +229,14 @@ export function renderReport(root, r, ctx = {}) {
         ${marks.length ? '<li><span class="dot diamond" style="background:var(--ink)"></span>Merke</li>' : ''}
         ${useReal && sp && sp.episodes.length ? '<li><span class="dot line" style="background:var(--sign)"></span>Over fartsgrensen</li>' : ''}
       </ul>
-      <p class="muted small">${useReal ? 'Trykk på kartet for å utforske det i full skjerm: flytt, zoom og trykk på et nummer for å se hendelsen.' : 'Trykk på et nummer i kartet for å se hendelsen.'}</p>
+      <p class="muted small">${useReal ? 'Trykk på kartet for å se det i full skjerm.' : 'Trykk på et nummer i kartet for å se hendelsen.'}</p>
     </section>
 
-    ${sits.length ? situationSection(sits, sitSum) : ''}
+    ${sits.length ? situationSection(sits, sitSum) : eventsHtml}
 
     <section class="card" id="score-section">
       <h2 class="card-title">${icon('chart')}Slik gikk det</h2>
       ${prev ? '<p class="muted small">Pilene viser endring fra forrige tur.</p>' : ''}
-      ${r.perKm ? `<p class="muted small">Poengene er justert for distanse: trekk regnes per 10 km${r.kmFactor > 1.01 ? ', og turer under 5 km regnes som 5 km' : ''}.</p>` : ''}
       <div class="bars">${['brake', 'accel', 'turn', 'smooth'].map(k => scoreBar(k, r.scores[k], prev ? prev.scores[k] : null)).join('')}</div>
     </section>
 
@@ -240,35 +249,8 @@ export function renderReport(root, r, ctx = {}) {
       ${(() => { const others = sameRoute.filter(x => !x.current); const cur = sameRoute.find(x => x.current); if (!others.length || !cur) return ''; const best = Math.max(...others.map(x => x.overall)); const d = cur.overall - best; return `<p class="route-verdict ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? `Beste tur på denne ruten hittil${d > 0 ? ` (${d} poeng over forrige beste)` : ''}.` : `${-d} poeng under beste tur på ruten (${best}).`}</p>`; })()}
     </section>` : ''}
 
-    ${sp ? `<section class="card" id="limits-section">
-      <h2 class="card-title">${icon('speed')}Fartsgrenser</h2>
-      <p class="muted small">Fra Statens vegvesen (NVDB). Teller når farten er minst 4 km/t over grensen i minst 3 sekunder. Inngår ikke i samlet poengsum.</p>
-      <div class="bars">${scoreBar('limits', sp.score, null)}</div>
-      <dl class="stats limits-stats">
-        <div><dt>Over grensen</dt><dd>${n0(sp.secondsOver)} s</dd></div>
-        <div><dt>Mest over</dt><dd>${sp.maxOver >= 4 ? '+' + n0(sp.maxOver) + ' km/t' : '–'}</dd></div>
-        <div><dt>Ruten dekket</dt><dd>${n0(sp.coverage * 100)} %</dd></div>
-      </dl>
-      ${sp.episodes.length ? `<ol class="episodes">${sp.episodes.map(e => `
-        <li><span class="limit-pill">${e.limit}</span>
-          <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t</span></span></li>`).join('')}</ol>`
-        : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
-    </section>` : ''}
 
-    <section class="card" id="events-section">
-      <h2 class="card-title">${icon('warn')}Hendelser</h2>
-      ${r.events.length ? `<ol class="events">${r.events.map(e => `
-        <li><button type="button" class="event" data-n="${e.n}" style="--c:${KIND_COLOR[e.kind]}">
-          <span class="num">${e.n}</span>
-          <span class="ev-text"><strong>${esc(eventLabel(e))}</strong><span class="muted">${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}</span>${names.events[e.n] ? `<span class="ev-place">${esc(names.events[e.n])}</span>` : ''}</span>
-          <span class="ev-g"><span class="g-word">${gWord(e.g)}</span></span>
-          <span class="ev-chev" aria-hidden="true">›</span>
-        </button>
-        <div class="ev-detail" id="ev-detail-${e.n}" hidden></div></li>`).join('')}</ol>
-        <p class="muted small">Trykk på en hendelse for detaljer.</p>` : '<p class="muted">Ingen brå hendelser registrert på denne turen.</p>'}
-    </section>
 
-    ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}
 
     ${r.camera ? cameraSection(r, ctx) : ''}
     ${r.road ? roadSection(r, ctx) : ''}
@@ -298,7 +280,24 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
 
     <details class="more-details" id="more-section">
-      <summary class="btn secondary">${icon('chart', 20)}Flere detaljer<span class="muted small">fartsgraf, datakvalitet og hvordan det måles</span></summary>
+      <summary class="btn secondary">${icon('chart', 20)}Flere detaljer<span class="muted small">hendelser, fartsgrenser, veier, fartsgraf og hvordan det måles</span></summary>
+
+    ${sits.length ? eventsHtml : ''}
+    ${sp ? `<section class="card" id="limits-section">
+      <h2 class="card-title">${icon('speed')}Fartsgrenser</h2>
+      <p class="muted small">Fra Statens vegvesen (NVDB). Teller når farten er minst 4 km/t over grensen i minst 3 sekunder. Inngår ikke i samlet poengsum.</p>
+      <div class="bars">${scoreBar('limits', sp.score, null)}</div>
+      <dl class="stats limits-stats">
+        <div><dt>Over grensen</dt><dd>${n0(sp.secondsOver)} s</dd></div>
+        <div><dt>Mest over</dt><dd>${sp.maxOver >= 4 ? '+' + n0(sp.maxOver) + ' km/t' : '–'}</dd></div>
+        <div><dt>Ruten dekket</dt><dd>${n0(sp.coverage * 100)} %</dd></div>
+      </dl>
+      ${sp.episodes.length ? `<ol class="episodes">${sp.episodes.map(e => `
+        <li><span class="limit-pill">${e.limit}</span>
+          <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t</span></span></li>`).join('')}</ol>`
+        : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
+    </section>` : ''}
+    ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}
 
     <section class="card" id="speed-section">
       <h2 class="card-title">${icon('speed')}Fart underveis</h2>
@@ -338,6 +337,8 @@ export function renderReport(root, r, ctx = {}) {
           <p><strong>Motor:</strong> ${r.alongSource === 'acc'
             ? `v3 – bremsing og gass ble målt med akselerometeret (100 ganger i sekundet) og kalibrert mot GPS (samsvar ${Math.round((r.accFit ? r.accFit.corr : 0) * 100)} %). Det fanger korte, harde bremser som GPS glatter bort.`
             : (r.engine === 'v3' ? 'v3 var valgt, men akselerometerdata manglet eller passet dårlig med GPS (løs holder?), så GPS-fart ble brukt.' : 'v1 – bremsing og gass fra GPS-fart.')}</p>
+          <p><strong>Feltskifter</strong> finnes i GPS-sporet (sideforflytning på 2,5–5 m) og bekreftes med gyroskopet. Under 45 km/t og der veien svinger ujevnt telles de ikke, så noen kan mangle.</p>
+          ${r.perKm ? `<p><strong>Poengene er justert for distanse:</strong> trekk regnes per 10 km${r.kmFactor > 1.01 ? ', og turer under 5 km regnes som 5 km' : ''}.</p>` : ''}
           <p>Hendelser som ligger mindre enn to sekunder fra hverandre slås sammen til én. Poengsummen trekker mest for kraftige hendelser, og samlet poengsum vekter bremsing 30 %, svinger 25 %, jevn fart 25 % og akselerasjon 20 %.</p>
           ${sp ? `<p><strong>Fartsgrenser</strong> hentes fra Statens vegvesen etter turen. Hvert GPS-punkt kobles til nærmeste fartsgrensestrekning innen 25 m, så i kryss og ved avkjøringer kan grensen bomme et sekund eller to. Poeng: 100 minus 1,5 per sekund over grensen, minus 10 per episode med 10 km/t eller mer over.</p>` : ''}
           <p>Følsomhet: ${esc(ctx.sensitivityLabel || 'Normal')}.</p>
@@ -387,6 +388,7 @@ export function renderReport(root, r, ctx = {}) {
     select(n);
     openDetail(n, true);
     const row = root.querySelector(`.event[data-n="${n}"]`);
+    const more = row && row.closest('.more-details'); if (more) more.open = true;
     if (row) row.scrollIntoView({ behavior: smooth, block: 'center' });
   };
   root.querySelectorAll('.marker').forEach(m => m.addEventListener('click', () => fromMap(m.dataset.n)));
@@ -559,6 +561,8 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
 /* Samkjøring: det som skjedde, med alle kildene som så det (v0.8.0) */
 const SIT_ICON = { away: 'eye', event: 'warn', lane: 'shift', start: 'play', speed: 'speed' };
 const LEVEL_LABEL = { high: 'Alvorlig', medium: 'Bør øves på', low: 'Liten ting', ok: 'Bra' };
+/* De viktigste først (0.11.5): en tur i byen kan gi 40 punkter (fartsdempere, gangfelt). Fem vises, resten ligger bak «Vis … til». */
+const TOP_SITS = 5;
 function situationSection(sits, sum) {
   const shown = sits.filter(s => s.level !== 'ok').sort((a, b) => (LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]) || (a.t - b.t));
   const good = sits.filter(s => s.level === 'ok');
@@ -568,9 +572,10 @@ function situationSection(sits, sum) {
 </span>
       ${icon('chev', 18)}</button></li>`;
   return `<section class="card" id="situation-section">
-      <h2 class="card-title">${icon('layers')}Situasjoner</h2>
+      <h2 class="card-title">${icon('layers')}Det som skjedde</h2>
       ${sum.high ? `<p class="muted small">${sum.high} alvorlig${sum.high === 1 ? '' : 'e'}, ${sum.medium} å øve på. Trykk for å se stedet på kartet.</p>` : '<p class="muted small">Trykk for å se stedet på kartet.</p>'}
-      ${shown.length ? `<ul class="man-list">${shown.map(item).join('')}</ul>` : '<p>Ingen situasjoner å øve på. Bra!</p>'}
+      ${shown.length ? `<ul class="man-list">${shown.slice(0, TOP_SITS).map(item).join('')}</ul>` : '<p>Ingen situasjoner å øve på. Bra!</p>'}
+      ${shown.length > TOP_SITS ? `<details class="adv"><summary>Vis ${shown.length - TOP_SITS} til</summary><ul class="man-list">${shown.slice(TOP_SITS).map(item).join('')}</ul></details>` : ''}
       ${good.length ? `<details class="adv"><summary>${good.length} ${good.length === 1 ? 'situasjon' : 'situasjoner'} gikk bra</summary><ul class="man-list">${good.map(item).join('')}</ul></details>` : ''}
     </section>`;
 }
@@ -638,7 +643,6 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
         <ul class="gw-list">${gw.map(g => `<li><button type="button" class="man-item small" data-lat="${g.lat}" data-lon="${g.lon}"><span>${mss(g.t)}</span><span>${kmh(g.approachKmh)} → ${kmh(g.minKmh)}</span>${icon('chev', 16)}</button></li>`).join('')}</ul>
         <p class="muted small">Om dere måtte vike for trafikk, kan ikke appen vite. Lav fart inn mot krysset gir tid til å se.</p></details>` : ''}
       ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Veidata</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
-      <p class="muted small">Feltskifter finnes i GPS-sporet (sideforflytning på 2,5–5 m) og bekreftes med gyroskopet. Under 45 km/t og der veien svinger ujevnt telles de ikke, så noen kan mangle.</p>
     </section>`;
 }
 
@@ -662,7 +666,7 @@ function roadSection(r, ctx = {}) {
         <div><strong>${rd.medianDist !== null ? rd.medianDist + ' m' : '–'}</strong><span class="muted small">vanlig avstand</span></div>
         <div><strong>${rd.close.length}</strong><span class="muted small">ganger for nær</span></div>
       </div>
-      <p>${rd.close.length ? `For kort avstand til bilen foran ${rd.close.length === 1 ? 'én gang' : rd.close.length + ' ganger'}. Se Situasjoner.` : rd.medianHeadway !== null ? 'Ingen perioder med for kort avstand til bilen foran.' : 'Det var sjelden en bil rett foran når veikameraet så veien.'} Hold minst 2 sekunder, og 3 i mørke eller på glatt vei.</p>
+      <p>${rd.close.length ? `For kort avstand til bilen foran ${rd.close.length === 1 ? 'én gang' : rd.close.length + ' ganger'}. Se «Det som skjedde».` : rd.medianHeadway !== null ? 'Ingen perioder med for kort avstand til bilen foran.' : 'Det var sjelden en bil rett foran når veikameraet så veien.'} Hold minst 2 sekunder, og 3 i mørke eller på glatt vei.</p>
       ${ln ? `<h3 class="mt">Plassering i feltet <span class="beta-tag">Ny</span></h3>
       <p>${ln.medianOffset !== null ? `Bilen lå typisk ${Math.abs(ln.medianOffset).toFixed(2).replace('.', ',')} m ${ln.medianOffset > 0.05 ? 'til høyre for' : ln.medianOffset < -0.05 ? 'til venstre for' : 'fra'} midten av feltet, og varierte rundt ${ln.spread.toFixed(2).replace('.', ',')} m.${ln.nearEdge ? ` Nær en feltlinje i ${ln.nearEdge} bilder.` : ''}` : 'For få bilder med begge feltlinjene til å si noe om plasseringen.'}</p>
       <p class="muted small">Begge feltlinjene ble funnet i ${pc(ln.share)} av veibildene i minst 40 km/t. Forutsetter at telefonen står midt i bilen; står den til siden, forskyves tallene.</p>` : ''}

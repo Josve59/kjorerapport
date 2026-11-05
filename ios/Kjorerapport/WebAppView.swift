@@ -48,7 +48,14 @@ struct WebAppView: UIViewRepresentable {
         // Testbygg: SIMCTL_CHILD_KJ_HASH=#/kamera åpner en side direkte
         if let hash = ProcessInfo.processInfo.environment["KJ_HASH"] { start += hash }
         #endif
-        web.load(URLRequest(url: URL(string: start)!))
+        // Nettappens filer ligger i appen og kan endre seg ved hver oppdatering. WebKit kunne vise gamle filer fra
+        // sin hurtigbuffer etter en oppdatering (0.11.5), så bufferen tømmes før siden lastes. Turene (IndexedDB) og
+        // innstillingene (localStorage) ligger ikke i bufferen og blir ikke rørt.
+        let url = URL(string: start)!
+        let caches: Set<String> = [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache]
+        config.websiteDataStore.removeData(ofTypes: caches, modifiedSince: .distantPast) { [weak web] in
+            web?.load(URLRequest(url: url))
+        }
         return web
     }
 

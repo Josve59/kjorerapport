@@ -1037,3 +1037,17 @@ body.has-tabbar .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
 .rd-next li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; }
 .rd-next li svg { flex: none; color: var(--turn); margin-top: 2px; }
 .ready-note { margin: 16px 4px; }
+
+/* Sjekk før kjøring (0.11.5): dagens mål i en lukket boks, så man kommer raskt i gang */
+.focus-box { margin-top: 14px; border-radius: 14px; background: var(--bg); }
+.focus-box > summary { list-style: none; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 12px 14px; min-height: 44px; cursor: pointer; }
+.focus-box > summary::-webkit-details-marker { display: none; }
+.focus-box > summary::before { content: none; display: none; }
+.focus-box > summary { font-size: 1rem; font-weight: 400; }
+.focus-box .focus-title { font-weight: 700; }
+.focus-box .focus-title { margin: 0; grid-column: 1; }
+.focus-box .focus-summary { grid-column: 1; color: var(--muted); font-size: .92rem; }
+.focus-box .focus-edit { grid-column: 2; grid-row: 1 / span 2; color: var(--accel); font-weight: 700; }
+.focus-box[open] .focus-edit { visibility: hidden; }
+.focus-box > :not(summary) { margin-left: 14px; margin-right: 14px; }
+.focus-box > :last-child { margin-bottom: 14px; }

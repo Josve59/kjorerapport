@@ -21,7 +21,7 @@ import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
 
-export const APP_VERSION = '0.11.4';
+export const APP_VERSION = '0.11.5';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -159,7 +159,7 @@ async function renderHome() {
   let filter = settings.homeDriver || '';
   if (filter && !driverNames.includes(filter)) filter = '';
   const chips = $('#driver-chips');
-  if (driverNames.length) {
+  if (driverNames.length > 1) {   // med én fører er det ingenting å velge mellom (0.11.5)
     chips.innerHTML = ['', ...driverNames].map(n => `<button type="button" class="chip ${n === filter ? 'on' : ''}" data-d="${esc(n)}" aria-pressed="${n === filter}">${n ? esc(n) : 'Alle'}</button>`).join('');
     chips.hidden = false;
     chips.querySelectorAll('.chip').forEach(c => c.onclick = () => { saveSettings({ ...getSettings(), homeDriver: c.dataset.d }); renderHome(); });
@@ -290,6 +290,9 @@ async function renderHome() {
   // Påminnelse om sikkerhetskopi
   const bb = $('#backup-banner');
   const realCount = allDrives.filter(isReal).length;
+  // Hjelp for nye brukere forsvinner når de har kommet i gang (0.11.5): demoturen ligger da under Innstillinger
+  $('#btn-demo').hidden = realCount >= 3;
+  $('#start-sub').hidden = realCount >= 3;
   const lastB = settings.lastBackupAt ? Date.parse(settings.lastBackupAt) : 0;
   const newSince = allDrives.filter(d => isReal(d) && Date.parse(d.startedAt) > lastB).length;
   const snoozed = settings.backupSnoozeUntil && Date.parse(settings.backupSnoozeUntil) > Date.now();
@@ -939,13 +942,16 @@ function renderPrecheck() {
   $('#precheck-error').textContent = '';
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
 
-  btnPerm.onclick = async () => {
+  btnPerm.onclick = async ev => {
     btnPerm.disabled = true;
     btnPerm.textContent = 'Venter på svar …';
-    const motion = await requestMotionPermission();
+    let motion = await requestMotionPermission();
+    // Startet av appen selv (uten trykk) kan ikke spørsmålet stilles på nytt: da avgjør sensordataene om det virker
+    if (ev && ev.auto && motion === 'denied') motion = 'unknown';
     if (motion === 'denied') setCheck(mot, false, 'Tilgang avslått. Slå på «Bevegelse og retning» i Safari-innstillingene.');
     else if (motion === 'unsupported') setCheck(mot, false, 'Ingen bevegelsessensorer på denne enheten');
     else setCheck(mot, null, 'Venter på data …');
+    if (motion !== 'denied' && motion !== 'unsupported' && !getSettings().permOk) saveSettings({ ...getSettings(), permOk: true });
     try {
       await requestLocationOnce();
       setCheck(gps, null, 'Venter på god nok nøyaktighet …');
@@ -1002,6 +1008,8 @@ function renderPrecheck() {
   delete btnStart.dataset.buzzed;
   btnStart.onclick = () => startRecording();
   btnAnyway.onclick = () => startRecording();
+  // iPhone-appen husker tilgangen (0.11.5): da starter sjekken med en gang, uten et ekstra trykk
+  if (window.kjNative && getSettings().permOk) btnPerm.onclick({ auto: true });
 }
 
 /* Dagens øvingsmål: opptil tre, huskes til neste tur. */
@@ -1011,6 +1019,8 @@ async function renderFocusSuggestions() {
   const sug = suggestFocus(rows);
   if (!sug.length) { el.hidden = true; return; }
   const label = id => (FOCUS.find(f => f.id === id) || {}).label || id;
+  const sum = $('#focus-summary');
+  if (sum && !(getSettings().focus || []).length) sum.textContent = `Forslag: ${sug.map(x => label(x.id)).join(', ')}`;
   el.innerHTML = `<p class="sug-title">${icon('target', 18)}Forslag ut fra de siste turene</p>
     <ul class="sug-list">${sug.map(x => `<li><strong>${esc(label(x.id))}</strong><span class="muted small">${esc(x.reason)}</span></li>`).join('')}</ul>
     <button type="button" class="btn secondary small-btn" id="btn-use-sug">Bruk forslagene</button>`;
@@ -1021,6 +1031,9 @@ async function renderFocusSuggestions() {
 function renderFocusChips() {
   const box = $('#focus-chips');
   const sel = new Set((getSettings().focus || []).filter(id => FOCUS.some(f => f.id === id)));
+  // Sammendraget i den lukkede boksen (0.11.5): valgene står der, listen åpnes bare når man vil endre
+  const sum = $('#focus-summary');
+  if (sum) sum.textContent = sel.size ? FOCUS.filter(f => sel.has(f.id)).map(f => f.label).join(', ') : 'Valgfritt';
   box.innerHTML = FOCUS.map(f => `<button type="button" class="chip ${sel.has(f.id) ? 'on' : ''}" data-f="${f.id}" aria-pressed="${sel.has(f.id)}">${esc(f.label)}</button>`).join('');
   box.querySelectorAll('.chip').forEach(c => c.onclick = () => {
     const cur = new Set(getSettings().focus || []);
@@ -1142,8 +1155,11 @@ async function startRecording(replay = null) {
       if (st.gpsError) { gps.textContent = 'GPS: ingen signal'; gps.dataset.state = 'fail'; }
       else if (st.warmup) { gps.textContent = 'GPS: venter på fersk posisjon …'; gps.dataset.state = 'wait'; }
       else if (!st.gpsFresh) { gps.textContent = 'GPS: venter …'; gps.dataset.state = 'wait'; }
-      else { gps.textContent = `GPS: ${n0(st.acc)} m`; gps.dataset.state = st.acc <= 20 ? 'ok' : 'wait'; }
-      saved.textContent = st.lastCheckpoint === null ? 'Lagrer første bit om litt' : `Sist lagret for ${n0(st.elapsed - st.lastCheckpoint)} s siden · ${st.locCount} GPS-punkter`;
+      else { gps.textContent = st.acc <= 20 ? 'GPS ok' : `GPS: ${n0(st.acc)} m`; gps.dataset.state = st.acc <= 20 ? 'ok' : 'wait'; }
+      // Under kjøring vises bare det ledsageren må reagere på (0.11.5): god GPS og vanlig lagring er stille
+      gps.hidden = gps.dataset.state === 'ok';
+      const behind = st.lastCheckpoint !== null && st.elapsed - st.lastCheckpoint > 90;
+      saved.textContent = behind ? `Sist lagret for ${n0(st.elapsed - st.lastCheckpoint)} s siden` : '';
       const pill = $('#rec-marks-pill');
       pill.hidden = !st.marks;
       const undoBtn = $('#btn-undo-mark'), lastMark = recorder && recorder.marks[recorder.marks.length - 1];
