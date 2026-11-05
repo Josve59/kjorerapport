@@ -142,6 +142,11 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.12.1 – week numbers and hotspots
+- **The weekly chart on Turer** shows the ISO week number (as in Norwegian calendars), with Monday's date underneath.
+- **Faresteder moved from Opplæring to Turer.** Opplæring is now only the curriculum checklist. Hotspots are places where your own drives had repeated events, so they belong with the drives. Pluss is still required.
+- **Opplæring** in the student version shows all of your own drives. Before, it filtered by the old driver name.
+
 ## What's new in 0.12.0 – feedback from a test user
 
 **While driving:**

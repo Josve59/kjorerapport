@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.12.0';
+export const APP_VERSION = '0.12.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -689,7 +689,13 @@ async function renderLog() {
   const weeks = Array.from({ length: 8 }, (_, i) => { const w = new Date(thisWeek); w.setDate(w.getDate() - (7 - i) * 7); return { start: w.getTime(), key: key(w), sec: 0 }; });
   for (const x of rows) { const w = weeks.find(w => w.key === key(weekStart(Date.parse(x.d.startedAt)))); if (w) w.sec += x.log.total.sec; }
   const maxW = Math.max(...weeks.map(w => w.sec), 1);
+  // Faresteder (0.12.1, før under Opplæring): steder der det har skjedd noe flere ganger hører til turene
+  const spots = hotspots(rows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems({ ...x, marks: markRows(x.d.marks || [], x.res) }) })));
+  const spotsCard = `<button type="button" class="card t-cta spots-cta" id="btn-log-spots"><span class="card-title">${icon('pin')}Faresteder${hasPlus() ? '' : `<span class="lock-tag">${icon('lock', 14)}Pluss</span>`}</span>
+      <span class="muted small">${spots.length ? `${spots.length} ${spots.length === 1 ? 'sted' : 'steder'} der det har skjedd noe flere ganger` : 'Steder der det skjer noe flere ganger, vist på kartet'}</span><span class="last-cta">Se på kartet ${icon('chev', 18)}</span></button>`;
   const wkFmt = new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short' });
+  // Ukenummer (ISO 8601, som i norske kalendere) med mandagens dato under (0.12.1)
+  const isoWeek = t => { const d = new Date(t); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7)); const jan4 = new Date(d.getFullYear(), 0, 4, 12); return 1 + Math.round(((d - jan4) / 86400000 - 3 + ((jan4.getDay() + 6) % 7)) / 7); };
   root.innerHTML = `
     ${filter ? `<p class="eyebrow pad">Elev: ${esc(filter)}</p>` : ''}
     <section class="tiles">
@@ -705,8 +711,9 @@ async function renderLog() {
     <section class="card"><h2 class="card-title">${icon('snow')}Føre</h2>${bar(tot.surface, ['dry', 'wet', 'snow', 'ice'], SURFACE_LABEL, 'surf')}
       <p class="muted small">${tot.surface.unknown > 0 ? `${fmtHours(tot.surface.unknown)} er kjørt før føre kunne velges. ` : ''}Velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></section>
     <section class="card"><h2 class="card-title">${icon('chart')}Siste åtte uker</h2>
-      <div class="week-bars" role="img" aria-label="Kjøretid per uke">${weeks.map(w => `<div class="wk"><span class="wk-val">${w.sec ? Math.round(w.sec / 60) : ''}</span><span class="wk-bar" style="height:${Math.max(2, w.sec / maxW * 100)}%"></span><span class="wk-lbl">${wkFmt.format(new Date(w.start))}</span></div>`).join('')}</div>
-      <p class="muted small">Minutter per uke, fra mandag.</p></section>
+      <div class="week-bars" role="img" aria-label="Kjøretid per uke">${weeks.map(w => `<div class="wk"><span class="wk-val">${w.sec ? Math.round(w.sec / 60) : ''}</span><span class="wk-bar" style="height:${Math.max(2, w.sec / maxW * 100)}%"></span><span class="wk-lbl"><strong>${isoWeek(w.start)}</strong>${new Date(w.start).getDate()}.${new Date(w.start).getMonth() + 1}.</span></div>`).join('')}</div>
+      <p class="muted small">Ukenummer, med mandagens dato under. Tallet over søylen er minutter kjørt.</p></section>
+    ${spotsCard}
     <h2 class="section-title">Alle turer</h2>
     <ul class="drives log-list card">${rows.map(x => `<li><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${x.d.id}">
       <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
@@ -717,6 +724,7 @@ async function renderLog() {
   root.querySelectorAll('.drive').forEach(b => b.onclick = () => { location.hash = '#/rapport/' + b.dataset.id; });
   const csv = () => exportLogCsv(rows, filter);
   root.querySelector('#btn-log-csv2').onclick = csv;
+  $('#btn-log-spots').onclick = () => { location.hash = '#/faresteder'; };
 }
 
 async function exportLogCsv(rows, filter) {
@@ -1033,17 +1041,16 @@ async function renderPlan() {
   show('plan');
   const root = $('#plan-root');
   const s = getSettings();
-  const driver = s.activeDriver || '';
-  const rows = await gatherRows(driver);
+  const driver = isTeacher() ? (s.activeStudent || '') : '';
+  const rows = await gatherRows(scopeDriver(s));
   const ev = curriculumEvidence(rows);
   const { key, mine } = planState();
   const prog = planProgress();
   const dfmt = iso => new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
-  const spots = hotspots(rows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
+  // Faresteder er flyttet til Turer (0.12.1): Opplæring er bare læreplanen
   root.innerHTML = `
-    ${spots.length ? `<button type="button" class="card mini-card plan-spots" id="btn-plan-spots"><span class="card-title">${icon('pin')}Faresteder</span><span class="muted small">${spots.length} ${spots.length === 1 ? 'sted' : 'steder'} der det har skjedd noe flere ganger</span><span class="last-cta">Se på kartet ${icon('chev', 18)}</span></button>` : ''}
     <section class="card plan-head">
-      <p class="eyebrow">${driver ? esc(driver) : 'Fører ikke valgt'}</p>
+      <p class="eyebrow">${driver ? esc(driver) : esc(s.name || 'Din opplæring')}</p>
       <p class="plan-prog"><strong>${prog.done}</strong> av ${prog.total} punkter krysset av</p>
       <span class="goal-bar"><span style="width:${(prog.done / prog.total * 100).toFixed(0)}%"></span></span>
       <p class="muted small">Basert på hovedtrekkene i læreplanen for førerkort klasse B. Trafikkskolen avgjør hva som er gjennomført. Grå tekst viser hva appen har sett på turene.</p>
@@ -1056,8 +1063,6 @@ async function renderPlan() {
         ${it.help ? `<span class="muted small">${esc(it.help)}</span>` : ''}
         ${it.auto ? `<span class="plan-ev ${e && e.good ? 'good' : ''}">${e ? esc(e.text) : 'Ikke øvd på turene ennå'}</span>` : ''}</span></label></li>`;
     }).join('')}</ul></section>`).join('')}`;
-  const spotsBtn = root.querySelector('#btn-plan-spots');
-  if (spotsBtn) spotsBtn.onclick = () => { location.hash = '#/faresteder'; };
   root.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => {
     const cur = getSettings();
     const allC = { ...(cur.curriculum || {}) };
@@ -2324,7 +2329,7 @@ function updateTabbar(h) {
   bar.hidden = hide;
   document.body.classList.toggle('has-tabbar', !hide);
   if (TAB_ROOTS[h]) lastTab = h;
-  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'plan' })[h] || TAB_ROOTS[lastTab];
+  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -2334,7 +2339,7 @@ function updateTabbar(h) {
 /* Tilbake: fra en rapport til fanen den kom fra, fra Faresteder til Opplæring, ellers til Hjem */
 function goBack() {
   const h = location.hash;
-  location.hash = h === '#/faresteder' ? '#/opplaering' : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
+  location.hash = h === '#/faresteder' ? '#/logg' : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
 }
 
 /* Overlegg som låser siden (fullskjerm kart og kamera) lukkes ved hvert skjermbytte. Før 0.10.1 kunne «Tilbake»
