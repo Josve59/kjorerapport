@@ -21,7 +21,7 @@ import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
 
-export const APP_VERSION = '0.11.3';
+export const APP_VERSION = '0.11.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -2099,7 +2099,13 @@ function init() {
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = goBack);
   setupLongPress($('#btn-stop'), finishRecording);
   // Pluss: status fra App Store ved start; endres den (kjøp, Familiedeling, refusjon), tegnes skjermen på nytt
-  setDevPlus(({ on: true, off: false })[getSettings().devPlus] ?? null);
+  // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke
+  // låse opp Pluss i App Store-utgaven (0.11.4).
+  const devWanted = ({ on: true, off: false })[getSettings().devPlus] ?? null;
+  if (devWanted !== null) {
+    if (!window.kjNative) setDevPlus(devWanted);
+    else if (window.kjNative.info) window.kjNative.info().then(i => { if (i && i.devTools) setDevPlus(devWanted); }).catch(() => {});
+  }
   let plusWas = hasPlus();
   onPlusChange(plus => {
     updatePlusMarks();

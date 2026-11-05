@@ -142,6 +142,23 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.11.4 – ready for the App Store
+
+Everything for the submission is ready. The step-by-step guide (in Norwegian) is [`appstore/innsending.md`](appstore/innsending.md).
+
+**In the app:**
+- **Privacy manifest** (`ios/Kjorerapport/PrivacyInfo.xcprivacy`), which Apple requires: no tracking and no collected data. The only «required reason» API is the system uptime, used to timestamp the sensors.
+- **«Pluss (test)» now only works where the developer section exists** (Xcode and TestFlight). A setting saved in TestFlight could otherwise have unlocked Pluss for free in the App Store version.
+- **New help page** (`hjelp/`, the support URL for the App Store), linked from Innstillinger › Om appen.
+- **The privacy page** now covers purchases through the App Store, and deleting the iPhone app.
+- **The camera permission text** describes both cameras.
+- **The map's buttons no longer show above the tab bar** when the map is scrolled under it.
+
+**For the App Store:**
+- 7 screenshots at 1320 × 2868 in `appstore/skjermbilder/`, with captions in Norwegian. They are made from made-up drives along real streets in Trondheim. The tools to make new ones are in `appstore/verktoy/`.
+- A screenshot of the Pluss screen for the purchase review: `appstore/kjop-pluss-review.png`.
+- An updated description, review notes, age rating answers and support URL in `appstore/README.md`.
+
 ## What's new in 0.11.3 – bug fixes
 
 **Messages at the bottom no longer get stuck:**

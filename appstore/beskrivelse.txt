@@ -3,6 +3,7 @@ Kjørerapport gjør øvelseskjøringen mer konkret. Fest telefonen i holderen, l
 SLIK FUNGERER DET
 • Telefonen står i en holder. Ledsageren starter og stopper opptaket, og føreren rører ikke telefonen.
 • Under turen vises bare fartsgrensen, og det piper før fotobokser og strekningsmåling.
+• Opptaket fortsetter med låst skjerm, og turen vises på låseskjermen og i Dynamic Island.
 • Etter turen kommer rapporten med en gang.
 
 RAPPORTEN ETTER HVER TUR
@@ -17,6 +18,9 @@ FØLG FREMGANGEN
 • Utvikling fra tur til tur, og steder der det gjentatte ganger skjer noe.
 • Opplæringsplan etter læreplanen for klasse B, der appen viser hva dere har øvd på.
 
+KLAR FOR OPPKJØRING?
+Se hva som er på plass før oppkjøringen, og hva dere bør øve mer på: mengde, variasjon, mørkekjøring, jevn kjøring, fartsgrenser, situasjoner, speilblikk og den obligatoriske opplæringen. Det er trafikklæreren som avgjør når du er klar.
+
 TIL TRAFIKKLÆREREN
 • Én side med alt som er øvd siden forrige kjøretime: tid, veityper, manøvrer, hva som går bra og hva som bør jobbes med.
 • Vis den på telefonen, skriv den ut eller send den som melding. Da blir kjøretimene brukt på det som trengs.
@@ -24,8 +28,11 @@ TIL TRAFIKKLÆREREN
 LEDSAGERENS MERKER
 Ledsageren kan merke speil, skulderblikk, feltskifte og andre ting med ett trykk under turen. Merkene kommer med i rapporten.
 
-KAMERA (VALGFRITT)
-Med kameraet på kan appen se om føreren sjekker speil og gjør skulderblikk. Analysen skjer på telefonen. Bilder lagres og sendes aldri.
+KAMERAENE (VALGFRITT)
+Frontkameraet ser om føreren sjekker speil og gjør skulderblikk. Bakkameraet kan samtidig se bilen foran, feltlinjene og fartsskiltene. Analysen skjer på telefonen. Bilder lagres og sendes aldri.
+
+GRATIS OG PLUSS
+Opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg og eksport er gratis. Kjørerapport Pluss er ett kjøp, ikke abonnement, og kan deles med familien. Pluss gir kameraene, opplæringsplanen med faresteder, siden til trafikklæreren, «Klar for oppkjøring?» og rapportene for alle eldre turer. Prøv Pluss gratis i 14 dager. Ingenting trekkes, og prøven fornyes ikke.
 
 PERSONVERN
 Ingen konto, ingen reklame og ingen sporing. Turene lagres bare på telefonen din. Fartsgrenser og kart hentes fra Statens vegvesen og Kartverket, og det kan slås av.

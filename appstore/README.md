@@ -2,7 +2,7 @@
 
 Everything that will go into App Store Connect and the app's settings file when the iPhone app is built (phase 1). It is written for a native app in SwiftUI that records with the phone's own sensors and reuses today's analysis and report (see «Architecture» at the bottom). Today's web app is unchanged.
 
-Status, 3 November 2026: text and plans are ready. Before phase 1, Xcode must be installed and an Apple Developer account created.
+Status, 5 November 2026: **everything is ready for submission.** The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). The only things left are Apple's: the developer account (from the 18th birthday), the agreements, and pressing the buttons.
 
 ---
 
@@ -12,7 +12,7 @@ Status, 3 November 2026: text and plans are ready. Before phase 1, Xcode must be
 |---|---|---|
 | Install **Xcode** (free, about 15 GB) | Needed to build and test the iPhone app | Mac App Store |
 | Create an **Apple Developer** account (about NOK 1,200 a year) | TestFlight on your own phone and publishing | developer.apple.com/programs |
-| Choose **personal or company account** | A company (Svendsen Media) shows the company name in the App Store, but needs a D-U-N-S number (free, takes 1–2 weeks) | Same place |
+| Enrol as an **individual** | An ENK is not a legal entity, so Apple only accepts it as an individual. Your legal name is shown as the seller. Requires age 18 | Same place |
 | Check that the name **«Kjørerapport»** is free | The name must be unique in the App Store | App Store Connect when the app is created |
 | Decide on the **price** | The app is free to download; «Kjørerapport Pluss» is a one-time in-app purchase (section 12) | App Store Connect |
 | Sign the **Paid Applications agreement** and add bank and tax details | Needed before any in-app purchase can be sold | App Store Connect › Business |
@@ -34,7 +34,8 @@ Status, 3 November 2026: text and plans are ready. Before phase 1, Xcode must be
 | **Price** | Free (with the in-app purchase «Kjørerapport Pluss», section 12) | |
 | **Availability** | Norway (speed limits and road data only cover Norway) | |
 | **Privacy policy URL** | https://josve59.github.io/kjorerapport/personvern/ (updated for the app before submission, see section 5) | |
-| **Support URL** | https://josve59.github.io/kjorerapport/trafikkskole/ or a separate support page with an email address | |
+| **Support URL** | https://josve59.github.io/kjorerapport/hjelp/ (help page with FAQ and email, 0.11.4) | |
+| **Marketing URL** (optional) | https://josve59.github.io/kjorerapport/trafikkskole/ | |
 | **Copyright** | © 2026 Svendsen Media (or your name with a personal account) | |
 
 Notes on the text:
@@ -87,7 +88,14 @@ The current page (`personvern/`) is good. For the iPhone app, change:
 
 ## 6. Age rating
 
-Answer «No» / «None» to every question (no violence, gambling, profanity, user-generated content shared with others, web browsing, purchases). That gives **4+**. The app is meant for 15–17-year-olds and their companions, but the age rating describes content, not the target group.
+Answer «No» / «None» to every question in Apple's age rating questionnaire. That includes:
+- no violence, gambling, profanity or medical content
+- no user-generated content shared with others, no messaging or chat
+- no unrestricted web access (the help and privacy pages are the app's own)
+- no advertising
+- no parental controls or age assurance
+
+The in-app purchase does not affect the rating. That gives **4+**. The app is meant for 15–17-year-olds and their companions, but the age rating describes content, not the target group.
 
 ---
 
@@ -107,7 +115,9 @@ Paste into «Notes» under App Review Information (in English, since the reviewe
 >
 > **Camera (optional):** off by default. When enabled, face and road analysis run on-device; no images or video are stored or transmitted.
 >
-> **In-app purchase «Kjørerapport Pluss»** (non-consumable, one-time, Family Sharing on) unlocks the cameras, the training plan, the driving-teacher summary and reports for drives older than the 10 latest. Recording, the report, the map, speed limits and data export are free. «Gjenopprett kjøp» is on the Pluss screen (Innstillinger › Kjørerapport Pluss, or tap the «Opplæring» tab).
+> **In-app purchases.** «Kjørerapport Pluss» (non-consumable, one-time, Family Sharing on) unlocks the cameras, the training plan, the driving-teacher summary, «Klar for oppkjøring?» and reports for drives older than the 10 latest. «14-day Trial» is a free non-consumable, offered as described in guideline 3.1.1: it unlocks Pluss for 14 days from the purchase date, then the app returns to the free features. No charge, no renewal. Recording, the report, the map, speed limits and data export are always free. Both purchases and «Gjenopprett kjøp» (Restore) are on the Pluss screen: Settings (gear icon) › «Kjørerapport Pluss», or tap the «Opplæring» tab.
+>
+> **Cameras on the simulator or without a car:** the cameras need a real device mounted in a car to be useful. They can be started under Home › «Kamera: speil- og skulderblikk» › «Start kamera».
 
 Contact information: your name, phone and email. No demo account is needed (no login).
 
@@ -130,16 +140,21 @@ Contact information: your name, phone and email. No demo account is needed (no l
 
 ## 9. Screenshots
 
-Required: **6.9-inch iPhone**, 1320 × 2868 portrait (Apple scales down to smaller phones). 3–10 images. They are taken from the real app in the simulator in phase 1, in light mode, with a short caption on top in Norwegian:
+**Done (0.11.4):** seven images in [`skjermbilder/`](skjermbilder/), 1320 × 2868 (6.9-inch iPhone, Apple scales them down to smaller phones). Upload them in this order:
 
-1. **«Tilbakemelding etter hver tur»** – the top of the report: score ring, «Kort fortalt», «Neste øvingstur».
-2. **«Se hvor det skjedde»** – the map with numbered events and route.
-3. **«Øv på det som trengs»** – «Neste øvingstur» with two concrete practice items.
-4. **«Klar til kjøretimen»** – «Til trafikklæreren» with time, road types and «Bør jobbes med».
-5. **«Følg fremgangen»** – Turer / kjørelogg with road types and darkness.
-6. **«Fartsgrensen hele veien»** – the recording screen with the speed limit sign and the stop button (from the demo replay).
+1. «Rapport etter hver øvingstur» – the top of the report.
+2. «Bare fartsgrensen på skjermen» – a real recording in the simulator, with the speed limit from NVDB.
+3. «Se hvor det skjedde» – the map in full screen with numbered events.
+4. «Hele øvingen samlet» – Turer, the driving log.
+5. «Klar til neste kjøretime» – Til trafikklæreren.
+6. «Klar for oppkjøring?»
+7. «I gang på et halvt minutt» – the check before driving.
 
-Use the demo drive or a real drive without personal place names in a visible position (pick a route in a central area).
+How they were made:
+- From the real app in the simulator (iPhone 18 Pro Max, light mode, Norwegian, the status bar set to 09:41).
+- The data is made-up practice drives for «Emma», laid along real streets in central Trondheim (`ios/testrute-trondheim.txt`). No real person's drives or addresses are shown.
+- The tools are in [`verktoy/`](verktoy/): `seed.js` (test data), `shot.sh` (one screenshot from the simulator) and `compose.py` (adds the captions from `captions.json`; needs Python with Pillow). To make new ones, ask Claude to «lag nye App Store-bilder».
+- The test build has a hook for this: `KJ_EVAL` (Debug only, WebAppView.swift) runs a script that fills in the test data.
 
 ---
 

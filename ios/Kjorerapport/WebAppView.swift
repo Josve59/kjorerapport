@@ -21,6 +21,10 @@ struct WebAppView: UIViewRepresentable {
         #if DEBUG
         // Testbygg: nettappens console.log/warn/error og feil i Xcode-loggen
         content.addUserScript(WKUserScript(source: Self.consoleBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        // Testbygg: SIMCTL_CHILD_KJ_EVAL=<fil.js> kjører et skript når siden er lastet (testdata til App Store-bildene)
+        if let path = ProcessInfo.processInfo.environment["KJ_EVAL"], let source = try? String(contentsOfFile: path, encoding: .utf8) {
+            content.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        }
         #endif
         #if targetEnvironment(simulator)
         // Simulatoren har ingen bevegelsessensor: en telefon som ligger i ro, så sjekken før kjøring og opptaket kan testes

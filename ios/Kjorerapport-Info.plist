@@ -8,7 +8,7 @@
 	<key>NSMotionUsageDescription</key>
 	<string>Bevegelsessensorene måler bremsing, akselerasjon og svinger under kjøreturen. Målingene lagres bare på telefonen.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Kameraet er valgfritt. Det ser på veien foran eller på føreren (speil og skulderblikk). Bildene analyseres på telefonen og lagres eller sendes aldri.</string>
+	<string>Kameraet er valgfritt. Frontkameraet ser om føreren sjekker speil og skulder, og bakkameraet ser veien foran. Bildene analyseres på telefonen og lagres eller sendes aldri.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
