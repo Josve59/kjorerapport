@@ -79,6 +79,10 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         case "review":
             // Apple bestemmer selv om spørsmålet vises (høyst tre ganger i året)
             if let scene = webView?.window?.windowScene { AppStore.requestReview(in: scene) }
+        case "beep":
+            // Pip (0.12.2): spilles av appen, så de høres med lydløs-bryteren på (se Beeper.swift)
+            let tones = (body["tones"] as? [[Double]]) ?? []
+            Beeper.shared.play(tones, volume: body["volume"] as? Double ?? 0.6)
         case "haptic":
             let pattern = (body["pattern"] as? [Double]) ?? [30]
             if pattern.count > 1 { UINotificationFeedbackGenerator().notificationOccurred(.success) }

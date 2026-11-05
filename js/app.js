@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.12.1';
+export const APP_VERSION = '0.12.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -888,7 +888,7 @@ function gameCardHtml(g) {
       <span class="last-cta">Se fremgangen ${icon('chev', 18)}</span>
     </button>`;
 }
-const badgeHtml = b => `<li class="badge ${b.earned ? 'got' : 'locked'}"><span class="badge-ico">${icon(b.earned ? b.icon : 'lock', 26)}</span><strong>${esc(b.title)}</strong><span class="muted small">${esc(b.text)}</span>${b.earned ? `<span class="muted small badge-at">${esc(date(b.earned.at))}</span>` : ''}</li>`;
+const badgeHtml = b => `<li class="merke ${b.earned ? 'got' : 'locked'}"><span class="badge-ico">${icon(b.earned ? b.icon : 'lock', 26)}</span><strong>${esc(b.title)}</strong><span class="muted small">${esc(b.text)}</span>${b.earned ? `<span class="muted small badge-at">${esc(date(b.earned.at))}</span>` : ''}</li>`;
 async function renderProgress() {
   show('progress');
   const root = $('#progress-root');
@@ -1053,13 +1053,13 @@ async function renderPlan() {
       <p class="eyebrow">${driver ? esc(driver) : esc(s.name || 'Din opplæring')}</p>
       <p class="plan-prog"><strong>${prog.done}</strong> av ${prog.total} punkter krysset av</p>
       <span class="goal-bar"><span style="width:${(prog.done / prog.total * 100).toFixed(0)}%"></span></span>
-      <p class="muted small">Basert på hovedtrekkene i læreplanen for førerkort klasse B. Trafikkskolen avgjør hva som er gjennomført. Grå tekst viser hva appen har sett på turene.</p>
+      <p class="muted small">Etter læreplanen for klasse B. Trafikkskolen avgjør hva som er gjennomført. Teksten under et punkt er det appen har sett på turene.</p>
     </section>
     ${CURRICULUM.map(st => `<h2 class="group-title">${esc(st.stage)}</h2><section class="card"><ul class="plan-list">${st.items.map(it => {
       const e = it.auto ? ev[it.auto] : null;
       const st2 = mine[it.id] || {};
       return `<li><label class="plan-item"><input type="checkbox" data-id="${it.id}" ${st2.done ? 'checked' : ''}>
-        <span><strong>${esc(it.label)}</strong>${st2.done && st2.at ? ` <span class="muted small">· ${dfmt(st2.at)}</span>` : ''}
+        <span><strong>${esc(it.label)}</strong>${st2.done && st2.at ? `<span class="muted small">Krysset av ${dfmt(st2.at)}</span>` : ''}
         ${it.help ? `<span class="muted small">${esc(it.help)}</span>` : ''}
         ${it.auto ? `<span class="plan-ev ${e && e.good ? 'good' : ''}">${e ? esc(e.text) : 'Ikke øvd på turene ennå'}</span>` : ''}</span></label></li>`;
     }).join('')}</ul></section>`).join('')}`;
@@ -1939,7 +1939,9 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     if (stale()) return;
     const drawBase = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
-      title: 'Kjørerapport', subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),
+      // Tittelen er når turen var (0.12.2): «Kjørerapport» står allerede øverst
+      title: shortDay(drive.startedAt), subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),
+      eyebrow: [isTeacher() && drive.driver ? drive.driver : '', ...tags].filter(Boolean).join(' · '),
       realMap: settings.netMap !== false,
       customThresholds: !!(settings.th),
       driver: drive.driver || '', drivers: isTeacher() ? students(settings).map(x => x.name) : [],   // bare trafikklæreren flytter turer mellom elever (0.12.0)

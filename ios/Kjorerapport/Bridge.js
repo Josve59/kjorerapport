@@ -9,6 +9,7 @@
     // Kameraene (CameraHub.swift): bildene hentes fra /cam/user.jpg og /cam/environment.jpg, bilene kommer som «kjcamdets»
     camInfo: () => call('camInfo'), camStart: o => call('camStart', o), camStop: () => call('camStop'), camConfig: o => call('camConfig', o),
     review: () => call('review'),
+    beep: (tones, volume) => call('beep', { tones, volume }),   // pip spilt av appen (0.12.2)
     // Kjørerapport Pluss (PlusStore.swift): engangskjøp i App Store; endringer kommer som hendelsen «kjplus»
     plusStatus: () => call('plusStatus'), plusBuy: () => call('plusBuy'), plusTrial: () => call('plusTrial'), plusRestore: () => call('plusRestore'), plusRedeem: () => call('plusRedeem') };
   window.__kjPlus = owned => { window.dispatchEvent(new CustomEvent('kjplus', { detail: { owned } })); };

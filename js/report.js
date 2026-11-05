@@ -106,7 +106,7 @@ export function buildSummary(r, ctx = {}) {
 }
 
 export function renderReport(root, r, ctx = {}) {
-  const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', gaps = [], interrupted = false,
+  const { prevScore = null, prev = null, title = 'Rapport', subtitle = '', eyebrow = subtitle, gaps = [], interrupted = false,
     note = null, onNoteChange = null, onDelete = null, onShare = null, marks: rawMarks = [], onMarkNote = null,
     enrich = null, enrichStatus = null, canFetch = false, onFetch = null, diag = null,
     realMap = false, driver = '', drivers = [], onDriverChange = null, startedAt = null, focus = [], sameRoute = [], onSpeak = null, feedbackHref = null } = ctx;
@@ -160,7 +160,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>`;
   root.innerHTML = `
     <header class="report-head">
-      <p class="eyebrow">${esc(subtitle)}</p>
+      ${eyebrow ? `<p class="eyebrow">${esc(eyebrow)}</p>` : ''}
       ${enrichStatus ? `<p class="enrich-status ${enrichStatus.error ? 'error' : ''}" id="enrich-status" aria-live="polite">${esc(enrichStatus.text)}${enrichStatus.error && onFetch ? ' <button type="button" class="link" id="btn-fetch">Prøv igjen</button>' : ''}</p>`
         : (enrich && enrich.error && canFetch && onFetch ? `<p class="enrich-status error">Forrige henting feilet: ${esc(enrich.error)} <button type="button" class="link" id="btn-fetch">Prøv igjen</button></p>` : '')}
     </header>

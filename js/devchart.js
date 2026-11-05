@@ -10,9 +10,10 @@ import { esc, km as fmtKm } from './format.js';
 
 const PERIODS = [['14', '2 uker'], ['30', 'Måned'], ['90', '3 mnd'], ['365', 'År'], ['all', 'Alt']];
 const CAT_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)', smooth: 'var(--good)' };
-const DAY = 86400000;
+const DAY = 86400000, MIN_W = 20 * 60000;   // zoom helt inn til 20 minutter (flere turer samme kveld)
 const dFmt = new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short' });
 const dFmtY = new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' });
+const tFmt = new Intl.DateTimeFormat('nb-NO', { hour: '2-digit', minute: '2-digit' });
 const longFmt = new Intl.DateTimeFormat('nb-NO', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
 /* Glidende snitt over de n siste turene (til trendlinjen) */
@@ -39,12 +40,21 @@ export function openDevChart(data, { goal = null, mode = 'total', onOpen = null 
   document.body.appendChild(box);
   document.body.classList.add('map-open');
   const tMin = data[0].t, tMax = data[data.length - 1].t;
-  const span = Math.max(tMax - tMin, DAY);
-  let view = { from: tMin - span * 0.04, to: tMax + span * 0.04 }, period = 'all', sel = null;
+  const pad = Math.max((tMax - tMin) * 0.05, 15 * 60000);
+  const fitAll = () => ({ from: tMin - pad, to: tMax + pad });
+  const maxW = Math.max(tMax - tMin + 2 * pad, 400 * DAY);
+  let view = fitAll(), period = 'all', sel = null;
+  // Utsnittet holdes innenfor grensene, og alltid med noe av dataene i
+  const clamp = v => {
+    let w = Math.min(Math.max(v.to - v.from, MIN_W), maxW), from = v.from;
+    from = Math.min(Math.max(from, tMin - w * 0.9), tMax - w * 0.1);
+    return { from, to: from + w };
+  };
+  const zoomBy = f => { const c = (view.from + view.to) / 2, w = (view.to - view.from) * f; view = clamp({ from: c - w / 2, to: c + w / 2 }); period = ''; sel = null; draw(); };
   const setPeriod = p => {
     period = p;
-    if (p === 'all') view = { from: tMin - span * 0.04, to: tMax + span * 0.04 };
-    else { const d = +p * DAY; view = { from: Math.max(tMax - d, tMin - d * 0.04), to: tMax + d * 0.04 }; if (tMax - d < tMin) view.from = tMax - d; }
+    if (p === 'all') view = fitAll();
+    else { const d = +p * DAY; view = clamp({ from: tMax - d, to: tMax + d * 0.04 }); }
     draw();
   };
   const close = () => { box.remove(); document.body.classList.remove('map-open'); document.removeEventListener('keydown', onKey); };
@@ -60,8 +70,11 @@ export function openDevChart(data, { goal = null, mode = 'total', onOpen = null 
     const vis = data.filter(p => p.t >= view.from && p.t <= view.to);
     const grid = [0, 25, 50, 75, 100].map(l => `<line x1="${pl}" x2="${W - pr}" y1="${Y(l)}" y2="${Y(l)}" class="grid"/><text x="${pl - 5}" y="${Y(l) + 4}" text-anchor="end" class="axis">${l}</text>`).join('');
     // Datoer langs bunnen: 4 merker jevnt fordelt
+    // Kort utsnitt: klokkeslett. Langt: dato (med år når utsnittet går over nyttår).
     const yr = new Date(view.from).getFullYear() !== new Date(view.to).getFullYear();
-    const ticks = [0, 1, 2, 3].map(i => { const x = pl + i / 3 * (W - pl - pr); return `<text x="${x}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === 3 ? 'end' : 'middle'}" class="axis">${(yr ? dFmtY : dFmt).format(new Date(T(x)))}</text>`; }).join('');
+    const short = view.to - view.from < 2 * DAY;
+    const fmt = short ? tFmt : yr ? dFmtY : dFmt;
+    const ticks = [0, 1, 2, 3].map(i => { const x = pl + i / 3 * (W - pl - pr); return `<text x="${x}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === 3 ? 'end' : 'middle'}" class="axis">${fmt.format(new Date(T(x)))}</text>`; }).join('');
     const path = (vals, pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.t).toFixed(1)} ${Y(vals[i]).toFixed(1)}`).join('');
     let series = '';
     if (mode === 'cats') {
@@ -88,59 +101,70 @@ export function openDevChart(data, { goal = null, mode = 'total', onOpen = null 
       <div class="dev-stats">${st ? `<span><strong>${Math.round(st.avg)}</strong><span class="muted small">snitt</span></span><span><strong>${st.best}</strong><span class="muted small">beste</span></span>
         <span><strong class="${st.change > 0 ? 'up' : st.change < 0 ? 'down' : ''}">${st.change === null ? '–' : (st.change > 0 ? '+' : '') + Math.round(st.change)}</strong><span class="muted small">endring</span></span><span><strong>${st.n}</strong><span class="muted small">${st.n === 1 ? 'tur' : 'turer'}</span></span>` : '<span class="muted">Ingen turer i dette utsnittet.</span>'}</div>
       <div class="dev-chart">${svg}</div>
+      <div class="dev-zoom"><button type="button" class="btn secondary small-btn" data-z="out" aria-label="Zoom ut">−</button><button type="button" class="btn secondary small-btn" data-z="fit">Vis alt</button><button type="button" class="btn secondary small-btn" data-z="in" aria-label="Zoom inn">+</button></div>
       ${mode === 'cats' ? `<ul class="legend">${Object.keys(CATS).map(k => `<li><span class="dot line" style="background:${CAT_COLOR[k]}"></span>${CATS[k]}</li>`).join('')}</ul>`
-        : '<p class="muted small dev-help">Den brede blå linjen er snittet av de tre siste turene. Zoom med to fingre, dra sidelengs, og trykk på et punkt.</p>'}
+        : '<p class="muted small dev-help">Den brede linjen er snittet av de tre siste turene. Knip for å zoome, dra sidelengs, og trykk på et punkt for å se turen.</p>'}
       ${p ? `<div class="card dev-pick"><span><strong>${esc(cap(longFmt.format(new Date(p.t))))}</strong><span class="muted small">${p.overall} poeng · ${fmtKm(p.km)}</span></span>${onOpen ? `<button type="button" class="btn small-btn primary dev-open">Åpne rapporten</button>` : ''}</div>` : ''}`;
     box.querySelector('.dev-close').onclick = close;
     box.querySelectorAll('.dev-mode button').forEach(b => b.onclick = () => { mode = b.dataset.m; sel = null; draw(); });
     box.querySelectorAll('.dev-periods .chip').forEach(b => b.onclick = () => { sel = null; setPeriod(b.dataset.p); });
+    box.querySelectorAll('.dev-zoom button').forEach(b => b.onclick = () => { if (b.dataset.z === 'fit') { sel = null; setPeriod('all'); } else zoomBy(b.dataset.z === 'in' ? 0.5 : 2); });
     const open = box.querySelector('.dev-open');
     if (open) open.onclick = () => { close(); onOpen(p.id); };
     wire(box.querySelector('.dev-chart'));
   }
 
-  // Zoom med to fingre og dra med én (pekerhendelser), trykk for å velge et punkt
+  // Zoom med to fingre og dra med én, trykk for å velge et punkt. Berøringshendelser på iPhone (0.12.2: mer pålitelig
+  // enn pekerhendelser for to fingre), mus i nettleseren.
   function wire(el) {
-    const ptrs = new Map();
-    let start = null, moved = false;
+    let start = null, moved = false, fingers = 0;
     const svgX = clientX => { const r = el.getBoundingClientRect(); return (clientX - r.left) / r.width * W; };
-    el.onpointerdown = e => { el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, e.clientX); moved = false; start = { view: { ...view }, xs: [...ptrs.values()] }; };
-    el.onpointermove = e => {
-      if (!ptrs.has(e.pointerId)) return;
-      ptrs.set(e.pointerId, e.clientX);
-      const xs = [...ptrs.values()];
-      if (!start || xs.length !== start.xs.length) { start = { view: { ...view }, xs }; return; }
+    const begin = xs => { start = { view: { ...view }, xs }; };
+    const move = xs => {
+      if (!start || xs.length !== start.xs.length) { begin(xs); return; }
       const v0 = start.view, w0 = v0.to - v0.from;
       const t0 = x => v0.from + (svgX(x) - pl) / (W - pl - pr) * w0;
       if (xs.length >= 2) {
-        const a0 = t0(start.xs[0]), b0 = t0(start.xs[1]);
         const d1 = Math.abs(svgX(xs[1]) - svgX(xs[0])), d0 = Math.abs(svgX(start.xs[1]) - svgX(start.xs[0]));
-        if (d1 < 8 || d0 < 8) return;
-        const w = Math.min(Math.max(w0 * d0 / d1, DAY), (tMax - tMin) * 1.5 + 30 * DAY);
-        const mid = (a0 + b0) / 2, midX = (svgX(xs[0]) + svgX(xs[1])) / 2;
+        if (d1 < 4 || d0 < 4) return;
+        const w = Math.min(Math.max(w0 * d0 / d1, MIN_W), maxW);
+        const mid = (t0(start.xs[0]) + t0(start.xs[1])) / 2, midX = (svgX(xs[0]) + svgX(xs[1])) / 2;
         const from = mid - (midX - pl) / (W - pl - pr) * w;
-        view = { from, to: from + w };
+        view = clamp({ from, to: from + w });
+        moved = true;
       } else {
         const dx = (svgX(xs[0]) - svgX(start.xs[0])) / (W - pl - pr) * w0;
-        if (Math.abs(dx) > w0 * 0.01) moved = true;
-        view = { from: v0.from - dx, to: v0.to - dx };
+        if (Math.abs(svgX(xs[0]) - svgX(start.xs[0])) > 6) moved = true;
+        if (!moved) return;
+        view = clamp({ from: v0.from - dx, to: v0.to - dx });
       }
-      if (xs.length >= 2) moved = true;
       period = '';
       redrawChart();
     };
-    const up = e => {
-      const wasTap = ptrs.size === 1 && !moved;
-      ptrs.delete(e.pointerId);
-      if (!ptrs.size) start = null; else start = { view: { ...view }, xs: [...ptrs.values()] };
-      if (wasTap && mode !== 'cats') {
-        const r = el.getBoundingClientRect(), x = svgX(e.clientX), y = (e.clientY - r.top) / r.height * H;
-        let best = null, bd = 24;
-        data.forEach((p, i) => { const d = Math.hypot(X(p.t) - x, Y(p.overall) - y); if (d < bd) { bd = d; best = i; } });
-        sel = best; draw();
-      } else if (moved) draw();
+    const tap = (cx, cy) => {
+      if (mode === 'cats') return;
+      const r = el.getBoundingClientRect(), x = svgX(cx), y = (cy - r.top) / r.height * H;
+      let best = null, bd = 28;
+      data.forEach((p, i) => { const d = Math.hypot(X(p.t) - x, Y(p.overall) - y); if (d < bd) { bd = d; best = i; } });
+      sel = best; draw();
     };
-    el.onpointerup = up; el.onpointercancel = up;
+    const end = (rest, cx, cy) => {
+      if (rest.length) { begin(rest); return; }
+      const wasTap = fingers === 1 && !moved;
+      start = null; fingers = 0;
+      if (wasTap) tap(cx, cy); else if (moved) draw();
+      moved = false;
+    };
+    const xsOf = list => [...list].map(t => t.clientX);
+    el.addEventListener('touchstart', e => { e.preventDefault(); if (!start) moved = false; fingers = Math.max(fingers, e.touches.length); begin(xsOf(e.touches)); }, { passive: false });
+    el.addEventListener('touchmove', e => { e.preventDefault(); move(xsOf(e.touches)); }, { passive: false });
+    const te = e => { const c = e.changedTouches[0]; end(xsOf(e.touches), c.clientX, c.clientY); };
+    el.addEventListener('touchend', te); el.addEventListener('touchcancel', te);
+    // Mus (nettleseren på en datamaskin): dra og klikk
+    el.onpointerdown = e => { if (e.pointerType !== 'mouse') return; el.setPointerCapture(e.pointerId); moved = false; fingers = 1; begin([e.clientX]); };
+    el.onpointermove = e => { if (e.pointerType === 'mouse' && start) move([e.clientX]); };
+    el.onpointerup = e => { if (e.pointerType === 'mouse' && start) end([], e.clientX, e.clientY); };
+    el.onwheel = e => { e.preventDefault(); zoomBy(e.deltaY > 0 ? 1.25 : 0.8); };
   }
   function redrawChart() { const c = box.querySelector('.dev-chart'); if (c) c.innerHTML = chartSvg().svg; }
 

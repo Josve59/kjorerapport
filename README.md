@@ -142,6 +142,23 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.12.2 – sound, zoom and small fixes
+- **Sound works in the iPhone app:**
+  - WebKit muted the app's Web Audio, especially with the silent switch on.
+  - The pips (speed warning, speed cameras, «Prøv lyden») are now played by the app itself (`ios/Kjorerapport/Beeper.swift`, `kjNative.beep`).
+  - They play like navigation-app alerts: heard with the silent switch on, briefly lowering music.
+- **The score rings in the trip list are full size again.** A new CSS class for badges had the same name as the rings.
+- **The app itself no longer zooms:**
+  - The viewport no longer allows zoom, and `touch-action: manipulation` stops zoom from double-taps and pinches.
+  - Maps and Kjøreutvikling still zoom by themselves.
+- **Kjøreutvikling zoom:**
+  - It uses touch events. Before, the finger release was lost when the chart was redrawn under the fingers.
+  - Zooms down to 20 minutes, so several drives on the same evening can be told apart, and shows times of day in short views.
+  - Has −, Vis alt and + buttons.
+  - The view stays within the data.
+- **Report:** the title is now when the drive happened. Before, «Kjørerapport» appeared twice at the top.
+- **Opplæring:** the date shows as «Krysset av 20. aug.», and the explanation that mentioned «grå tekst» has been corrected.
+
 ## What's new in 0.12.1 – week numbers and hotspots
 - **The weekly chart on Turer** shows the ISO week number (as in Norwegian calendars), with Monday's date underneath.
 - **Faresteder moved from Opplæring to Turer.** Opplæring is now only the curriculum checklist. Hotspots are places where your own drives had repeated events, so they belong with the drives. Pluss is still required.

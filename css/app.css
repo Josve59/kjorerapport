@@ -1143,10 +1143,10 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .record-list li.tap { cursor: pointer; }
 .record-list strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 .badge-grid { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.badge { background: var(--surface); border-radius: 16px; padding: 14px 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.merke { background: var(--surface); border-radius: 16px; padding: 14px 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
 .badge-ico { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--lv1) 30%, transparent); color: var(--ink); margin-bottom: 4px; flex: none; }
-.badge.locked { opacity: .55; }
-.badge.locked .badge-ico { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.merke.locked { opacity: .55; }
+.merke.locked .badge-ico { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .badge-at { margin-top: 2px; }
 .unlock-card { border: 2px solid var(--lv1); animation: unlock-in .6s var(--ease) both; }
 .unlock-card .eyebrow { display: flex; align-items: center; gap: 6px; }
@@ -1181,3 +1181,9 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .view-mode { border: 2px dashed var(--turn); }
 .cam-card { display: flex; align-items: center; gap: 12px; width: 100%; }
 .cam-card .cam-chev { margin-left: auto; color: var(--muted); }
+/* Ingen zoom av siden (0.12.2): dobbelttrykk og knip zoomet appen ved et uhell. Kart og kjøreutviklingen zoomer selv. */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.dev-zoom { display: flex; gap: 8px; justify-content: center; }
+.dev-zoom .btn { min-width: 56px; font-size: 1.2rem; }
+/* Grafen tegnes på nytt mens fingrene beveger seg: berøringen må høre til rammen rundt, ellers kommer ikke «slipp» fram */
+.dev-chart .dev-svg { pointer-events: none; }

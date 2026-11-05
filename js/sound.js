@@ -45,6 +45,7 @@ const session = type => { try { if (navigator.audioSession) navigator.audioSessi
 
 /* Kalles fra et trykk (start opptak, bryteren i innstillingene): låser opp lyden på iPhone. */
 export function unlockSound() {
+  if (typeof window !== 'undefined' && window.kjNative && window.kjNative.beep) return true;   // appen trenger ingen opplåsing
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
@@ -68,6 +69,8 @@ const PATTERNS = {
 export async function playSound(name, volume = 0.5) {
   const pat = PATTERNS[name];
   if (!pat) return;
+  // iPhone-appen (0.12.2): appen spiller pipene selv. Web Audio i appen ble dempet og hørtes ikke.
+  if (typeof window !== 'undefined' && window.kjNative && window.kjNative.beep) { window.kjNative.beep(pat, Math.min(1, volume + 0.2)); return; }
   try {
     if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ctx = new AC(); }
     session('transient');
