@@ -40,37 +40,34 @@ export function checkCalibration(calib, poses, now = Date.now()) {
 }
 
 /* Hvem er føreren (0.12.6)? Førerkameraet ser ofte både føreren og ledsageren. Ansiktsmodellen ga før bare ett
-   ansikt, og noen ganger var det ledsagerens, så blikket ble regnet fra feil person. Nå ses opptil to ansikter, og
-   føreren er ansiktet nærmest der føreren har vært (en glidende plassering i cm fra kameraet). Uten kjent plassering
-   er føreren den nærmeste: telefonen står ved rattet. Et ansikt langt fra førerplassen (ledsageren når føreren ikke
-   ses) godtas ikke. Har føreren ikke vært sett på en stund, godtas et nytt ansikt, men ikke et som sitter tydelig lenger unna (ledsageren);
-   etter et kvarter starter det helt på nytt (og ved hver ny tur).
-   poses: [{ x, y, z }] (cm, z negativ foran kameraet). step(poses, t) gir indeksen til føreren eller -1. */
-export function createDriverPicker({ maxJump = 35, nearer = 25, staleSec = 20, forgetSec = 900, start = null } = {}) {
-  let ref = start && Number.isFinite(start.x) && Number.isFinite(start.z) ? { ...start } : null, seenAt = -Infinity;
-  const ok = p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
-  const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+   ansikt, og noen ganger var det ledsagerens, så blikket ble regnet fra feil person. Nå ses opptil to ansikter.
+   Ansiktsmodellens avstander i cm har feil skala (kalibreringen 6. nov.: føreren «110 cm» unna en telefon ved rattet),
+   så valget bruker retningen fra kameraet (vinkel), som ikke påvirkes av skalaen.
+   - Sidene: i kamerabildet er positiv x mot bilens venstre side. Føreren sitter til venstre for ledsageren
+     (kalibreringen: føreren på x = +34,5, og blikk mot venstre speil gir positiv vinkel).
+   - Først: ett ansikt er føreren; to ansikter: det som er lengst mot venstre.
+   - Så: ansiktet nærmest førerens retning. Føreren kan lene seg fritt mot venstre (skulderblikk) og opptil `toward`
+     grader mot ledsagersiden. Et ansikt lenger over mot høyre (ledsageren, rundt 35–40° unna) godtas ikke, heller
+     ikke når føreren ikke har vært sett på lenge (mørkt i bilen). Etter `forgetSec` uten fører starter det på nytt.
+   poses: [{ x, y, z }] (z negativ foran kameraet). step(poses, t) gir indeksen til føreren eller -1. */
+export function createDriverPicker({ toward = 18, up = 25, farther = 1.6, forgetSec = 900 } = {}) {
+  let ref = null, seenAt = -Infinity;
+  const deg = 180 / Math.PI;
+  const ok = p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z) && p.z < 0;
+  const dir = p => ({ ax: Math.atan2(p.x, -p.z) * deg, ay: Math.atan2(p.y, -p.z) * deg, d: Math.hypot(p.x, p.y, p.z) });
   return {
     get ref() { return ref; },
     step(poses, t) {
-      const c = (poses || []).map((p, i) => ({ p, i })).filter(x => ok(x.p));
-      if (!c.length) return (poses || []).length ? 0 : -1;   // uten plassering: det ene ansiktet modellen fant
-      const byNear = c.slice().sort((a, b) => Math.abs(a.p.z) - Math.abs(b.p.z));
+      const c = (poses || []).map((p, i) => ({ i, ...(ok(p) ? dir(p) : {}) })).filter(x => Number.isFinite(x.ax));
+      if (!c.length) return (poses || []).length === 1 ? 0 : -1;   // uten plassering: det ene ansiktet modellen fant
       let pick;
-      if (!ref || t - seenAt > forgetSec) pick = byNear[0];
-      else if (t - seenAt > staleSec) {
-        // Lenge uten fører (mørkt i bilen, eller holderen flyttet): et ansikt godtas, men ikke et som sitter tydelig
-        // lenger unna enn føreren gjorde (det er ledsageren)
-        pick = byNear[0];
-        if (Math.abs(pick.p.z) - Math.abs(ref.z) > nearer) return -1;
-      }
+      if (!ref || t - seenAt > forgetSec) pick = c.reduce((a, b) => (b.ax > a.ax ? b : a));
       else {
-        pick = c.slice().sort((a, b) => dist(a.p, ref) - dist(b.p, ref))[0];
-        // To ansikter og det andre er tydelig nærmere telefonen: det er føreren (ledsageren sitter lenger unna)
-        if (byNear[0] !== pick && Math.abs(pick.p.z) - Math.abs(byNear[0].p.z) > nearer) pick = byNear[0];
-        else if (dist(pick.p, ref) > maxJump) return -1;
+        const fits = c.filter(x => x.ax - ref.ax >= -toward && Math.abs(x.ay - ref.ay) <= up && x.d <= ref.d * farther);
+        if (!fits.length) return -1;
+        pick = fits.reduce((a, b) => (Math.hypot(b.ax - ref.ax, b.ay - ref.ay) < Math.hypot(a.ax - ref.ax, a.ay - ref.ay) ? b : a));
       }
-      ref = ref && t - seenAt <= staleSec ? { x: ref.x + (pick.p.x - ref.x) * 0.1, y: ref.y + (pick.p.y - ref.y) * 0.1, z: ref.z + (pick.p.z - ref.z) * 0.1 } : { x: pick.p.x, y: pick.p.y, z: pick.p.z };
+      ref = ref && t - seenAt <= forgetSec ? { ax: ref.ax + (pick.ax - ref.ax) * 0.05, ay: ref.ay + (pick.ay - ref.ay) * 0.05, d: ref.d + (pick.d - ref.d) * 0.05 } : { ax: pick.ax, ay: pick.ay, d: pick.d };
       seenAt = t;
       return pick.i;
     }

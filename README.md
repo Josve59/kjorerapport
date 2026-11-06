@@ -142,6 +142,10 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.12.7 – driver picked by direction
+
+- Review of 0.12.6: the face model's centimetres are off by about a factor of two (the driver measured «110 cm» from a phone by the wheel), so a 35 cm limit could drop the driver when leaning into a shoulder check. The driver is now chosen by direction from the camera, which the scale error doesn't affect: the driver sits to the left of the companion, may lean freely to the left and up to 18° towards the companion's side; the companion (about 35–40° away) is never taken.
+
 ## What's new in 0.12.6 – the driver's face, and steadier lane lines
 
 - The driver camera could switch to the companion's face. The face model now looks for up to two faces, and the driver is the one closest to where the driver has been (at the start: the face nearest the phone). A face clearly farther away than the driver (the companion) is not accepted, even after a long time without seeing the driver.

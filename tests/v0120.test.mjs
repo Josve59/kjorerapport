@@ -140,15 +140,16 @@ test('kjøreutvikling: glidende snitt og periodetall', () => {
 
 /* ---------- Føreren, ikke ledsageren (0.12.6) ---------- */
 import { createDriverPicker } from '../js/calibcheck.js';
-test('førerkamera: føreren er det nærmeste ansiktet, og ledsageren tas ikke over', () => {
-  const d = { x: 30, y: 5, z: -60 }, l = { x: -45, y: 8, z: -110 };
+test('førerkamera: føreren er ansiktet lengst mot venstre, og ledsageren tas ikke over', () => {
+  // Som kalibreringen 6. nov.: føreren rundt 17° mot venstre, ledsageren rundt 20° mot høyre (modellens «cm»)
+  const d = { x: 34, y: 6, z: -110 }, l = { x: -45, y: 8, z: -120 };
   const p = createDriverPicker();
-  assert.equal(p.step([l, d], 0), 1, 'nærmeste ansikt er føreren');
+  assert.equal(p.step([l, d], 0), 1, 'to ansikter: føreren sitter til venstre');
   for (let t = 0.1; t < 3; t += 0.1) assert.equal(p.step([d, l], t), 0);
   assert.equal(p.step([l], 3.1), -1, 'føreren snur seg bort: ledsagerens ansikt godtas ikke');
-  assert.equal(p.step([{ ...d, x: 38 }], 3.2), 0, 'føreren tilbake, litt flyttet');
-  assert.equal(p.step([l], 30), -1, 'lenge uten fører (mørkt): ledsageren lenger unna godtas fortsatt ikke');
-  assert.equal(p.step([{ x: 10, y: 0, z: -70 }], 31), 0, 'flyttet holder: føreren på ny plass godtas');
+  assert.equal(p.step([{ x: 75, y: 4, z: -100 }], 3.2), 0, 'skulderblikk: føreren lener seg langt mot venstre');
+  assert.equal(p.step([{ x: 10, y: 6, z: -105 }, l], 3.3), 0, 'føreren lener seg litt mot høyre');
+  assert.equal(p.step([l], 600), -1, 'lenge uten fører (mørkt): ledsageren godtas fortsatt ikke');
   assert.equal(p.step([l], 1000), 0, 'etter et kvarter starter det helt på nytt');
   assert.equal(p.step([], 1001), -1);
 });
