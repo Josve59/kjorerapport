@@ -14,6 +14,7 @@
     plusStatus: () => call('plusStatus'), plusBuy: () => call('plusBuy'), plusTrial: () => call('plusTrial'), plusRestore: () => call('plusRestore'), plusRedeem: () => call('plusRedeem') };
   window.__kjPlus = owned => { window.dispatchEvent(new CustomEvent('kjplus', { detail: { owned } })); };
   window.__kjCamDets = r => { window.dispatchEvent(new CustomEvent('kjcamdets', { detail: r })); };
+  window.__kjCamLanes = r => { window.dispatchEvent(new CustomEvent('kjcamlanes', { detail: r })); };   // feltlinjer (0.13.0)
 
   const watchers = new Map();
   let nextId = 1;

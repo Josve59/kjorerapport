@@ -142,6 +142,12 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.0 – lane lines with machine learning
+
+- The road camera now finds lane lines with a machine-learning model, TwinLiteNet+ large (MIT, trained on BDD100K by day and night), running on the iPhone next to the car detection. It tells real painted lines apart from kerbs, road edges, guardrails and snow poles, and also finds the road ahead (shown as a faint blue area in the camera view).
+- The model's points go into the same lane fitting and tracking as before, so curves, the lane-width line and the steadiness from 0.12.6 still apply. Without the model (web version, older phones) the simple image analysis is used.
+- See `ios/Models/README.md` for how it was made and checked, and a licence note on BDD100K.
+
 ## What's new in 0.12.7 – driver picked by direction
 
 - Review of 0.12.6: the face model's centimetres are off by about a factor of two (the driver measured «110 cm» from a phone by the wheel), so a 35 cm limit could drop the driver when leaning into a shoulder check. The driver is now chosen by direction from the camera, which the scale error doesn't affect: the driver sits to the left of the companion, may lean freely to the left and up to 18° towards the companion's side; the companion (about 35–40° away) is never taken.

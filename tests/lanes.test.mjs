@@ -106,3 +106,16 @@ test('feltlinjer over tid: ny linje vises etter to bilder, og står en stund nå
   for (let i = 0; i < 3; i++) o = tr.step({ left: null, right: R(139) }, w);
   assert.equal(o.left, null, 'borte etter en stund');
 });
+
+/* 0.13.0: punkter fra feltmodellen i stedet for bildet */
+test('feltlinjer fra feltmodellen: punktene gir linjene, bildet brukes ikke', () => {
+  const w = 160, h = 120, pts = [];
+  for (let y = 60; y <= 112; y += 1) {
+    const f = (y - h * 0.5) / (h * 0.45);
+    pts.push({ x: 74 + (38 - 74) * f, y }, { x: 86 + (127 - 86) * f, y });
+  }
+  const blank = new Uint8Array(w * h).fill(70);   // ingenting å se i bildet
+  const r = detectLanes(blank, w, h, { points: pts });
+  assert.ok(r.left && r.right && r.ml, JSON.stringify(r));
+  assert.equal(detectLanes(blank, w, h, { points: [] }).left, null);
+});

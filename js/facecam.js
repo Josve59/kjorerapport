@@ -16,7 +16,7 @@ const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) er det mørkt: b
 let landmarker = null, loading = null, stream = null, video = null, timer = null, roadTimer = null;
 const listeners = new Set(), roadListeners = new Set();
 let lastPose = null, lastTs = 0, frames = 0, startedAt = 0, fpsWanted = 8, fpsNow = 8;
-let driver = null, road = null, roadModel = null, detsUnsub = null, driverSeq = -1, roadSeq = -1;   // kildene i iPhone-appen
+let driver = null, road = null, roadModel = null, detsUnsub = null, lanesUnsub = null, mlLanes = null, driverSeq = -1, roadSeq = -1;   // kildene i iPhone-appen
 let wantFacings = [], lastKick = 0;   // vakten: kameraene startes på nytt hvis bildene stopper (0.10.1)
 // Veiens form (0.10.3): forventet sving og feltbredde fra app.js (GPS-sporet og Statens vegvesen), og kamerahøyden
 // slik feltlinjene viser den (lært underveis: feltbredde / avstanden mellom linjene i modellen)
@@ -28,9 +28,9 @@ let laneCanvas = null, laneCtx = null, tailCanvas = null, tailCtx = null, signCa
 let flowPrev = null, flowPrevT = 0, flowRgba = null, signN = 0, lastSign = null, signReads = [];
 const tracker = createTracker();   // biler og folk mellom svarene fra bilgjenkjenningen
 const signs = signTracker();
-const freshPerf = () => ({ faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0,
+const freshPerf = () => ({ faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0, stalls: 0 });
-const perf = { stalls: 0, faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0,
+const perf = { stalls: 0, faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0 };
 
 export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver, native: !!driver,
@@ -38,7 +38,7 @@ export const state = () => ({ loaded: !!landmarker, running: !!stream || !!drive
   road: !!road, roadModel, roadSize: road && road.ready ? `${road.width}x${road.height}` : null, roadBottom,
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, lastPose, lastRoad, video,
   perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10,
-    flowMs: Math.round(perf.flowMs * 10) / 10, signMs: Math.round(perf.signMs * 10) / 10, dfineMs: Math.round(perf.dfineMs) } });
+    flowMs: Math.round(perf.flowMs * 10) / 10, signMs: Math.round(perf.signMs * 10) / 10, dfineMs: Math.round(perf.dfineMs), laneMlMs: Math.round(perf.laneMlMs) } });
 
 /* Førerplassen (0.12.6): lært av kameraet (først det nærmeste ansiktet), på nytt hver gang kameraet startes */
 let driverPick = createDriverPicker();
@@ -96,6 +96,9 @@ export async function startCamera(videoEl, { road: withRoad = false } = {}) {
       roadModel = r.model || null;
       perf.dfine = roadModel;
       detsUnsub = native.onDets(onDets);
+      // Feltmodellen (0.13.0): siste svar brukes av feltlinjene i roadTick
+      mlLanes = null;
+      lanesUnsub = native.onLanes(r => { mlLanes = r; perf.laneMlFrames++; if (r.backend) perf.laneMl = r.backend; if (Number.isFinite(r.ms)) ema('laneMlMs', r.ms); });
     }
     video = videoEl;
     await show(videoEl, driver.stream());
@@ -254,15 +257,19 @@ function roadTick() {
     // Linjene kameraet så i forrige bilde (ikke de tegnet etter feltbredden), så valget holder seg til samme linje (0.12.5)
     const pv = lastView && lastView.lane && lastView.lane.W === W && performance.now() - (lastView.lane.at || 0) < 600 ? lastView.lane : null;
     const prev = pv ? { left: pv.left && !pv.left.predicted ? pv.left : null, right: pv.right && !pv.right.predicted ? pv.right : null } : null;
+    // Feltmodellen (0.13.0): punktene på linjene den fant, skalert til det lille bildet. Punkter godt utenfor veien
+    // foran (gang- og sykkelvei, linjer bak en fortauskant) tas ikke med. Uten ferskt svar: den enkle bildeanalysen.
+    const ml = mlLanes && mlLanes.w > 0 && Math.abs(mlLanes.h / mlLanes.w - vh / vw) < 0.02 && performance.now() - mlLanes.at < 600 ? mlLanes : null;
+    const points = ml ? mlPoints(ml, W / ml.w, W) : null;
     const raw = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
-      focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true, prev });
+      focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true, prev, points });
     // Det som vises og lagres: linjer som er sett mer enn én gang, og som står litt når de faller ut (0.12.6)
     const ln = { ...raw, ...laneTrack.step(raw, W) };
     // Kamerahøyden fra feltbredden: telefonen står i en holder ved rattet, så bare rimelige høyder tas med (0.12.5)
     if (Number.isFinite(ln.camH) && ln.camH > 0.8 && ln.camH < 1.8) camHEst += (ln.camH - camHEst) * 0.05;
     const seenL = !!ln.left && !ln.left.predicted, seenR = !!ln.right && !ln.right.predicted;
     r.lane = { l: seenL, r: seenR, offset: ln.offset, ...(ln.curve ? { k: Math.round(ln.curve.kappa * 1e4) / 1e4 } : {}), ...(shape.laneWidth ? { lw: shape.laneWidth } : {}) };
-    Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H, at: performance.now(), kappa: ln.curve ? ln.curve.kappa : null,
+    Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H, at: performance.now(), ml: !!points, road: ml ? scaleRoad(ml.road, W / ml.w) : null, kappa: ln.curve ? ln.curve.kappa : null,
       prior: shape.kappa, src: shape.src, lanes: shape.lanes, laneWidth: shape.laneWidth }, lum: r.lum, roadBottom });
   } catch { /* ingen feltlinjer */ }
   ema('laneMs', performance.now() - t2);
@@ -290,6 +297,26 @@ function roadTick() {
   }
   lastRoad = r;
   for (const fn of roadListeners) fn(r, now0);
+}
+
+/* Feltmodellens svar i det lille bildets piksler (k = liten bredde / kamerabredde). pts: [x, y, …], road: [y, venstre,
+   høyre, …]. Et punkt mer enn 6 % av bredden utenfor veien foran på samme høyde droppes. */
+function mlPoints(ml, k, W) {
+  const road = scaleRoad(ml.road, k), m = W * 0.06, out = [];
+  for (let i = 0; i + 1 < ml.pts.length; i += 2) {
+    const x = ml.pts[i] * k, y = ml.pts[i + 1] * k;
+    let e = null, best = Infinity;
+    for (const r of road) { const d = Math.abs(r[0] - y); if (d < best) { best = d; e = r; } }
+    if (e && best < 6 && (x < e[1] - m || x > e[2] + m)) continue;
+    out.push({ x, y });
+  }
+  return out;
+}
+function scaleRoad(road, k) {
+  const out = [];
+  const r = road || [];
+  for (let i = 0; i + 2 < r.length; i += 3) out.push([r[i] * k, r[i + 1] * k, r[i + 2] * k]);
+  return out;
 }
 
 /* Fartsskilt (k0.7.6): røde ringer i delen av bildet over dashbordet, tallet lest mot maler (signs.js). Skilt som
@@ -381,6 +408,7 @@ export function stopLoop() {
 
 function stopSources() {
   if (detsUnsub) detsUnsub(); detsUnsub = null;
+  if (lanesUnsub) lanesUnsub(); lanesUnsub = null; mlLanes = null;
   if (driver) driver.stop();
   if (road) road.stop();
   if (driver || road) native.stop();

@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.12.7';
+export const APP_VERSION = '0.13.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1643,6 +1643,14 @@ function drawCamView() {
   // Feltlinjer (regnet på et lite bilde, skaleres opp)
   // Feltlinjer (0.10.3): buer langs veien, prøvd i 16 punkter og glattet hvert for seg. Feltet fargelegges svakt mellom
   // linjene, og en linje kameraet ikke så (tegnet etter feltbredden) er stiplet
+  // Veien foran fra feltmodellen (0.13.0): svakt blått felt mellom kantene
+  if (v.lane && v.lane.road && v.lane.road.length > 2) {
+    const k = v.w / v.lane.W, rd = v.lane.road;
+    g.save(); g.fillStyle = 'rgba(64, 156, 255, 0.14)'; g.beginPath();
+    rd.forEach(([y, xl], i) => (i ? g.lineTo(X(xl * k), Y(y * k)) : g.moveTo(X(xl * k), Y(y * k))));
+    rd.slice().reverse().forEach(([y, , xr]) => g.lineTo(X(xr * k), Y(y * k)));
+    g.closePath(); g.fill(); g.restore();
+  }
   if (v.lane) {
     const k = v.w / v.lane.W, N = 16;
     const sample = L => { const S = scaleLane(L, k); return Array.from({ length: N }, (_, i) => { const y = S.yBottom + (S.yTop - S.yBottom) * i / (N - 1); return [laneX(S, y), y]; }); };
@@ -1710,14 +1718,15 @@ function drawCamView() {
     `<div>${laneSeenText(v.lane)}${off !== null ? ` · ${Math.abs(off).toFixed(2).replace('.', ',')} m ${off > 0.05 ? 'til høyre' : off < -0.05 ? 'til venstre' : 'midt i'}` : ''}</div>`,
     `<div class="muted">${roadShapeText(v.lane)}</div>`,
     `<div>Skilt: ${v.lastSign ? `<strong>${v.lastSign.limit}</strong> (lest ${v.lastSign.reads} ganger, ${Math.round((performance.now() - v.lastSign.at) / 1000)} s siden)` : 'ingen lest ennå'}${liveLimitNow ? ` · grense nå ${liveLimitNow}` : ''}</div>`,
-    `<div class="muted">${v.roadBottom ? `Dashbordkant ${Math.round(v.roadBottom * 100)} % (blå strek)` : 'Dashbordkant ikke funnet ennå'}${Number.isFinite(v.lum) ? ` · lys ${v.lum}` : ''}${Number.isFinite(st.perf.dfineMs) && st.perf.dfineMs ? ` · D-FINE ${Math.round(st.perf.dfineMs)} ms` : ''}${st.perf.flowTries ? ` · følger i bildet ${Math.round(100 * st.perf.flowHits / st.perf.flowTries)} %` : ''}</div>`
+    `<div class="muted">${v.roadBottom ? `Dashbordkant ${Math.round(v.roadBottom * 100)} % (blå strek)` : 'Dashbordkant ikke funnet ennå'}${Number.isFinite(v.lum) ? ` · lys ${v.lum}` : ''}${Number.isFinite(st.perf.dfineMs) && st.perf.dfineMs ? ` · D-FINE ${Math.round(st.perf.dfineMs)} ms` : ''}${st.perf.laneMlMs ? ` · feltmodell ${Math.round(st.perf.laneMlMs)} ms` : ''}${st.perf.flowTries ? ` · følger i bildet ${Math.round(100 * st.perf.flowHits / st.perf.flowTries)} %` : ''}</div>`
   ].join('');
 }
 /* Hva kameraet så av feltlinjene (0.10.3): sette linjer, og om en er tegnet etter feltbredden */
 function laneSeenText(ln) {
   if (!ln) return 'Ingen feltlinjer';
   const seen = ['left', 'right'].filter(k => ln[k] && !ln[k].predicted).length, guess = ['left', 'right'].some(k => ln[k] && ln[k].predicted);
-  return seen === 2 ? 'Begge feltlinjer' : seen === 1 ? (guess ? 'Én feltlinje, den andre etter feltbredden' : 'Én feltlinje') : 'Ingen feltlinjer';
+  const txt = seen === 2 ? 'Begge feltlinjer' : seen === 1 ? (guess ? 'Én feltlinje, den andre etter feltbredden' : 'Én feltlinje') : 'Ingen feltlinjer';
+  return ln.ml ? `${txt} (feltmodell)` : txt;
 }
 /* Svingen og feltene: «Sving til høyre, radius 240 m (veidata) · tofeltsvei · felt 3,25 m» */
 function roadShapeText(ln) {

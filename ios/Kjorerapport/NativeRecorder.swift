@@ -24,6 +24,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     private var lastActivityUpdate = Date.distantPast
     private let gravity = 9.80665
     private let detector = RoadDetector()   // bilgjenkjenning for veikameraet (CameraHub)
+    private let laneDetector = LaneDetector()   // feltlinjer og vei med maskinlæring (0.13.0)
     private lazy var plus: PlusStore = {
         let p = PlusStore()
         p.onChange = { [weak self] owned in self?.send("window.__kjPlus && window.__kjPlus(\(owned))") }
@@ -51,7 +52,8 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         case "info":
             return (["devTools": await Self.devTools()], nil)
         case "camInfo":
-            return (["multi": CameraHub.multiSupported, "model": Bundle.main.url(forResource: "DFine", withExtension: "mlmodelc") != nil], nil)
+            return (["multi": CameraHub.multiSupported, "model": Bundle.main.url(forResource: "DFine", withExtension: "mlmodelc") != nil,
+                     "lanes": Bundle.main.url(forResource: "Lanes", withExtension: "mlmodelc") != nil], nil)
         case "camStart":
             // Begge kameraene samtidig når telefonen kan (iPhone XS og nyere), ellers det første i listen
             let facings = (body["facings"] as? [String] ?? ["user"]).compactMap(CameraHub.Facing.init(rawValue:))
@@ -99,6 +101,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             CameraHub.shared.stop()
         case "camConfig":
             detector.configure(roadBottom: body["roadBottom"] as? Double, dark: body["dark"] as? Bool ?? false)
+            laneDetector.configure(roadBottom: body["roadBottom"] as? Double)
         case "geoStart":
             watching = true
             startLocation()
@@ -144,7 +147,19 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             let js = "window.__kjCamDets && window.__kjCamDets(\(Self.jsonString(result)))"
             Task { @MainActor in self?.send(js) }
         }
-        CameraHub.shared.onRoadFrame = { frame in detector.feed(frame) }
+        // Feltlinjene (0.13.0): egen modell på de samme veibildene, svarene som window.__kjCamLanes({ pts, road, … })
+        let lanes = self.laneDetector
+        let lanesLoaded = await Task.detached(priority: .userInitiated) { lanes.load() }.value
+        if lanesLoaded {
+            lanes.onResult = { [weak self] result in
+                let js = "window.__kjCamLanes && window.__kjCamLanes(\(Self.jsonString(result)))"
+                Task { @MainActor in self?.send(js) }
+            }
+        }
+        CameraHub.shared.onRoadFrame = { frame in
+            detector.feed(frame)
+            if lanesLoaded { lanes.feed(frame) }
+        }
         return detector.name
     }
 

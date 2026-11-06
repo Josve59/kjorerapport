@@ -40,6 +40,14 @@ export function onDets(fn) {
   return () => window.removeEventListener('kjcamdets', h);
 }
 
+/* Svar fra feltmodellen (0.13.0): fn({ pts, road, w, h, y0, y1, ms, backend, at }). pts = [x, y, x, y, …] midt på
+   feltlinjene, road = [y, venstre, høyre, …] kantene av veien foran, i kamerabildets piksler; y0–y1 er båndet modellen så. */
+export function onLanes(fn) {
+  const h = e => { const r = e.detail; if (r && Array.isArray(r.pts)) fn({ ...r, at: performance.now() - (Number(r.age) || 0) }); };
+  window.addEventListener('kjcamlanes', h);
+  return () => window.removeEventListener('kjcamlanes', h);
+}
+
 /* Et kamera som canvas: henter nye bilder fra appen så ofte som fps sier. { canvas, width, height, t, frames,
    seq, stream(), stop() }. t = når siste bilde ble tatt (performance.now). max: lengste side i piksler (0 = full). */
 export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {

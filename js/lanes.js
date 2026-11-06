@@ -18,15 +18,16 @@ export const LANE_WIDTH = 3.25;
    { xBottom, xTop, yBottom, yTop, inliers } eller null, offset = bilens sideavvik fra midten av feltet i meter
    (positiv = til høyre, forutsatt at kameraet står midt i bilen), width = feltbredde i piksler nederst. */
 export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.45, maxBg = 150, minInl = 0.25, seed = 7,
-  curve = false, far = null, kappa = null, kappaWeight = 3, focal = null, camH = 1.2, laneWidth = LANE_WIDTH, predict = false, useHorizon = false, prev = null } = {}) {
+  curve = false, far = null, kappa = null, kappaWeight = 3, focal = null, camH = 1.2, laneWidth = LANE_WIDTH, predict = false, useHorizon = false, prev = null, points = null } = {}) {
   const y0 = Math.floor(h * top), y1 = Math.floor(h * bottom);
   // Med buede linjer letes det også lenger fram (mot horisonten), der svingen synes
   const ys = curve ? Math.max(1, Math.min(y0, Math.floor(h * (far ?? Math.max(horizon + 0.04, top - 0.15))))) : y0;
-  const night = stretchDark(gray, w, ys, y1);
+  // Punkter fra feltmodellen (0.13.0, iPhone-appen): midt på linjene modellen fant, så bildet trengs ikke
+  const night = points ? null : stretchDark(gray, w, ys, y1);
   if (night) gray = night;
   const minW = Math.max(1, Math.round(w * 0.006)), maxW = Math.max(3, Math.round(w * 0.08));
-  const pts = [];
-  for (let y = ys; y <= y1; y += 1) {
+  const pts = points ? points.filter(p => p.y >= ys && p.y <= y1) : [];
+  for (let y = ys; !points && y <= y1; y += 1) {
     const row = y * w;
     // Lokal bakgrunn: glidende snitt over 1/8 av bredden
     const win = Math.max(4, Math.round(w / 8));
@@ -150,7 +151,7 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
     // Kamerahøyden følger av feltbredden: B(høyre) − B(venstre) = feltbredde / høyde
     if (width && seenL.curve && seenR.curve) { const dB = seenR.curve.B - seenL.curve.B; if (dB > 0) camHeight = Math.round(laneWidth / dB * 100) / 100; }
   }
-  return { left, right, offset, width, points: pts.length, night: !!night, curve: shape ? { C: shape.C, kappa: shape.kappa, vh: shape.vh } : null, camH: camHeight };
+  return { left, right, offset, width, points: pts.length, night: !!night, ml: !!points, curve: shape ? { C: shape.C, kappa: shape.kappa, vh: shape.vh } : null, camH: camHeight };
 }
 
 /* Feltlinjen er en lys rygg (0.12.5): lysere enn asfalten rett på begge sider. Overgangen fra asfalt til lys grus,
