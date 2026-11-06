@@ -137,3 +137,18 @@ test('kjøreutvikling: glidende snitt og periodetall', () => {
   assert.equal(st.best, 100); assert.equal(st.n, 6); assert.equal(Math.round(st.change), 25);
   assert.equal(periodStats([]), null);
 });
+
+/* ---------- Føreren, ikke ledsageren (0.12.6) ---------- */
+import { createDriverPicker } from '../js/calibcheck.js';
+test('førerkamera: føreren er det nærmeste ansiktet, og ledsageren tas ikke over', () => {
+  const d = { x: 30, y: 5, z: -60 }, l = { x: -45, y: 8, z: -110 };
+  const p = createDriverPicker();
+  assert.equal(p.step([l, d], 0), 1, 'nærmeste ansikt er føreren');
+  for (let t = 0.1; t < 3; t += 0.1) assert.equal(p.step([d, l], t), 0);
+  assert.equal(p.step([l], 3.1), -1, 'føreren snur seg bort: ledsagerens ansikt godtas ikke');
+  assert.equal(p.step([{ ...d, x: 38 }], 3.2), 0, 'føreren tilbake, litt flyttet');
+  assert.equal(p.step([l], 30), -1, 'lenge uten fører (mørkt): ledsageren lenger unna godtas fortsatt ikke');
+  assert.equal(p.step([{ x: 10, y: 0, z: -70 }], 31), 0, 'flyttet holder: føreren på ny plass godtas');
+  assert.equal(p.step([l], 1000), 0, 'etter et kvarter starter det helt på nytt');
+  assert.equal(p.step([], 1001), -1);
+});

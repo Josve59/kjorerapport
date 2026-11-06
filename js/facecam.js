@@ -4,11 +4,12 @@
    I Safari bare førerkameraet, som før. Ingen bilder lagres eller sendes – bare vinkler og tall om veien går videre. */
 import { poseFromMatrix, eyesFromBlendshapes } from './camera.js';
 import { processDetections, detectTaillights, roadDets, focalPx } from './road.js';
-import { detectLanes, toGray, rowMeans, dashLine, scaleLane, LANE_WIDTH } from './lanes.js';
+import { detectLanes, toGray, rowMeans, dashLine, scaleLane, LANE_WIDTH, createLaneTracker } from './lanes.js';
 import { createTracker } from './track.js';
 import { matchShift } from './flow.js';
 import { readSigns, signTracker } from './signs.js';
 import * as native from './nativecam.js';
+import { createDriverPicker } from './calibcheck.js';
 
 const BASE = new URL('../vendor/mediapipe/', import.meta.url).href;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) er det mørkt: bilgjenkjenningen får et lysere bilde, og baklys letes etter
@@ -39,6 +40,10 @@ export const state = () => ({ loaded: !!landmarker, running: !!stream || !!drive
   perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10,
     flowMs: Math.round(perf.flowMs * 10) / 10, signMs: Math.round(perf.signMs * 10) / 10, dfineMs: Math.round(perf.dfineMs) } });
 
+/* Førerplassen (0.12.6): lært av kameraet (først det nærmeste ansiktet), på nytt hver gang kameraet startes */
+let driverPick = createDriverPicker();
+let laneTrack = createLaneTracker();   // feltlinjene over tid (0.12.6)
+
 /* Kan telefonen ha begge kameraene på samtidig (iPhone-appen på iPhone XS og nyere, med bilgjenkjenningen)? */
 export async function roadSupported() {
   const i = await native.camInfo();
@@ -56,7 +61,7 @@ export function loadModel(onStatus = () => {}) {
     const fileset = await FilesetResolver.forVisionTasks(BASE + 'wasm');
     const opts = delegate => ({
       baseOptions: { modelAssetPath: BASE + 'face_landmarker.task', delegate },
-      runningMode: 'VIDEO', numFaces: 1,
+      runningMode: 'VIDEO', numFaces: 2,   // føreren og ledsageren; føreren velges under (0.12.6)
       outputFacialTransformationMatrixes: true, outputFaceBlendshapes: true   // øynene (k0.7.6)
     });
     try { landmarker = await FaceLandmarker.createFromOptions(fileset, opts('GPU')); }
@@ -77,6 +82,7 @@ function show(videoEl, s) {
 
 /* Starter førerkameraet (og veikameraet med road: true, bare i iPhone-appen). Må kalles fra et trykk første gang. */
 export async function startCamera(videoEl, { road: withRoad = false } = {}) {
+  driverPick = createDriverPicker(); laneTrack = createLaneTracker();
   if (native.available()) {
     const want = withRoad ? ['user', 'environment'] : ['user'];
     if (driver && !!road === withRoad) { video = videoEl; await show(videoEl, driver.stream()); return; }
@@ -174,12 +180,14 @@ function faceTick() {
   const t1 = performance.now();
   try {
     const res = landmarker.detectForVideo(src, ts);
-    const m = res && res.facialTransformationMatrixes && res.facialTransformationMatrixes[0];
-    pose = m ? poseFromMatrix(m.data) : null;
+    // Føreren blant ansiktene (0.12.6): ledsageren skal ikke tas for føreren
+    const all = ((res && res.facialTransformationMatrixes) || []).map(m => poseFromMatrix(m.data));
+    const k = driverPick.step(all, ts / 1000);
+    pose = k >= 0 ? all[k] : null;
     // Øynene (k0.7.6): hvor de ser i forhold til hodet
-    const eyes = pose && res.faceBlendshapes && res.faceBlendshapes[0] ? eyesFromBlendshapes(res.faceBlendshapes[0].categories) : null;
+    const eyes = pose && res.faceBlendshapes && res.faceBlendshapes[k] ? eyesFromBlendshapes(res.faceBlendshapes[k].categories) : null;
     if (pose && eyes) Object.assign(pose, eyes);
-    const lm = res && res.faceLandmarks && res.faceLandmarks[0];
+    const lm = k >= 0 && res.faceLandmarks ? res.faceLandmarks[k] : null;
     lastFace = lm ? { at: performance.now(), lm, pose, w, h } : lastFace && performance.now() - lastFace.at < 500 ? lastFace : null;
   } catch { pose = null; }
   ema('faceMs', performance.now() - t1); adapt();
@@ -246,8 +254,10 @@ function roadTick() {
     // Linjene kameraet så i forrige bilde (ikke de tegnet etter feltbredden), så valget holder seg til samme linje (0.12.5)
     const pv = lastView && lastView.lane && lastView.lane.W === W && performance.now() - (lastView.lane.at || 0) < 600 ? lastView.lane : null;
     const prev = pv ? { left: pv.left && !pv.left.predicted ? pv.left : null, right: pv.right && !pv.right.predicted ? pv.right : null } : null;
-    const ln = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
+    const raw = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
       focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true, prev });
+    // Det som vises og lagres: linjer som er sett mer enn én gang, og som står litt når de faller ut (0.12.6)
+    const ln = { ...raw, ...laneTrack.step(raw, W) };
     // Kamerahøyden fra feltbredden: telefonen står i en holder ved rattet, så bare rimelige høyder tas med (0.12.5)
     if (Number.isFinite(ln.camH) && ln.camH > 0.8 && ln.camH < 1.8) camHEst += (ln.camH - camHEst) * 0.05;
     const seenL = !!ln.left && !ln.left.predicted, seenR = !!ln.right && !ln.right.predicted;

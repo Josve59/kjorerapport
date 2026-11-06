@@ -142,6 +142,11 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.12.6 – the driver's face, and steadier lane lines
+
+- The driver camera could switch to the companion's face. The face model now looks for up to two faces, and the driver is the one closest to where the driver has been (at the start: the face nearest the phone). A face clearly farther away than the driver (the companion) is not accepted, even after a long time without seeing the driver.
+- Lane lines flickered about twice a second. A new line must now be seen in two frames in the same place before it shows, a line that drops out stays for about half a second, and one wrong hit doesn't move it. The line drawn from the lane width is only shown next to a confirmed line.
+
 ## What's new in 0.12.5 – lane lines stay on the lane
 
 - The road camera often took the road edge, a kerb, a guardrail or a snow pole for a lane line, so the green lane was a thin strip off to the side.

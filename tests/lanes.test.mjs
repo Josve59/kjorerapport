@@ -90,3 +90,19 @@ test('feltlinjer: den innerste linjen velges, ikke en sterkere linje lenger ut',
   const want = 118 + (84 - 118) * (1 - (h * 0.92 - h * 0.5) / (h * 0.45));
   assert.ok(Math.abs(r.right.xBottom - want) < 4, `innerste linje: ${r.right.xBottom} mot ${want}`);
 });
+
+/* 0.12.6: linjene over tid */
+import { createLaneTracker } from '../kamera/js/lanes.js';
+test('feltlinjer over tid: ny linje vises etter to bilder, og står en stund når den faller ut', () => {
+  const L = x => ({ xBottom: x, xTop: x + 30, yBottom: 100, yTop: 60 }), R = x => ({ xBottom: x, xTop: x - 30, yBottom: 100, yTop: 60 });
+  const tr = createLaneTracker({ need: 2, hold: 3 }), w = 160;
+  assert.equal(tr.step({ left: L(20), right: R(140), offset: 0.1 }, w).left, null, 'første bilde: ikke vist ennå');
+  let o = tr.step({ left: L(21), right: R(139), offset: 0.1 }, w);
+  assert.ok(o.left && o.right); assert.equal(o.offset, 0.1);
+  o = tr.step({ left: null, right: R(139), offset: null }, w);
+  assert.ok(o.left && o.left.held, 'venstre står selv om den ikke ble sett'); assert.equal(o.offset, null);
+  o = tr.step({ left: L(120), right: R(139) }, w);   // én feilaktig linje langt unna
+  assert.ok(o.left && Math.abs(o.left.xBottom - 21) < 1, 'et enkelt feiltreff flytter ikke linjen');
+  for (let i = 0; i < 3; i++) o = tr.step({ left: null, right: R(139) }, w);
+  assert.equal(o.left, null, 'borte etter en stund');
+});

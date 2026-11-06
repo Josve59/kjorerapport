@@ -328,3 +328,37 @@ export function dashLine(rowMean, { from = 0.6, to = 0.97, win = 5, minStep = 12
   while (k + 1 < steps.length && steps[k + 1][1] >= steps[k][1]) k++;
   return steps[k][0] / h;
 }
+
+/* Feltlinjer over tid (0.12.6). Bildeanalysen ser linjene i noen bilder og ikke i andre (stiplet linje, lys fra
+   møtende bil, skygger), og tar av og til feil. Linjene vekslet derfor rundt to ganger i sekundet. Her må en ny linje
+   ses to bilder på rad på samme sted før den vises, og en linje som forsvinner, blir stående i opptil `hold` bilder
+   (rundt et halvt sekund). Den andre linjen tegnes etter feltbredden bare når den ene er bekreftet.
+   step(ln, w) tar svaret fra detectLanes og bildebredden, og gir { left, right, offset }. */
+export function createLaneTracker({ need = 2, hold = 5, tol = 0.1 } = {}) {
+  const T = { left: { line: null, hits: 0, miss: 0, cand: null }, right: { line: null, hits: 0, miss: 0, cand: null } };
+  const near = (a, b, w) => Math.abs(a.xBottom - b.xBottom) < w * tol * 1.5 && Math.abs(laneX(a, a.yTop) - laneX(b, a.yTop)) < w * tol;
+  return {
+    step(ln, w) {
+      const out = { left: null, right: null, offset: null };
+      for (const side of ['left', 'right']) {
+        const s = T[side], raw = ln && ln[side] && !ln[side].predicted ? ln[side] : null;
+        if (raw && s.line && near(raw, s.line, w)) { s.line = raw; s.hits++; s.miss = 0; s.cand = null; }
+        else {
+          if (raw) {
+            s.cand = s.cand && near(raw, s.cand.line, w) ? { line: raw, hits: s.cand.hits + 1 } : { line: raw, hits: 1 };
+            if (s.cand.hits >= need) { s.line = s.cand.line; s.hits = s.cand.hits; s.miss = 0; s.cand = null; continue; }
+          } else s.cand = null;
+          if (s.line && ++s.miss > hold) { s.line = null; s.hits = 0; s.miss = 0; }
+        }
+      }
+      for (const side of ['left', 'right']) if (T[side].line && T[side].hits >= need) out[side] = T[side].miss ? { ...T[side].line, held: true } : T[side].line;
+      // Den andre linjen etter feltbredden: bare ved siden av en bekreftet linje
+      for (const [side, other] of [['left', 'right'], ['right', 'left']]) {
+        if (!out[side] && out[other] && ln && ln[side] && ln[side].predicted && !out[other].held) out[side] = ln[side];
+      }
+      // Sideavviket bare når begge linjene er sett i dette bildet og stemmer med det som vises
+      if (ln && Number.isFinite(ln.offset) && out.left === ln.left && out.right === ln.right) out.offset = ln.offset;
+      return out;
+    }
+  };
+}

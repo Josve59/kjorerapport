@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.12.5';
+export const APP_VERSION = '0.12.6';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
