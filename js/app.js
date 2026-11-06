@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.12.3';
+export const APP_VERSION = '0.12.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1209,11 +1209,18 @@ function renderPrecheck() {
     $('#step-check').dataset.state = 'active';
     btnStart.textContent = 'Venter på GPS …';
     const since = performance.now();
+    const fixMotion = $('#btn-motion-fix');
+    fixMotion.hidden = true;
+    fixMotion.onclick = async () => { const r = await requestMotionPermission(); if (r === 'granted') { motion = 'granted'; fixMotion.hidden = true; setCheck(mot, null, 'Venter på data …'); } else setCheck(mot, false, 'Tilgang avslått. Slå på «Bevegelse og retning» for appen i Innstillinger.'); };
     stopPrecheck = startPrecheck(st => {
       const waited = (performance.now() - since) / 1000;
       if (st.gpsError) setCheck(gps, false, st.gpsError.code === 1 ? 'Posisjonstilgang avslått' : 'Ingen GPS-signal');
       else if (Number.isFinite(st.acc)) setCheck(gps, st.gpsOk, `${n0(st.acc)} m nøyaktighet${st.gpsOk ? '' : ' (må være 20 m eller bedre' + (waited > 10 ? ' – blir ofte bedre når bilen står ute og står stille)' : ')')}`);
-      if (motion !== 'denied' && motion !== 'unsupported') setCheck(mot, st.motionOk, st.motionOk ? 'Bevegelsesdata mottas' : 'Ingen bevegelsesdata enda – beveg telefonen litt');
+      // Ingen data etter 3 s (f.eks. når siden ble åpnet uten trykk): én knapp som ber om tilgangen i et trykk
+      const noMotion = !st.motionSeen && waited > 3 && motion !== 'unsupported';
+      fixMotion.hidden = !noMotion;
+      if (noMotion) setCheck(mot, null, 'Får ingen bevegelsesdata. Trykk på knappen under.');
+      else if (motion !== 'denied' && motion !== 'unsupported') setCheck(mot, st.motionOk, st.motionOk ? 'Bevegelsesdata mottas' : 'Ingen bevegelsesdata enda – beveg telefonen litt');
       if (st.steady === null) setCheck(hold, null, 'Venter på bevegelsesdata');
       else setCheck(hold, st.steady, st.steady ? 'Telefonen står stødig' : 'Telefonen beveger seg – fest den i holderen og slipp den');
       btnStart.disabled = !(st.gpsOk && st.motionOk);
@@ -2425,7 +2432,9 @@ function init() {
   applyTheme();
   hydrateIcons();
   ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress'].forEach(n => { screens[n] = document.getElementById(n); });
-  $('#btn-go-precheck').onclick = () => { location.hash = '#/sjekk'; };
+  // Bevegelsesdata (0.12.4): iPhone gir dem bare etter et trykk. «Start kjøretur» er trykket, så tilgangen bes om her;
+  // sjekken før kjøring starter av seg selv uten trykk, og fikk ellers aldri data.
+  $('#btn-go-precheck').onclick = () => { requestMotionPermission().catch(() => {}); location.hash = '#/sjekk'; };
   $('#btn-go-camera').onclick = () => { location.hash = '#/kamera'; };
   $('#btn-demo').onclick = () => { location.hash = '#/demo'; };
   document.querySelectorAll('.btn-gear').forEach(b => b.onclick = () => { location.hash = '#/innstillinger'; });

@@ -142,6 +142,14 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.12.4 – motion data again
+- **The bug:** «Før du kjører» got no motion data on the phone.
+  - Since 0.11.5 the check starts by itself, without a tap.
+  - iPhone only gives a page motion data after a tap (`DeviceMotionEvent.requestPermission`), so the data never came.
+- **The fix:**
+  - Access is now requested in the tap on «Start kjøretur», so the check gets data straight away.
+  - If no data comes within 3 seconds (for example when the check was opened another way), a «Slå på bevegelse» button appears in the check.
+
 ## What's new in 0.12.3 – tab bar and small things
 - **The tab bar responds on the first tap.**
   - Before, iPhone used the first tap to stop the scrolling after a swipe, so you had to tap twice.
