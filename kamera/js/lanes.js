@@ -18,7 +18,7 @@ export const LANE_WIDTH = 3.25;
    { xBottom, xTop, yBottom, yTop, inliers } eller null, offset = bilens sideavvik fra midten av feltet i meter
    (positiv = til høyre, forutsatt at kameraet står midt i bilen), width = feltbredde i piksler nederst. */
 export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.45, maxBg = 150, minInl = 0.25, seed = 7,
-  curve = false, far = null, kappa = null, kappaWeight = 3, focal = null, camH = 1.2, laneWidth = LANE_WIDTH, predict = false, useHorizon = false } = {}) {
+  curve = false, far = null, kappa = null, kappaWeight = 3, focal = null, camH = 1.2, laneWidth = LANE_WIDTH, predict = false, useHorizon = false, prev = null } = {}) {
   const y0 = Math.floor(h * top), y1 = Math.floor(h * bottom);
   // Med buede linjer letes det også lenger fram (mot horisonten), der svingen synes
   const ys = curve ? Math.max(1, Math.min(y0, Math.floor(h * (far ?? Math.max(horizon + 0.04, top - 0.15))))) : y0;
@@ -46,7 +46,7 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
       if ((!bright || x === w - 1) && start >= 0) {
         const len = x - start;
         const maxLen = y >= y0 ? maxW * (0.5 + (y - y0) / (y1 - y0 + 1)) : maxW * 0.5 * Math.max(0.3, (y - ys) / (y0 - ys + 1));
-        if (len >= minW && len <= maxLen) pts.push({ x: start + len / 2, y });
+        if (len >= minW && len <= maxLen && ridge(gray, row, start, x, w)) pts.push({ x: start + len / 2, y });
         start = -1;
       }
     }
@@ -73,11 +73,8 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
     let sxy = 0, syy = 0; for (const c of best.inl) { sxy += (c.y - my) * (c.x - mx); syy += (c.y - my) ** 2; }
     const b = syy > 0 ? sxy / syy : best.b, a = mx - b * my;
     if (Math.sign(b) !== sign) return null;
-    return { xBottom: a + b * y1, xTop: a + b * y0, yBottom: y1, yTop: y0, inliers: n };
+    return { xBottom: a + b * y1, xTop: a + b * y0, yBottom: y1, yTop: y0, inliers: n, pts: best.inl };
   };
-  const mid = w / 2, near = pts.filter(p => p.y >= y0);
-  let left = fit(near.filter(p => p.x < mid), -1);
-  let right = fit(near.filter(p => p.x >= mid), 1);
   // Perspektiv: linjene skal peke mot et forsvinningspunkt over analyseområdet og nær midten av bildet.
   // Forlenget til horisonten (her antatt rundt 0,45·h) må hver linje ende i midtre halvdel.
   const atY = (L, y) => L.xBottom + (L.xTop - L.xBottom) * (y - L.yBottom) / (L.yTop - L.yBottom);
@@ -85,8 +82,48 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
   // I sving (buede linjer på) kan de rette linjene nær bilen peke lenger til siden
   const lo = curve ? 0.02 : 0.2, hi = curve ? 0.98 : 0.8;
   const plausible = L => L && atY(L, yh) > w * lo && atY(L, yh) < w * hi;
-  if (!plausible(left)) left = null;
-  if (!plausible(right)) right = null;
+  // 0.12.5: opptil tre kandidater per side (den sterkeste, så den sterkeste av resten osv.). Veikant, rekkverk og
+  // brøytestikker er ofte lengre og tydeligere enn en stiplet feltlinje, men ligger lenger ut. Valget tar derfor den
+  // innerste kandidaten som er rimelig sterk, og den som ligger der linjen var i forrige bilde (prev) når den finnes.
+  const mid = w / 2, near = pts.filter(p => p.y >= y0);
+  const candidates = (cand, sign) => {
+    const out = [];
+    let rest = cand;
+    for (let k = 0; k < 3; k++) {
+      const L = fit(rest, sign);
+      if (!L) break;
+      const used = new Set(L.pts);
+      delete L.pts;
+      // Helningen i bildet er sideavstanden delt på kamerahøyden (x = A + B·d gir dx/dy = B). En linje i eget felt
+      // ligger høyst rundt 3 m til siden av kameraet; rekkverk og kanter lenger ut (eller høyere opp) helner mer.
+      const lat = Math.abs((L.xTop - L.xBottom) / (L.yTop - L.yBottom)) * camH;
+      if (plausible(L) && lat <= 3) out.push(L);
+      rest = rest.filter(p => !used.has(p));
+    }
+    return out;
+  };
+  const yRef = (y0 + y1) / 2;
+  const pick = (cs, side, before) => {
+    if (!cs.length) return null;
+    const strongest = Math.max(...cs.map(c => c.inliers));
+    const ok = cs.filter(c => c.inliers >= strongest * 0.4);
+    if (before) {
+      // Nær linjen i forrige bilde: den vinner (linjene flytter seg lite mellom to bilder)
+      const tol = w * 0.08;
+      const close = ok.filter(c => Math.abs(atY(c, yRef) - laneX(before, yRef)) < tol && Math.abs(c.xBottom - before.xBottom) < tol * 1.5);
+      if (close.length) return close.sort((a, b) => b.inliers - a.inliers)[0];
+    }
+    return ok.sort((a, b) => side === 'left' ? atY(b, yRef) - atY(a, yRef) : atY(a, yRef) - atY(b, yRef))[0];
+  };
+  const candL = candidates(near.filter(p => p.x < mid), -1), candR = candidates(near.filter(p => p.x >= mid), 1);
+  let left = pick(candL, 'left', prev && prev.left);
+  let right = pick(candR, 'right', prev && prev.right);
+  // Feltet kan ikke være en smal stripe: med begge linjer skal bredden midt i analyseområdet passe med feltbredden
+  // sett fra kamerahøyden (grovt, horisonten er bare antatt). Er feltet altfor smalt, er den svakeste linjen feil.
+  if (left && right && laneWidth > 0 && camH > 0) {
+    const want = laneWidth / camH * Math.max(1, yRef - yh), got = atY(right, yRef) - atY(left, yRef);
+    if (got < want * 0.45) { if (left.inliers >= right.inliers) right = null; else left = null; }
+  }
   if (left && right) {
     const xi = (a, b) => { const sa = (a.xTop - a.xBottom) / (a.yTop - a.yBottom), sb = (b.xTop - b.xBottom) / (b.yTop - b.yBottom); const y = (b.xBottom - a.xBottom + sa * a.yBottom - sb * b.yBottom) / (sa - sb); return { y, x: a.xBottom + sa * (y - a.yBottom) }; };
     const v = xi(left, right);
@@ -114,6 +151,21 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
     if (width && seenL.curve && seenR.curve) { const dB = seenR.curve.B - seenL.curve.B; if (dB > 0) camHeight = Math.round(laneWidth / dB * 100) / 100; }
   }
   return { left, right, offset, width, points: pts.length, night: !!night, curve: shape ? { C: shape.C, kappa: shape.kappa, vh: shape.vh } : null, camH: camHeight };
+}
+
+/* Feltlinjen er en lys rygg (0.12.5): lysere enn asfalten rett på begge sider. Overgangen fra asfalt til lys grus,
+   gress, fortau eller snøkant er et trinn (lyst bare på den ene siden) og tas ikke med. Det var det som oftest ble
+   tatt for en feltlinje ute på siden. Ved bildekanten holder det med den ene siden. */
+function ridge(gray, row, start, end, w) {
+  const len = end - start, f = Math.max(2, Math.min(6, len));
+  let m = 0; for (let x = start; x < end; x++) m += gray[row + x]; m /= len;
+  const side = (a, b) => { a = Math.max(0, a); b = Math.min(w, b); if (b - a < 2) return null; let s = 0; for (let x = a; x < b; x++) s += gray[row + x]; return s / (b - a); };
+  const l = side(start - 1 - f, start - 1), r = side(end + 1, end + 1 + f);
+  if (l === null && r === null) return false;
+  // Innsiden (mot midten av bildet) er asfalt og skal være tydelig mørkere. Utsiden kan være grus eller gress, men
+  // linjen skal likevel skille seg litt ut fra den.
+  const inner = (start + end) / 2 < w / 2 ? r : l, outer = inner === r ? l : r;
+  return (inner === null || m - inner >= 15) && (outer === null || m - outer >= 6);
 }
 
 /* x i bildet for en linje på høyde y: buet (curve) eller rett */

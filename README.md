@@ -142,6 +142,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.12.5 – lane lines stay on the lane
+
+- The road camera often took the road edge, a kerb, a guardrail or a snow pole for a lane line, so the green lane was a thin strip off to the side.
+- A lane line must now be a bright stripe with darker asphalt on the inside. A step from asphalt to a bright pavement, gravel or grass is no longer a line.
+- Up to three candidate lines per side; the inner one that is reasonably strong wins, and the one where the line was in the previous frame is preferred.
+- Lines leaning more than a lane line can (over 3 m to the side) and lanes that are far too narrow are thrown out. The camera-height estimate only accepts 0.8–1.8 m.
+
 ## What's new in 0.12.4 – motion data again
 - **The bug:** «Før du kjører» got no motion data on the phone.
   - Since 0.11.5 the check starts by itself, without a tap.

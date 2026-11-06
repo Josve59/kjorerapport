@@ -243,12 +243,16 @@ function roadTick() {
     // Buede linjer (0.10.3): forventet sving og feltbredde fra veidata og GPS, og den andre linjen der den skal være
     const base = roadBottom ? { top: Math.max(0.25, roadBottom - 0.2), bottom: roadBottom - 0.02, horizon: Math.max(0.15, roadBottom - 0.25), minInl: 0.15, maxBg: 230 } : { top: 0.6, bottom: 0.92, horizon: 0.45 };
     const laneW = shape.laneWidth || LANE_WIDTH;
+    // Linjene kameraet så i forrige bilde (ikke de tegnet etter feltbredden), så valget holder seg til samme linje (0.12.5)
+    const pv = lastView && lastView.lane && lastView.lane.W === W && performance.now() - (lastView.lane.at || 0) < 600 ? lastView.lane : null;
+    const prev = pv ? { left: pv.left && !pv.left.predicted ? pv.left : null, right: pv.right && !pv.right.predicted ? pv.right : null } : null;
     const ln = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
-      focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true });
-    if (Number.isFinite(ln.camH) && ln.camH > 0.5 && ln.camH < 5) camHEst += (ln.camH - camHEst) * 0.05;
+      focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true, prev });
+    // Kamerahøyden fra feltbredden: telefonen står i en holder ved rattet, så bare rimelige høyder tas med (0.12.5)
+    if (Number.isFinite(ln.camH) && ln.camH > 0.8 && ln.camH < 1.8) camHEst += (ln.camH - camHEst) * 0.05;
     const seenL = !!ln.left && !ln.left.predicted, seenR = !!ln.right && !ln.right.predicted;
     r.lane = { l: seenL, r: seenR, offset: ln.offset, ...(ln.curve ? { k: Math.round(ln.curve.kappa * 1e4) / 1e4 } : {}), ...(shape.laneWidth ? { lw: shape.laneWidth } : {}) };
-    Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H, kappa: ln.curve ? ln.curve.kappa : null,
+    Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H, at: performance.now(), kappa: ln.curve ? ln.curve.kappa : null,
       prior: shape.kappa, src: shape.src, lanes: shape.lanes, laneWidth: shape.laneWidth }, lum: r.lum, roadBottom });
   } catch { /* ingen feltlinjer */ }
   ema('laneMs', performance.now() - t2);

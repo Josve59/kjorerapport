@@ -66,3 +66,27 @@ test('dashbordkant: øverste tydelige overgang fra vei til mørkt dashbord fra 6
   const g = new Uint8Array(4 * 3).fill(10); g[4] = 50;
   assert.equal(rowMeans(g, 4, 3)[1], 20);
 });
+
+/* 0.12.5: veikanter og ytre linjer tas ikke for feltet */
+test('feltlinjer: overgang fra asfalt til lyst fortau er ingen feltlinje', () => {
+  const w = 160, h = 120, g = road(w, h, [[38, 74]]);
+  // Lyst fortau til høyre for en kant som går mot forsvinningspunktet
+  for (let y = Math.floor(h * 0.5); y < h; y++) {
+    const f = (y - h * 0.5) / (h * 0.45), xe = Math.round(86 + (127 - 86) * f);
+    for (let x = xe; x < w; x++) g[y * w + x] = 190;
+  }
+  const r = detectLanes(g, w, h);
+  assert.ok(r.left, 'venstre linje finnes');
+  assert.equal(r.right, null, 'fortauskanten er ikke en feltlinje: ' + JSON.stringify(r.right));
+});
+test('feltlinjer: den innerste linjen velges, ikke en sterkere linje lenger ut', () => {
+  const w = 160, h = 120;
+  // Stiplet kantlinje i feltet, og en heltrukken lys linje lenger ut (rekkverk, kant av gang- og sykkelvei)
+  const g = road(w, h, [[38, 74], [118, 84]], { dashed: true });
+  const outer = road(w, h, [[156, 92]]);
+  for (let i = 0; i < g.length; i++) if (outer[i] === 210) g[i] = 210;
+  const r = detectLanes(g, w, h);
+  assert.ok(r.right, 'høyre linje finnes');
+  const want = 118 + (84 - 118) * (1 - (h * 0.92 - h * 0.5) / (h * 0.45));
+  assert.ok(Math.abs(r.right.xBottom - want) < 4, `innerste linje: ${r.right.xBottom} mot ${want}`);
+});
