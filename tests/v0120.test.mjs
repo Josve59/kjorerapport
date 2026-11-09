@@ -153,3 +153,58 @@ test('førerkamera: føreren er ansiktet lengst mot venstre, og ledsageren tas i
   assert.equal(p.step([l], 1000), 0, 'etter et kvarter starter det helt på nytt');
   assert.equal(p.step([], 1001), -1);
 });
+
+/* ---------- Føreren fra kalibreringen, ledsagerens side skjult (0.13.2) ---------- */
+import { createFaceMask } from '../js/calibcheck.js';
+test('førerkamera: plassen fra kalibreringen gjelder fra start, ikke det første ansiktet', () => {
+  const home = { x: 34.5, y: 5.8, z: -110.3 };                    // kalibreringen 6. nov.
+  const lean = { x: 12, y: 18, z: -50 }, d = { x: 34, y: 6, z: -110 }, l = { x: -45, y: 8, z: -120 };
+  // Uten kalibrering: føreren som lener seg mot telefonen ved start blir førerplassen, og føreren i setet avvises
+  const old = createDriverPicker();
+  assert.equal(old.step([lean], 0), 0);
+  assert.equal(old.step([d], 0.2), -1, 'slik det gikk 9. nov. kl. 20.12');
+  // Med kalibreringen: begge godtas, ledsageren aldri, og avvisningen sier at det var ledsagersiden
+  const p = createDriverPicker({ home });
+  assert.equal(p.step([l], 0), -1); assert.deepEqual(p.rejectedSide, [0]);
+  assert.equal(p.step([lean], 0.1), 0);
+  for (let t = 0.2; t < 6; t += 0.1) assert.equal(p.step([lean], t), 0);
+  assert.equal(p.step([d], 6), 0, 'tilbake i setet: godtas selv om førerplassen har glidd mot telefonen');
+  assert.deepEqual(p.rejectedSide, []);
+  assert.equal(p.step([l], 6.1), -1); assert.deepEqual(p.rejectedSide, [0]);
+  assert.equal(p.step([l], 2000), -1, 'etter et kvarter uten fører: fortsatt ikke ledsageren');
+});
+test('førerkamera: kalibreringen slippes når føreren aldri passer (holderen flyttet opp eller ned)', () => {
+  const p = createDriverPicker({ home: { x: 34.5, y: 5.8, z: -110.3 } });
+  const moved = { x: 30, y: -50, z: -95 };                         // samme side, men langt lavere
+  let k = -1, t = 0;
+  for (; t < 10 && k < 0; t += 0.125) k = p.step([moved], t);
+  assert.equal(k, 0); assert.ok(t > 4 && t < 6, `godtatt etter ${t} s`);
+  // Ledsageren alene slipper aldri kalibreringen
+  const q = createDriverPicker({ home: { x: 34.5, y: 5.8, z: -110.3 } });
+  for (let s = 0; s < 30; s += 0.125) assert.equal(q.step([{ x: -45, y: 8, z: -120 }], s), -1);
+});
+test('førerkamera: ledsagerens side males svart når modellen har funnet ledsageren, aldri over føreren', () => {
+  const m = createFaceMask();
+  const drv = { min: 0.62, max: 0.86 }, pas = { min: 0.08, max: 0.3 };
+  for (let t = 0; t < 2; t += 0.125) m.driver(drv, t);
+  m.passenger(pas, 2.1); m.passenger(pas, 2.2);
+  assert.equal(m.mask, null, 'to ganger er ikke nok');
+  m.passenger(pas, 2.3);
+  assert.deepEqual(m.mask, { from: 0, to: 0.33 });
+  // Ledsageren lener seg mot føreren: skjermen følger, men stopper 0,2 fra midten av førerens ansikt
+  for (let t = 2.4; t < 6; t += 0.125) m.passenger({ min: 0.3, max: 0.6 }, t);
+  assert.equal(m.mask.to, 0.54);
+  // Ingen fører på et minutt: skjermen fjernes og læres på nytt
+  m.tick(60); assert.ok(m.mask); m.tick(70); assert.equal(m.mask, null);
+  // Avviste ansikter tett på føreren (feil i velgeren) gir ingen skjerm, heller ikke uten kjent fører
+  const n = createFaceMask();
+  for (let t = 0; t < 1; t += 0.125) n.passenger(pas, t);
+  assert.equal(n.mask, null, 'førerens plass i bildet er ikke kjent ennå');
+  const n2 = createFaceMask();
+  n2.driver(drv, 1); for (let t = 1; t < 2; t += 0.125) n2.passenger({ min: 0.55, max: 0.75 }, t);
+  assert.equal(n2.mask, null);
+  // Ledsager til høyre i bildet (speilvendt kamera): skjermen på høyre side
+  const r = createFaceMask();
+  r.driver({ min: 0.1, max: 0.35 }, 0); for (let t = 0; t < 1; t += 0.125) r.passenger({ min: 0.7, max: 0.92 }, t);
+  assert.deepEqual(r.mask, { from: 0.67, to: 1 });
+});

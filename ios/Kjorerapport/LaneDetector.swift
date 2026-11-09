@@ -20,6 +20,7 @@ nonisolated final class LaneDetector: @unchecked Sendable {
     private var busy = false
     private var lastStart: CFTimeInterval = 0
     private var roadBottom: Double?
+    private var gamma = 1.0   // under 1 i mørket: bildet lysnes (0.13.2, regnet ut i nettappen, lanes.js laneGamma)
     private var models: [(units: String, model: MLModel)] = []
     private var chosen: Int?
     private var trials: [[Double]] = []
@@ -51,8 +52,8 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         return !models.isEmpty
     }
 
-    func configure(roadBottom: Double?) {
-        lock.lock(); self.roadBottom = roadBottom; lock.unlock()
+    func configure(roadBottom: Double?, gamma: Double = 1) {
+        lock.lock(); self.roadBottom = roadBottom; self.gamma = min(1, max(0.3, gamma)); lock.unlock()
     }
 
     /// Nytt veibilde: høyst rundt 8 ganger i sekundet (3 når telefonen er varm), og bare når forrige svar er ferdig.
@@ -63,11 +64,11 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         guard !busy, !models.isEmpty, now - lastStart >= (hot ? 0.33 : 0.125) else { lock.unlock(); return }
         busy = true
         lastStart = now
-        let bottom = roadBottom
+        let bottom = roadBottom, gamma = self.gamma
         lock.unlock()
         queue.async { [self] in
             defer { lock.lock(); busy = false; lock.unlock() }
-            guard let out = run(frame, roadBottom: bottom) else { return }
+            guard let out = run(frame, roadBottom: bottom, gamma: gamma) else { return }
             onResult?(out)
         }
     }
@@ -80,7 +81,7 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         return (y1 - bh, y1)
     }
 
-    private func run(_ frame: CameraHub.Frame, roadBottom: Double?) -> [String: Any]? {
+    private func run(_ frame: CameraHub.Frame, roadBottom: Double?, gamma: Double) -> [String: Any]? {
         let w = frame.width, h = frame.height
         let (y0, y1) = Self.band(w: w, h: h, roadBottom: roadBottom)
         guard let pool else { return nil }
@@ -89,11 +90,17 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         guard let input = pb else { return nil }
         let inner = Double(Self.height - 2 * Self.pad)
         // Core Image har origo nederst til venstre: båndet flyttes ned i hjørnet, skaleres til 640×360 og løftes 12 rader
-        let img = CIImage(cvPixelBuffer: frame.buffer)
+        var img = CIImage(cvPixelBuffer: frame.buffer)
             .cropped(to: CGRect(x: 0, y: Double(h) - y1, width: Double(w), height: y1 - y0))
             .transformed(by: CGAffineTransform(translationX: 0, y: -(Double(h) - y1)))
             .transformed(by: CGAffineTransform(scaleX: Double(Self.width) / Double(w), y: inner / (y1 - y0)))
             .transformed(by: CGAffineTransform(translationX: 0, y: Double(Self.pad)))
+        // Mørkt (0.13.2): lysnes som bildet til bilgjenkjenningen, ellers fant modellen få linjer under lys 30
+        if gamma < 0.99, let f = CIFilter(name: "CIGammaAdjust") {
+            f.setValue(img, forKey: kCIInputImageKey)
+            f.setValue(gamma, forKey: "inputPower")
+            if let o = f.outputImage { img = o }
+        }
         let gray = CIImage(color: CIColor(red: 114 / 255, green: 114 / 255, blue: 114 / 255))
             .cropped(to: CGRect(x: 0, y: 0, width: Self.width, height: Self.height))
         ci.render(img.composited(over: gray), to: input, bounds: CGRect(x: 0, y: 0, width: Self.width, height: Self.height), colorSpace: nil)
@@ -151,7 +158,7 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         lock.lock()
         let units = models[chosen ?? index].units
         lock.unlock()
-        return ["pts": pts, "road": edges, "w": w, "h": h, "y0": y0.rounded(), "y1": y1.rounded(),
+        return ["pts": pts, "road": edges, "w": w, "h": h, "y0": y0.rounded(), "y1": y1.rounded(), "gamma": gamma,
                 "age": max(0, (CACurrentMediaTime() - frame.time) * 1000), "ms": ms,
                 "backend": "TwinLiteNet+ · \(units)\(chosen == nil ? " (måler)" : "")"]
     }

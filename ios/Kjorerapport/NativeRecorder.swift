@@ -101,7 +101,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             CameraHub.shared.stop()
         case "camConfig":
             detector.configure(roadBottom: body["roadBottom"] as? Double, dark: body["dark"] as? Bool ?? false)
-            laneDetector.configure(roadBottom: body["roadBottom"] as? Double)
+            laneDetector.configure(roadBottom: body["roadBottom"] as? Double, gamma: body["laneGamma"] as? Double ?? 1)
         case "geoStart":
             watching = true
             startLocation()

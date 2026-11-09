@@ -117,3 +117,46 @@ test('veikamera: brøytestikker er ikke folk, møtende biler er ikke bilen foran
   const ahead = [0, 1, 2, 3].map(i => ({ t: 5 + i * 0.5, cars: 1, people: 0, lead: { cls: 'car', dist: 30 - i * 0.5, wpx: 50 } }));
   assert.equal(roadSummary(ahead, pts).follow.length, 4);
 });
+
+/* ---------- Huslys er ikke biler (0.13.2) ---------- */
+import { onRoad, roadDets } from '../kamera/js/road.js';
+/* Veien som feltmodellen så den på nattbildene 2. nov. (kamerabildet 720×1280): en spiss ved 52 % av høyden som
+   blir full bredde rett over dashbordkanten. Rader hver 5. piksel, [y, venstre, høyre]. */
+function roadRows({ top = 665, full = 820, bottom = 905, tip = [353, 410] } = {}) {
+  const rows = [];
+  for (let y = top; y <= bottom; y += 5) {
+    const f = Math.min(1, (y - top) / (full - top));
+    rows.push([y, Math.round(tip[0] * (1 - f)), Math.round(tip[1] + (720 - tip[1]) * f)]);
+  }
+  return { rows, y0: 581 };
+}
+test('veikamera: biler må stå på veien foran – huslys over og ved siden av veien er ikke biler', () => {
+  const W = 720, H = 1280, road = roadRows();
+  const box = (x, bottom, w = 30, h = 24) => ({ cls: 'car', score: 0.7, x, y: bottom - h, w, h });
+  assert.ok(onRoad(box(366, 680), road, W, H), 'bil langt framme på veien');
+  assert.ok(onRoad(box(366, 655), road, W, H), 'litt over spissen: innenfor slingringsmonnet');
+  assert.ok(!onRoad(box(366, 600), road, W, H), 'opplyst vindu over der veien slutter');
+  assert.ok(!onRoad(box(640, 700, 40, 30), road, W, H), 'huslys langt til høyre for veien');
+  assert.ok(onRoad(box(560, 720, 50, 40), road, W, H), 'parkert bil rett utenfor veikanten (x 520)');
+  assert.ok(onRoad(box(0, 880, 60, 50), road, W, H), 'nær bilen godtas alt');
+  // Uten svar fra feltmodellen, og når veien ikke smalner til en spiss (borte i mørket) eller går over båndet: ingen sjekk
+  assert.ok(onRoad(box(366, 600), null, W, H));
+  assert.ok(onRoad(box(366, 600), { rows: road.rows.slice(0, 5), y0: 581 }, W, H), 'for få rader');
+  const short = { rows: road.rows.filter(r => r[0] >= 760), y0: 581 };
+  assert.ok(onRoad(box(366, 600), short, W, H), 'veien forsvinner i mørket uten å smalne');
+  assert.ok(onRoad(box(366, 500), roadRows({ top: 585 }), W, H), 'veien fortsetter over båndet');
+  // I gjenkjenningen: huslyset midt i bildet blir ikke bilen foran, og telles ikke
+  const light = box(345, 560, 40, 30), car = box(340, 700, 40, 32);
+  assert.ok(processDetections([light], W, H, { roadBottom: 0.75 }).lead, 'uten veien: huslyset ble «bil foran»');
+  const r = processDetections([light, car], W, H, { roadBottom: 0.75, road });
+  assert.equal(r.cars, 1); assert.equal(r.lead.wpx, 40); assert.equal(r.lead.box.y, 668);
+  assert.deepEqual(roadDets([light, car, { cls: 'person', score: 0.8, x: 650, y: 560, w: 20, h: 50 }], W, H, 0.75, road).map(d => d.y), [668, 560], 'folk på fortauet vises fortsatt');
+});
+test('veikamera i mørket: røde lys utenfor veien er ikke baklys', () => {
+  const w = 320, h = 240, f = focalPx(w, h), sep = TAIL_SEP * f / 15;
+  const frame = nightFrame([[160 - sep / 2, 150, 3], [160 + sep / 2, 150, 3]]);
+  assert.ok(detectTaillights(frame, w, h, { onRoad: () => true }).lead);
+  let asked = null;
+  assert.equal(detectTaillights(frame, w, h, { onRoad: b => { asked = b; return false; } }).lead, null);
+  assert.ok(Math.abs(asked.x - (160 - sep / 2)) < 1.5 && Math.abs(asked.w - sep) < 2 && Math.abs(asked.y - 150) < 1.5, JSON.stringify(asked));
+});

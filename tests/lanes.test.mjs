@@ -119,3 +119,15 @@ test('feltlinjer fra feltmodellen: punktene gir linjene, bildet brukes ikke', ()
   assert.ok(r.left && r.right && r.ml, JSON.stringify(r));
   assert.equal(detectLanes(blank, w, h, { points: [] }).left, null);
 });
+
+/* ---------- Lysere bilde til feltmodellen i mørket (0.13.2) ---------- */
+import { laneGamma } from '../kamera/js/lanes.js';
+test('feltmodellen i mørket: bildet lysnes under lys 50, mest i det mørkeste, og glir over uten hopp', () => {
+  assert.equal(laneGamma(60), 1); assert.equal(laneGamma(50), 1); assert.equal(laneGamma(null), 1); assert.equal(laneGamma(0), 1);
+  assert.equal(laneGamma(15), 0.45, 'turen 6. nov. kl. 22.39, motorveien i stummende mørke');
+  assert.equal(laneGamma(27), 0.6, 'turen 9. nov. kl. 17.50, minutt 12–13');
+  // Snittet løftes mot 70 i det mørke, og kurven går jevnt mot 1
+  for (const lum of [10, 20, 30]) { const g = laneGamma(lum); assert.ok(Math.abs(255 * (lum / 255) ** g - 70) < 12, `lys ${lum} → ${Math.round(255 * (lum / 255) ** g)}`); }
+  let prev = laneGamma(4);
+  for (let lum = 5; lum <= 55; lum++) { const g = laneGamma(lum); assert.ok(g >= prev && g - prev <= 0.1, `lys ${lum}: ${prev} → ${g}`); prev = g; }
+});

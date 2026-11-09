@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.1';
+export const APP_VERSION = '0.13.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -500,9 +500,12 @@ function leftDuringStart(hash) {
   return true;
 }
 
+/* Førerens plass fra kalibreringen (0.13.2): førervelgeren i facecam.js starter der, ikke ved det første ansiktet */
+const driverHome = () => { const c = getCalib(); return (c && c.pos) || null; };
+
 async function ensureCamera(videoEl, onStatus = () => {}) {
   if (cam.state().running && cam.state().road === roadWanted()) { await cam.attachVideo(videoEl); return; }
-  await cam.startCamera(videoEl, { road: roadWanted() });
+  await cam.startCamera(videoEl, { road: roadWanted(), home: driverHome() });
   await cam.loadModel(onStatus);
   cam.startLoop(8);
 }
@@ -628,6 +631,8 @@ async function runCalibration() {
   overlay.hidden = false;
   const offFace = cam.onPose(p => { face.textContent = p ? 'Kameraet ser ansiktet' : 'Kameraet ser ikke ansiktet – snu deg litt tilbake'; face.dataset.ok = p ? '1' : '0'; });
   const byTarget = {};
+  // Den gamle plassen brukes ikke mens det kalibreres (0.13.2): holderen kan være flyttet, og det er derfor de kalibrerer
+  cam.setDriverHome(null);
   try {
     for (const [i, step] of CALIB_STEPS.entries()) {
       progress.textContent = `Steg ${i + 1} av ${CALIB_STEPS.length}`;
@@ -645,18 +650,19 @@ async function runCalibration() {
       byTarget[step.id] = got;
     }
   } finally { offFace(); overlay.hidden = true; calibAbort = null; }
-  if (cancelled) { stopSpeaking(); return null; }
+  if (cancelled) { stopSpeaking(); cam.setDriverHome(driverHome()); return null; }
   vibrate([30, 60, 30]);
   const c = calibrationFromSamples(byTarget);
   if (c.ok) {
     const pos = facePosition(byTarget.forward || []);   // hvor ansiktet sto, så appen ser om holderen flytter seg (0.12.0)
     if (pos) c.pos = pos;
-    c.at = new Date().toISOString(); saveCalib(c); speak('Ferdig. Kalibreringen er lagret.');
+    c.at = new Date().toISOString(); saveCalib(c); cam.setDriverHome(driverHome()); speak('Ferdig. Kalibreringen er lagret.');
     // To speil nær hverandre (v0.11.1): lagret, men si fra, så de kan kalibrere på nytt med tydeligere hodebevegelser
     if (c.close) infoDialog({ title: 'Kalibreringen er lagret, men …', text: `${closeMirrorText(c.close)}, så appen kan blande dem. Kalibrer gjerne på nytt og snu hodet tydelig mot hvert speil. Hjelper ikke det, vinkle holderen litt mer mot føreren (den skal fortsatt stå ved rattet).` });
     else toast('Kalibreringen er lagret.', { type: 'ok' });
     return c;
   }
+  cam.setDriverHome(driverHome());
   speak('Kalibreringen ble ikke god nok.');
   infoDialog({ title: 'Kalibreringen ble ikke god nok', text: c.problem === 'missing' ? 'Kameraet så ikke ansiktet lenge nok i ett eller flere trinn. Sjekk at ansiktet er godt synlig og at det er lyst nok.' : c.problem === 'close' ? 'Telefonen ser for liten forskjell mellom rett fram og et av speilene. Vinkle holderen litt mer mot føreren (den skal stå ved rattet), og snu hodet tydelig mot speilet.' : 'Venstre og høyre speil ble ikke skilt fra hverandre. Prøv igjen, og snu hodet tydelig.' });
   return null;
@@ -1171,7 +1177,7 @@ function renderPrecheck() {
     if (leftDuringStart('#/sjekk')) return;
     if (camWanted()) {
       try {
-        await cam.startCamera($('#pre-video'), { road: roadWanted() });
+        await cam.startCamera($('#pre-video'), { road: roadWanted(), home: driverHome() });
         await cam.loadModel(t => setCheck(camCheck, null, t));
         cam.startLoop(8);
         if (camUnsub) camUnsub();
@@ -1743,9 +1749,10 @@ function roadShapeText(ln) {
    over speilene fra kalibreringen med en prikk for hvor føreren ser nå (fylt: blikket med øynene, ring: bare hodet),
    hva appen tror føreren ser på, og de siste blikkene. Alt glir mykt (punktene 50 ms, blikket 90 ms). */
 function drawFaceView(g, cw, ch, v, st, info) {
+  const maskText = v.mask ? '<div class="muted">Ledsagerens side er skjult for ansiktsmodellen</div>' : '';
   if (!v.lm || !v.pose) {
     camEase.face = null;
-    info.innerHTML = '<div>Førerkamera</div><div class="muted">Ser ikke ansiktet – juster holderen</div>';
+    info.innerHTML = '<div>Førerkamera</div><div class="muted">Ser ikke ansiktet – juster holderen</div>' + maskText;
     return;
   }
   const now = performance.now(), dt = Math.min(250, Math.max(0, now - (camEase.t || now)));
@@ -1754,6 +1761,13 @@ function drawFaceView(g, cw, ch, v, st, info) {
   // Kamerabildet vises speilvendt med «contain»
   const s = Math.min(cw / v.w, ch / v.h), ox = (cw - v.w * s) / 2, oy = (ch - v.h * s) / 2;
   const X = x => ox + (1 - x) * v.w * s, Y = y => oy + y * v.h * s;
+  // Ledsagerens side, malt svart for ansiktsmodellen (0.13.2): mørk her også, så det synes
+  if (v.mask) {
+    const x0 = X(v.mask.to), x1 = X(v.mask.from);
+    g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(x0, oy, x1 - x0, v.h * s);
+    g.fillStyle = 'rgba(255,255,255,.8)'; g.font = '600 12px system-ui, sans-serif'; g.textBaseline = 'top';
+    g.fillText('Skjult (ledsager)', x0 + 8, oy + 8);
+  }
   const c = getCalib(), gz = c ? toGaze(v.pose, c) : v.pose, gc = c ? gazeCalib(c) : null;
   // Glatting av punktene og blikket
   let F = camEase.face;
@@ -1809,7 +1823,8 @@ function drawFaceView(g, cw, ch, v, st, info) {
     `<div>Førerkamera · <strong style="color:${col}">${c ? CLASS_LABEL[cls] : 'Ser ansiktet'}</strong></div>`,
     `<div>Hode ${Math.round(p.yaw)}° / ${Math.round(p.pitch)}° · ${Number.isFinite(p.ex) ? `øyne ${Math.round(p.ex)}° / ${Math.round(p.ey)}°` : p.blink > 0.55 ? 'øyne lukket' : 'øyne –'}</div>`,
     `<div class="muted">${useGaze(c) ? 'Blikket = hode + øyne' : c ? 'Bare hodet – kalibrer på nytt for å ta med øynene' : 'Ikke kalibrert'} · ${st.fps.toFixed(0)} bilder/s · ${v.faceMs} ms</div>`,
-    faceLog.length ? `<div class="muted">${faceLog.map(l => `${CLASS_LABEL[l.cls]} ${l.dur.toFixed(1).replace('.', ',')} s (${Math.round(nowS - l.t)} s siden)`).join('<br>')}</div>` : ''
+    faceLog.length ? `<div class="muted">${faceLog.map(l => `${CLASS_LABEL[l.cls]} ${l.dur.toFixed(1).replace('.', ',')} s (${Math.round(nowS - l.t)} s siden)`).join('<br>')}</div>` : '',
+    maskText
   ].join('');
 }
 async function finishRecording() {

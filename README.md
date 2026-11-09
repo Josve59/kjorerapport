@@ -142,6 +142,14 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.2 – no cars on houses, lane lines in the dark, the driver not the companion
+
+- Lit windows and lamps on houses are no longer shown or counted as cars. A car must now stand on the road the lane model sees, or right next to it (parked cars): a box whose bottom is well above where the road ends, or far to the side of it, is dropped. Red lights off the road are no longer taken for tail lights either. Without an answer from the lane model nothing changes.
+- The lane model gets a brightened picture in the dark, as the car detection already did. On the drives of 6 and 9 November it found both lines in 10–28 % of frames below light level 30 (at 40 km/h or more), against 77–84 % from light level 40.
+- The face camera starts from where the driver sat during calibration instead of the first face it sees. On 9 November at 20:12 the driver was rejected for 3 minutes after the start, most likely because the picker learned the seat from the driver leaning towards the phone.
+- When the face model has found the companion instead of the driver, the companion's side of the picture is blacked out for the model, so it looks again and finds the driver. The face camera view shows the hidden part. On 9 November «another face than the driver's» was 25 % and 44 % of frames.
+- `tools/turrapport.mjs` also shows lane lines in the dark, how often the lane model's picture was brightened, cars dropped for being off the road, and how often the companion's side was hidden.
+
 ## What's new in 0.13.1 – the driver's face in the dark, no false 30 zones
 
 - The face camera finds the driver far more often in the dark again. Looking for two faces (0.12.6) made the face model search for a new face in every frame instead of following the one it had: 33 ms per frame instead of 9, and on the drives of 6 November it found the driver in 28 % of frames at a light level where 0.12.5 found 88 %. It now follows one face again; the driver picker still rejects the companion's face.

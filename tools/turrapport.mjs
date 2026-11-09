@@ -47,6 +47,20 @@ function laneStats(road) {
   return { n: rows.length, both, one, none, flips, perMin: sec > 0 ? (flips * 60) / sec : 0, median };
 }
 
+/* Feltlinjene i mørket (lys under 30) i minst 40 km/t, der veien som regel har oppmalte linjer */
+function darkLanes(road, loc) {
+  const fixes = loc.filter(p => Number.isFinite(p.speed));
+  const kmhAt = t => {
+    if (!fixes.length) return NaN;
+    let lo = 0, hi = fixes.length - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (fixes[m].t < t) lo = m + 1; else hi = m; }
+    return fixes[lo].speed * 3.6;
+  };
+  let n = 0, both = 0;
+  for (const r of road) if (r.lane && Number.isFinite(r.lum) && r.lum < 30 && kmhAt(r.t) >= 39.5) { n++; if (r.lane.l && r.lane.r) both++; }
+  return { n, both };
+}
+
 /* Fartsvarslene lagres ikke, så de regnes ut på nytt: GPS-farten mot fartsgrensen fra NVDB, der et skilt fra
    kameraet gjelder til neste skilt, 3 km eller ny NVDB-strekning, slik som under kjøring (app.js / signs.js).
    Varselet regnes ut selv om ledsageren hadde slått det av i innstillingene. */
@@ -95,12 +109,17 @@ function report(drive, input, file, exportVersion) {
     line('Ansikt', `funnet i ${pct(ok, head.length)} av ${n0(head.length)} bilder (${perSec(head.length, sec)} per s), ${ms(perf && perf.faceMs || 0)} per bilde`);
     // Fra 0.13.1: hvorfor bildene var uten ansikt (tellerne gjelder hele kameraøkten)
     if (perf && perf.faceFrames) more(`uten ansikt: ingen i bildet ${pct(perf.faceNone, perf.faceFrames)} · annet ansikt enn førerens ${pct(perf.faceOther, perf.faceFrames)}`);
+    // Fra 0.13.2: ledsagerens side av bildet skjult, så modellen ikke følger ledsageren
+    if (perf && perf.faceFrames && 'faceMasked' in perf) more(`ledsagerens side skjult i ${pct(perf.faceMasked, perf.faceFrames)} av bildene`);
   } else line('Ansikt', 'ingen data fra førerkameraet lagret med turen');
 
   const ls = laneStats(road);
   if (ls.n) {
     line('Feltlinjer', `begge ${pct(ls.both, ls.n)} · én ${pct(ls.one, ls.n)} · ingen ${pct(ls.none, ls.n)} (${n0(ls.n)} bilder)`);
     more(`skifter ${n0(ls.flips)} ganger, ${n1(ls.perMin)} per min${ls.median !== null ? `; en tilstand varer typisk ${n1(ls.median)} s` : ''}`);
+    // I mørket på veier med linjer (0.13.2 lysner bildet til feltmodellen): 9. nov. var det 10–28 % her, mot ~80 % i lyset
+    const dk = darkLanes(road, loc);
+    if (dk.n >= 50) more(`i mørket (lys under 30, minst 40 km/t): begge ${pct(dk.both, dk.n)} av ${n0(dk.n)} bilder`);
   } else line('Feltlinjer', 'ingen data fra veikameraet lagret med turen');
 
   if (!perf) {
@@ -111,9 +130,11 @@ function report(drive, input, file, exportVersion) {
     // Tellerne gjelder hele kameraøkten (fra kameraet startet, kan være før turen), så de deles ikke på turens lengde
     if (!('laneMlFrames' in perf)) line('Feltmodell', `ikke med i ${version} (kom i 0.13.0); linjene er fra bildeanalysen`);
     else if (!perf.laneMlFrames) line('Feltmodell', 'kjørte ikke (ingen svar); linjene er fra bildeanalysen');
-    else line('Feltmodell', `kjørte: ${n0(perf.laneMlFrames)} svar, ${ms(perf.laneMlMs)} per bilde${perf.laneMl ? ` · ${perf.laneMl}` : ''}`);
+    else line('Feltmodell', `kjørte: ${n0(perf.laneMlFrames)} svar, ${ms(perf.laneMlMs)} per bilde${perf.laneMl ? ` · ${perf.laneMl}` : ''}${'laneMlDim' in perf ? ` · lysnet i mørket i ${pct(perf.laneMlDim, perf.laneMlFrames)}` : ''}`);
     if (!perf.dfineFrames) line('D-FINE', 'kjørte ikke (ingen svar)');
     else line('D-FINE', `${ms(perf.dfineMs)} per bilde · ${n0(perf.dfineFrames)} svar, fant noe i ${pct(perf.dfineAny, perf.dfineFrames)}${perf.dfine ? ` · ${perf.dfine}` : ''}`);
+    // Fra 0.13.2: biler som ikke sto på veien feltmodellen så (huslys), tatt bort
+    if ('roadKnown' in perf) more(perf.roadKnown ? `bil utenfor veien tatt bort i ${pct(perf.offRoad, perf.roadKnown)} av ${n0(perf.roadKnown)} bilder der veien var kjent` : 'veien var aldri kjent, så biler utenfor veien ble ikke tatt bort');
     const drops = perf.drops || 0, stalls = perf.stalls || 0;
     if (!drops && !stalls && !perf.slow) line('Varme', 'ingen tegn: aldri treg, kameraet stoppet aldri');
     else line('Varme', [

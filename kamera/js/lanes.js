@@ -292,6 +292,17 @@ function stretchDark(gray, w, y0, y1) {
   return out;
 }
 
+/* Lysere bilde til feltmodellen i mørket (0.13.2): i 40 km/t eller mer fant den begge linjene i 10–28 % av bildene med
+   lys (snitt 0–255) under 30, mot 77–84 % fra lys 40 (turene 6. og 9. nov.). Bilgjenkjenningen får allerede et lysnet
+   bilde. Gammakurven v → 255·(v/255)^g løfter snittet mot 70 i mørket, glidende til ingen endring ved lys 50.
+   Avrundet til 0,05, så appen bare får beskjed når den endres merkbart. 1 = uendret. */
+export function laneGamma(lum) {
+  if (!Number.isFinite(lum) || lum >= 50 || lum <= 0) return 1;
+  const target = lum <= 30 ? 70 : 70 - (lum - 30);   // 70 ved lys 30, ned til 50 ved lys 50
+  const g = Math.log(target / 255) / Math.log(lum / 255);
+  return Math.round(Math.max(0.45, Math.min(1, g)) * 20) / 20;
+}
+
 /* RGBA (fra canvas) → gråtoner */
 export function toGray(rgba, w, h) {
   const g = new Uint8Array(w * h);

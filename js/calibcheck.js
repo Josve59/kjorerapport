@@ -50,27 +50,82 @@ export function checkCalibration(calib, poses, now = Date.now()) {
    - Så: ansiktet nærmest førerens retning. Føreren kan lene seg fritt mot venstre (skulderblikk) og opptil `toward`
      grader mot ledsagersiden. Et ansikt lenger over mot høyre (ledsageren, rundt 35–40° unna) godtas ikke, heller
      ikke når føreren ikke har vært sett på lenge (mørkt i bilen). Etter `forgetSec` uten fører starter det på nytt.
-   poses: [{ x, y, z }] (z negativ foran kameraet). step(poses, t) gir indeksen til føreren eller -1. */
-export function createDriverPicker({ toward = 18, up = 25, farther = 1.6, forgetSec = 900 } = {}) {
-  let ref = null, seenAt = -Infinity;
+   poses: [{ x, y, z }] (z negativ foran kameraet). step(poses, t) gir indeksen til føreren eller -1.
+   0.13.2: med home (ansiktets plass fra kalibreringen) er det førerplassen fra start, og et ansikt der godtas alltid.
+   Turen 9. nov. kl. 20.12 ble ansiktet avvist i 3 minutter etter start: førerplassen var lært av det første ansiktet,
+   trolig føreren som lente seg mot telefonen da turen ble startet. Ansikter på førersiden av kalibreringen som likevel
+   ikke passer (40 på rad uten at noe godtas: holderen er flyttet opp/ned eller fram/tilbake) gjør at kalibreringen
+   ikke brukes mer. rejectedSide: indeksene som sist ble avvist fordi de sitter på ledsagersiden (til createFaceMask). */
+export function createDriverPicker({ toward = 18, up = 25, farther = 1.6, forgetSec = 900, home = null } = {}) {
+  let ref = null, seenAt = -Infinity, homeDir = null, misses = 0, side = [];
   const deg = 180 / Math.PI;
   const ok = p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z) && p.z < 0;
   const dir = p => ({ ax: Math.atan2(p.x, -p.z) * deg, ay: Math.atan2(p.y, -p.z) * deg, d: Math.hypot(p.x, p.y, p.z) });
+  const fitsTo = (x, r) => x.ax - r.ax >= -toward && Math.abs(x.ay - r.ay) <= up && x.d <= r.d * farther;
+  const setHome = p => { homeDir = ok(p) ? dir(p) : null; misses = 0; };
+  setHome(home);
   return {
     get ref() { return ref; },
+    get rejectedSide() { return side; },
+    setHome,
     step(poses, t) {
+      side = [];
       const c = (poses || []).map((p, i) => ({ i, ...(ok(p) ? dir(p) : {}) })).filter(x => Number.isFinite(x.ax));
       if (!c.length) return (poses || []).length === 1 ? 0 : -1;   // uten plassering: det ene ansiktet modellen fant
+      const fresh = !ref || t - seenAt > forgetSec;
+      if (fresh && homeDir) ref = homeDir;
       let pick;
-      if (!ref || t - seenAt > forgetSec) pick = c.reduce((a, b) => (b.ax > a.ax ? b : a));
+      if (fresh && !homeDir) pick = c.reduce((a, b) => (b.ax > a.ax ? b : a));
       else {
-        const fits = c.filter(x => x.ax - ref.ax >= -toward && Math.abs(x.ay - ref.ay) <= up && x.d <= ref.d * farther);
-        if (!fits.length) return -1;
+        const refs = homeDir ? [ref, homeDir] : [ref];
+        const fits = c.filter(x => refs.some(r => fitsTo(x, r)));
+        if (!fits.length) {
+          side = c.filter(x => refs.every(r => x.ax - r.ax < -toward)).map(x => x.i);
+          if (homeDir && side.length < c.length && ++misses >= 40) { homeDir = null; ref = null; }
+          return -1;
+        }
         pick = fits.reduce((a, b) => (Math.hypot(b.ax - ref.ax, b.ay - ref.ay) < Math.hypot(a.ax - ref.ax, a.ay - ref.ay) ? b : a));
       }
-      ref = ref && t - seenAt <= forgetSec ? { ax: ref.ax + (pick.ax - ref.ax) * 0.05, ay: ref.ay + (pick.ay - ref.ay) * 0.05, d: ref.d + (pick.d - ref.d) * 0.05 } : { ax: pick.ax, ay: pick.ay, d: pick.d };
+      misses = 0;
+      ref = !fresh ? { ax: ref.ax + (pick.ax - ref.ax) * 0.05, ay: ref.ay + (pick.ay - ref.ay) * 0.05, d: ref.d + (pick.d - ref.d) * 0.05 } : { ax: pick.ax, ay: pick.ay, d: pick.d };
       seenAt = t;
       return pick.i;
+    }
+  };
+}
+
+/* Ledsagerens side av bildet skjules (0.13.2). Ansiktsmodellen ser ett ansikt om gangen og følger det den har funnet.
+   Fant den ledsageren, ble ansiktet avvist (riktig), men føreren ble ikke funnet før modellen mistet ledsageren:
+   turene 9. nov. hadde «annet ansikt enn førerens» i 25 og 44 % av bildene, ofte et halvt til tre minutter i strekk.
+   Når et ansikt på ledsagersiden er avvist 3 ganger på 3 s, males bildet svart fra ledsagerens ansikt og ut til
+   kanten (med litt luft), så modellen må lete på nytt og finner føreren. Aldri nærmere førerens ansikt enn `keep` av
+   bildebredden. Ser modellen ikke føreren på `giveUp` s, fjernes skjermen og læres på nytt.
+   Bokser og mask er i bildebredde 0–1: { min, max } fra ansiktspunktenes x. mask: { from, to } eller null. */
+export function createFaceMask({ minGap = 0.25, need = 3, within = 3, keep = 0.2, pad = 0.03, giveUp = 60 } = {}) {
+  let driverU = null, pass = null, hits = [], mask = null, lastDriver = -Infinity, maskAt = -Infinity;
+  const build = () => {
+    const pc = (pass.min + pass.max) / 2;
+    if (driverU === null || Math.abs(pc - driverU) < minGap) return null;
+    const m = pc < driverU ? { from: 0, to: Math.min(pass.max + pad, driverU - keep) } : { from: Math.max(pass.min - pad, driverU + keep), to: 1 };
+    return m.to - m.from >= 0.05 ? { from: Math.round(m.from * 1000) / 1000, to: Math.round(m.to * 1000) / 1000 } : null;
+  };
+  return {
+    get mask() { return mask; },
+    driver(box, t) {
+      const c = (box.min + box.max) / 2;
+      driverU = driverU === null ? c : driverU + (c - driverU) * 0.1;
+      lastDriver = t;
+    },
+    passenger(box, t) {
+      hits = hits.filter(x => t - x <= within); hits.push(t);
+      pass = pass ? { min: pass.min + (box.min - pass.min) * 0.3, max: pass.max + (box.max - pass.max) * 0.3 } : { ...box };
+      if (hits.length < need) return;
+      const m = build();
+      if (m && !mask) maskAt = t;
+      if (m) mask = m;
+    },
+    tick(t) {
+      if (mask && t - Math.max(lastDriver, maskAt) > giveUp) { mask = null; pass = null; hits = []; }
     }
   };
 }

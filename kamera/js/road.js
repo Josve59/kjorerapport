@@ -19,22 +19,47 @@ export function focalPx(w, h, fovDeg = 66) {
    bildet (sentrum innenfor midtre 30 %) med underkanten i nedre del (på veien, ikke på en bro), den bredeste. */
 /* Bilens eget panser/dashbord (k0.7.1): bokser over 70 % av bildebredden, eller som går godt ned i dashbordet,
    er ikke noe på veien. Turen 2. nov.: 8263 av 9364 «biler foran» var dashbordet (720 px bred boks, «2,5 m»). */
-export function roadDets(dets, w, h, roadBottom = null) {
+export function roadDets(dets, w, h, roadBottom = null, road = null) {
   const rb = roadBottom || 1;
   // Folk (k0.7.3): rød-hvite brøytestikker ble tatt for fotgjengere om kvelden (270 bilder 2. nov. kl. 20.32).
   // En stående person er 1,5–4 ganger så høy som bred; stikkene er mye smalere. Svake person-treff teller heller ikke.
   const okPerson = d => d.cls !== 'person' || (d.h / d.w <= 4.5 && d.score >= 0.5);
+  // Kjøretøy står på veien (0.13.2): huslys ble tatt for biler om kvelden (turene 9. nov.), se onRoad
+  const okVehicle = d => !VEHICLE_WIDTH[d.cls] || onRoad(d, road, w, h);
   // Dashbordkanten ikke funnet ennå (v0.11.1: turen 3. nov. kl. 19.57 fant den aldri, og 66 «biler foran» på 3–4 m var
   // 500 px brede bokser nederst): da godtas ikke bokser over 60 % av bredden eller med underkanten i nederste 10 %
-  if (!roadBottom) return dets.filter(d => d.w < w * 0.6 && d.y + d.h <= h * 0.9 && okPerson(d));
-  return dets.filter(d => d.w < w * 0.7 && d.y + d.h <= h * (rb + 0.04) && d.y < h * rb && okPerson(d));
+  if (!roadBottom) return dets.filter(d => d.w < w * 0.6 && d.y + d.h <= h * 0.9 && okPerson(d) && okVehicle(d));
+  return dets.filter(d => d.w < w * 0.7 && d.y + d.h <= h * (rb + 0.04) && d.y < h * rb && okPerson(d) && okVehicle(d));
 }
 
-export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minScore = 0.35, roadBottom = null, lane = null } = {}) {
+/* Står boksen på veien foran (0.13.2)? Bilgjenkjenningen tok av og til opplyste vinduer og lamper på hus for biler i
+   mørket (turene 9. nov.). Feltmodellen ser hvor veien er: road = { rows: [[y, venstre, høyre], …] sortert ovenfra,
+   y0: toppen av båndet modellen ser }, alt i kamerabildets piksler. En bil står med hjulene på veien eller rett ved den:
+   - underkanten av boksen ligger ikke godt over der veien slutter, når veien smalner til en spiss der (ikke når den
+     bare forsvinner i mørket eller fortsetter over båndet),
+   - boksen når inn til veien på samme høyde, med en halv veibredde å gå på (parkerte biler bak fortauet).
+   Nær bilen (nederste 40 % av veien) godtas alt. Uten svar fra feltmodellen sjekkes ingenting. */
+export function onRoad(b, road, w, h) {
+  const rows = road && road.rows;
+  if (!rows || rows.length < 8) return true;
+  const top = rows[0], last = rows[rows.length - 1], yb = b.y + b.h;
+  if (yb >= top[0] + 0.6 * (last[0] - top[0])) return true;
+  if (yb < top[0] - 0.02 * h) {
+    const widest = Math.max(...rows.map(r => r[2] - r[1]));
+    const cut = Number.isFinite(road.y0) && top[0] <= road.y0 + 0.01 * h;
+    return !(top[2] - top[1] < 0.25 * widest && !cut);
+  }
+  let r = top, best = Infinity;
+  for (const q of rows) { const d = Math.abs(q[0] - yb); if (d < best) { best = d; r = q; } }
+  const m = Math.max(0.5 * (r[2] - r[1]), 0.03 * w);
+  return b.x <= r[2] + m && b.x + b.w >= r[1] - m;
+}
+
+export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minScore = 0.35, roadBottom = null, lane = null, road = null } = {}) {
   const f = focalPx(w, h, fovDeg);
   let lead = null, cars = 0, people = 0, best = 0;
   const minBottom = roadBottom ? Math.max(0.1, roadBottom - 0.42) : 0.45;
-  dets = roadDets(dets, w, h, roadBottom);
+  dets = roadDets(dets, w, h, roadBottom, road);
   for (const d of dets) {
     // Beste bil-score også under grensen (k0.6.5): viser om gjenkjenningen var nær ved å se noe (mørke, refleks)
     if (VEHICLE_WIDTH[d.cls] && d.score > best) best = d.score;
@@ -64,7 +89,7 @@ export function processDetections(dets, w, h, { fovDeg = 66, maxDist = 80, minSc
    personbil). rgba: Uint8ClampedArray fra canvas, w×h (gjerne 320×240). Returnerer { lead, pairs }.
    Ren funksjon, kan testes i Node. */
 export const TAIL_SEP = 1.45;
-export function detectTaillights(rgba, w, h, { fovDeg = 66, maxDist = 80, roadBottom = null } = {}) {
+export function detectTaillights(rgba, w, h, { fovDeg = 66, maxDist = 80, roadBottom = null, onRoad: onRoadFn = null } = {}) {
   // Rødt lys: sterk rød kanal, tydelig mer rødt enn grønt og blått. Overeksponerte kjerner (hvite) kobles
   // til blobben gjennom den røde glorien rundt.
   // Bare veien: over dashbordkanten når den er kjent (k0.7.1)
@@ -118,6 +143,8 @@ export function detectTaillights(rgba, w, h, { fovDeg = 66, maxDist = 80, roadBo
     if (cx < w * 0.35 || cx > w * 0.65 || cy < h * (roadBottom ? rb - 0.45 : 0.35) || cy > h * (roadBottom ? rb - 0.02 : 0.8)) continue;
     const dist = TAIL_SEP * f / dx;
     if (dist > maxDist || dist < 4) continue;
+    // Røde lys utenfor veien (0.13.2): lamper og vinduer på hus. onRoadFn({ x, y, w, h }) i dette bildets piksler.
+    if (onRoadFn && !onRoadFn({ x: Math.min(a.x, b.x), y: cy, w: dx, h: 0 })) continue;
     if (!lead || dx > lead.wpx) lead = { cls: 'car', dist: Math.round(dist * 10) / 10, wpx: Math.round(dx), score: 0.5, src: 'baklys' };
   }
   return { lead, pairs };
