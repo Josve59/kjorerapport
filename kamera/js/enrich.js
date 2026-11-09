@@ -97,8 +97,9 @@ function segDist(p, a, b, cos) {
 }
 
 /* Finner fartsgrense for hvert GPS-punkt: nærmeste strekning innen MATCH_M meter, ellers NaN.
-   segments: [{ limit, pts: [{lat,lon}] }]. Grov forhåndsfiltrering med boksen rundt strekningen. */
-export function matchLimits(points, segments, maxM = MATCH_M) {
+   segments: [{ limit, pts: [{lat,lon}] }]. Grov forhåndsfiltrering med boksen rundt strekningen.
+   parallelOnly (0.13.1): bare strekninger langs kjøreretningen, aldri nærmeste på tvers (livelimit.js). */
+export function matchLimits(points, segments, maxM = MATCH_M, { parallelOnly = false } = {}) {
   const segs = segments.filter(s => Number.isFinite(s.limit) && s.pts.length > 1).map(s => {
     const lats = s.pts.map(p => p.lat), lons = s.pts.map(p => p.lon);
     return { ...s, minLat: Math.min(...lats), maxLat: Math.max(...lats), minLon: Math.min(...lons), maxLon: Math.max(...lons) };
@@ -131,7 +132,7 @@ export function matchLimits(points, segments, maxM = MATCH_M) {
       }
     }
     if (bestPar <= maxM) return limitPar;
-    return best <= maxM ? limit : NaN;
+    return best <= maxM && !parallelOnly ? limit : NaN;
   });
 }
 

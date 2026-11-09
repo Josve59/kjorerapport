@@ -142,6 +142,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.1 – the driver's face in the dark, no false 30 zones
+
+- The face camera finds the driver far more often in the dark again. Looking for two faces (0.12.6) made the face model search for a new face in every frame instead of following the one it had: 33 ms per frame instead of 9, and on the drives of 6 November it found the driver in 28 % of frames at a light level where 0.12.5 found 88 %. It now follows one face again; the driver picker still rejects the companion's face.
+- The app now counts why a frame had no face (nobody in view, or a face that wasn't the driver's), saved with the drive, so the next export shows which it was.
+- The speed limit while driving no longer jumps to a crossing street or a road under the car. The driving direction (used for this after the drive since 0.9.9) never reached the live check. With poor GPS (30–50 m) the limit also stays on the road the car is on instead of dropping to a nearby lower one; a higher limit is still taken at once. Replayed on the drives of 6 November: the false «79 in a 30 zone» and «72 in a 30 zone» warnings are gone, and no new ones appear.
+- `tools/turrapport.mjs` prints a short report from an export (see CLAUDE.md).
+
 ## What's new in 0.13.0 – lane lines with machine learning
 
 - The road camera now finds lane lines with a machine-learning model, TwinLiteNet+ large (MIT, trained on BDD100K by day and night), running on the iPhone next to the car detection. It tells real painted lines apart from kerbs, road edges, guardrails and snow poles, and also finds the road ahead (shown as a faint blue area in the camera view).

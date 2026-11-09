@@ -28,13 +28,14 @@ function exportFile(dir, name, perf) {
 test('turrapport: tall fra en oppdiktet tur', () => {
   const dir = mkdtempSync(join(tmpdir(), 'turrapport-'));
   try {
-    const perf = { stalls: 2, dfine: 'D-FINE medium · ane', dfineMs: 61, dfineFrames: 400, dfineAny: 120, slow: true, drops: 3 };
+    const perf = { stalls: 2, faceMs: 12, faceFrames: 1000, faceNone: 200, faceOther: 50, dfine: 'D-FINE medium · ane', dfineMs: 61, dfineFrames: 400, dfineAny: 120, slow: true, drops: 3 };
     const ml = exportFile(dir, 'ml.json', { ...perf, laneMl: 'TwinLiteNet+ · ane', laneMlMs: 23, laneMlFrames: 950 });
     const old = exportFile(dir, 'old.json', { ...perf, dfineFrames: 0 });   // før 0.13.0: ingen laneMl-felt
     const out = execFileSync(process.execPath, [tool, ml, old], { encoding: 'utf8' });
     const [a, b] = out.split('\n\n');
     assert.match(a, /Varighet +2 min · 1,3 km/);
-    assert.match(a, /Ansikt +funnet i 75 % av 1[\s ]080 bilder/);
+    assert.match(a, /Ansikt +funnet i 75 % av 1[\s ]080 bilder \(9,0 per s\), 12 ms per bilde/);
+    assert.match(a, /uten ansikt: ingen i bildet 20 % · annet ansikt enn førerens 5 %/);
     assert.match(a, /begge 63 % · én 25 % · ingen 13 %/);
     assert.match(a, /skifter 134 ganger/);
     assert.match(a, /Feltmodell +kjørte: 950 svar, 23 ms per bilde/);

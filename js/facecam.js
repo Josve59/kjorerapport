@@ -28,9 +28,9 @@ let laneCanvas = null, laneCtx = null, tailCanvas = null, tailCtx = null, signCa
 let flowPrev = null, flowPrevT = 0, flowRgba = null, signN = 0, lastSign = null, signReads = [];
 const tracker = createTracker();   // biler og folk mellom svarene fra bilgjenkjenningen
 const signs = signTracker();
-const freshPerf = () => ({ faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0,
+const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0, stalls: 0 });
-const perf = { stalls: 0, faceMs: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0,
+const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0 };
 
 export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver, native: !!driver,
@@ -61,7 +61,10 @@ export function loadModel(onStatus = () => {}) {
     const fileset = await FilesetResolver.forVisionTasks(BASE + 'wasm');
     const opts = delegate => ({
       baseOptions: { modelAssetPath: BASE + 'face_landmarker.task', delegate },
-      runningMode: 'VIDEO', numFaces: 2,   // føreren og ledsageren; føreren velges under (0.12.6)
+      // Ett ansikt (0.13.1): med to leter modellen etter et nytt ansikt i hvert bilde i stedet for å følge det den har.
+      // Det tok 33 ms mot 9 ms, og i mørket mistet den føreren mye oftere (6. nov. ved likt lys: 28 % mot 88 %).
+      // Førervelgeren under passer fortsatt på at ledsagerens ansikt ikke tas for førerens.
+      runningMode: 'VIDEO', numFaces: 1,
       outputFacialTransformationMatrixes: true, outputFaceBlendshapes: true   // øynene (k0.7.6)
     });
     try { landmarker = await FaceLandmarker.createFromOptions(fileset, opts('GPU')); }
@@ -187,6 +190,8 @@ function faceTick() {
     const all = ((res && res.facialTransformationMatrixes) || []).map(m => poseFromMatrix(m.data));
     const k = driverPick.step(all, ts / 1000);
     pose = k >= 0 ? all[k] : null;
+    // Hvorfor det ikke ble noe ansikt (0.13.1): ingen i bildet (mørkt, snudd bort) eller et annet ansikt enn førerens
+    perf.faceFrames++; if (!all.length) perf.faceNone++; else if (k < 0) perf.faceOther++;
     // Øynene (k0.7.6): hvor de ser i forhold til hodet
     const eyes = pose && res.faceBlendshapes && res.faceBlendshapes[k] ? eyesFromBlendshapes(res.faceBlendshapes[k].categories) : null;
     if (pose && eyes) Object.assign(pose, eyes);

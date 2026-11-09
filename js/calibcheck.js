@@ -40,7 +40,8 @@ export function checkCalibration(calib, poses, now = Date.now()) {
 }
 
 /* Hvem er føreren (0.12.6)? Førerkameraet ser ofte både føreren og ledsageren. Ansiktsmodellen ga før bare ett
-   ansikt, og noen ganger var det ledsagerens, så blikket ble regnet fra feil person. Nå ses opptil to ansikter.
+   ansikt, og noen ganger var det ledsagerens, så blikket ble regnet fra feil person. (0.13.1: modellen ser igjen ett
+   ansikt om gangen, se facecam.js; er det ledsagerens, avvises det her.)
    Ansiktsmodellens avstander i cm har feil skala (kalibreringen 6. nov.: føreren «110 cm» unna en telefon ved rattet),
    så valget bruker retningen fra kameraet (vinkel), som ikke påvirkes av skalaen.
    - Sidene: i kamerabildet er positiv x mot bilens venstre side. Føreren sitter til venstre for ledsageren

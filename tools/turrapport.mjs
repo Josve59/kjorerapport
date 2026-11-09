@@ -89,9 +89,12 @@ function report(drive, input, file, exportVersion) {
   out.push(`${date(drive.startedAt)} · versjon ${version}${exportVersion && exportVersion !== version ? ` (eksportert med ${exportVersion})` : ''}${drive.demo ? ' · demotur' : ''}${drive.interrupted ? ' · avbrutt' : ''}`);
   line('Varighet', `${duration(sec)} · ${n1(distanceKm(loc))} km`);
 
+  const cp = drive.cameraPlan, perf = cp && cp.perf;
   if (head.length) {
     const ok = head.filter(h => h.ok).length;
-    line('Ansikt', `funnet i ${pct(ok, head.length)} av ${n0(head.length)} bilder (${perSec(head.length, sec)} per s)`);
+    line('Ansikt', `funnet i ${pct(ok, head.length)} av ${n0(head.length)} bilder (${perSec(head.length, sec)} per s), ${ms(perf && perf.faceMs || 0)} per bilde`);
+    // Fra 0.13.1: hvorfor bildene var uten ansikt (tellerne gjelder hele kameraøkten)
+    if (perf && perf.faceFrames) more(`uten ansikt: ingen i bildet ${pct(perf.faceNone, perf.faceFrames)} · annet ansikt enn førerens ${pct(perf.faceOther, perf.faceFrames)}`);
   } else line('Ansikt', 'ingen data fra førerkameraet lagret med turen');
 
   const ls = laneStats(road);
@@ -100,7 +103,6 @@ function report(drive, input, file, exportVersion) {
     more(`skifter ${n0(ls.flips)} ganger, ${n1(ls.perMin)} per min${ls.median !== null ? `; en tilstand varer typisk ${n1(ls.median)} s` : ''}`);
   } else line('Feltlinjer', 'ingen data fra veikameraet lagret med turen');
 
-  const cp = drive.cameraPlan, perf = cp && cp.perf;
   if (!perf) {
     line('Feltmodell', 'veikameraet var ikke på');
     line('D-FINE', 'veikameraet var ikke på');

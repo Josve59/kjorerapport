@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.0';
+export const APP_VERSION = '0.13.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1362,7 +1362,7 @@ async function startRecording(replay = null) {
       cam.setSpeed(st.kmh);   // fartsskilt leses bare når bilen kjører
       if (!replay && st.pos && cam.state().road) feedRoadShape(st, live);
       if (live) {
-        const res = live.update(st.pos);
+        const res = live.update(st.pos && { ...st.pos, acc: st.acc });   // GPS-ens usikkerhet: veien bilen er på, holdes (0.13.1)
         // Skilt fra veikameraet (midlertidige og digitale skilt) går foran NVDB til neste skilt, 3 km eller ny NVDB-strekning
         if (camSignNew) { camLimit.sign(camSignNew.limit, st.distanceM, res.limit); liveLog.push({ t: Math.round(st.elapsed), limit: camSignNew.limit, src: 'kamera' }); camSignNew = null; }
         const cl = camLimit.current(st.distanceM, res.limit);

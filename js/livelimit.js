@@ -31,14 +31,33 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
       .catch(() => { failedAt = now(); status = 'feil'; })
       .finally(() => { loading = null; });
   };
-  /* Nytt GPS-punkt {lat, lon}. Returnerer { limit (km/t eller null), status: 'venter' | 'ok' | 'feil' | 'ukjent' }. */
+  /* Kjøreretningen (0.13.1): matchLimits velger strekninger langs kjøreretningen, men får ett punkt om gangen her og
+     kunne ikke regne den ut selv. Kryssende gater og veier under ga derfor 80→30→80 i noen sekunder og falske
+     fartsvarsler (turene 6. nov.). Retningen tas fra punktet minst 8 m bak, så GPS-støy i lav fart ikke snur den. */
+  let back = null, heading = null;
+  const metresTo = (a, b) => Math.hypot((b.lat - a.lat) * 111195, (b.lon - a.lon) * 111195 * Math.cos(a.lat * Math.PI / 180));
+  /* Nytt GPS-punkt {lat, lon, acc (m, valgfri)}. Returnerer { limit (km/t eller null), status: 'venter' | 'ok' | 'feil' | 'ukjent' }. */
   const update = p => {
     if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return { limit: current, status };
+    if (!back) back = p;
+    else if (metresTo(back, p) >= 8) {
+      heading = (Math.atan2((p.lon - back.lon) * Math.cos(back.lat * Math.PI / 180), p.lat - back.lat) * 180 / Math.PI + 360) % 360;
+      back = p;
+    }
     if (!box || !inner(box, p)) load(p);
     if (!box) return { limit: current, status };
     const d = 0.003;
     const near = segs.filter(s => p.lat > s.minLat - d && p.lat < s.maxLat + d && p.lon > s.minLon - 2 * d && p.lon < s.maxLon + 2 * d);
-    const v = matchLimits([p], near)[0];
+    const pt = { lat: p.lat, lon: p.lon, heading: Number.isFinite(p.heading) ? p.heading : heading };
+    let v = matchLimits([pt], near)[0];
+    // Veien bilen er på, holdes (0.13.1): så lenge en strekning med samme grense går langs kjøreretningen innenfor
+    // GPS-ens usikkerhet, går ikke grensen ned eller blir ukjent. Dårlig GPS (30–50 m) dro ellers punktet bort fra
+    // 80-veien og over på en 30-gate på tvers (turen 6. nov. kl. 15.35: 79 km/t «i 30-sone» i 12 s). En høyere
+    // grense tas med en gang: holdt tilbake ga den varsel til føreren som gasset opp etter skiltet.
+    if (Number.isFinite(current) && !(v >= current) && pt.heading !== null) {
+      const radius = Math.max(25, Number.isFinite(p.acc) ? Math.min(p.acc, 50) : 0);
+      if (matchLimits([pt], near.filter(s => s.limit === current), radius, { parallelOnly: true })[0] === current) v = current;
+    }
     recent.push(Number.isFinite(v) ? v : null);
     if (recent.length > 3) recent.shift();
     const counts = new Map();
