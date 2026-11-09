@@ -8,12 +8,15 @@ Norwegian driving-feedback app for learner drivers. Plain HTML/CSS/JS (ES module
 - `kamera/js/` – camera test app. Files listed in `tests/shared.test.mjs` (road, track, lanes, flow, signs, sign-tpl, camera, analysis, situations, roadshape, livelimit, enrich) must stay byte-identical with `js/`: after editing one, `cp js/X.js kamera/js/X.js`.
 - `ios/Kjorerapport/*.swift` – native side: CameraHub, RoadDetector (D-FINE cars), LaneDetector (TwinLiteNet+ lanes), NativeRecorder (bridge), Beeper. `ios/copy-web.sh` copies the web files and `ios/Models/*.mlmodelc` into the app at build time. Models are documented in `ios/Models/README.md`.
 - `tests/*.test.mjs` – node:test.
+- `tools/` – Node scripts for the developer, not part of the app.
 
 ## Commands
 - Tests: `node --test tests/*.test.mjs` (Node isn't on PATH, see CLAUDE.local.md). Syntax only: `node --check js/x.js`.
 - iPhone build + install + launch: `ios/ship.sh` (needs the sandbox disabled; the phone must be unlocked to launch).
+- Drive report from an export (version, duration, face %, lane lines and how often they flip, lane model, D-FINE, heat, speed warnings; no coordinates): `node tools/turrapport.mjs` for the newest `~/Downloads/kjorerapport-*.json`, `node tools/turrapport.mjs 2` for the two newest, or pass files (backups give one report per drive). Run it first when the owner sends a new export.
 
 ## Every change
+Changes that only touch `tools/`, `tests/` or docs skip steps 1 and the `ios/ship.sh` part of 2: the app is unchanged.
 1. Bump the version in three places: `APP_VERSION` in `js/app.js`, `VERSION` in `sw.js`, and the version text in `index.html`. Add a «What's new in x.y.z» section at the top of the README list.
 2. Run the tests, then `ios/ship.sh`.
 3. Commit. End the message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
