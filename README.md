@@ -142,6 +142,11 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.5 – car detection without Objects365
+
+- The road camera's car detection is now D-FINE medium trained on COCO only (`ustc-community/dfine-medium-coco`, Apache 2.0). Before, it was the same model pretrained on Objects365, a dataset listed as non-commercial, which could stop the app from being sold. The lane model (BDD100K) still has the same question open.
+- Same size and speed. On 162 COCO pictures with vehicles that neither model was trained on, it found 96 % of close vehicles (97 % before) and 92 % of those at least 32 px (94 % before); the loss is mostly small cars far away. Not tested in the dark. Details in `ios/Models/README.md`.
+
 ## What's new in 0.13.4 – design clean-up
 
 A pass over the screens with the Emma test data, against a list of common signs of unfinished design. Most of the list was already in place (one accent colour, design tokens, tabular figures); these were not:

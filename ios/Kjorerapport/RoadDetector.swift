@@ -2,7 +2,7 @@ import CoreImage
 import CoreML
 import QuartzCore
 
-/// Bilgjenkjenning for veikameraet med D-FINE medium (Apache 2.0, Peterande/D-FINE, Objects365 + COCO) som Core ML,
+/// Bilgjenkjenning for veikameraet med D-FINE medium (Apache 2.0, Peterande/D-FINE, bare COCO fra 0.13.5) som Core ML,
 /// på telefonens grafikkprosessor eller AI-brikke. Samme utsnitt og tolkning som D-FINE i nettappen (kamera/js/dfine.js):
 /// et kvadrat midt i det stående bildet (rett over dashbordkanten når den er kjent), skalert til 640×640, lysnet med
 /// en gammakurve i mørket. Svarene er i kamerabildets piksler og går til nettappen, som følger bilene mellom svarene.

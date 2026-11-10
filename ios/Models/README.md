@@ -1,8 +1,19 @@
 # D-FINE for the road camera (Core ML)
 
-`DFine.mlmodelc` is **D-FINE medium, trained on Objects365 and COCO** (COCO AP about 55). Until 0.10.1 it was xlarge (AP about 59).
+`DFine.mlmodelc` is **D-FINE medium, trained on COCO only** (`ustc-community/dfine-medium-coco`, Apache 2.0). Until 0.13.4 it was the same model pretrained on Objects365 and then trained on COCO (`dfine-medium-obj2coco`, COCO AP about 55), and until 0.10.1 xlarge (AP about 59).
 
-**Why medium:** on the iPhone, on the drives on 3 Nov, xlarge took 380 ms per frame on a cool phone and 660 ms after 14 minutes (heat). That is only 1.5–2.5 answers a second, and the driver camera slowed down too. On the Mac, medium is 2.2 times faster than xlarge (7 against 15 ms), so it should give about twice as many answers and less heat. It found the same cars on the night snapshots (38 against 39 boxes). It comes from [Peterande/D-FINE](https://github.com/Peterande/D-FINE) under Apache 2.0, via Hugging Face `ustc-community/dfine-medium-obj2coco`. It is compiled for Core ML (fp16, iOS 17+).
+**Why COCO only (0.13.5):** Objects365 is listed as non-commercial, so a model trained on it may not be usable in an app that is sold. COCO's annotations are CC BY 4.0. On 162 COCO val2017 pictures with vehicles (575 cars, trucks, buses and motorcycles; neither model was trained on them), at the app's score of 0.35 and overlap 0.5 (`.local-test/dfine/compare.py`):
+
+| Vehicles | obj2coco (before) | coco (now) |
+| --- | --- | --- |
+| All | 87 % found | 85 % found |
+| At least 32 px | 94 % | 92 % |
+| At least 96 px (close) | 97 % | 96 % |
+| Right class (of those found) | 92–94 % | 93–94 % |
+
+The loss is mostly small cars far away. Same size and speed, since it is the same model. Not compared in the dark: there were no night pictures to test on. Core ML fp16 matched PyTorch fp32 on 650 of 652 boxes (60 of the pictures).
+
+**Why medium:** on the iPhone, on the drives on 3 Nov, xlarge took 380 ms per frame on a cool phone and 660 ms after 14 minutes (heat). That is only 1.5–2.5 answers a second, and the driver camera slowed down too. On the Mac, medium is 2.2 times faster than xlarge (7 against 15 ms), so it should give about twice as many answers and less heat. It found the same cars on the night snapshots (38 against 39 boxes). It comes from [Peterande/D-FINE](https://github.com/Peterande/D-FINE) under Apache 2.0, via Hugging Face `ustc-community/dfine-medium-coco` (0.13.4 and earlier: `dfine-medium-obj2coco`). It is compiled for Core ML (fp16, iOS 17+).
 
 - **Input:** `image`, 640×640 RGB (values 0–1, no normalisation).
 - **Output:** `logits` [1, 300, 80] (COCO classes) and `boxes` [1, 300, 4] (cx, cy, w, h, 0–1). `RoadDetector.swift` decodes them the same way as `kamera/js/dfine.js`.
@@ -12,7 +23,7 @@
 **How it was made** (`convert-dfine.py`, Python 3.9, torch 2.8, transformers 4.57, coremltools 9.0):
 
 ```
-python convert-dfine.py ustc-community/dfine-medium-obj2coco DFine.mlpackage
+python convert-dfine.py ustc-community/dfine-medium-coco DFine.mlpackage
 xcrun coremlcompiler compile DFine.mlpackage .
 cd DFine.mlmodelc/weights && split -b 45m -d -a 2 weight.bin weight.bin.part && rm weight.bin
 ```
@@ -52,4 +63,4 @@ xcrun coremlcompiler compile Lanes.mlpackage .
 
 fp16 Core ML matches PyTorch fp32 on a night frame (lane and road pixels 100 % the same).
 
-**Licence note:** the code and weights are MIT, but BDD100K's own terms are for research and non-commercial use. Check this (as with Objects365 for D-FINE) before the app is sold.
+**Licence note:** the code and weights are MIT, but BDD100K's own terms are for research and non-commercial use. Check this before the app is sold. (D-FINE no longer uses Objects365 from 0.13.5.)

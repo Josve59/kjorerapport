@@ -1,7 +1,7 @@
 [
   {
     "metadataOutputVersion" : "3.0",
-    "shortDescription" : "D-FINE (ustc-community\/dfine-medium-obj2coco), Apache 2.0. Input 640x640 RGB. Outputs logits [1,300,80], boxes cx,cy,w,h 0-1.",
+    "shortDescription" : "D-FINE (ustc-community\/dfine-medium-coco), Apache 2.0. Input 640x640 RGB. Outputs logits [1,300,80], boxes cx,cy,w,h 0-1.",
     "outputSchema" : [
       {
         "hasShapeFlexibility" : "0",
@@ -95,7 +95,7 @@
       }
     ],
     "userDefinedMetadata" : {
-      "com.github.apple.coremltools.conversion_date" : "2026-11-03",
+      "com.github.apple.coremltools.conversion_date" : "2026-11-10",
       "com.github.apple.coremltools.source" : "torch==2.8.0",
       "com.github.apple.coremltools.version" : "9.0",
       "com.github.apple.coremltools.source_dialect" : "TorchScript"
