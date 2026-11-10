@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.3';
+export const APP_VERSION = '0.13.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -339,7 +339,7 @@ async function renderHome() {
   const newSince = allDrives.filter(d => isReal(d) && Date.parse(d.startedAt) > lastB).length;
   const snoozed = settings.backupSnoozeUntil && Date.parse(settings.backupSnoozeUntil) > Date.now();
   if (realCount >= 2 && newSince >= 2 && Date.now() - lastB > 7 * 86400000 && !snoozed) {
-    bb.innerHTML = `<span>${icon('shield', 20)}<span>${newSince} turer er ikke sikkerhetskopiert.</span></span><span class="banner-actions"><button type="button" class="link" id="btn-bb-later">Senere</button><button type="button" class="btn small-btn primary" id="btn-bb-now">Ta kopi</button></span>`;
+    bb.innerHTML = `<span>${icon('shield', 20)}<span>${newSince} turer er ikke sikkerhetskopiert.</span></span><span class="banner-actions"><button type="button" class="link" id="btn-bb-later">Senere</button><button type="button" class="btn small-btn secondary" id="btn-bb-now">Ta kopi</button></span>`;
     bb.hidden = false;
     $('#btn-bb-now').onclick = async () => { await backupAll(await listDrives()); bb.hidden = true; };
     $('#btn-bb-later').onclick = () => { saveSettings({ ...getSettings(), backupSnoozeUntil: new Date(Date.now() + 7 * 86400000).toISOString() }); bb.hidden = true; };
@@ -714,8 +714,8 @@ async function renderLog() {
 </section>
     <section class="card"><h2 class="card-title">${icon('moon')}Lysforhold</h2>${bar(tot.light, ['day', 'twilight', 'dark'], LIGHT_LABEL, 'light')}
 </section>
-    <section class="card"><h2 class="card-title">${icon('snow')}Føre</h2>${bar(tot.surface, ['dry', 'wet', 'snow', 'ice'], SURFACE_LABEL, 'surf')}
-      ${tot.surface.unknown > 0 ? `<p class="muted small">${fmtHours(tot.surface.unknown)} er kjørt før føre kunne velges.</p>` : ''}</section>
+    <section class="card"><h2 class="card-title">${icon('snow')}Føre</h2>${['dry', 'wet', 'snow', 'ice'].some(k => tot.surface[k] > 0) ? `${bar(tot.surface, ['dry', 'wet', 'snow', 'ice'], SURFACE_LABEL, 'surf')}
+      ${tot.surface.unknown > 0 ? `<p class="muted small">${fmtHours(tot.surface.unknown)} er kjørt før føre kunne velges.</p>` : ''}` : '<p class="muted small">Føre er ikke valgt på noen tur ennå. Velg det når du starter en tur.</p>'}</section>
     <section class="card"><h2 class="card-title">${icon('chart')}Siste åtte uker</h2>
       <div class="week-bars" role="img" aria-label="Kjøretid per uke">${weeks.map(w => `<div class="wk"><span class="wk-val">${w.sec ? Math.round(w.sec / 60) : ''}</span><span class="wk-bar" style="height:${Math.max(2, w.sec / maxW * 100)}%"></span><span class="wk-lbl"><strong>${isoWeek(w.start)}</strong>${new Date(w.start).getDate()}.${new Date(w.start).getMonth() + 1}.</span></div>`).join('')}</div>
       <p class="muted small">Minutter per uke. Under: ukenummer og mandagens dato.</p></section>
@@ -2024,7 +2024,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       const marksRows = (drive.marks || []).map((m, i) => { const t = m.t - (r.t0 || 0); const pt = r.points.length ? r.points.reduce((a, b) => Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a) : null; return { i, lat: pt ? pt.lat : NaN, lon: pt ? pt.lon : NaN }; });
       try {
         const enrich = await enrichDrive(r, marksRows, wants, drive.enrich, text => {
-          const el = root.querySelector('#enrich-status'); if (el) el.textContent = text;
+          const el = root.querySelector('#enrich-status'); if (el) el.textContent = text.replace(/ (…|%)/g, '\u00a0$1');
         });
         enrich.attemptedAt = new Date().toISOString(); enrich.error = null;
         drive.enrich = enrich;

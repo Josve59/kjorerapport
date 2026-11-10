@@ -1,6 +1,6 @@
 /* Rapportvisning – ren SVG/HTML, ingen nettverk. */
 import { CATS, rating } from './analysis.js';
-import { esc, km, kmh, gee, mss, duration, n0, n1 } from './format.js';
+import { esc, km, kmh, gee, mss, duration, n0, n1, overTime } from './format.js';
 import { analyzeSpeeding, evaluateRoad } from './enrich.js';
 import { icon, MARK_CATS, FOCUS, isRemark } from './ui.js';
 import { closeMirrorText } from './camera.js';
@@ -86,7 +86,7 @@ export function buildSummary(r, ctx = {}) {
   } else lines.push('Ingen brå hendelser.');
   const sp = speedingFor(r, ctx.enrich);
   if (sp) {
-    lines.push(`Fartsgrenser: ${sp.score} poeng, ${n0(sp.secondsOver)} s over grensen${sp.episodes.length ? ':' : '.'}`);
+    lines.push(`Fartsgrenser: ${sp.score} poeng, ${overTime(sp.secondsOver, true)} over grensen${sp.episodes.length ? ':' : '.'}`);
     for (const e of sp.episodes) lines.push(`– ${mss(e.tFrom)}–${mss(e.tTo)}: ${kmh(e.maxKmh)} i ${e.limit}-sone`);
   }
   lines.push('Tips:');
@@ -181,10 +181,10 @@ export function renderReport(root, r, ctx = {}) {
     <section class="card summary-card">
       <h2 class="card-title">${icon('list')}Kort fortalt</h2>
       <ul class="summary-list">
-        ${positives.map(k => `<li class="sum-good">${icon('check', 20)}<span><strong>${CATS[k]}:</strong> ${POSITIVE[k]}</span></li>`).join('')}
+        ${positives.map(k => `<li class="sum-good">${icon('check', 20)}<span>${POSITIVE[k]}</span></li>`).join('')}
         ${tipsAll.map(t => `<li class="sum-work sum-${t.cat}">${icon('chev', 20)}<span>${esc(t.text)}</span></li>`).join('')}
         ${!positives.length && !tipsAll.length ? r.tips.map(t => `<li class="sum-good">${icon('check', 20)}<span>${esc(t.text)}</span></li>`).join('') : ''}
-        ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.</span></li>` : ''}
+        ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${overTime(sp.secondsOver)} over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)}\u00a0km/t over` : ''}.</span></li>` : ''}
         ${sitSum.high ? `<li class="sum-work sum-brake">${icon('warn', 20)}<span><strong>${sitSum.high} ${sitSum.high === 1 ? 'alvorlig situasjon' : 'alvorlige situasjoner'}</strong> <button type="button" class="link sum-goto" data-goto="situation-section">Se hvor ›</button></span></li>` : ''}
         ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket: ${Object.entries(marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {})).map(([c, n]) => `${MARK_CATS[c].label.toLowerCase()} ${n}`).join(', ')}.</span></li>` : ''}
       </ul>
@@ -240,7 +240,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>
 
     ${sameRoute.length > 1 ? `<section class="card" id="route-section">
-      <h2 class="card-title">${icon('chart')}Samme rute</h2>
+      <h2 class="card-title">${icon('repeat')}Samme rute</h2>
       <p class="muted small">Dere har kjørt denne strekningen ${sameRoute.length} ganger. Slik har det gått:</p>
       <table class="route-table"><thead><tr><th>Dato</th><th>Poeng</th><th>Hendelser</th><th>Tid</th></tr></thead><tbody>
       ${sameRoute.map(x => `<tr class="${x.current ? 'cur' : ''}" data-id="${x.id}"><td>${esc(x.date)}${x.current ? ' <span class="tag">denne</span>' : ''}</td><td><strong>${x.overall}</strong></td><td>${x.events}</td><td>${duration(x.duration)}</td></tr>`).join('')}
@@ -481,7 +481,7 @@ const PRACTICE = {
 };
 export function nextPractice(r, { sp = null, marks = [], camera = null, sits = [] } = {}) {
   const out = [];
-  if (sp && sp.secondsOver >= 10) out.push({ id: 'limits', w: 30 + sp.secondsOver / 5, why: `${n0(sp.secondsOver)} sekunder over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)} km/t over` : ''}.` });
+  if (sp && sp.secondsOver >= 10) out.push({ id: 'limits', w: 30 + sp.secondsOver / 5, why: `${overTime(sp.secondsOver)} over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)}\u00a0km/t over` : ''}.` });
   const mirrorMarks = markCount(marks, ['speil', 'skulder']);
   if (mirrorMarks) out.push({ id: 'mirror', w: 25 + 5 * mirrorMarks, why: `Ledsageren merket speil eller skulderblikk ${mirrorMarks === 1 ? 'én gang' : mirrorMarks + ' ganger'}.` });
   else if (camera && camera.calibrated && Array.isArray(camera.lane)) {
@@ -522,7 +522,7 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
       res.text = `${r.scores.smooth} poeng`;
     } else if (id === 'limits') {
       if (!sp) res.text = 'Slå på Veidata i innstillinger for å måle fartsgrenser';
-      else { res.state = sp.secondsOver <= 10 ? 'ok' : 'no'; res.text = sp.secondsOver ? `${n0(sp.secondsOver)} s over grensen` : 'Aldri over grensen'; }
+      else { res.state = sp.secondsOver <= 10 ? 'ok' : 'no'; res.text = sp.secondsOver ? `${overTime(sp.secondsOver, true)} over grensen` : 'Aldri over grensen'; }
     } else if (id === 'roundabout') {
       if (!rbs.length) res.text = 'Ingen rundkjøringer på ruten';
       else {
@@ -854,7 +854,7 @@ export function spokenSummary(r, { focusResults = [], marks = [], sp = null } = 
   if (good.length) parts.push(`Dette gikk bra: ${good.join(', ')}.`);
   const tip = r.tips.find(t => t.cat !== 'good');
   if (tip) parts.push(`Det viktigste å jobbe med: ${tip.text}`);
-  if (sp && sp.secondsOver > 0) parts.push(`${Math.round(sp.secondsOver)} sekunder over fartsgrensen.`);
+  if (sp && sp.secondsOver > 0) parts.push(`${overTime(sp.secondsOver)} over fartsgrensen.`);
   for (const f of focusResults) parts.push(`Mål: ${f.label}, ${f.state === 'ok' ? 'nådd' : f.state === 'no' ? 'øv mer' : 'ikke målt'}.`);
   if (marks.length) parts.push(`Ledsageren merket ${marks.length === 1 ? 'ett sted' : marks.length + ' steder'}. Snakk om dem sammen.`);
   return parts.join(' ').replace(/km\/t/g, 'kilometer i timen').replace(/ km /g, ' kilometer ').replace(/(\d) km\b/g, '$1 kilometer').replace(/ min\b/g, ' minutter');
@@ -933,13 +933,18 @@ function delta(now, before, words = false) {
 
 function countUp(el, target) {
   if (!el || prefersReduced()) return;
+  // Ringen fylles i takt med tallet (0.13.4), så man ser hvor langt mot 100 poengsummen når
+  const arc = el.closest('svg') && el.closest('svg').querySelector('.score-arc');
+  const full = arc ? Number(arc.dataset.c) : 0;
   const t0 = performance.now(), dur = 900;
   const tick = now => {
     const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
     el.textContent = Math.round(target * e);
+    if (arc) arc.setAttribute('stroke-dasharray', `${(full * Math.max(0, Math.min(100, target)) / 100 * e).toFixed(1)} ${full.toFixed(1)}`);
     if (p < 1) requestAnimationFrame(tick);
   };
   el.textContent = '0';
+  if (arc) arc.setAttribute('stroke-dasharray', `0 ${full.toFixed(1)}`);
   requestAnimationFrame(tick);
 }
 
@@ -953,7 +958,7 @@ export function scoreRing(score, size = 132) {
   const col = score >= 75 ? 'var(--good)' : score >= 55 ? 'var(--turn)' : 'var(--brake)';   // egen skala, ikke hendelsesfargene
   return `<svg class="score-ring" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${score} av 100 poeng">
     <circle cx="50" cy="50" r="42" fill="none" stroke="var(--line)" stroke-width="8"/>
-    <circle cx="50" cy="50" r="42" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/>
+    <circle class="score-arc" data-c="${c.toFixed(1)}" cx="50" cy="50" r="42" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/>
     <text class="score-num" x="50" y="47" text-anchor="middle" dominant-baseline="central" font-weight="800" font-size="${score >= 100 ? 30 : 34}" fill="var(--ink)">${score}</text>
     <text x="50" y="69" text-anchor="middle" font-size="10" fill="var(--muted)">av 100</text>
   </svg>`;

@@ -26,7 +26,7 @@ export const GUIDES = [
     ]
   },
   {
-    id: 'camera', icon: 'mirror', title: 'Kameraet: få gode målinger',
+    id: 'camera', icon: 'camera', title: 'Kameraet: få gode målinger',
     lead: 'Kalibrer der telefonen faktisk står under kjøring.',
     when: c => c.cameraOn,
     steps: [

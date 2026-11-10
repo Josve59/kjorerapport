@@ -58,6 +58,10 @@ const P = {
   volume: 'M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11',
   pin: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
   school: 'M3 9l9-5 9 5-9 5zM7 11v5c0 1.5 2.5 3 5 3s5-1.5 5-3v-5M21 9v6',
+  // 0.13.4: eget kamera, gjentatt rute og skilt (før brukte kameraet speilikonet og «Feil grense» fartsmåleren)
+  camera: 'M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  repeat: 'M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4',
+  sign: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 18.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13z',   // fartsgrenseskilt: tykk ring
   checkbox: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z'
 };
 
@@ -88,7 +92,7 @@ export const MARK_CATS = {
   // Ikke en merknad, men fasit: ledsageren trykker like etter hvert feltskifte (v0.7.6)
   felt: { label: 'Feltskifte', icon: 'shift', neutral: true },
   // Fasit for fartsgrensen (v0.9.4): trykk når appens fartsgrense ikke stemmer med skiltet eller bilen
-  grense: { label: 'Feil grense', icon: 'speed', neutral: true }
+  grense: { label: 'Feil grense', icon: 'sign', neutral: true }
 };
 /* Merker som ikke er tilbakemelding på kjøringen */
 export const isRemark = m => m.cat !== 'annet' && !(MARK_CATS[m.cat] && MARK_CATS[m.cat].neutral);

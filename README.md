@@ -142,6 +142,18 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.4 – design clean-up
+
+A pass over the screens with the Emma test data, against a list of common signs of unfinished design. Most of the list was already in place (one accent colour, design tokens, tabular figures); these were not:
+- The middle dot between facts («8,9 km · 11 min») now sits in the middle. Overpass draws it to the right, so it now comes from the system font.
+- Text that was cut off or broke badly: «Samlet | Kategorier» on the progress chart (cut to «Kategor») moves under the title when there is no room, «Forrige time» on the teacher screen stays on one line, «Feil grense» while driving stays on one line, and times in «Samme rute» no longer break. Headings break evenly.
+- «Kort fortalt» no longer repeats itself («Jevn fart: Jevn fart gjennom hele turen.»).
+- Long times over the speed limit are shown in minutes («6 minutter», not «376 sekunder»).
+- Icons: the camera has its own icon (it used the mirror), «Feil grense» has a speed-limit sign (it used the same speedometer as «Fart»), and «Samme rute» has a repeat icon. Small buttons with an icon now have a gap between icon and text.
+- Only one yellow button on the home screen: «Ta kopi» on the backup banner is grey, so «Start kjøretur» stands out.
+- The score ring fills up together with the number when the report opens.
+- A small spinner while road data is fetched, and «Føre» shows one line instead of a bar of zeros when no surface has been chosen.
+
 ## What's new in 0.13.3 – no hay bales as cars, steady bus labels, road edges on unmarked roads
 
 - On roads without painted lines (narrow roads with poor markings) the road camera now shows the right road edge and the middle of the road from the lane model, as orange dots, instead of no lines. They are not counted as seen lane lines, give no position in the lane, and are not used to pick the car ahead.

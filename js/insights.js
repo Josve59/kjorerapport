@@ -1,5 +1,6 @@
 /* Innsikt på tvers av turer: forslag til øvingsmål, faresteder, samme rute og opplæringsplan.
    Rene funksjoner uten nettleseravhengighet, så de kan testes i Node. */
+import { overTime } from './format.js';
 
 const RAD = Math.PI / 180;
 export function metres(a, b) {
@@ -29,7 +30,7 @@ export function suggestFocus(rows, now = new Date()) {
     const km = withSp.reduce((s, x) => s + x.res.stats.km, 0);
     const sec = withSp.reduce((s, x) => s + x.sp.secondsOver, 0);
     const per10 = km > 0.5 ? sec / km * 10 : 0;
-    if (per10 > 10) out.push({ id: 'limits', weight: Math.min(40, per10 / 2), reason: `${Math.round(sec)} sekunder over fartsgrensen på ${turer}` });
+    if (per10 > 10) out.push({ id: 'limits', weight: Math.min(40, per10 / 2), reason: `${overTime(sec)} over fartsgrensen på ${turer}` });
   }
   const mirror = recent.reduce((s, x) => s + (x.marks || []).filter(m => m.cat === 'speil' || m.cat === 'skulder').length, 0);
   if (mirror >= 2) out.push({ id: 'mirror', weight: 8 * mirror / n + 4, reason: `Ledsageren merket speil eller skulder ${mirror} ganger` });
@@ -154,7 +155,7 @@ export function curriculumEvidence(rows) {
   if (withSp.length) {
     const km = withSp.reduce((s, x) => s + x.res.stats.km, 0);
     const sec = withSp.reduce((s, x) => s + x.sp.secondsOver, 0);
-    ev.limits = { text: `${Math.round(sec)} s over grensen på ${Math.round(km)} km`, good: km > 20 && sec / km * 10 < 5 };
+    ev.limits = { text: `${overTime(sec, true)} over grensen på ${Math.round(km)} km`, good: km > 20 && sec / km * 10 < 5 };
   } else ev.limits = null;
   return ev;
 }

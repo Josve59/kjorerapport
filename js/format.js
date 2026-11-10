@@ -32,6 +32,14 @@ export function duration(sec) {
   return `${h} t ${String(m % 60).padStart(2, '0')} min`;
 }
 
+/* Tid over fartsgrensen (0.13.4): sekunder når det er lite, ellers minutter. «376 s» er vanskelig å se for seg. */
+export function overTime(sec, short = false) {
+  const s = Math.max(0, Math.round(sec));
+  if (s < 90) return short ? `${s} s` : `${s} ${s === 1 ? 'sekund' : 'sekunder'}`;
+  const m = Math.round(s / 60);
+  return `${m} ${short ? 'min' : 'minutter'}`;
+}
+
 export const date = iso => df.format(new Date(iso));
 export const dateShort = iso => dfShort.format(new Date(iso));
 

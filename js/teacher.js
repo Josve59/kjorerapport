@@ -6,7 +6,7 @@ import { sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import { suggestFocus, curriculumEvidence, CURRICULUM } from './insights.js';
 import { CATS } from './analysis.js';
 import { MARK_CATS, FOCUS, icon } from './ui.js';
-import { esc, km, n0 } from './format.js';
+import { esc, km, overTime } from './format.js';
 
 export function fmtHours(sec) {
   const m = Math.round(sec / 60);
@@ -69,7 +69,7 @@ export function teacherText(s, { note = '' } = {}) {
   const m = s.maneuvers;
   L.push(`Manøvrer: ${m.roundabouts} rundkjøringer, ${m.laneChanges} feltskifter${m.junctions ? `, ${m.junctions} kryss med vikeplikt eller stopp` : ''}.`);
   L.push(`Snittpoeng ${s.score.avg}${trendWord(s.score) ? ` (${trendWord(s.score).toLowerCase()})` : ''}. Bremsing ${s.score.cats.brake}, akselerasjon ${s.score.cats.accel}, svinger ${s.score.cats.turn}, jevn fart ${s.score.cats.smooth}.`);
-  if (s.speeding) L.push(`Fartsgrenser: ${s.speeding.sec} s over grensen på ${km(s.speeding.km)}.`);
+  if (s.speeding) L.push(`Fartsgrenser: ${overTime(s.speeding.sec, true)} over grensen på ${km(s.speeding.km)}.`);
   if (s.mirrors) L.push(`Speilblikk før feltskifte: sett ved ${s.mirrors.seen} av ${s.mirrors.lanes} (førerkamera).`);
   if (s.work.length) { L.push('Bør jobbes med:'); for (const w of s.work) L.push(`– ${w.label}: ${w.reason}`); }
   if (s.good.length) L.push(`Går fint: ${s.good.join(', ').toLowerCase()}.`);
@@ -124,7 +124,7 @@ export function teacherHtml(s, { note = '' } = {}) {
       <h2 class="card-title">${icon('chart')}Hvordan det går</h2>
       <p><strong>Snitt ${s.score.avg} av 100</strong>${tw ? ` · ${esc(tw)}` : ''}</p>
       <ul class="t-cats">${['brake', 'accel', 'turn', 'smooth'].map(catRow).join('')}</ul>
-      ${s.speeding ? `<p>Fartsgrenser: ${n0(s.speeding.sec)} sekunder over grensen på ${km(s.speeding.km)}${s.speeding.per10 < 5 ? ', det er lite' : ''}.</p>` : ''}
+      ${s.speeding ? `<p>Fartsgrenser: ${overTime(s.speeding.sec)} over grensen på ${km(s.speeding.km)}${s.speeding.per10 < 5 ? ', det er lite' : ''}.</p>` : ''}
       ${s.mirrors ? `<p>Speilblikk før feltskifte: sett ved ${s.mirrors.seen} av ${s.mirrors.lanes} (førerkamera).</p>` : ''}
       <p class="muted small">Poengene måler hvor rolig og jevnt det kjøres (brå bremsing, gass og svinger), ikke om trafikkreglene følges.</p>
     </section>
