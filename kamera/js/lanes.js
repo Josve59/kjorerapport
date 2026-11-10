@@ -292,6 +292,48 @@ function stretchDark(gray, w, y0, y1) {
   return out;
 }
 
+/* Veikanten når veien ikke har oppmalte linjer (0.13.3). På smale veier uten gode markeringer fant appen ingen linjer,
+   mens feltmodellen ser veien (det blå feltet). Feltet vårt er da høyre halvdel av veien: høyre veikant og midten.
+   road: [[y, venstre, høyre], …] fra feltmodellen i analysebildets piksler. vh: horisonten (rad), yBottom: nederste
+   rad linjene tegnes til. Rader der kanten går ut av bildet, og smale biter nederst (panseret skygger) tas ikke med.
+   Hver linje tilpasses x = A + B·d + C/d (d = y − vh, som de buede feltlinjene). Svarer { left, right } med linjer
+   merket edge: 'midt' / 'kant', eller null for en side med for lite vei. */
+export function roadEdgeLines(road, w, { vh, yBottom, minRows = 6 } = {}) {
+  const rows = (road || []).filter(r => r[0] > vh + 2 && r[0] <= yBottom).sort((a, b) => a[0] - b[0]);
+  let widest = 0;
+  const good = rows.filter(r => { const s = r[2] - r[1]; if (s < 0.5 * widest) return false; widest = Math.max(widest, s); return s > 0; });
+  const fitSide = (pts, edge) => {
+    if (pts.length < minRows || pts[pts.length - 1].y - pts[0].y < 12) return null;
+    // Minste kvadrater med basis [1, d, 1/d]; litt demping på C, så noen få rader ikke gir en vill sving
+    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], v = [0, 0, 0];
+    let s2 = 0;
+    for (const p of pts) {
+      const d = p.y - vh, f = [1, d, 1 / d];
+      s2 += f[2] * f[2];
+      for (let i = 0; i < 3; i++) { v[i] += f[i] * p.x; for (let j = 0; j < 3; j++) M[i][j] += f[i] * f[j]; }
+    }
+    M[2][2] += 0.05 * s2;
+    const c = solve3(M, v);
+    if (!c) return null;
+    const L = { curve: { A: c[0], B: c[1], C: c[2], vh }, yBottom, yTop: pts[0].y, inliers: pts.length, edge };
+    L.xBottom = laneX(L, yBottom); L.xTop = laneX(L, L.yTop);
+    return L;
+  };
+  const right = fitSide(good.filter(r => r[2] < w - 2).map(r => ({ y: r[0], x: r[2] })), 'kant');
+  const left = fitSide(good.filter(r => r[1] > 1 && r[2] < w - 2).map(r => ({ y: r[0], x: (r[1] + r[2]) / 2 })), 'midt');
+  return { left, right };
+}
+function solve3(M, v) {
+  const a = M.map((r, i) => [...r, v[i]]);
+  for (let i = 0; i < 3; i++) {
+    let p = i; for (let k = i + 1; k < 3; k++) if (Math.abs(a[k][i]) > Math.abs(a[p][i])) p = k;
+    if (Math.abs(a[p][i]) < 1e-12) return null;
+    [a[i], a[p]] = [a[p], a[i]];
+    for (let k = 0; k < 3; k++) if (k !== i) { const f = a[k][i] / a[i][i]; for (let j = i; j < 4; j++) a[k][j] -= f * a[i][j]; }
+  }
+  return [a[0][3] / a[0][0], a[1][3] / a[1][1], a[2][3] / a[2][2]];
+}
+
 /* Lysere bilde til feltmodellen i mørket (0.13.2): i 40 km/t eller mer fant den begge linjene i 10–28 % av bildene med
    lys (snitt 0–255) under 30, mot 77–84 % fra lys 40 (turene 6. og 9. nov.). Bilgjenkjenningen får allerede et lysnet
    bilde. Gammakurven v → 255·(v/255)^g løfter snittet mot 70 i mørket, glidende til ingen endring ved lys 50.

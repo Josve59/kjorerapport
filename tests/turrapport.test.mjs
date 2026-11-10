@@ -15,7 +15,7 @@ function exportFile(dir, name, perf) {
   for (let i = 0; i < 120; i++) loc.push({ t: i, lat: 59.9 + i * 1e-4, lon: 10.7, speed: (i > 30 && i < 50 ? 60 : 40) / 3.6, bearing: 0, acc: 5 });
   // 9 bilder i sekundet: venstre linje 15 av 20, høyre 30 av 40, ansikt 3 av 4
   for (let i = 0; i < 1080; i++) {
-    road.push({ t: i / 9, cars: 0, people: 0, lead: null, lane: { l: i % 20 < 15, r: i % 40 < 30, offset: null }, lum: i < 360 ? 20 : 50 });
+    road.push({ t: i / 9, cars: 0, people: 0, lead: null, lane: { l: i % 20 < 15, r: i % 40 < 30, offset: null, ...(i % 10 === 0 ? { e: 1 } : {}) }, lum: i < 360 ? 20 : 50 });
     head.push({ t: i / 9, yaw: 0, pitch: 0, ex: 0, ey: 0, ok: i % 4 !== 0 });
   }
   const f = join(dir, name);
@@ -41,6 +41,7 @@ test('turrapport: tall fra en oppdiktet tur', () => {
     assert.match(a, /Feltmodell +kjørte: 950 svar, 23 ms per bilde · TwinLiteNet\+ · ane · lysnet i mørket i 20 %/);
     assert.match(a, /i mørket \(lys under 30, minst 40 km\/t\): begge 63 % av 360 bilder/);
     assert.match(a, /ledsagerens side skjult i 30 % av bildene/);
+    assert.match(a, /uten oppmalte linjer: veikanten fra feltmodellen vist i 10 % av bildene/);
     assert.match(a, /bil utenfor veien tatt bort i 5 % av 800 bilder der veien var kjent/);
     assert.doesNotMatch(b, /ledsagerens side|utenfor veien|lysnet/, 'eldre turer har ikke tellerne');
     assert.match(a, /D-FINE +61 ms per bilde · 400 svar, fant noe i 30 %/);

@@ -28,7 +28,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.2';
+export const APP_VERSION = '0.13.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1667,10 +1667,10 @@ function drawCamView() {
       const pts = sample(raw);
       const eased = o && o.pts.length === N ? pts.map(([x, y], i) => [o.pts[i][0] + (x - o.pts[i][0]) * aLane, o.pts[i][1] + (y - o.pts[i][1]) * aLane]) : pts;
       camEase.lanes[side] = { pts: eased };
-      lines[side] = { pts: eased, predicted: !!raw.predicted };
+      lines[side] = { pts: eased, predicted: !!raw.predicted, edge: raw.edge || null };
     }
     if (lines.left && lines.right) {
-      g.fillStyle = 'rgba(61, 220, 132, 0.16)'; g.beginPath();
+      g.fillStyle = lines.right.edge ? 'rgba(255, 167, 38, 0.12)' : 'rgba(61, 220, 132, 0.16)'; g.beginPath();
       lines.left.pts.forEach(([x, y], i) => (i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))));
       lines.right.pts.slice().reverse().forEach(([x, y]) => g.lineTo(X(x), Y(y)));
       g.closePath(); g.fill();
@@ -1681,6 +1681,8 @@ function drawCamView() {
       if (!Ln) continue;
       g.save(); g.strokeStyle = col;
       if (Ln.predicted) { g.setLineDash([10, 9]); g.globalAlpha = 0.6; }
+      // Veikant og midten av veien uten oppmalte linjer (0.13.3): oransje prikker, så de ikke forveksles med linjer
+      if (Ln.edge) { g.strokeStyle = '#ffa726'; g.setLineDash([2, 10]); g.globalAlpha = 0.9; }
       g.beginPath(); Ln.pts.forEach(([x, y], i) => (i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y)))); g.stroke();
       g.restore();
     }
@@ -1730,6 +1732,7 @@ function drawCamView() {
 /* Hva kameraet så av feltlinjene (0.10.3): sette linjer, og om en er tegnet etter feltbredden */
 function laneSeenText(ln) {
   if (!ln) return 'Ingen feltlinjer';
+  if ((ln.left && ln.left.edge) || (ln.right && ln.right.edge)) return 'Ingen oppmalte linjer – veikanten og midten av veien (feltmodell)';
   const seen = ['left', 'right'].filter(k => ln[k] && !ln[k].predicted).length, guess = ['left', 'right'].some(k => ln[k] && ln[k].predicted);
   const txt = seen === 2 ? 'Begge feltlinjer' : seen === 1 ? (guess ? 'Én feltlinje, den andre etter feltbredden' : 'Én feltlinje') : 'Ingen feltlinjer';
   return ln.ml ? `${txt} (feltmodell)` : txt;

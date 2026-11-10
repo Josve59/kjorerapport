@@ -4,7 +4,7 @@
    I Safari bare førerkameraet, som før. Ingen bilder lagres eller sendes – bare vinkler og tall om veien går videre. */
 import { poseFromMatrix, eyesFromBlendshapes } from './camera.js';
 import { processDetections, detectTaillights, roadDets, focalPx, onRoad as onRoadArea, VEHICLE_WIDTH } from './road.js';
-import { detectLanes, toGray, rowMeans, dashLine, scaleLane, LANE_WIDTH, createLaneTracker, laneGamma } from './lanes.js';
+import { detectLanes, toGray, rowMeans, dashLine, scaleLane, LANE_WIDTH, createLaneTracker, laneGamma, roadEdgeLines } from './lanes.js';
 import { createTracker } from './track.js';
 import { matchShift } from './flow.js';
 import { readSigns, signTracker } from './signs.js';
@@ -260,7 +260,8 @@ function roadTick() {
     // Til turrapporten (0.13.2): hvor ofte veien var kjent, og hvor ofte en bil ble tatt bort fordi den sto utenfor
     if (area) { perf.roadKnown++; if (merged.some(d => VEHICLE_WIDTH[d.cls] && d.score >= 0.35 && !onRoadArea(d, area, vw, vh))) perf.offRoad++; }
     // Feltlinjene fra forrige bilde (regnet på et lite bilde), skalert til kamerabildet
-    const pl = lastView && lastView.lane && lastView.lane.left && lastView.lane.right ? lastView.lane : null, kk = pl ? vw / pl.W : 1;
+    // Bare oppmalte linjer: veikanten og midten (0.13.3) er for usikre til å skille bilen foran fra møtende biler
+    const pl = lastView && lastView.lane && lastView.lane.left && lastView.lane.right && !lastView.lane.left.edge && !lastView.lane.right.edge ? lastView.lane : null, kk = pl ? vw / pl.W : 1;
     r = processDetections(merged, vw, vh, { roadBottom, lane: pl ? { left: scaleLane(pl.left, kk), right: scaleLane(pl.right, kk) } : null, road: area });
     lastView = { at: performance.now(), w: vw, h: vh, lead: r.lead, roadBottom, dfine: roadModel, lane: lastView && lastView.lane };
   } catch { r = null; }
@@ -288,7 +289,8 @@ function roadTick() {
     const laneW = shape.laneWidth || LANE_WIDTH;
     // Linjene kameraet så i forrige bilde (ikke de tegnet etter feltbredden), så valget holder seg til samme linje (0.12.5)
     const pv = lastView && lastView.lane && lastView.lane.W === W && performance.now() - (lastView.lane.at || 0) < 600 ? lastView.lane : null;
-    const prev = pv ? { left: pv.left && !pv.left.predicted ? pv.left : null, right: pv.right && !pv.right.predicted ? pv.right : null } : null;
+    const painted = L => (L && !L.predicted && !L.edge ? L : null);
+    const prev = pv ? { left: painted(pv.left), right: painted(pv.right) } : null;
     // Feltmodellen (0.13.0): punktene på linjene den fant, skalert til det lille bildet. Punkter godt utenfor veien
     // foran (gang- og sykkelvei, linjer bak en fortauskant) tas ikke med. Uten ferskt svar: den enkle bildeanalysen.
     const ml = mlLanes && mlLanes.w > 0 && Math.abs(mlLanes.h / mlLanes.w - vh / vw) < 0.02 && performance.now() - mlLanes.at < 600 ? mlLanes : null;
@@ -299,8 +301,15 @@ function roadTick() {
     const ln = { ...raw, ...laneTrack.step(raw, W) };
     // Kamerahøyden fra feltbredden: telefonen står i en holder ved rattet, så bare rimelige høyder tas med (0.12.5)
     if (Number.isFinite(ln.camH) && ln.camH > 0.8 && ln.camH < 1.8) camHEst += (ln.camH - camHEst) * 0.05;
-    const seenL = !!ln.left && !ln.left.predicted, seenR = !!ln.right && !ln.right.predicted;
-    r.lane = { l: seenL, r: seenR, offset: ln.offset, ...(ln.curve ? { k: Math.round(ln.curve.kappa * 1e4) / 1e4 } : {}), ...(shape.laneWidth ? { lw: shape.laneWidth } : {}) };
+    // Smale veier uten oppmalte linjer (0.13.3): ingen linje sett, men feltmodellen ser veien. Da vises høyre veikant og
+    // midten av veien (feltet vårt er høyre halvdel). Telles ikke som sette linjer, og gir ikke sideavvik.
+    let edge = false;
+    if (ml && !painted(ln.left) && !painted(ln.right)) {
+      const e = roadEdgeLines(scaleRoad(ml.road, W / ml.w), W, { vh: base.horizon * H, yBottom: base.bottom * H });
+      if (e.right) { ln.left = e.left; ln.right = e.right; edge = true; }
+    }
+    const seenL = !!painted(ln.left), seenR = !!painted(ln.right);
+    r.lane = { l: seenL, r: seenR, offset: ln.offset, ...(edge ? { e: 1 } : {}), ...(ln.curve ? { k: Math.round(ln.curve.kappa * 1e4) / 1e4 } : {}), ...(shape.laneWidth ? { lw: shape.laneWidth } : {}) };
     Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H, at: performance.now(), ml: !!points, road: ml ? scaleRoad(ml.road, W / ml.w) : null, kappa: ln.curve ? ln.curve.kappa : null,
       prior: shape.kappa, src: shape.src, lanes: shape.lanes, laneWidth: shape.laneWidth }, lum: r.lum, roadBottom });
   } catch { /* ingen feltlinjer */ }

@@ -142,6 +142,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.3 – no hay bales as cars, steady bus labels, road edges on unmarked roads
+
+- On roads without painted lines (narrow roads with poor markings) the road camera now shows the right road edge and the middle of the road from the lane model, as orange dots, instead of no lines. They are not counted as seen lane lines, give no position in the lane, and are not used to pick the car ahead.
+- A car must now stand within a fifth of the road's width from the road the lane model sees (0.13.2 allowed half): on narrow roads half was 2–2.5 m, enough for hay bales on the field to show as cars.
+- Each tracked vehicle keeps the class most of the answers gave. On 9 November at 20:52 the same car switched between car, bus and truck from frame to frame (659 frames with a «bus» or «truck» ahead, mostly for 0.3 s), and the distance jumped 40 % because a bus is taken to be 2.55 m wide.
+- `tools/turrapport.mjs` shows how often the road edges were shown.
+
 ## What's new in 0.13.2 – no cars on houses, lane lines in the dark, the driver not the companion
 
 - Lit windows and lamps on houses are no longer shown or counted as cars. A car must now stand on the road the lane model sees, or right next to it (parked cars): a box whose bottom is well above where the road ends, or far to the side of it, is dropped. Red lights off the road are no longer taken for tail lights either. Without an answer from the lane model nothing changes.

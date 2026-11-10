@@ -37,8 +37,9 @@ export function roadDets(dets, w, h, roadBottom = null, road = null) {
    y0: toppen av båndet modellen ser }, alt i kamerabildets piksler. En bil står med hjulene på veien eller rett ved den:
    - underkanten av boksen ligger ikke godt over der veien slutter, når veien smalner til en spiss der (ikke når den
      bare forsvinner i mørket eller fortsetter over båndet),
-   - boksen når inn til veien på samme høyde, med en halv veibredde å gå på (parkerte biler bak fortauet).
-   Nær bilen (nederste 40 % av veien) godtas alt. Uten svar fra feltmodellen sjekkes ingenting. */
+   - boksen når inn til veien på samme høyde, med en femtedel av veibredden å gå på (parkerte biler i veikanten).
+     0.13.2 ga en halv veibredde: på smale veier 2–2,5 m, nok til at høyballer på jordet ble «biler» (9. nov. kl. 20.52).
+   Nær bilen (nederste 40 % av veien, rundt 7 m) godtas alt. Uten svar fra feltmodellen sjekkes ingenting. */
 export function onRoad(b, road, w, h) {
   const rows = road && road.rows;
   if (!rows || rows.length < 8) return true;
@@ -51,7 +52,7 @@ export function onRoad(b, road, w, h) {
   }
   let r = top, best = Infinity;
   for (const q of rows) { const d = Math.abs(q[0] - yb); if (d < best) { best = d; r = q; } }
-  const m = Math.max(0.5 * (r[2] - r[1]), 0.03 * w);
+  const m = Math.max(0.2 * (r[2] - r[1]), 0.02 * w);
   return b.x <= r[2] + m && b.x + b.w >= r[1] - m;
 }
 

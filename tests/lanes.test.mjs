@@ -131,3 +131,25 @@ test('feltmodellen i mørket: bildet lysnes under lys 50, mest i det mørkeste, 
   let prev = laneGamma(4);
   for (let lum = 5; lum <= 55; lum++) { const g = laneGamma(lum); assert.ok(g >= prev && g - prev <= 0.1, `lys ${lum}: ${prev} → ${g}`); prev = g; }
 });
+
+/* ---------- Veikanten på veier uten oppmalte linjer (0.13.3) ---------- */
+import { roadEdgeLines, laneX } from '../kamera/js/lanes.js';
+test('smal vei uten linjer: høyre veikant og midten av veien fra feltmodellens vei', () => {
+  // Analysebildet 240×427, horisonten ved rad 220. En 5 m bred vei, bilen 1 m til høyre for midten, kamerahøyde 1,2 m:
+  // x = 120 + X·d/1,2 (X sideveis i meter, d rader under horisonten). Veien går ut av bildet nederst.
+  const vh = 220, xAt = (X, y) => 120 + X * (y - vh) / 1.2;
+  const road = [];
+  for (let y = 224; y <= 330; y += 2) road.push([y, Math.max(0, Math.round(xAt(-3.5, y))), Math.min(240, Math.round(xAt(1.5, y)))]);
+  road.push([332, 200, 240], [334, 230, 240]);                     // panseret skygger: smale biter nederst
+  const { left, right } = roadEdgeLines(road, 240, { vh, yBottom: 330 });
+  assert.equal(right.edge, 'kant'); assert.equal(left.edge, 'midt');
+  for (const y of [240, 260, 280]) {
+    assert.ok(Math.abs(laneX(right, y) - xAt(1.5, y)) < 2, `høyre kant ved ${y}: ${laneX(right, y)} mot ${xAt(1.5, y)}`);
+    assert.ok(Math.abs(laneX(left, y) - xAt(-1, y)) < 2.5, `midten ved ${y}: ${laneX(left, y)} mot ${xAt(-1, y)}`);
+  }
+  // Nederst er kanten utenfor bildet, men linjen fortsetter riktig dit
+  assert.ok(Math.abs(laneX(right, 330) - xAt(1.5, 330)) < 6);
+  // For lite vei: ingen linjer
+  assert.deepEqual(roadEdgeLines(road.slice(0, 3), 240, { vh, yBottom: 330 }), { left: null, right: null });
+  assert.deepEqual(roadEdgeLines(null, 240, { vh, yBottom: 330 }), { left: null, right: null });
+});

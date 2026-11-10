@@ -69,13 +69,19 @@ export function createTracker({ maxAge = 1000, maxAhead = 500, smooth = 0.5 } = 
       const gain = flow ? 0.35 : 1;
       for (const k of K) tr.box[k] = Math.max(k === 'w' || k === 'h' ? 4 : -Infinity, tr.box[k] + (d[k] - past[k]) * gain);
       tr.det = { t: Math.max(tr.det.t, t), b: { x: d.x, y: d.y, w: d.w, h: d.h } };
-      tr.seen = Math.max(tr.seen, t); tr.hits++; tr.cls = d.cls; tr.score = d.score; tr.src = d.src;
+      tr.seen = Math.max(tr.seen, t); tr.hits++; tr.score = d.score; tr.src = d.src;
+      // Klassen etter flertallet (0.13.3): D-FINE vekslet mellom bil, buss og lastebil på samme bil (turen 9. nov.
+      // kl. 20.52: 659 bilder med «buss» eller «lastebil» foran, oftest i 0,3 s), og avstanden hoppet 40 % fordi en
+      // buss regnes som 2,55 m bred. Hvert svar teller med scoren sin, eldre svar teller litt mindre.
+      for (const k in tr.votes) tr.votes[k] *= 0.85;
+      tr.votes[d.cls] = (tr.votes[d.cls] || 0) + d.score;
+      tr.cls = Object.keys(tr.votes).reduce((a, b) => (tr.votes[b] > tr.votes[a] ? b : a));
       remember(tr);
     }
     dets.forEach((d, j) => {
       if (usedD.has(j) || d.score < minNew) return;
       const b = { x: d.x, y: d.y, w: d.w, h: d.h };
-      const tr = { id: nextId++, box: { ...b }, v: { x: 0, y: 0, w: 0, h: 0 }, t, seen: t, flowAt: -Infinity, det: { t, b }, hist: [], hits: 1, cls: d.cls, score: d.score, src: d.src };
+      const tr = { id: nextId++, box: { ...b }, v: { x: 0, y: 0, w: 0, h: 0 }, t, seen: t, flowAt: -Infinity, det: { t, b }, hist: [], hits: 1, cls: d.cls, votes: { [d.cls]: d.score }, score: d.score, src: d.src };
       remember(tr); tracks.push(tr);
     });
     tracks = tracks.filter(alive(t));

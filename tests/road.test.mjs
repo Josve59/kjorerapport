@@ -160,3 +160,13 @@ test('veikamera i mørket: røde lys utenfor veien er ikke baklys', () => {
   assert.equal(detectTaillights(frame, w, h, { onRoad: b => { asked = b; return false; } }).lead, null);
   assert.ok(Math.abs(asked.x - (160 - sep / 2)) < 1.5 && Math.abs(asked.w - sep) < 2 && Math.abs(asked.y - 150) < 1.5, JSON.stringify(asked));
 });
+test('veikamera: høyballer på jordet ved en smal vei er ikke biler, en bil i veikanten er det (0.13.3)', () => {
+  const W = 720, H = 1280;
+  // Smal vei: 120 px bred ved rad 760 (rundt 4,5 m), spiss ved 665
+  const road = roadRows({ tip: [370, 390], full: 1400 });
+  const at = road.rows.find(r => r[0] === 760);
+  const bale = { cls: 'car', score: 0.6, x: at[2] + 40, y: 730, w: 45, h: 30 };     // 40 px (rundt 1,5 m) ut på jordet
+  const parked = { cls: 'car', score: 0.7, x: at[2] - 15, y: 728, w: 60, h: 32 };   // står litt inn på veien
+  assert.ok(!onRoad(bale, road, W, H), JSON.stringify({ at, bale }));
+  assert.ok(onRoad(parked, road, W, H));
+});

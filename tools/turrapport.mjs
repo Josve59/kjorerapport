@@ -118,6 +118,9 @@ function report(drive, input, file, exportVersion) {
     line('Feltlinjer', `begge ${pct(ls.both, ls.n)} · én ${pct(ls.one, ls.n)} · ingen ${pct(ls.none, ls.n)} (${n0(ls.n)} bilder)`);
     more(`skifter ${n0(ls.flips)} ganger, ${n1(ls.perMin)} per min${ls.median !== null ? `; en tilstand varer typisk ${n1(ls.median)} s` : ''}`);
     // I mørket på veier med linjer (0.13.2 lysner bildet til feltmodellen): 9. nov. var det 10–28 % her, mot ~80 % i lyset
+    // Fra 0.13.3: veikanten og midten av veien vist i bilder uten oppmalte linjer
+    const ne = road.filter(r => r.lane && r.lane.e).length;
+    if (ne) more(`uten oppmalte linjer: veikanten fra feltmodellen vist i ${pct(ne, ls.n)} av bildene`);
     const dk = darkLanes(road, loc);
     if (dk.n >= 50) more(`i mørket (lys under 30, minst 40 km/t): begge ${pct(dk.both, dk.n)} av ${n0(dk.n)} bilder`);
   } else line('Feltlinjer', 'ingen data fra veikameraet lagret med turen');

@@ -50,3 +50,17 @@ test('følging: usikre svar holder liv i en bil som følges, men starter ingen n
   assert.equal(tr.predict(2050).length, 1);
   assert.equal(tr.predict(2400).length, 0);
 });
+
+test('følging: klassen følger flertallet, så en bil ikke blinker til buss (0.13.3)', () => {
+  const tr = createTracker();
+  const seq = ['car', 'car', 'bus', 'car', 'truck', 'car', 'bus', 'car'];
+  seq.forEach((cls, k) => tr.update([{ cls, score: cls === 'car' ? 0.7 : 0.6, x: 300 + k, y: 400, w: 80, h: 60 }], k * 120));
+  const p = tr.predict(seq.length * 120);
+  assert.equal(p.length, 1); assert.equal(p[0].cls, 'car');
+  // En ekte buss som en gang ses som lastebil, forblir buss; skifter svarene for godt, skifter klassen etter hvert
+  const b = createTracker();
+  ['bus', 'bus', 'truck', 'bus'].forEach((cls, k) => b.update([{ cls, score: 0.8, x: 300, y: 400, w: 160, h: 120 }], k * 120));
+  assert.equal(b.predict(480)[0].cls, 'bus');
+  for (let k = 4; k < 12; k++) b.update([{ cls: 'truck', score: 0.8, x: 300, y: 400, w: 160, h: 120 }], k * 120);
+  assert.equal(b.predict(12 * 120)[0].cls, 'truck');
+});
