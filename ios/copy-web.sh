@@ -26,6 +26,6 @@ if [ ! -f "$OUT/weights/weight.bin" ] || [ -n "$(find "$MODEL/weights" -name 'we
 fi
 echo "D-FINE kopiert til $OUT"
 
-# Feltlinjene (TwinLiteNet+ large, 4 MB, se Models/README.md): liten nok til å ligge i ett stykke
+# Feltlinjene (TwinLiteNet+ large med egne vekter fra comma10k, 4 MB, se Models/README.md): liten nok til å ligge i ett stykke
 rsync -a --delete "$SRCROOT/Models/Lanes.mlmodelc/" "$RES/Lanes.mlmodelc/"
 echo "Feltmodellen kopiert til $RES/Lanes.mlmodelc"

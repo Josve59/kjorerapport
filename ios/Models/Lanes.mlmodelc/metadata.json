@@ -1,7 +1,7 @@
 [
   {
     "metadataOutputVersion" : "3.0",
-    "shortDescription" : "TwinLiteNet+ large (MIT, chequanghuy\/TwinLiteNetPlus, BDD100K). Input 640x384 RGB. Outputs lanes, road [1,1,384,640]: >0 = lane line \/ drivable.",
+    "shortDescription" : "TwinLiteNet+ large (MIT, chequanghuy\/TwinLiteNetPlus), trained from scratch on comma10k (MIT, comma.ai). Input 640x384 RGB. Outputs lanes, road [1,1,384,640]: >0 = lane line \/ road.",
     "outputSchema" : [
       {
         "hasShapeFlexibility" : "0",
@@ -83,7 +83,7 @@
       }
     ],
     "userDefinedMetadata" : {
-      "com.github.apple.coremltools.conversion_date" : "2026-11-06",
+      "com.github.apple.coremltools.conversion_date" : "2026-11-10",
       "com.github.apple.coremltools.source" : "torch==2.8.0",
       "com.github.apple.coremltools.version" : "9.0",
       "com.github.apple.coremltools.source_dialect" : "TorchScript"

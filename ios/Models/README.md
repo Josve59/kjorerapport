@@ -44,23 +44,58 @@ Two changes were needed for the conversion:
 - The Neural Engine took 84–209 ms, much slower, so the app uses the GPU (or «all», whichever is faster on the phone).
 - 8-bit weights halved the size but matched only 52 of 57.
 
-# Lane lines and the road ahead (Core ML, 0.13.0)
+# Lane lines and the road ahead (Core ML, 0.13.0; own weights from 0.13.6)
 
-`Lanes.mlmodelc` is **TwinLiteNet+ large** ([chequanghuy/TwinLiteNetPlus](https://github.com/chequanghuy/TwinLiteNetPlus), MIT, 1.94 M parameters, 4 MB), trained on BDD100K (dashcam drives by day and night, in rain and snow). It marks every pixel as lane line or not, and drivable road or not. BDD100K lane IoU 34.2 %, drivable area mIoU 92.9 %.
+`Lanes.mlmodelc` is **TwinLiteNet+ large** ([chequanghuy/TwinLiteNetPlus](https://github.com/chequanghuy/TwinLiteNetPlus), MIT, 1.94 M parameters, 4 MB). From 0.13.6 the weights are **our own, trained from scratch on comma10k** ([commaai/comma10k](https://github.com/commaai/comma10k), MIT, © 2020 Comma.ai, Inc.: 9 888 dashcam pictures labelled by hand, day and night). Until 0.13.5 the app used the project's weights trained on BDD100K, whose terms are for research and non-commercial use. The model marks every pixel as lane line or not, and road or not.
 
-**Why:** the simple image analysis in the web app (`js/lanes.js`) took kerbs, road edges, guardrails and snow poles for lane lines and flickered. On 168 night frames from 2 Nov the model found the real lines where the old method followed guardrails, and drew nothing on roads without markings instead of a road edge.
+**Why a model (0.13.0):** the simple image analysis in the web app (`js/lanes.js`) took kerbs, road edges, guardrails and snow poles for lane lines and flickered.
 
 - **Input:** `image`, 640×384 RGB (0–1). `LaneDetector.swift` takes a 16:9 band of the portrait road frame right above the dashboard edge, scales it to 640×360 and adds 12 grey rows (114) above and below, as in training.
-- **Output:** `lanes` and `road`, [1, 1, 384, 640]: above 0 = lane line / drivable road.
+- **Output:** `lanes` and `road`, [1, 1, 384, 640]: above 0 = lane line / road.
 - `LaneDetector.swift` sends the middle of each lane-line run (every 2nd row) and the left and right edge of the road ahead (every 4th row) to the web app, which fits the lane lines from those points (`detectLanes(…, { points })`) and keeps them steady over time.
+- **Road means the whole road surface** from 0.13.6, oncoming lanes included (comma10k's label). BDD100K's «drivable area» was narrower. The app uses it to drop lane points and cars that are off the road (`mlPoints`, `onRoad`) and for the road edges on unmarked roads (`roadEdgeLines`).
 
-**How it was made** (Python 3.9, torch 2.8, coremltools 9.0): `tln_model.py` is the model written out again from the project's `model/model.py` (same layer names, so the weights load with `strict=True`); weights `large.pth` from the project's Google Drive, loaded with `weights_only=True`.
+## How the weights were made (0.13.6)
+
+Python 3.9, torch 2.8, scipy 1.13, coremltools 9.0, on the Mac's GPU (MPS, fp32: fp16 made the training unstable). `tln_model.py` is the model written out again from the project's `model/model.py`. The scripts are in `lanes-train/` and run from a work folder with the data (`.local-test/lanes-comma/`, 8 GB, not in git). The finished weights are `lanes-comma10k.pth`.
+
+1. **Data:** comma10k at commit `6c205fe` (20 Feb 2026), `imgs/` and `masks/` in `raw/`. `prep.py` writes pictures and labels (road, lane markings, own car) and where the bonnet starts. Every 20th picture (495) is the test set, the other 9 393 are for training.
+2. **Cropped like the phone** (`train.py`): a 16:9 band that ends at the bonnet edge, as the app's band ends at the dashboard edge. In training the band is 34–58° wide, tilted up to 4°, mirrored, with changed light and colour, and in 30 % of the pictures darkened, noisy and brightened with gamma, as the app does in the dark.
+3. **First training from scratch:** `KJ_LBL=lbl python train.py --epochs 22 --low 16` (16 rounds at 3/4 size, then 6 at full size, 3 h 9 min). AdamW, batch 32, cross-entropy + Dice, the averaged (EMA) weights are kept.
+4. **Dashes joined** (`connect.py`): comma10k labels only the paint, so the first model drew a dashed line as separate dashes. The BDD100K weights drew it as a whole line, which is what the app's line fit was tuned with. `connect.py` joins a dash to the next one up the road when it lies in the dash's direction, the gap is no longer than a normal gap (at most 4 times the dash, about 18 m on the ground) and there is road all the way between: 33 876 joins in 6 626 of the 9 888 pictures, checked on contact sheets (`sheet_gt.py`).
+5. **Fine-tuned on the joined labels:** `python train.py --init best.pth --epochs 9 --low 6 --lr 4e-4` (81 min). The best full-size round is kept.
+6. **Converted:**
 
 ```
-python convert-lanes.py - large.pth Lanes.mlpackage
+python convert-lanes.py - lanes-comma10k.pth Lanes.mlpackage
 xcrun coremlcompiler compile Lanes.mlpackage .
 ```
 
-fp16 Core ML matches PyTorch fp32 on a night frame (lane and road pixels 100 % the same).
+fp16 Core ML matches PyTorch fp32 on 62 test pictures (`check_coreml.py`): lane pixels 99.997 % the same, road pixels 99.994 %, 16 ms per picture on the Mac's GPU. Input and output are the same as before, so nothing in the Swift code changed.
 
-**Licence note:** the code and weights are MIT, but BDD100K's own terms are for research and non-commercial use. Check this before the app is sold. (D-FINE no longer uses Objects365 from 0.13.5.)
+## Compared with the BDD100K weights
+
+On the 495 test pictures, against the labels with joined dashes (`compare.py`), and through the app's own line fit (`applevel.py` makes the same points as `LaneDetector.swift`, `applevel.mjs` sends them through `detectLanes` the way `js/facecam.js` does):
+
+| | BDD100K (until 0.13.5) | First training | Fine-tuned (in the app) |
+| --- | --- | --- | --- |
+| Lane points found | 70 % | 75 % | 83 % |
+| Reported points that are right | 73 % | 81 % | 80 % |
+| The same in the 122 dark pictures | 70 % / 79 % | 74 % / 83 % | 82 % / 83 % |
+| Right lines out of the app's line fit | 580 | 608 | 609 |
+| Wrong lines | 42 | 39 | 41 |
+| Pictures with no line | 85 | 68 | 69 |
+| Dark pictures: right / wrong lines | 155 / 7 | 162 / 6 | 163 / 6 |
+| Road, overlap with the labels | 72 % | 95 % | 95 % |
+
+- **A line counts as right** when at least 5 rows near the car have a labelled line within 12 px and the median distance is 3 px or less (in the app's 240 px wide picture).
+- **With the line fit set to the comma camera's horizon** (`comma` in `applevel.mjs`): 599 right and 121 wrong, 638 and 53, 646 and 70. In the 29 pictures where only the fine-tuned model had a wrong line, about 18 were real dashed lines that the labels lack (`sheet_app.py`), and about 6 were false: tar seams, and once a line across a car close in front.
+- **The road number is unfair to the BDD100K weights:** they were trained to mark a narrower area.
+
+**Not tested:**
+- The test pictures come from the same source as the training pictures (comma's cameras, mostly American roads) and are new to the BDD100K weights. Neither set of weights is measured on pictures from the phone on Norwegian roads: the colour frames from the drives are gone.
+- The phone's band shows the road a little closer than the training crops (the horizon about 21 % from the top of the band, 35–44 % in training).
+- Speed and heat on the phone (same network, so no change is expected).
+- The real test is a drive: compare lane lines and how often they flip in `tools/turrapport.mjs` with earlier exports, in the dark and on dashed lines.
+
+**Licence:** the model code is MIT (© 2025 Chế Quang Huy), the training pictures and labels are MIT (© 2020 Comma.ai, Inc.), and the weights are our own. Both notices are on the app's licence page (`lisenser/index.html`). Nothing in the lane model is limited to non-commercial use now.

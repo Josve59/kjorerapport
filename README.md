@@ -142,6 +142,16 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.6 – lane model trained on open data
+
+- The road camera's lane model (TwinLiteNet+ large) now has our own weights, trained from scratch on comma10k (MIT, © 2020 Comma.ai, Inc., about 10 000 dashcam pictures labelled by hand). Before, the weights were trained on BDD100K, which is for research and non-commercial use. With the car model from 0.13.5, neither of the road camera's two models is trained on data listed as non-commercial.
+- Same network, size and speed. Nothing changed in the Swift code or in how the app fits the lines.
+- On 495 test pictures that were not used in the training, it finds 83 % of the lane points (70 % before), and 80 % of the points it reports are right (73 %). Through the app's own line fit: 609 right lines (580), 41 wrong (42) and 69 pictures with no line (85). In the 122 dark pictures: 163 right and 6 wrong (155 and 7).
+- comma10k labels only the paint, so a first training drew dashed lines as separate dashes. The dashes were joined in the labels and the model fine-tuned, so it draws a dashed line whole, as the old weights did.
+- «Road» from the model is now the whole road surface, oncoming lanes included. The app uses it to drop cars and lane points off the road and for the road edges on unmarked roads.
+- **Not tested** on pictures from the phone or on Norwegian roads: the test pictures come from the same source as the training pictures. Check lane lines and flips after the next drive with `tools/turrapport.mjs`. How it was trained and measured: `ios/Models/README.md`, scripts in `ios/Models/lanes-train/`.
+- The licence page credits comma10k and COCO, and no longer says the car model is trained on Objects365.
+
 ## What's new in 0.13.5 – car detection without Objects365
 
 - The road camera's car detection is now D-FINE medium trained on COCO only (`ustc-community/dfine-medium-coco`, Apache 2.0). Before, it was the same model pretrained on Objects365, a dataset listed as non-commercial, which could stop the app from being sold. The lane model (BDD100K) still has the same question open.

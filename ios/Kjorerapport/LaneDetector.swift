@@ -2,10 +2,11 @@ import CoreImage
 import CoreML
 import QuartzCore
 
-/// Feltlinjer og vei med maskinlæring (0.13.0): TwinLiteNet+ large (MIT, chequanghuy/TwinLiteNetPlus), trent på
-/// BDD100K (100 000 kjøreturer, dag og natt, regn og snø). Modellen merker hver piksel som feltlinje eller ikke, og
-/// kjørbar vei eller ikke. Den skiller oppmalte linjer fra veikanter, rekkverk, fortauskanter og brøytestikker, som den
-/// enkle bildeanalysen i nettappen ofte tok feil av.
+/// Feltlinjer og vei med maskinlæring (0.13.0): TwinLiteNet+ large (MIT, chequanghuy/TwinLiteNetPlus). Fra 0.13.6 med
+/// egne vekter, trent på comma10k (MIT, rundt 10 000 håndmerkede kjørebilder, dag og natt), så ingenting i modellen er
+/// begrenset til ikke-kommersiell bruk. Modellen merker hver piksel som feltlinje eller ikke, og vei eller ikke (hele
+/// veiflaten, også motgående felt). Den skiller oppmalte linjer fra veikanter, rekkverk, fortauskanter og
+/// brøytestikker, som den enkle bildeanalysen i nettappen ofte tok feil av.
 /// Utsnittet er et bredt bånd (16:9) av det stående veibildet, rett over dashbordkanten, slik modellen er trent
 /// (dashbordkamera, 640×360 med grå kant til 640×384). Svaret er punkter midt på hver linjebit rad for rad, og venstre
 /// og høyre kant av veien foran, i kamerabildets piksler. Nettappen tilpasser feltlinjene (lanes.js) fra punktene.
