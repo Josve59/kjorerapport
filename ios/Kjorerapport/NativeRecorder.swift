@@ -103,6 +103,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         case "camConfig":
             detector.configure(roadBottom: body["roadBottom"] as? Double, dark: body["dark"] as? Bool ?? false)
             laneDetector.configure(roadBottom: body["roadBottom"] as? Double, gamma: body["laneGamma"] as? Double ?? 1)
+            if let bias = body["faceBias"] as? Double { CameraHub.shared.setUserBias(bias) }   // førerkameraet i mørket (0.13.10)
         case "geoStart":
             watching = true
             startLocation()

@@ -41,6 +41,9 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
     private let lock = NSLock()
     private var session: AVCaptureSession?
     private var facingOf: [ObjectIdentifier: Facing] = [:]
+    // Førerkameraet i mørket (0.13.10): enheten huskes, så eksponeringen kan gjøres lysere. Brukes bare på setupQueue
+    private var userDevice: AVCaptureDevice?
+    private var userBias: Float = 0
     private var latest: [Facing: Frame] = [:]
     private var seq = 0
     private(set) var active: [Facing] = []
@@ -96,6 +99,8 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
     private func stopNow() {
         session?.stopRunning()
         session = nil
+        userDevice = nil
+        userBias = 0
         #if targetEnvironment(simulator)
         simTimer?.cancel()
         simTimer = nil
@@ -121,7 +126,10 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         for f in use {
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: f == .user ? .front : .back),
                   let input = try? AVCaptureDeviceInput(device: device) else { continue }
-            Self.chooseFormat(device, size: Self.size[f]!, multi: multi)
+            // Førerkameraet får bruke lengre lukkertid i mørket (ned til 7,5 bilder i sekundet): dobbelt så mye lys.
+            // Ansiktsmodellen ser 8 bilder i sekundet, så ingenting går tapt
+            Self.chooseFormat(device, size: Self.size[f]!, multi: multi, lowLightFps: f == .user ? 7.5 : nil)
+            if f == .user { userDevice = device }
             let out = AVCaptureVideoDataOutput()
             out.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
             out.alwaysDiscardsLateVideoFrames = true
@@ -186,7 +194,7 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
     }
 
     /// Minste format med minst ønsket størrelse (og som tåler to kameraer samtidig), låst til 15 bilder i sekundet
-    private static func chooseFormat(_ device: AVCaptureDevice, size: (Int32, Int32), multi: Bool) {
+    private static func chooseFormat(_ device: AVCaptureDevice, size: (Int32, Int32), multi: Bool, lowLightFps: Double? = nil) {
         let fits = device.formats.filter { f in
             let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
             return (!multi || f.isMultiCamSupported) && d.width >= size.0 && d.height >= size.1
@@ -199,7 +207,15 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         guard let best, (try? device.lockForConfiguration()) != nil else { return }
         device.activeFormat = best
         device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: fps)
-        device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: fps)
+        // Lengste lukkertid: 1/15 s, eller lengre i mørket når formatet tåler det (kameraet velger selv etter lyset).
+        // Bare verdier formatet selv oppgir eller som ligger innenfor dem: en ugyldig verdi stopper appen
+        var slowest = CMTime(value: 1, timescale: fps)
+        if let low = lowLightFps, low < Double(fps),
+           let r = best.videoSupportedFrameRateRanges.first(where: { $0.minFrameRate <= Double(fps) && $0.maxFrameRate >= Double(fps) }) {
+            let want = r.minFrameRate <= low ? CMTime(value: 2, timescale: fps) : r.maxFrameDuration
+            if CMTimeCompare(want, r.minFrameDuration) >= 0, CMTimeCompare(want, r.maxFrameDuration) <= 0 { slowest = want }
+        }
+        device.activeVideoMaxFrameDuration = slowest
         device.unlockForConfiguration()
     }
 
@@ -228,14 +244,33 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         return latest[f]
     }
 
-    /// Siste bilde som JPEG, valgfritt nedskalert så den lengste siden er høyst maxSide.
-    func jpeg(_ f: Facing, maxSide: Int, quality: Double, after: Int) -> (data: Data, ageMs: Int, seq: Int, width: Int, height: Int)? {
+    /// Førerkameraet i mørket (0.13.10): ber kameraet eksponere lysere (trinn, 0 = vanlig) når nettappen ser at
+    /// bildet av føreren er mørkt. Holder seg innenfor det kameraet tillater.
+    func setUserBias(_ ev: Double) {
+        setupQueue.async { [self] in
+            guard let d = userDevice else { return }
+            let v = min(d.maxExposureTargetBias, max(d.minExposureTargetBias, Float(ev)))
+            guard abs(v - userBias) > 0.05, (try? d.lockForConfiguration()) != nil else { return }
+            d.setExposureTargetBias(v, completionHandler: nil)
+            d.unlockForConfiguration()
+            userBias = v
+        }
+    }
+
+    /// Siste bilde som JPEG, valgfritt nedskalert så den lengste siden er høyst maxSide. gamma under 1 lysner bildet
+    /// før det pakkes (0.13.10: førerbildet i mørket, så de mørke tonene ikke går tapt i pakkingen).
+    func jpeg(_ f: Facing, maxSide: Int, quality: Double, after: Int, gamma: Double = 1) -> (data: Data, ageMs: Int, seq: Int, width: Int, height: Int)? {
         guard let frame = latestFrame(f), frame.seq != after else { return nil }
         var image = CIImage(cvPixelBuffer: frame.buffer)
         let long = max(frame.width, frame.height)
         if maxSide > 0, long > maxSide {
             let k = CGFloat(maxSide) / CGFloat(long)
             image = image.transformed(by: CGAffineTransform(scaleX: k, y: k))
+        }
+        if gamma < 0.99, let g = CIFilter(name: "CIGammaAdjust") {
+            g.setValue(image, forKey: kCIInputImageKey)
+            g.setValue(max(0.3, gamma), forKey: "inputPower")
+            if let o = g.outputImage { image = o }
         }
         let opts = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): quality]
         guard let data = ci.jpegRepresentation(of: image, colorSpace: sRGB, options: opts) else { return nil }

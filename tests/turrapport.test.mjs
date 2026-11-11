@@ -51,6 +51,8 @@ test('turrapport: tall fra en oppdiktet tur', () => {
     assert.match(a, /verst: 0:33 60 km\/t i 40-sone \(skilt fra kameraet\), 17 s/);
     // 0.13.9: takten på feltmodellen, og skilt der kartet sa noe annet
     assert.match(a, /rundt 7,9 svar i sekundet/);
+    // 0.13.10: ansiktet i mørket (lys under 30 de første 40 s: 360 bilder, 3 av 4 med ansikt)
+    assert.match(a, /i mørket \(lys på veien under 30\): funnet i 75 % av 360 bilder/);
     assert.match(a, /Skilt +1 lest av kameraet · kartet hadde eller fikk samme grense for 0/);
     assert.match(a, /kartet sa noe annet \(midlertidig skilt eller feillesning\): 0:35 skilt 40, kart 50/);
     assert.match(b, /Feltmodell +ikke med i 0\.13\.0/);

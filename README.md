@@ -142,6 +142,17 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.10 – the driver's face on dark roads
+
+On the drive on 11 Nov at 20:00 the driver's face was found in 59 % of the pictures. Split by how light it was on the road (the road camera's brightness, 0–255), the cause is plain: about 90 % from 40 and up, 70 % at 30–40, and 7 % at 20–30, which is a road without street lights. Twelve stretches of more than half a minute had no face, 15 minutes in all. The drive two days earlier shows the same (11 % at 20–30).
+
+- **Brighter picture for the face model.** Once a second the app measures how light it is where the driver's face usually is (`js/facelight.js`). Below 80 the iPhone app brightens the driver picture before it is packed as JPEG (`?g=` on `/cam/user.jpg`), so the dark tones are not lost in the packing first. The brightening comes in gradually, so the picture does not jump.
+- **More light from the camera.** The driver camera may use a longer shutter time in the dark (down to 7.5 pictures per second, twice the light; the face model looks at 8 per second). When the picture is dark the camera is also asked to expose 1.5 steps brighter, and back to normal when it is light again.
+- **Less work.** The driver picture is fetched 10 times per second, not 15: the face model never saw the rest, which were packed, sent and unpacked for nothing.
+- The export counts how often the picture was brightened and whether the face was found then (`faceDim`, `faceDimOk`, `faceLum`). `tools/turrapport.mjs` shows it, and for every export how often the face was found on dark roads: 7 % on this drive.
+
+- **Tested:** the rule for how much to brighten (unit tests) and the iPhone build. **Not tested:** whether the face model finds more faces. There are no dark pictures of a driver to try it on, so the next drive in the dark decides: compare «i mørket … funnet i» with 7 %. If it is no better, the brightening goes out again.
+
 ## What's new in 0.13.9 – smoother lane lines, and speed signs that apply where they stand and count in the report
 
 From the drive on 11 Nov at 20:00 (46 min, 38 km, dark, 0.13.8 with the `n2` lane test weights).

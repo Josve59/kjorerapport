@@ -10,6 +10,7 @@ import { matchShift } from './flow.js';
 import { readSigns, signTracker, signAhead } from './signs.js';
 import * as native from './nativecam.js';
 import { createDriverPicker, createFaceMask } from './calibcheck.js';
+import { createFaceLight, meanLum } from './facelight.js';
 
 const BASE = new URL('../vendor/mediapipe/', import.meta.url).href;
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) er det mørkt: bilgjenkjenningen får et lysere bilde, og baklys letes etter
@@ -29,16 +30,16 @@ let laneCanvas = null, laneCtx = null, tailCanvas = null, tailCtx = null, signCa
 let flowPrev = null, flowPrevT = 0, flowRgba = null, signN = 0, lastSign = null, signReads = [];
 const tracker = createTracker();   // biler og folk mellom svarene fra bilgjenkjenningen
 const signs = signTracker();
-const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, laneRunMs: 0, roadKnown: 0, offRoad: 0,
+const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, laneRunMs: 0, roadKnown: 0, offRoad: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stalls: 0, stallLog: [] });
-const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, laneRunMs: 0, roadKnown: 0, offRoad: 0,
+const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, laneRunMs: 0, roadKnown: 0, offRoad: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stallLog: [] };
 
 export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver, native: !!driver,
   stalled: !!driver && driver.stalledMs > 3000,   // ingen nye bilder fra kameraene på 3 s
   road: !!road, roadModel, roadSize: road && road.ready ? `${road.width}x${road.height}` : null, roadBottom,
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, lastPose, lastRoad, video,
-  perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10,
+  perf: { ...perf, faceMs: Math.round(perf.faceMs), faceLum: Math.round(perf.faceLum), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10,
     flowMs: Math.round(perf.flowMs * 10) / 10, signMs: Math.round(perf.signMs * 10) / 10, dfineMs: Math.round(perf.dfineMs), laneMlMs: Math.round(perf.laneMlMs), laneRunMs: Math.round(perf.laneRunMs) } });
 
 /* Førerplassen (0.12.6): lært av kameraet, på nytt hver gang kameraet startes. Fra 0.13.2 med plassen fra
@@ -46,6 +47,9 @@ export const state = () => ({ loaded: !!landmarker, running: !!stream || !!drive
 let driverHome = null;
 let driverPick = createDriverPicker();
 let faceMask = createFaceMask(), maskCanvas = null, maskCtx = null;
+// Førerbildet i mørket (0.13.10): lysnes etter hvor lyst det er der førerens ansikt pleier å være
+const faceLight = createFaceLight();
+let lightCanvas = null, lightCtx = null, lightN = 0, faceBox = null, faceBias = 0;
 let laneTrack = createLaneTracker();   // feltlinjene over tid (0.12.6)
 let laneRaw = null, laneRawW = 0, laneAnsAt = null;   // siste utregnede linjer og svaret de kom fra (0.13.9)
 
@@ -103,7 +107,9 @@ export async function startCamera(videoEl, { road: withRoad = false, home } = {}
     perfSince = performance.now();
     wantFacings = want;
     const r = await native.start(want, { detect: withRoad });
-    driver = native.source('user', { fps: 15, max: 640 });
+    // 10 bilder i sekundet (0.13.10, var 15): ansiktsmodellen ser 8, resten ble pakket og sendt til ingen nytte (varme)
+    driver = native.source('user', { fps: 10, max: 640 });
+    faceLight.reset(); faceBox = null; faceBias = 0; lightN = 0;
     if (r.active.includes('environment')) {
       road = native.source('environment', { fps: 10 });
       roadModel = r.model || null;
@@ -213,6 +219,7 @@ function faceTick() {
       input = maskCanvas;
       perf.faceMasked++;
     }
+    if (driver) { try { faceLightStep(src, w, h); } catch { /* uten lysning */ } }
     const res = landmarker.detectForVideo(input, ts);
     // Føreren blant ansiktene (0.12.6): ledsageren skal ikke tas for føreren
     const all = ((res && res.facialTransformationMatrixes) || []).map(mx => poseFromMatrix(mx.data));
@@ -220,9 +227,11 @@ function faceTick() {
     pose = k >= 0 ? all[k] : null;
     // Hvorfor det ikke ble noe ansikt (0.13.1): ingen i bildet (mørkt, snudd bort) eller et annet ansikt enn førerens
     perf.faceFrames++; if (!all.length) perf.faceNone++; else if (k < 0) perf.faceOther++;
+    // Hvor ofte bildet ble lysnet, og om ansiktet ble funnet da (0.13.10): viser i eksporten om lysningen virker
+    if (driver && driver.gamma < 0.95) { perf.faceDim++; if (k >= 0) perf.faceDimOk++; }
     // Hvor føreren og ledsageren er i bildet, til skjermen over
     const lms = (res && res.faceLandmarks) || [];
-    if (k >= 0 && lms[k]) faceMask.driver(xSpan(lms[k]), ts / 1000);
+    if (k >= 0 && lms[k]) { faceMask.driver(xSpan(lms[k]), ts / 1000); faceBox = lmBox(lms[k]); }
     for (const i of driverPick.rejectedSide) if (lms[i]) faceMask.passenger(xSpan(lms[i]), ts / 1000);
     faceMask.tick(ts / 1000);
     // Øynene (k0.7.6): hvor de ser i forhold til hodet
@@ -235,6 +244,25 @@ function faceTick() {
   frames++;
   lastPose = pose;
   for (const fn of listeners) fn(pose, ts);
+}
+/* Rammen rundt ansiktet (0–1), med litt luft: der lyset måles neste gang, også når ansiktet er mistet */
+const lmBox = lm => {
+  let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+  for (const p of lm) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; }
+  const mx = (x1 - x0) * 0.15, my = (y1 - y0) * 0.15;
+  return { x0: x0 - mx, x1: x1 + mx, y0: y0 - my, y1: y1 + my };
+};
+/* Ett lite bilde i sekundet: lyset der føreren sitter (hele bildet før ansiktet er sett), og hvor mye bildet skal lysnes */
+function faceLightStep(src, w, h) {
+  if (lightN++ % 8) return;
+  const W = 24, H = Math.max(8, Math.round(24 * h / w));
+  if (!lightCanvas || lightCanvas.height !== H) { lightCanvas = document.createElement('canvas'); lightCanvas.width = W; lightCanvas.height = H; lightCtx = lightCanvas.getContext('2d', { willReadFrequently: true }); }
+  lightCtx.drawImage(src, 0, 0, W, H);
+  const o = faceLight.step(meanLum(lightCtx.getImageData(0, 0, W, H).data, W, H, faceBox));
+  if (o.raw === null) return;
+  driver.gamma = o.gamma;
+  ema('faceLum', o.raw);
+  if (o.bias !== faceBias) { faceBias = o.bias; if (!road) native.configure({ faceBias }); }
 }
 const xSpan = lm => { let min = 1, max = 0; for (const p of lm) { if (p.x < min) min = p.x; if (p.x > max) max = p.x; } return { min, max }; };
 
@@ -259,7 +287,7 @@ function roadTick() {
   const el = road.canvas, vw = el.width, vh = el.height, now0 = road.t;
   const dark = lastLum !== null && lastLum < NIGHT_LUM;
   const area = roadArea(vw, vh);   // veien foran fra feltmodellen: biler og baklys må stå på den (0.13.2)
-  native.configure({ roadBottom, dark, laneGamma: laneGamma(lastLum) });
+  native.configure({ roadBottom, dark, laneGamma: laneGamma(lastLum), faceBias });
   // Bildesammenligning (k0.7.5): hvor bilene har flyttet seg siden forrige bilde, før boksene brukes
   flowRgba = null;
   try { const tf = performance.now(); flowStep(el, now0); ema('flowMs', performance.now() - tf); } catch { flowPrev = null; }

@@ -64,6 +64,17 @@ function darkLanes(road, loc) {
 /* Fartsvarslene lagres ikke, så de regnes ut på nytt: GPS-farten mot fartsgrensen fra NVDB, der et skilt fra
    kameraet gjelder til neste skilt, 3 km eller ny NVDB-strekning, slik som under kjøring (app.js / signs.js).
    Varselet regnes ut selv om ledsageren hadde slått det av i innstillingene. */
+/* Ansiktet funnet i bildene der veikameraet målte lys under 30 (mørk vei uten gatelys) */
+function darkFace(head, road) {
+  let ri = 0, n = 0, ok = 0;
+  for (const h of head) {
+    while (ri < road.length - 1 && road[ri + 1].t <= h.t) ri++;
+    const lum = road[ri] && Math.abs(road[ri].t - h.t) < 2 ? road[ri].lum : null;
+    if (Number.isFinite(lum) && lum < 30) { n++; if (h.ok) ok++; }
+  }
+  return { n, ok };
+}
+
 function speedWarnings(loc, liveLimits) {
   const warn = createSpeedWarn(), cam = createCamLimit();
   const limits = [...liveLimits].sort((a, b) => a.t - b.t);
@@ -108,6 +119,10 @@ function report(drive, input, file, exportVersion) {
     const ok = head.filter(h => h.ok).length;
     line('Ansikt', `funnet i ${pct(ok, head.length)} av ${n0(head.length)} bilder (${perSec(head.length, sec)} per s), ${ms(perf && perf.faceMs || 0)} per bilde`);
     // Fra 0.13.1: hvorfor bildene var uten ansikt (tellerne gjelder hele kameraøkten)
+    // Ansiktet når det er mørkt ute (lys på veien under 30): der ble føreren mistet før 0.13.10 lysnet førerbildet
+    const df = darkFace(head, road);
+    if (df.n >= 100) more(`i mørket (lys på veien under 30): funnet i ${pct(df.ok, df.n)} av ${n0(df.n)} bilder`);
+    if (perf && 'faceDim' in perf && perf.faceFrames) more(perf.faceDim ? `førerbildet lysnet i ${pct(perf.faceDim, perf.faceFrames)} av bildene, ansiktet funnet i ${pct(perf.faceDimOk, perf.faceDim)} av dem` : 'førerbildet ble aldri lysnet (lyst nok i bilen)');
     if (perf && perf.faceFrames) more(`uten ansikt: ingen i bildet ${pct(perf.faceNone, perf.faceFrames)} · annet ansikt enn førerens ${pct(perf.faceOther, perf.faceFrames)}`);
     // Fra 0.13.2: ledsagerens side av bildet skjult, så modellen ikke følger ledsageren
     if (perf && perf.faceFrames && 'faceMasked' in perf) more(`ledsagerens side skjult i ${pct(perf.faceMasked, perf.faceFrames)} av bildene`);

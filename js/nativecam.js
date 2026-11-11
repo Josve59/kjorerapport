@@ -51,6 +51,7 @@ export function onLanes(fn) {
 /* Et kamera som canvas: henter nye bilder fra appen så ofte som fps sier. { canvas, width, height, t, frames,
    seq, stream(), stop() }. t = når siste bilde ble tatt (performance.now). max: lengste side i piksler (0 = full). */
 export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
+  let gamma = 1;   // under 1 = appen lysner bildet før det pakkes (0.13.10, førerbildet i mørket)
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   let running = true, seq = -1, t = 0, frames = 0, stream = null, timer = null, lastAt = performance.now();
@@ -60,7 +61,7 @@ export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
     const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const limit = ctl ? setTimeout(() => ctl.abort(), 2500) : null;
     try {
-      const r = await fetch(`/cam/${facing}.jpg?after=${seq}&q=${quality}${max ? '&max=' + max : ''}`, { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
+      const r = await fetch(`/cam/${facing}.jpg?after=${seq}&q=${quality}${max ? '&max=' + max : ''}${gamma < 0.99 ? '&g=' + gamma : ''}`, { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
       if (r.status === 200) {
         const age = Number(r.headers.get('X-Age')) || 0;
         const s = Number(r.headers.get('X-Seq'));
@@ -83,6 +84,7 @@ export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
     get width() { return canvas.width; }, get height() { return canvas.height; },
     get t() { return t; }, get frames() { return frames; }, get seq() { return seq; },
     get ready() { return frames > 0; },
+    get gamma() { return gamma; }, set gamma(v) { gamma = Number.isFinite(v) ? Math.max(0.3, Math.min(1, v)) : 1; },
     /* Millisekunder siden siste nye bilde (eller siden kilden startet) */
     get stalledMs() { return performance.now() - lastAt; },
     /* Til et <video>-element (forhåndsvisning) */

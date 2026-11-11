@@ -102,13 +102,14 @@ nonisolated final class WebServer: @unchecked Sendable {
         connection.send(content: out, completion: .contentProcessed { _ in connection.cancel() })
     }
 
-    /// Siste bilde fra et kamera (CameraHub): /cam/user.jpg eller /cam/environment.jpg, valgfritt ?max=<lengste side>
+    /// Siste bilde fra et kamera (CameraHub): /cam/user.jpg eller /cam/environment.jpg, valgfritt ?max=<lengste side>, ?g=<gamma under 1 lysner>
     /// og ?after=<nummer> (204 hvis det ikke har kommet et nyere bilde). X-Age er bildets alder i millisekunder.
     private func cameraFrame(_ connection: NWConnection, path: String, query: [String: String], head: Bool) {
         let name = path.dropFirst("/cam/".count).replacingOccurrences(of: ".jpg", with: "")
         var header: String, body = Data()
         if let facing = CameraHub.Facing(rawValue: name),
-           let f = CameraHub.shared.jpeg(facing, maxSide: Int(query["max"] ?? "") ?? 0, quality: Double(query["q"] ?? "") ?? 0.8, after: Int(query["after"] ?? "") ?? -1) {
+           let f = CameraHub.shared.jpeg(facing, maxSide: Int(query["max"] ?? "") ?? 0, quality: Double(query["q"] ?? "") ?? 0.8, after: Int(query["after"] ?? "") ?? -1,
+                                         gamma: Double(query["g"] ?? "") ?? 1) {
             body = f.data
             header = "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: \(body.count)\r\nX-Age: \(f.ageMs)\r\nX-Seq: \(f.seq)\r\nX-Size: \(f.width)x\(f.height)\r\n"
         } else {
