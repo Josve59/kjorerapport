@@ -139,12 +139,21 @@ function report(drive, input, file, exportVersion) {
     // Fra 0.13.2: biler som ikke sto på veien feltmodellen så (huslys), tatt bort
     if ('roadKnown' in perf) more(perf.roadKnown ? `bil utenfor veien tatt bort i ${pct(perf.offRoad, perf.roadKnown)} av ${n0(perf.roadKnown)} bilder der veien var kjent` : 'veien var aldri kjent, så biler utenfor veien ble ikke tatt bort');
     const drops = perf.drops || 0, stalls = perf.stalls || 0;
+    const clock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    // Før 0.13.8 ble oppstarten (modellene varmer opp) regnet som «treg»: slowSince er millisekunder etter at appen åpnet
+    const warmup = drops === 1 && !perf.slow && !('stallLog' in perf) && perf.slowSince > 0 && perf.slowSince < 30000;
+    // Fra 0.13.8: når vakten startet kameraene på nytt, og appens grunn
+    const log = (perf.stallLog || []).map(s => { const d = (s.at - Date.parse(drive.startedAt)) / 1000; return `${d < 0 ? 'før turen' : clock(d)} ${s.why || 'ukjent grunn'}`; }).join(', ');
     if (!drops && !stalls && !perf.slow) line('Varme', 'ingen tegn: aldri treg, kameraet stoppet aldri');
     else line('Varme', [
-      drops ? `treg ${n0(drops)} ${drops === 1 ? 'gang' : 'ganger'} (ned til 5 bilder i sekundet)` : 'aldri treg',
+      drops ? `treg ${n0(drops)} ${drops === 1 ? 'gang' : 'ganger'} (ned til 5 bilder i sekundet)${warmup ? `, ${n0(perf.slowSince / 1000)} s etter at appen åpnet: oppstarten, ikke varme` : ''}` : 'aldri treg',
       perf.slow ? 'fortsatt treg da turen sluttet' : '',
-      stalls ? `kameraet stoppet og startet på nytt ${n0(stalls)} ${stalls === 1 ? 'gang' : 'ganger'}` : 'kameraet stoppet aldri'
+      stalls ? `kameraet stoppet og startet på nytt ${n0(stalls)} ${stalls === 1 ? 'gang' : 'ganger'}${log ? ` (${log})` : ''}` : 'kameraet stoppet aldri'
     ].filter(Boolean).join(' · '));
+    // Hull i bildene fra veikameraet (over 3 s): når i turen kameraet faktisk var borte
+    const holes = [];
+    for (let i = 1; i < road.length; i++) if (road[i].t - road[i - 1].t > 3) holes.push(`${clock(road[i - 1].t)} (${n0(road[i].t - road[i - 1].t)} s)`);
+    if (holes.length) more(`uten bilder fra veikameraet: ${holes.slice(0, 6).join(', ')}${holes.length > 6 ? ` og ${holes.length - 6} til` : ''}`);
   }
 
   const sw = speedWarnings(loc, drive.liveLimits || []);

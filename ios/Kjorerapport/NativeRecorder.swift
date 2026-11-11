@@ -62,7 +62,8 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             let started = await CameraHub.shared.start(facings)
             let model = detect && started.active.contains(.environment) ? await startDetector() : nil
             if model == nil { CameraHub.shared.onRoadFrame = nil }
-            return (["active": started.active.map(\.rawValue), "multi": started.multi, "error": started.error.map { $0 as Any } ?? NSNull(), "model": model.map { $0 as Any } ?? NSNull()], nil)
+            let why: Any = CameraHub.shared.takeLastStop().map { $0 as Any } ?? NSNull()   // hvorfor kameraene sist stoppet (0.13.8)
+            return (["active": started.active.map(\.rawValue), "multi": started.multi, "error": started.error.map { $0 as Any } ?? NSNull(), "model": model.map { $0 as Any } ?? NSNull(), "why": why], nil)
         case "plusStatus":
             await plus.refresh()
             return (plus.status, nil)

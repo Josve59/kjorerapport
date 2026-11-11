@@ -88,6 +88,11 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         setupQueue.async { self.stopNow() }
     }
 
+    // Hvorfor kameraene sist stoppet av seg selv (0.13.8). Leses og nullstilles når nettappen starter dem igjen
+    private var lastStop: String?
+    private func noteStop(_ why: String) { lock.lock(); lastStop = why; lock.unlock() }
+    func takeLastStop() -> String? { lock.lock(); defer { lock.unlock() }; let s = lastStop; lastStop = nil; return s }
+
     private func stopNow() {
         session?.stopRunning()
         session = nil
@@ -157,6 +162,23 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         // Stopper kameraene av seg selv (for varm telefon, en annen app tok kameraet), startes de igjen når det går
         for name in [AVCaptureSession.runtimeErrorNotification, AVCaptureSession.interruptionEndedNotification] {
             NotificationCenter.default.addObserver(forName: name, object: s, queue: nil) { [weak self] _ in self?.resume() }
+        }
+        // Grunnen huskes (0.13.8), så eksporten kan si hvorfor kameraene stoppet
+        NotificationCenter.default.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: s, queue: nil) { [weak self] note in
+            let raw = note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int
+            let why: String
+            switch raw.flatMap(AVCaptureSession.InterruptionReason.init(rawValue:)) {
+            case .videoDeviceNotAvailableDueToSystemPressure: why = "telefonen var for varm eller presset"
+            case .videoDeviceInUseByAnotherClient: why = "en annen app tok kameraet"
+            case .videoDeviceNotAvailableInBackground: why = "appen lå i bakgrunnen"
+            case .videoDeviceNotAvailableWithMultipleForegroundApps: why = "flere apper var framme"
+            case .audioDeviceInUseByAnotherClient: why = "en annen app tok lyden"
+            default: why = "avbrudd \(raw ?? -1)"
+            }
+            self?.noteStop(why)
+        }
+        NotificationCenter.default.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: s, queue: nil) { [weak self] note in
+            self?.noteStop("kamerafeil \((note.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.code ?? 0)")
         }
         s.startRunning()
         return Started(active: got, multi: got.count > 1, error: nil)

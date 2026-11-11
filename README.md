@@ -142,6 +142,15 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.8 – no false «slow phone» at the start, and the export says why the cameras stopped
+
+From the drive on 11 Nov at 19:12, the first with the `n2` lane test weights (the export says `TwinLiteNet+ n2 · alle`, so the tag works).
+
+- **«Slow phone» at the start:** the app judged the phone as slow from the very first pictures, while the models were still warming up. 10 of the 15 drives exported in November have exactly one «slow» event, 6–26 s after the app opened. The driver camera then ran at 5 pictures per second for at least 20 s and the pill said «telefonen er treg (varm?)». The first 20 s after the cameras start are no longer judged.
+- **Why the cameras stopped:** this drive lost 8 s of pictures from both cameras 3:44 into the drive, and nothing said why. The app now remembers the reason iOS gives (too hot, another app took the camera, a camera error), and the web app stores the time and the reason with the drive (`perf.stallLog`, at most 8).
+- `tools/turrapport.mjs` shows the time and the reason, lists holes over 3 s in the road pictures, and says so when an old «slow» event was the start-up.
+- **Tested:** the unit tests and the iPhone build. **Not tested:** both changes on the phone, which needs a drive; the reason only shows when the cameras stop again.
+
 ## What's new in 0.13.7 – test weights for the lane model, named in the export
 
 - The build uses a compiled lane model in `.local-test/app-models/Lanes.mlmodelc` when there is one, in place of `ios/Models/Lanes.mlmodelc`. The folder is git-ignored, so weights that are not to be shared can be tried on the phone without going to GitHub. `ios/ship.sh` says when it happens. Delete the folder and run `ios/ship.sh` to go back.

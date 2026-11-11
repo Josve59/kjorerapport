@@ -18,6 +18,7 @@ const listeners = new Set(), roadListeners = new Set();
 let lastPose = null, lastTs = 0, frames = 0, startedAt = 0, fpsWanted = 8, fpsNow = 8;
 let driver = null, road = null, roadModel = null, detsUnsub = null, lanesUnsub = null, mlLanes = null, driverSeq = -1, roadSeq = -1;   // kildene i iPhone-appen
 let wantFacings = [], lastKick = 0;   // vakten: kameraene startes på nytt hvis bildene stopper (0.10.1)
+let perfSince = 0;   // når tallene sist ble nullstilt (kameraene startet)
 // Veiens form (0.10.3): forventet sving og feltbredde fra app.js (GPS-sporet og Statens vegvesen), og kamerahøyden
 // slik feltlinjene viser den (lært underveis: feltbredde / avstanden mellom linjene i modellen)
 let shape = { kappa: null, kappaWeight: 1, laneWidth: null, lanes: null, src: null }, camHEst = 1.2;
@@ -29,9 +30,9 @@ let flowPrev = null, flowPrevT = 0, flowRgba = null, signN = 0, lastSign = null,
 const tracker = createTracker();   // biler og folk mellom svarene fra bilgjenkjenningen
 const signs = signTracker();
 const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, roadKnown: 0, offRoad: 0,
-  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0, stalls: 0 });
+  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0, stalls: 0, stallLog: [] });
 const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, roadKnown: 0, offRoad: 0,
-  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0 };
+  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0, stallLog: [] };
 
 export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver, native: !!driver,
   stalled: !!driver && driver.stalledMs > 3000,   // ingen nye bilder fra kameraene på 3 s
@@ -98,6 +99,7 @@ export async function startCamera(videoEl, { road: withRoad = false, home } = {}
     if (driver && !!road === withRoad) { video = videoEl; await show(videoEl, driver.stream()); return; }
     stopSources();
     Object.assign(perf, freshPerf());   // tallene som lagres med turen gjelder denne økten
+    perfSince = performance.now();
     wantFacings = want;
     const r = await native.start(want, { detect: withRoad });
     driver = native.source('user', { fps: 15, max: 640 });
@@ -147,6 +149,9 @@ const ema = (k, v) => { perf[k] = perf[k] ? perf[k] * 0.9 + v * 0.1 : v; };
 function adapt() {
   const ms = Math.max(perf.faceMs, perf.roadMs + perf.laneMs);
   const now = performance.now();
+  // De første 20 s regnes ikke (0.13.8): modellene varmer opp og de første bildene er trege. Nesten hver tur ble
+  // meldt som «treg (varm?)» én gang, 6–26 s etter at appen åpnet, og førerkameraet gikk på 5 bilder i sekundet
+  if (now - Math.max(perfSince, startedAt) < 20000) return;
   if (ms > 110 && fpsNow > 5) { fpsNow = 5; perf.slow = true; perf.slowSince = now; perf.drops++; }
   else if (ms < 60 && fpsNow < fpsWanted && now - perf.slowSince > 20000) { fpsNow = fpsWanted; perf.slow = false; }
 }
@@ -172,7 +177,11 @@ function watchdog() {
   if (!driver || driver.stalledMs < 4000 || performance.now() - lastKick < 10000) return;
   lastKick = performance.now();
   perf.stalls++;
-  native.start(wantFacings, { detect: wantFacings.includes('environment') }).catch(() => {});
+  // Når og hvorfor (0.13.8): klokkeslettet og appens grunn (for varm, en annen app tok kameraet) følger med eksporten.
+  // Turen 11. nov. kl. 19.12 mistet 8 s fra begge kameraene uten at noe sa hvorfor
+  const entry = { at: Date.now(), why: null };
+  if (perf.stallLog.length < 8) perf.stallLog.push(entry);
+  native.start(wantFacings, { detect: wantFacings.includes('environment') }).then(r => { entry.why = (r && r.why) || null; }).catch(() => {});
 }
 
 function faceTick() {
