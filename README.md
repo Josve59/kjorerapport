@@ -142,6 +142,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.7 – test weights for the lane model, named in the export
+
+- The build uses a compiled lane model in `.local-test/app-models/Lanes.mlmodelc` when there is one, in place of `ios/Models/Lanes.mlmodelc`. The folder is git-ignored, so weights that are not to be shared can be tried on the phone without going to GitHub. `ios/ship.sh` says when it happens. Delete the folder and run `ios/ship.sh` to go back.
+- Test weights carry a tag (`python convert-lanes.py - weights.pth Lanes.mlpackage n2`). The app puts it in the lane model's name, so the «Feltmodell» line from `tools/turrapport.mjs` reads `TwinLiteNet+ n2 · alle` for a drive with them and `TwinLiteNet+ · alle` with the weights in git.
+- The weights in git are the same as in 0.13.6. The first test weights are `n2` (trained with A2D2 too, see `ios/Models/README.md`).
+- **Tested:** the converted `n2` model gives the same pixels as PyTorch on 62 test pictures (99.997 % for lines, 99.993 % for road), and the tag is read back from the compiled model. **Not tested:** the tag in an export, which needs a drive.
+
 ## What's new in 0.13.6 – lane model trained on open data
 
 - The road camera's lane model (TwinLiteNet+ large) now has our own weights, trained from scratch on comma10k (MIT, © 2020 Comma.ai, Inc., about 10 000 dashcam pictures labelled by hand). Before, the weights were trained on BDD100K, which is for research and non-commercial use. With the car model from 0.13.5, neither of the road camera's two models is trained on data listed as non-commercial.

@@ -21,6 +21,7 @@ for x in d.get('result',{}).get('devices',[]):
   rm -f "$TMP"
 fi
 [ -n "$DEVICE" ] || { echo "Fant ingen tilkoblet iPhone (sett KJ_DEVICE)"; exit 1; }
+if [ -d ../.local-test/app-models/Lanes.mlmodelc ]; then echo "Feltmodell: testvekter fra .local-test/app-models (ikke i git)"; fi
 echo "Bygger for $DEVICE …"
 xcodebuild -project Kjorerapport.xcodeproj -scheme Kjorerapport -configuration Debug -destination "id=$DEVICE" \
   -derivedDataPath "$DD" -allowProvisioningUpdates build 2>&1 | grep -E "error:|\*\* BUILD" || true

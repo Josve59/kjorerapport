@@ -29,3 +29,11 @@ echo "D-FINE kopiert til $OUT"
 # Feltlinjene (TwinLiteNet+ large med egne vekter fra comma10k, 4 MB, se Models/README.md): liten nok til å ligge i ett stykke
 rsync -a --delete "$SRCROOT/Models/Lanes.mlmodelc/" "$RES/Lanes.mlmodelc/"
 echo "Feltmodellen kopiert til $RES/Lanes.mlmodelc"
+
+# Testvekter som ikke skal i git (0.13.7): ligger det en ferdig kompilert feltmodell i .local-test/app-models/, brukes den i
+# stedet. Den er merket (convert-lanes.py), så eksporten viser at den kjørte. Slett mappen for å gå tilbake til vektene i git.
+LOCAL="$SRC/.local-test/app-models/Lanes.mlmodelc"
+if [ -d "$LOCAL" ]; then
+  rsync -a --delete "$LOCAL/" "$RES/Lanes.mlmodelc/"
+  echo "warning: Feltmodellen er testvekter fra $LOCAL (ikke i git)"
+fi

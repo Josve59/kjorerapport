@@ -24,6 +24,7 @@ nonisolated final class LaneDetector: @unchecked Sendable {
     private var gamma = 1.0   // under 1 i mørket: bildet lysnes (0.13.2, regnet ut i nettappen, lanes.js laneGamma)
     private var models: [(units: String, model: MLModel)] = []
     private var chosen: Int?
+    private var tag = ""   // merke på testvekter (0.13.7, modellens versjonsfelt): står i «backend», så eksporten viser hvilke vekter som kjørte
     private var trials: [[Double]] = []
     private var runs = 0
     private var pool: CVPixelBufferPool?
@@ -45,6 +46,7 @@ nonisolated final class LaneDetector: @unchecked Sendable {
             if let m = try? MLModel(contentsOf: url, configuration: config) { models.append((label, m)) }
         }
         trials = Array(repeating: [], count: models.count)
+        if let v = models.first?.model.modelDescription.metadata[.versionString] as? String, !v.isEmpty { tag = " \(v)" }
         let attrs: [String: Any] = [kCVPixelBufferWidthKey as String: Self.width, kCVPixelBufferHeightKey as String: Self.height,
                                     kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                                     kCVPixelBufferIOSurfacePropertiesKey as String: [:],
@@ -157,11 +159,11 @@ nonisolated final class LaneDetector: @unchecked Sendable {
             r += 4
         }
         lock.lock()
-        let units = models[chosen ?? index].units
+        let units = models[chosen ?? index].units, tag = self.tag
         lock.unlock()
         return ["pts": pts, "road": edges, "w": w, "h": h, "y0": y0.rounded(), "y1": y1.rounded(), "gamma": gamma,
                 "age": max(0, (CACurrentMediaTime() - frame.time) * 1000), "ms": ms,
-                "backend": "TwinLiteNet+ · \(units)\(chosen == nil ? " (måler)" : "")"]
+                "backend": "TwinLiteNet+\(tag) · \(units)\(chosen == nil ? " (måler)" : "")"]
     }
 
     /// De 4 første svarene på hver måte (det første regnes ikke), så velges den raskeste
