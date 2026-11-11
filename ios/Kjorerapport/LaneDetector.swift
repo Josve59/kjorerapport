@@ -2,6 +2,30 @@ import CoreImage
 import CoreML
 import QuartzCore
 
+/// Takten på modellene etter telefonens varme (0.13.12). Målt på telefonen 11. nov. kl. 22–23 (på et bord, koblet til
+/// Macen, fra normal temperatur, tid til «lunken» / «varm»):
+///   ingen av modellene: aldri / aldri (6,5 min) · bare feltmodellen 5 per s: 4:50 / ikke på 5 min
+///   bare bilgjenkjenningen 5 per s: 1:30 / 5:45 · begge 5 per s (slik det var): 0:25 / 2:00
+///   begge 3 per s: 1:10 / aldri (6,5 min) · bilgjenkjenning 2 og felt 3 per s: 1:45 / aldri (6,5 min)
+/// Bilgjenkjenningen (grafikkprosessoren) er altså varmekilden, og feltmodellen er billig. Før gikk begge 5 ganger i
+/// sekundet til telefonen ble «varm», og så 3 resten av turen uten at den kjølte seg ned (varm i 97 % av en tur).
+/// Nå: bilgjenkjenningen 2,5 og feltmodellen 5 ganger i sekundet. Varm telefon: 2 og 3. Bilen står stille: 1,5 og 1,5.
+/// Svært varm: 1 og 1. Følgingen i nettappen (track.js) flytter boksene mellom svarene og tåler 0,5 s mellom dem.
+nonisolated enum ModelPace {
+    /// Bilen står stille (fra nettappen, GPS-farten under 2 km/t): ingenting å følge med på
+    nonisolated(unsafe) static var still = false
+
+    /// Minste tid mellom to svar, i sekunder. Kamerabildene kommer 15 ganger i sekundet (hvert 0,067 s).
+    static func gate(cars: Bool) -> Double {
+        if still { return 0.65 }   // 1,5 i sekundet: følgingen i nettappen slipper en bil etter 1 s uten svar
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal, .fair: return cars ? 0.39 : 0.19
+        case .serious: return cars ? 0.46 : 0.31
+        default: return 0.95
+        }
+    }
+}
+
 /// Feltlinjer og vei med maskinlæring (0.13.0): TwinLiteNet+ large (MIT, chequanghuy/TwinLiteNetPlus). Fra 0.13.6 med
 /// egne vekter, trent på comma10k (MIT, rundt 10 000 håndmerkede kjørebilder, dag og natt), så ingenting i modellen er
 /// begrenset til ikke-kommersiell bruk. Modellen merker hver piksel som feltlinje eller ikke, og vei eller ikke (hele
@@ -19,6 +43,13 @@ nonisolated final class LaneDetector: @unchecked Sendable {
     private let queue = DispatchQueue(label: "kjorerapport.lanes", qos: .userInitiated)
     private let lock = NSLock()
     private var busy = false
+    /// Måling (testbygg, 0.13.12): KJ_LANES_HZ=<svar i sekundet> gir fast takt, også når telefonen er varm
+    private static let testGate: Double? = {
+        #if DEBUG
+        if let v = ProcessInfo.processInfo.environment["KJ_LANES_HZ"], let hz = Double(v), hz > 0 { return 1 / hz - 0.01 }
+        #endif
+        return nil
+    }()
     private var lastStart: CFTimeInterval = 0
     private var roadBottom: Double?
     private var gamma = 1.0   // under 1 i mørket: bildet lysnes (0.13.2, regnet ut i nettappen, lanes.js laneGamma)
@@ -38,7 +69,11 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         #if targetEnvironment(simulator)
         let choices = [("prosessor", MLComputeUnits.cpuOnly)]
         #else
-        let choices = [("alle", MLComputeUnits.all), ("gpu", MLComputeUnits.cpuAndGPU)]
+        var choices = [("alle", MLComputeUnits.all), ("gpu", MLComputeUnits.cpuAndGPU)]
+        #if DEBUG
+        // Måling (0.13.12): KJ_LANES=gpu eller alle tvinger én regneenhet, alt annet slår modellen av
+        if let only = ProcessInfo.processInfo.environment["KJ_LANES"] { choices = choices.filter { $0.0 == only } }
+        #endif
         #endif
         for (label, units) in choices {
             let config = MLModelConfiguration()
@@ -59,14 +94,13 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         lock.lock(); self.roadBottom = roadBottom; self.gamma = min(1, max(0.3, gamma)); lock.unlock()
     }
 
-    /// Nytt veibilde: 5 ganger i sekundet (3 når telefonen er varm), og bare når forrige svar er ferdig.
-    /// 0.13.9: grensen var 8, men uten optimalisering rakk appen bare rundt 5. Med optimalisering (ship.sh) ville den gått
-    /// opp til 7–8 og varmet telefonen mer, og varm telefon gir 3 i sekundet resten av turen. Derfor holdes takten på 5.
+    /// Nytt veibilde: 5 ganger i sekundet (færre når telefonen er varm eller bilen står, se ModelPace), og bare når
+    /// forrige svar er ferdig.
     func feed(_ frame: CameraHub.Frame) {
         let now = CACurrentMediaTime()
         let hot = ProcessInfo.processInfo.thermalState.rawValue >= ProcessInfo.ThermalState.serious.rawValue
         lock.lock()
-        guard !busy, !models.isEmpty, now - lastStart >= (hot ? 0.33 : 0.19) else { lock.unlock(); return }
+        guard !busy, !models.isEmpty, now - lastStart >= (Self.testGate ?? ModelPace.gate(cars: false)) else { lock.unlock(); return }
         busy = true
         lastStart = now
         let bottom = roadBottom, gamma = self.gamma
@@ -182,6 +216,9 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         guard trials.allSatisfy({ $0.count >= 4 }) else { return }
         let median = trials.map { t -> Double in let s = t.dropFirst().sorted(); return s[s.count / 2] }
         chosen = median.indices.min { median[$0] < median[$1] }
+        #if DEBUG
+        print("[cam] feltmodellen måling: " + zip(models, median).map { "\($0.0.units) \(Int($0.1.rounded())) ms" }.joined(separator: ", "))
+        #endif
     }
 
     /// Et svar [1, 1, rader, kolonner] lest med Core MLs egne radavstander (polstret på AI-brikken)

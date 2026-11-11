@@ -167,8 +167,8 @@ function report(drive, input, file, exportVersion) {
     // Varm telefon: iOS melder det selv (fra 0.13.9 telt per svar fra feltmodellen). Eldre turer: takten røper det
     // Fra 0.13.11: sekunder på hvert varmetrinn iOS melder (normal, lunken, varm, svært varm)
     const ths = Array.isArray(perf.thermalS) ? perf.thermalS : null, thSum = ths ? ths.reduce((a, b) => a + b, 0) : 0;
-    const steps = thSum > 10 ? 'telefonens varme: ' + ['normal', 'lunken', 'varm', 'svært varm'].map((n, i) => (ths[i] > 0 ? `${n} ${pct(ths[i], thSum)}` : '')).filter(Boolean).join(', ') + ' (modellene går 3 ganger i sekundet fra «varm»)' : '';
-    const hot = steps ? steps : 'laneMlHot' in perf ? (perf.laneMlHot / (perf.laneMlFrames || 1) >= 0.05 ? `telefonen var varm i ${pct(perf.laneMlHot, perf.laneMlFrames)} av turen (modellene går da 3 ganger i sekundet)` : '')
+    const steps = thSum > 10 ? 'telefonens varme: ' + ['normal', 'lunken', 'varm', 'svært varm'].map((n, i) => (ths[i] > 0 ? `${n} ${pct(ths[i], thSum)}` : '')).filter(Boolean).join(', ') + ' (fra «varm» går modellene saktere)' : '';
+    const hot = steps ? steps : 'laneMlHot' in perf ? (perf.laneMlHot / (perf.laneMlFrames || 1) >= 0.05 ? `telefonen var varm i ${pct(perf.laneMlHot, perf.laneMlFrames)} av turen (modellene går da saktere)` : '')
       : perf.laneMlFrames && sec > 60 && perf.laneMlFrames / sec < 3.3 ? 'telefonen var trolig varm hele turen (modellene gikk 3 ganger i sekundet)' : '';
     if (!drops && !stalls && !perf.slow) line('Varme', hot ? `${hot} · aldri treg, kameraet stoppet aldri` : 'ingen tegn: aldri treg, kameraet stoppet aldri');
     else line('Varme', [

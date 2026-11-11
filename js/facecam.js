@@ -290,7 +290,8 @@ function roadTick() {
   const el = road.canvas, vw = el.width, vh = el.height, now0 = road.t;
   const dark = lastLum !== null && lastLum < NIGHT_LUM;
   const area = roadArea(vw, vh);   // veien foran fra feltmodellen: biler og baklys må stå på den (0.13.2)
-  native.configure({ roadBottom, dark, laneGamma: laneGamma(lastLum), faceBias });
+  // still (0.13.12): bilen står stille, så modellene i appen går 1 gang i sekundet (varme). Ukjent fart regnes som kjøring
+  native.configure({ roadBottom, dark, laneGamma: laneGamma(lastLum), faceBias, still: speedKmh < 2 });
   // Bildesammenligning (k0.7.5): hvor bilene har flyttet seg siden forrige bilde, før boksene brukes
   flowRgba = null;
   try { const tf = performance.now(); flowStep(el, now0); ema('flowMs', performance.now() - tf); } catch { flowPrev = null; }
@@ -335,9 +336,9 @@ function roadTick() {
     const prev = pv ? { left: sure(pv.left), right: sure(pv.right) } : null;
     // Feltmodellen (0.13.0): punktene på linjene den fant, skalert til det lille bildet. Punkter godt utenfor veien
     // foran (gang- og sykkelvei, linjer bak en fortauskant) tas ikke med. Uten ferskt svar: den enkle bildeanalysen.
-    // 0.13.9: svaret gjelder i 1,2 s (var 0,6): varm telefon gir 3 svar i sekundet, og ett tapt svar sendte ellers
+    // 0.13.9: svaret gjelder lenge (1,5 s fra 0.13.12, var 0,6): varm eller stillestående bil gir få svar, og ett tapt svar sendte ellers
     // linjene over på den enkle bildeanalysen i et par bilder. Det samme svaret regnes heller ikke ut på nytt.
-    const ml = mlLanes && mlLanes.w > 0 && Math.abs(mlLanes.h / mlLanes.w - vh / vw) < 0.02 && performance.now() - mlLanes.at < 1200 ? mlLanes : null;
+    const ml = mlLanes && mlLanes.w > 0 && Math.abs(mlLanes.h / mlLanes.w - vh / vw) < 0.02 && performance.now() - mlLanes.at < 1500 ? mlLanes : null;
     const fresh = !ml || ml.at !== laneAnsAt || !laneRaw || laneRawW !== W;
     if (fresh) {
       const points = ml ? mlPoints(ml, W / ml.w, W) : null;
@@ -520,6 +521,7 @@ function stopSources() {
   if (driver || road) native.stop();
   driver = null; road = null; roadModel = null; driverSeq = -1; roadSeq = -1;
   tracker.reset(); flowPrev = null; lastView = null; lastRoad = null; rowEma = null; rowN = 0; roadBottom = null; lastLum = null;
+  speedKmh = NaN;   // ukjent fart til neste tur, så modellene ikke blir stående på «bilen står» (0.13.12)
 }
 
 export function stopCamera() {

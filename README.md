@@ -142,6 +142,28 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.12 – a cooler phone: the car detection runs less often
+
+On the drive on 11 Nov at 21:33 iOS reported the phone as hot in 97 % of the drive. Measured the same evening with the phone on a desk, connected to the Mac and starting from normal temperature each time (iOS reports four heat steps: normal, fair, serious, critical):
+
+| Running | Time to «fair» | Time to «serious» |
+| --- | --- | --- |
+| Both cameras, face model, signs, no road models | never | never (6.5 min) |
+| Lane model alone, 5 per second | 4:50 | not in 6 min |
+| Car detection alone, 5 per second | 1:30 | 5:45 |
+| Both, 5 per second (as it was) | 0:25 | 2:00 |
+| Both, 5 per second, car detection on «all» compute units | 0:40 | 1:40 |
+| Both, 3 per second | 1:10 | never (6.5 min) |
+| Car detection 2 and lane model 3 per second | 1:45 | never (6.5 min) |
+| **New pace:** car detection 2.5 and lane model 5 per second | 1:30 | never (6.5 min) |
+
+So the heat comes from the two Core ML models and nothing else, and mostly from the car detection (D-FINE on the graphics processor, 43–57 ms per answer). The lane model is cheap. The app ran both 5 times per second until the phone was hot, then 3, and at 3 it never cooled down again in the car.
+
+- **New pace** (`ModelPace` in `LaneDetector.swift`): car detection 2.5 and lane model 5 per second. Hot phone («serious»): 2 and 3. Car standing still (GPS speed under 2 km/h): 1.5 and 1.5. «Critical»: 1 and 1. The lane lines get more answers than on a hot phone before (5 against 3), the car detection fewer (2.5 against 3). The tracking in the web app moves the boxes between answers.
+- A test build can be driven from the Mac: `KJ_JS` runs JavaScript in the app at start and keeps the screen on, `KJ_DFINE` / `KJ_LANES` pick a compute unit or turn a model off, `KJ_DFINE_HZ` / `KJ_LANES_HZ` fix the pace, and the app answers with iOS's heat step (`thermal` in `kjNative.info()`). Launched with `xcrun devicectl device process launch --console -e '{"KJ_JS": "…"}'`, the web app's `console.log` comes back to the Mac. This is how the table was made.
+
+- **Tested:** the new pace on the desk (last row of the table), the unit tests and the iPhone build. **Not tested:** in the car, where the phone charges and the cabin is warm. The «Varme» line of `tools/turrapport.mjs` shows the time at each heat step for the next drive. Whether 2.5 answers per second from the car detection is enough for the distance to the car ahead is also untested on the road.
+
 ## What's new in 0.13.11 – no speed warning when the map hits the wrong road in a junction
 
 From the drive on 11 Nov at 21:33 (18 min, 20 km, dark, 0.13.10 with the `n2` lane test weights).

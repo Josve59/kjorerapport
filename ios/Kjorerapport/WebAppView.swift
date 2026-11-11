@@ -25,6 +25,12 @@ struct WebAppView: UIViewRepresentable {
         if let path = ProcessInfo.processInfo.environment["KJ_EVAL"], let source = try? String(contentsOfFile: path, encoding: .utf8) {
             content.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         }
+        // Testbygg: KJ_JS=<JavaScript> kjører teksten når siden er lastet, og skjermen holdes på. Til måling på telefonen
+        // fra Macen (0.13.12): devicectl device process launch --console -e '{"KJ_JS": "…"}' … (console.log kommer tilbake)
+        if let source = ProcessInfo.processInfo.environment["KJ_JS"], !source.isEmpty {
+            content.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
         #endif
         #if targetEnvironment(simulator)
         // Simulatoren har ingen bevegelsessensor: en telefon som ligger i ro, så sjekken før kjøring og opptaket kan testes

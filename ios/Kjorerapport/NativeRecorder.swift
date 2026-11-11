@@ -50,7 +50,8 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         guard let body = message.body as? [String: Any], let cmd = body["cmd"] as? String else { return (nil, "ukjent melding") }
         switch cmd {
         case "info":
-            return (["devTools": await Self.devTools()], nil)
+            // thermal (0.13.12): varmetrinnet fra iOS (0 normal, 1 lunken, 2 varm, 3 svært varm)
+            return (["devTools": await Self.devTools(), "thermal": ProcessInfo.processInfo.thermalState.rawValue], nil)
         case "camInfo":
             return (["multi": CameraHub.multiSupported, "model": Bundle.main.url(forResource: "DFine", withExtension: "mlmodelc") != nil,
                      "lanes": Bundle.main.url(forResource: "Lanes", withExtension: "mlmodelc") != nil], nil)
@@ -104,6 +105,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             detector.configure(roadBottom: body["roadBottom"] as? Double, dark: body["dark"] as? Bool ?? false)
             laneDetector.configure(roadBottom: body["roadBottom"] as? Double, gamma: body["laneGamma"] as? Double ?? 1)
             if let bias = body["faceBias"] as? Double { CameraHub.shared.setUserBias(bias) }   // førerkameraet i mørket (0.13.10)
+            ModelPace.still = body["still"] as? Bool ?? false   // bilen står stille: modellene går 1 gang i sekundet (0.13.12)
         case "geoStart":
             watching = true
             startLocation()

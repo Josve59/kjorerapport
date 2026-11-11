@@ -19,6 +19,13 @@ nonisolated final class RoadDetector: @unchecked Sendable {
     private let queue = DispatchQueue(label: "kjorerapport.dfine", qos: .userInitiated)
     private let lock = NSLock()
     private var busy = false
+    /// Måling (testbygg, 0.13.12): KJ_DFINE_HZ=<svar i sekundet> gir fast takt, også når telefonen er varm
+    private static let testGate: Double? = {
+        #if DEBUG
+        if let v = ProcessInfo.processInfo.environment["KJ_DFINE_HZ"], let hz = Double(v), hz > 0 { return 1 / hz - 0.01 }
+        #endif
+        return nil
+    }()
     private var lastStart: CFTimeInterval = 0
     private var roadBottom: Double?
     private var dark = false
@@ -39,7 +46,11 @@ nonisolated final class RoadDetector: @unchecked Sendable {
         #if targetEnvironment(simulator)
         let choices = [("prosessor", MLComputeUnits.cpuOnly)]   // simulatoren gir bare nuller på grafikkprosessoren
         #else
-        let choices = [("gpu", MLComputeUnits.cpuAndGPU), ("alle", MLComputeUnits.all)]
+        var choices = [("gpu", MLComputeUnits.cpuAndGPU), ("alle", MLComputeUnits.all)]
+        #if DEBUG
+        // Måling (0.13.12): KJ_DFINE=gpu eller alle tvinger én regneenhet, alt annet slår modellen av
+        if let only = ProcessInfo.processInfo.environment["KJ_DFINE"] { choices = choices.filter { $0.0 == only } }
+        #endif
         #endif
         for (label, units) in choices {
             let config = MLModelConfiguration()
@@ -66,14 +77,12 @@ nonisolated final class RoadDetector: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// Nytt veibilde. Modellen kjører 5 ganger i sekundet (3 når telefonen er varm), og bare når forrige
-    /// svar er ferdig, så bildene som kommer imens hoppes over. 0.13.9: samme takt som den faktisk hadde før appen
-    /// ble bygget med optimalisering (se LaneDetector), så telefonen ikke blir varmere enn før.
+    /// Nytt veibilde. Modellen kjører 2,5 ganger i sekundet (færre når telefonen er varm eller bilen står, se ModelPace
+    /// i LaneDetector.swift), og bare når forrige svar er ferdig, så bildene som kommer imens hoppes over.
     func feed(_ frame: CameraHub.Frame) {
         let now = CACurrentMediaTime()
-        let hot = ProcessInfo.processInfo.thermalState.rawValue >= ProcessInfo.ThermalState.serious.rawValue
         lock.lock()
-        guard !busy, !models.isEmpty, now - lastStart >= (hot ? 0.33 : 0.19) else { lock.unlock(); return }
+        guard !busy, !models.isEmpty, now - lastStart >= (Self.testGate ?? ModelPace.gate(cars: true)) else { lock.unlock(); return }
         busy = true
         lastStart = now
         let bottom = roadBottom, dark = self.dark
@@ -139,6 +148,9 @@ nonisolated final class RoadDetector: @unchecked Sendable {
         guard trials.allSatisfy({ $0.count >= 4 }) else { return }
         let median = trials.map { t -> Double in let s = t.dropFirst().sorted(); return s[s.count / 2] }
         chosen = median.indices.min { median[$0] < median[$1] }
+        #if DEBUG
+        print("[cam] D-FINE måling: " + zip(models, median).map { "\($0.0.units) \(Int($0.1.rounded())) ms" }.joined(separator: ", "))
+        #endif
     }
 
     /// Samme som cropFor i dfine.js: { sx, sy, sw, sh } i bildets piksler
