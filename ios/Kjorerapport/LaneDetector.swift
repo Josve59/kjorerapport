@@ -78,6 +78,7 @@ nonisolated final class LaneDetector: @unchecked Sendable {
             // Til eksporten (0.13.9): varm telefon (da kjøres modellen 3 ganger i sekundet) og tiden for hele svaret,
             // med klargjøring av bildet og lesing av svaret, ikke bare modellen
             out["hot"] = hot
+            out["th"] = ProcessInfo.processInfo.thermalState.rawValue   // trinnet (0–3), så eksporten viser hvor varm (0.13.11)
             out["run"] = (CACurrentMediaTime() - t0) * 1000
             onResult?(out)
         }

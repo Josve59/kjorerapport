@@ -9,7 +9,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, basename } from 'node:path';
 import { haversine } from '../js/sensors.js';
-import { createSpeedWarn } from '../js/speedwarn.js';
+import { createSpeedWarn, createDropGrace } from '../js/speedwarn.js';
 import { createCamLimit } from '../js/signs.js';
 import { n0, n1, hms, duration, date } from '../js/format.js';
 
@@ -76,7 +76,7 @@ function darkFace(head, road) {
 }
 
 function speedWarnings(loc, liveLimits) {
-  const warn = createSpeedWarn(), cam = createCamLimit();
+  const warn = createSpeedWarn(), cam = createCamLimit(), grace = createDropGrace();
   const limits = [...liveLimits].sort((a, b) => a.t - b.t);
   let li = 0, nvdb = null, dist = 0, lastFix = null, cur = null;
   const episodes = [];   // { t0, t1, limit, kmh, over, cam } – limit og kmh der farten var høyest over
@@ -90,7 +90,9 @@ function speedWarnings(loc, liveLimits) {
     const cl = cam.current(dist, nvdb);
     const limit = cl ? cl.limit : nvdb;
     const kmh = Number.isFinite(p.speed) && p.speed >= 0 ? p.speed * 3.6 : NaN;
-    const { level } = warn.step({ kmh, limit, t: p.t });
+    // Henstand når kartet alene senker grensen (0.13.11); KJ_NOGRACE=1 regner som før, til sammenligning
+    const wl = process.env.KJ_NOGRACE ? limit : grace.step({ t: p.t, limit, bearing: p.bearing, kmh, cam: !!cl });
+    const { level } = warn.step({ kmh, limit: wl, t: p.t });
     if (level > 0) {
       if (!cur) episodes.push(cur = { t0: p.t, t1: p.t, over: -Infinity });
       cur.t1 = p.t;
@@ -163,7 +165,10 @@ function report(drive, input, file, exportVersion) {
     // Fra 0.13.8: når vakten startet kameraene på nytt, og appens grunn
     const log = (perf.stallLog || []).map(s => { const d = (s.at - Date.parse(drive.startedAt)) / 1000; return `${d < 0 ? 'før turen' : clock(d)} ${s.why || 'ukjent grunn'}`; }).join(', ');
     // Varm telefon: iOS melder det selv (fra 0.13.9 telt per svar fra feltmodellen). Eldre turer: takten røper det
-    const hot = 'laneMlHot' in perf ? (perf.laneMlHot / (perf.laneMlFrames || 1) >= 0.05 ? `telefonen var varm i ${pct(perf.laneMlHot, perf.laneMlFrames)} av turen (modellene går da 3 ganger i sekundet)` : '')
+    // Fra 0.13.11: sekunder på hvert varmetrinn iOS melder (normal, lunken, varm, svært varm)
+    const ths = Array.isArray(perf.thermalS) ? perf.thermalS : null, thSum = ths ? ths.reduce((a, b) => a + b, 0) : 0;
+    const steps = thSum > 10 ? 'telefonens varme: ' + ['normal', 'lunken', 'varm', 'svært varm'].map((n, i) => (ths[i] > 0 ? `${n} ${pct(ths[i], thSum)}` : '')).filter(Boolean).join(', ') + ' (modellene går 3 ganger i sekundet fra «varm»)' : '';
+    const hot = steps ? steps : 'laneMlHot' in perf ? (perf.laneMlHot / (perf.laneMlFrames || 1) >= 0.05 ? `telefonen var varm i ${pct(perf.laneMlHot, perf.laneMlFrames)} av turen (modellene går da 3 ganger i sekundet)` : '')
       : perf.laneMlFrames && sec > 60 && perf.laneMlFrames / sec < 3.3 ? 'telefonen var trolig varm hele turen (modellene gikk 3 ganger i sekundet)' : '';
     if (!drops && !stalls && !perf.slow) line('Varme', hot ? `${hot} · aldri treg, kameraet stoppet aldri` : 'ingen tegn: aldri treg, kameraet stoppet aldri');
     else line('Varme', [

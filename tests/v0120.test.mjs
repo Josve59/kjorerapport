@@ -208,3 +208,35 @@ test('førerkamera: ledsagerens side males svart når modellen har funnet ledsag
   r.driver({ min: 0.1, max: 0.35 }, 0); for (let t = 0; t < 1; t += 0.125) r.passenger({ min: 0.7, max: 0.92 }, t);
   assert.deepEqual(r.mask, { from: 0.67, to: 1 });
 });
+
+/* 0.13.11: henstand når kartet alene senker grensen */
+import { createDropGrace } from '../js/speedwarn.js';
+test('fartsvarsel: kartet senker grensen etter en sving, varselet venter 10 s', () => {
+  const g = createDropGrace();
+  // Rett fram i 50-sone, så en sving og kartet sier 30 i ti sekunder (feiltreff i et kryss)
+  for (let t = 0; t < 10; t++) assert.equal(g.step({ t, limit: 50, bearing: 90, kmh: 45 }), 50);
+  assert.equal(g.step({ t: 10, limit: 50, bearing: 110, kmh: 45 }), 50);
+  for (let t = 11; t < 21; t++) assert.equal(g.step({ t, limit: 30, bearing: 112, kmh: 45 }), 50, `t=${t}: varsles mot 50`);
+  assert.equal(g.step({ t: 21, limit: 30, bearing: 112, kmh: 45 }), 30, 'står 30 fortsatt etter 10 s, er det grensen');
+  // Tilbake til 50 underveis: henstanden er over
+  const h = createDropGrace();
+  for (let t = 0; t < 5; t++) h.step({ t, limit: 50, bearing: 0, kmh: 40 });
+  h.step({ t: 5, limit: 50, bearing: 30, kmh: 40 });
+  assert.equal(h.step({ t: 6, limit: 30, bearing: 30, kmh: 40 }), 50);
+  assert.equal(h.step({ t: 9, limit: 50, bearing: 30, kmh: 40 }), 50);
+  assert.equal(h.step({ t: 30, limit: 30, bearing: 30, kmh: 40 }), 30 + 20, 'ny senkning på rett vei: 5 s henstand');
+  assert.equal(h.step({ t: 35, limit: 30, bearing: 30, kmh: 40 }), 30);
+});
+
+test('fartsvarsel: ingen henstand når kameraet har lest skiltet, og ukjent grense glemmes ikke', () => {
+  const g = createDropGrace();
+  for (let t = 0; t < 5; t++) g.step({ t, limit: 80, bearing: 0, kmh: 80 });
+  assert.equal(g.step({ t: 5, limit: 60, bearing: 0, kmh: 80, cam: true }), 60, 'skiltet er sett: varsles mot 60 med en gang');
+  // Kartet mister veien i 12 s og kommer tilbake med en lavere grense: fortsatt en senkning
+  const h = createDropGrace();
+  for (let t = 0; t < 5; t++) h.step({ t, limit: 50, bearing: 0, kmh: 46 });
+  for (let t = 5; t < 17; t++) assert.equal(h.step({ t, limit: null, bearing: 0, kmh: 46 }), null);
+  assert.equal(h.step({ t: 17, limit: 30, bearing: 0, kmh: 46 }), 50);
+  // Grensen går opp: gjelder med en gang
+  assert.equal(h.step({ t: 40, limit: 60, bearing: 0, kmh: 46 }), 60);
+});

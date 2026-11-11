@@ -30,9 +30,9 @@ let laneCanvas = null, laneCtx = null, tailCanvas = null, tailCtx = null, signCa
 let flowPrev = null, flowPrevT = 0, flowRgba = null, signN = 0, lastSign = null, signReads = [];
 const tracker = createTracker();   // biler og folk mellom svarene fra bilgjenkjenningen
 const signs = signTracker();
-const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, laneRunMs: 0, roadKnown: 0, offRoad: 0,
+const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, thermalS: [0, 0, 0, 0], laneRunMs: 0, roadKnown: 0, offRoad: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stalls: 0, stallLog: [] });
-const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, laneRunMs: 0, roadKnown: 0, offRoad: 0,
+const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, thermalS: [0, 0, 0, 0], laneRunMs: 0, roadKnown: 0, offRoad: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stallLog: [] };
 
 export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver, native: !!driver,
@@ -51,6 +51,7 @@ let faceMask = createFaceMask(), maskCanvas = null, maskCtx = null;
 const faceLight = createFaceLight();
 let lightCanvas = null, lightCtx = null, lightN = 0, faceBox = null, faceBias = 0;
 let laneTrack = createLaneTracker();   // feltlinjene over tid (0.12.6)
+let thermalAt = 0;   // forrige svar fra feltmodellen, til tiden per varmetrinn
 let laneRaw = null, laneRawW = 0, laneAnsAt = null;   // siste utregnede linjer og svaret de kom fra (0.13.9)
 
 /* Ansiktets plass fra kalibreringen ({ x, y, z } fra facePosition), eller null: under kalibreringen og uten kalibrering */
@@ -117,7 +118,9 @@ export async function startCamera(videoEl, { road: withRoad = false, home } = {}
       detsUnsub = native.onDets(onDets);
       // Feltmodellen (0.13.0): siste svar brukes av feltlinjene i roadTick
       mlLanes = null;
-      lanesUnsub = native.onLanes(r => { mlLanes = r; perf.laneMlFrames++; if (r.hot) perf.laneMlHot++; if (Number.isFinite(r.run)) ema('laneRunMs', r.run); if (r.gamma < 0.99) perf.laneMlDim++; if (r.backend) perf.laneMl = r.backend; if (Number.isFinite(r.ms)) ema('laneMlMs', r.ms); });
+      lanesUnsub = native.onLanes(r => { mlLanes = r; perf.laneMlFrames++; if (r.hot) perf.laneMlHot++;
+        // Sekunder på hvert varmetrinn (0.13.11): tiden siden forrige svar legges på trinnet telefonen melder nå
+        if (Number.isInteger(r.th) && r.th >= 0 && r.th < 4) { const nowT = performance.now(); if (thermalAt && nowT - thermalAt < 3000) perf.thermalS[r.th] = Math.round((perf.thermalS[r.th] + (nowT - thermalAt) / 1000) * 10) / 10; thermalAt = nowT; } if (Number.isFinite(r.run)) ema('laneRunMs', r.run); if (r.gamma < 0.99) perf.laneMlDim++; if (r.backend) perf.laneMl = r.backend; if (Number.isFinite(r.ms)) ema('laneMlMs', r.ms); });
     }
     video = videoEl;
     await show(videoEl, driver.stream());

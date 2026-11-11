@@ -37,3 +37,32 @@ export function createSpeedWarn() {
     reset() { overSince = null; active = false; lastBeep = -Infinity; }
   };
 }
+
+/* Henstand når kartet alene senker grensen (0.13.11). Under kjøring finner appen veien bilen er på fra GPS-punktet.
+   I kryss, rundkjøringer og ramper treffer den av og til en annen vei i noen sekunder: på turen 11. nov. kl. 21.33
+   viste kartet 30 i ti sekunder midt i en 50-strekning rett etter en sving, og føreren fikk varsel for 45 km/t.
+   Derfor varsles det mot den gamle grensen en stund etter at kartet senker den: 5 s på rett vei (føreren trenger
+   uansett tid til å bremse), 10 s når bilen nettopp har svingt (der kartet oftest tar feil). Har kameraet lest
+   skiltet (cam), er det ingen henstand. Bare varselet venter: grensen på skjermen og rapporten etter turen er uendret.
+   step({ t (s), limit, bearing (grader, kan mangle), kmh, cam }) → grensen det skal varsles mot. */
+export function createDropGrace({ straight = 5, turning = 10, turnDeg = 15, window = 5, memory = 30 } = {}) {
+  let hist = [], last = null, lastAt = -Infinity, pending = null;
+  return {
+    step({ t, limit, bearing = NaN, kmh = NaN, cam = false }) {
+      // Kjøreretningen de siste sekundene (ikke i krypefart, der GPS-retningen er støy)
+      if (Number.isFinite(bearing) && kmh >= 8) hist.push({ t, b: bearing });
+      hist = hist.filter(x => t - x.t <= window);
+      if (!Number.isFinite(limit)) return limit;
+      if (Number.isFinite(last) && t - lastAt <= memory && limit < last && !cam) {
+        let turn = 0;
+        for (const a of hist) for (const b of hist) turn = Math.max(turn, Math.abs(((a.b - b.b + 540) % 360) - 180));
+        // En henstand som alt løper, forlenges ikke og får ikke en lavere «gammel» grense
+        if (!pending || t >= pending.until) pending = { from: last, until: t + (turn >= turnDeg ? turning : straight) };
+      }
+      last = limit; lastAt = t;
+      if (pending && (t >= pending.until || limit >= pending.from || cam)) pending = null;
+      return pending ? pending.from : limit;
+    },
+    reset() { hist = []; last = null; lastAt = -Infinity; pending = null; }
+  };
+}

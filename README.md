@@ -142,6 +142,24 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.11 – no speed warning when the map hits the wrong road in a junction
+
+From the drive on 11 Nov at 21:33 (18 min, 20 km, dark, 0.13.10 with the `n2` lane test weights).
+
+What the drive showed:
+- **The face (0.13.10):** found in 96 % of the pictures (59 % on the drive before). The driver picture was brightened in 86 % of them, and the face was found in 95 % of those. On dark road (road light under 30) it was 81 %, against 7 % before, but only 200 pictures were that dark on this route.
+- **Lane lines (0.13.9):** both lines in 78 %, 7.5 changes per minute (14.9 before), and a line dropped out about once a minute at 40 km/h and up (almost five times a minute before). The route was mostly motorway, so part of this is the road.
+- **The optimised build (0.13.9):** a whole answer from the lane model takes 50 ms, of which the model is 46.
+- **Heat:** iOS reported the phone as hot in 97 % of the drive, so the models ran 3 times per second. This is now measured, not guessed, and it is the main thing holding the app back.
+- **Signs:** the camera read 3 signs, all matched by the map, and each applied from where it stood (18–26 m ahead). No sign was read at motorway speed in the dark, and none was a near miss, so the camera does not see them there at all.
+- **A false speed warning:** just after a roundabout the map said 30 for ten seconds in the middle of a 50 stretch, and the driver was warned for 45 km/h. The same spot gave the same warning on the 19:12 drive.
+
+Changed:
+- **Speed warning:** when the map alone lowers the limit, the warning is measured against the old limit for a while: 5 s on a straight road, 10 s when the car has just turned 15 degrees or more (`createDropGrace` in `js/speedwarn.js`). A sign read by the camera gives no such wait. Only the warning waits: the limit on the screen and the report after the drive are unchanged. Replayed on seven drives: the false warnings in the junction are gone on both drives that passed it (5 → 3 and 6 → 2 warnings), and the long ones stay (70 in a 60 zone for 10 s, 98 in an 80 zone for 9 s).
+- **Heat in the export:** seconds at each of iOS's four heat steps (`perf.thermalS`), shown on the «Varme» line of `tools/turrapport.mjs`.
+
+- **Tested:** the unit tests, the replay on seven drives, and the iPhone build. **Not tested:** on the phone. The wait also delays a true warning by up to 10 s when the driver turns into a street with a lower limit and speeds at once.
+
 ## What's new in 0.13.10 – the driver's face on dark roads
 
 On the drive on 11 Nov at 20:00 the driver's face was found in 59 % of the pictures. Split by how light it was on the road (the road camera's brightness, 0–255), the cause is plain: about 90 % from 40 and up, 70 % at 30–40, and 7 % at 20–30, which is a road without street lights. Twelve stretches of more than half a minute had no face, 15 minutes in all. The drive two days earlier shows the same (11 % at 20–30).

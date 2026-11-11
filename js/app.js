@@ -13,7 +13,7 @@ import * as cam from './facecam.js';
 import { createLiveLimit, createLiveRoad } from './livelimit.js';
 import { trackCurvature, aheadCurvature, kappaPrior } from './roadshape.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
-import { createSpeedWarn } from './speedwarn.js';
+import { createSpeedWarn, createDropGrace } from './speedwarn.js';
 import { SURFACES, SURFACE_LABEL, surfaceFactor, suggestSurface, surfaceSplit, dayKey } from './surface.js';
 import { CLASS_LABEL, CALIB_STEPS, MIRRORS, closeMirrorText, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
 import { roadSummary } from './road.js';
@@ -29,7 +29,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.10';
+export const APP_VERSION = '0.13.11';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1328,6 +1328,7 @@ async function startRecording(replay = null) {
   // Fartsvarsel (0.12.0): rød kant (og pip hvis valgt) når farten er for høy
   const speedWarn = settings.speedWarn !== false || settings.speedSound ? createSpeedWarn() : null;
   const speedBeep = !!settings.speedSound;
+  const dropGrace = createDropGrace();   // kartet alene senker grensen: varselet venter litt (0.13.11)
   if (speedBeep) unlockSound();
   const recEl = $('#record');
   recEl.style.setProperty('--speed-warn', 0); recEl.classList.remove('speeding');
@@ -1383,7 +1384,8 @@ async function startRecording(replay = null) {
         limitNote.textContent = cl ? (cl.agree ? '' : 'Skilt sett av kameraet')
           : res.limit !== null ? '' : res.status === 'feil' ? 'Ingen nett' : res.status === 'ukjent' ? 'Ukjent fartsgrense' : 'Henter fartsgrense …';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
-        warnSpeed(st.kmh, lim, st.elapsed);
+        // Varselet regnes mot den gamle grensen en liten stund når kartet alene senker den (feiltreff i kryss, 0.13.11)
+        warnSpeed(st.kmh, dropGrace.step({ t: st.elapsed, limit: lim, bearing: recorder && recorder.lastFix ? recorder.lastFix.bearing : NaN, kmh: st.kmh, cam: !!cl }), st.elapsed);
         // Fotoboks foran eller strekningsmåling (v0.9.7)
         // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
         // 2 s etter at bilen har passert, og forsvinner så av seg selv.
