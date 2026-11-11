@@ -66,13 +66,14 @@ nonisolated final class RoadDetector: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// Nytt veibilde. Modellen kjører høyst rundt 10 ganger i sekundet (3 når telefonen er varm), og bare når forrige
-    /// svar er ferdig, så bildene som kommer imens hoppes over.
+    /// Nytt veibilde. Modellen kjører 5 ganger i sekundet (3 når telefonen er varm), og bare når forrige
+    /// svar er ferdig, så bildene som kommer imens hoppes over. 0.13.9: samme takt som den faktisk hadde før appen
+    /// ble bygget med optimalisering (se LaneDetector), så telefonen ikke blir varmere enn før.
     func feed(_ frame: CameraHub.Frame) {
         let now = CACurrentMediaTime()
         let hot = ProcessInfo.processInfo.thermalState.rawValue >= ProcessInfo.ThermalState.serious.rawValue
         lock.lock()
-        guard !busy, !models.isEmpty, now - lastStart >= (hot ? 0.33 : 0.1) else { lock.unlock(); return }
+        guard !busy, !models.isEmpty, now - lastStart >= (hot ? 0.33 : 0.19) else { lock.unlock(); return }
         busy = true
         lastStart = now
         let bottom = roadBottom, dark = self.dark

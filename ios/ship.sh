@@ -23,8 +23,10 @@ fi
 [ -n "$DEVICE" ] || { echo "Fant ingen tilkoblet iPhone (sett KJ_DEVICE)"; exit 1; }
 if [ -d ../.local-test/app-models/Lanes.mlmodelc ]; then echo "Feltmodell: testvekter fra .local-test/app-models (ikke i git)"; fi
 echo "Bygger for $DEVICE …"
+# Swift-koden optimaliseres (0.13.9), men bygget er fortsatt et testbygg (DEBUG: utviklerverktøy og logg virker).
+# Uten optimalisering brukte lesingen av feltmodellens svar mer tid enn modellen selv: 3–5 svar i sekundet og varm telefon.
 xcodebuild -project Kjorerapport.xcodeproj -scheme Kjorerapport -configuration Debug -destination "id=$DEVICE" \
-  -derivedDataPath "$DD" -allowProvisioningUpdates build 2>&1 | grep -E "error:|\*\* BUILD" || true
+  -derivedDataPath "$DD" -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-O build 2>&1 | grep -E "error:|\*\* BUILD" || true
 APP="$DD/Build/Products/Debug-iphoneos/Kjorerapport.app"
 xcrun devicectl device install app --device "$DEVICE" "$APP" 2>&1 | tail -1
 xcrun devicectl device process launch --terminate-existing --device "$DEVICE" net.svendsenmedia.kjorerapport 2>&1 | tail -1 \

@@ -142,6 +142,41 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.9 – smoother lane lines, and speed signs that apply where they stand and count in the report
+
+From the drive on 11 Nov at 20:00 (46 min, 38 km, dark, 0.13.8 with the `n2` lane test weights).
+
+What the drive showed:
+- Both lane lines were seen in 72 % of the pictures (40 % on the 0.13.2 drive two days earlier), and in 73 % in the dark at 40 km/h and up (43 %).
+- The lane model answered 3.0 times per second the whole drive. That is the rate the app uses when iOS reports the phone as hot. Earlier drives reached 4–5 at best, never the 8 the code allowed: the app on the phone was built without optimisation, and reading the model's answer took longer than the model itself.
+- One line dropped out 220 times at 40 km/h and up. In 148 of them it was back within 1.5 s.
+- All 11 signs the camera read were right, and they were read 1–2 s before the car reached the sign. The limit applied at once, so the driver got a speed warning for 56 km/h «in a 50 zone» while still in the 60 zone.
+- The report after the drive only used the map's limits, so a temporary sign never counted.
+
+**Lane lines**
+- The tracker (`createLaneTracker`) counts answers from the model, not pictures. One answer used to count two or three times: one answer was enough to show a new line, and two lost answers removed it.
+- A lost line stays for 0.8 s. While the other line is seen, the lost one is drawn where the lane width puts it for up to 2.2 s, so it follows the road instead of standing still. Such a line is shown but not stored as seen.
+- An answer from the model is used for 1.2 s (was 0.6). One lost answer used to send the lines over to the simple image analysis for a couple of pictures. The same answer is no longer recalculated in every picture.
+- New `js/laneease.js` draws the lines: they glide towards the latest answer over about the time between answers (slowest far ahead, where the noise is largest), and fade in and out instead of blinking. A line that moves far at once fades in at the new place instead of sweeping across the road.
+
+**Speed signs**
+- A sign applies from where it stands. The distance comes from its width in the picture (`signAhead`) and is stored with the sign (`ahead` in `liveLimits`).
+- A short wrong hit in the map (a crossing street) no longer removes a temporary sign: the map's new value must have stood for 100 m.
+- A sign that shows more than the map, and that the map does not follow within 300 m, stops applying. Temporary and digital signs lower the limit, so a higher one is most likely a misreading or another road's sign.
+- The report uses the signs the camera read (`overlayCamSigns`): they are laid over the map's limits when the report opens, the map's own values are kept in `enrich.limitsNvdb`, and a speeding episode measured against a sign says «skilt sett av kameraet».
+- Import keeps the mark that a limit came from the camera.
+- The export lists signs that were read at least twice but not accepted (`perf.signMissed`, `signMissLog`).
+
+**Heat and speed**
+- `ios/ship.sh` builds the Swift code with optimisation. It is still a test build, so the developer tools work.
+- The models run 5 times per second (3 when the phone is hot). The limits were 8 and 10, which the optimised build would reach, and that would heat the phone more.
+- The export says how often the phone was hot and how long a whole answer from the lane model takes (`laneMlHot`, `laneRunMs`).
+
+`tools/turrapport.mjs` shows the lane model's rate, hot phone on the «Varme» line, and a «Skilt» line: how many signs the camera read, and where the map said something else.
+
+- **Tested:** 212 unit tests (tracker, drawing, sign rules, signs in the report, the tool), the report in the browser with a test drive, and the iPhone build (compiled with `-O`, installed).
+- **Not tested:** everything on the phone, which needs a drive: how the lines look, the sign distance on the road, and whether the phone runs cooler. No temporary sign has been seen by the camera on a drive yet, so that path is only tested with made-up data.
+
 ## What's new in 0.13.8 – no false «slow phone» at the start, and the export says why the cameras stopped
 
 From the drive on 11 Nov at 19:12, the first with the `n2` lane test weights (the export says `TwinLiteNet+ n2 · alle`, so the tag works).

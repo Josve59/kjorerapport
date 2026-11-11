@@ -40,7 +40,14 @@ export function speedingFor(r, enrich) {
   if (!enrich || !Array.isArray(enrich.limits) || enrich.limits.length !== r.points.length) return null;
   const limits = enrich.limits.map(v => (v === null ? NaN : v));
   if (!limits.some(Number.isFinite)) return null;
-  return { ...analyzeSpeeding(r.points, limits), limits };
+  const sp = analyzeSpeeding(r.points, limits);
+  // Målt mot et skilt kameraet leste (0.13.9: midlertidig eller digitalt skilt, ikke kartets grense)
+  const runs = Array.isArray(enrich.limitsCam) ? enrich.limitsCam : [];
+  if (runs.length) for (const e of sp.episodes) {
+    const i = r.points.findIndex(p => p.t >= e.tPeak);
+    e.cam = i >= 0 && runs.some(([a, b]) => i >= a && i <= b);
+  }
+  return { ...sp, limits };
 }
 
 const MARK_LETTER = i => String.fromCharCode(65 + (i % 26));
@@ -87,7 +94,7 @@ export function buildSummary(r, ctx = {}) {
   const sp = speedingFor(r, ctx.enrich);
   if (sp) {
     lines.push(`Fartsgrenser: ${sp.score} poeng, ${overTime(sp.secondsOver, true)} over grensen${sp.episodes.length ? ':' : '.'}`);
-    for (const e of sp.episodes) lines.push(`– ${mss(e.tFrom)}–${mss(e.tTo)}: ${kmh(e.maxKmh)} i ${e.limit}-sone`);
+    for (const e of sp.episodes) lines.push(`– ${mss(e.tFrom)}–${mss(e.tTo)}: ${kmh(e.maxKmh)} i ${e.limit}-sone${e.cam ? ' (skilt sett av kameraet)' : ''}`);
   }
   lines.push('Tips:');
   for (const t of r.tips) lines.push(`– ${t.text}`);
@@ -293,7 +300,7 @@ export function renderReport(root, r, ctx = {}) {
       </dl>
       ${sp.episodes.length ? `<ol class="episodes">${sp.episodes.map(e => `
         <li><span class="limit-pill">${e.limit}</span>
-          <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t</span></span></li>`).join('')}</ol>`
+          <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t${e.cam ? ' · skilt sett av kameraet' : ''}</span></span></li>`).join('')}</ol>`
         : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
     </section>` : ''}
     ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}

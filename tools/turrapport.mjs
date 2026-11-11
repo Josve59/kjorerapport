@@ -74,7 +74,7 @@ function speedWarnings(loc, liveLimits) {
     if (Number.isFinite(p.acc) && p.acc <= 50) lastFix = p;
     while (li < limits.length && limits[li].t <= p.t) {
       const x = limits[li++];
-      if (x.src === 'kamera') cam.sign(x.limit, dist, nvdb); else nvdb = x.limit;
+      if (x.src === 'kamera') cam.sign(x.limit, dist, nvdb, x.ahead); else nvdb = x.limit;   // ahead fra 0.13.9: skiltet gjelder fra der det står
     }
     const cl = cam.current(dist, nvdb);
     const limit = cl ? cl.limit : nvdb;
@@ -134,6 +134,9 @@ function report(drive, input, file, exportVersion) {
     if (!('laneMlFrames' in perf)) line('Feltmodell', `ikke med i ${version} (kom i 0.13.0); linjene er fra bildeanalysen`);
     else if (!perf.laneMlFrames) line('Feltmodell', 'kjørte ikke (ingen svar); linjene er fra bildeanalysen');
     else line('Feltmodell', `kjørte: ${n0(perf.laneMlFrames)} svar, ${ms(perf.laneMlMs)} per bilde${perf.laneMl ? ` · ${perf.laneMl}` : ''}${'laneMlDim' in perf ? ` · lysnet i mørket i ${pct(perf.laneMlDim, perf.laneMlFrames)}` : ''}`);
+    // Takten (svar i sekundet, regnet på turens lengde) viser om telefonen var varm: da kjøres modellen 3 ganger i sekundet.
+    // Fra 0.13.9 teller appen det selv, og måler hele svaret med klargjøring og lesing
+    if (perf.laneMlFrames && sec > 60) more([`rundt ${n1(perf.laneMlFrames / sec)} svar i sekundet`, perf.laneRunMs ? `${ms(perf.laneRunMs)} for hele svaret` : ''].filter(Boolean).join(' · '));
     if (!perf.dfineFrames) line('D-FINE', 'kjørte ikke (ingen svar)');
     else line('D-FINE', `${ms(perf.dfineMs)} per bilde · ${n0(perf.dfineFrames)} svar, fant noe i ${pct(perf.dfineAny, perf.dfineFrames)}${perf.dfine ? ` · ${perf.dfine}` : ''}`);
     // Fra 0.13.2: biler som ikke sto på veien feltmodellen så (huslys), tatt bort
@@ -144,8 +147,12 @@ function report(drive, input, file, exportVersion) {
     const warmup = drops === 1 && !perf.slow && !('stallLog' in perf) && perf.slowSince > 0 && perf.slowSince < 30000;
     // Fra 0.13.8: når vakten startet kameraene på nytt, og appens grunn
     const log = (perf.stallLog || []).map(s => { const d = (s.at - Date.parse(drive.startedAt)) / 1000; return `${d < 0 ? 'før turen' : clock(d)} ${s.why || 'ukjent grunn'}`; }).join(', ');
-    if (!drops && !stalls && !perf.slow) line('Varme', 'ingen tegn: aldri treg, kameraet stoppet aldri');
+    // Varm telefon: iOS melder det selv (fra 0.13.9 telt per svar fra feltmodellen). Eldre turer: takten røper det
+    const hot = 'laneMlHot' in perf ? (perf.laneMlHot / (perf.laneMlFrames || 1) >= 0.05 ? `telefonen var varm i ${pct(perf.laneMlHot, perf.laneMlFrames)} av turen (modellene går da 3 ganger i sekundet)` : '')
+      : perf.laneMlFrames && sec > 60 && perf.laneMlFrames / sec < 3.3 ? 'telefonen var trolig varm hele turen (modellene gikk 3 ganger i sekundet)' : '';
+    if (!drops && !stalls && !perf.slow) line('Varme', hot ? `${hot} · aldri treg, kameraet stoppet aldri` : 'ingen tegn: aldri treg, kameraet stoppet aldri');
     else line('Varme', [
+      hot,
       drops ? `treg ${n0(drops)} ${drops === 1 ? 'gang' : 'ganger'} (ned til 5 bilder i sekundet)${warmup ? `, ${n0(perf.slowSince / 1000)} s etter at appen åpnet: oppstarten, ikke varme` : ''}` : 'aldri treg',
       perf.slow ? 'fortsatt treg da turen sluttet' : '',
       stalls ? `kameraet stoppet og startet på nytt ${n0(stalls)} ${stalls === 1 ? 'gang' : 'ganger'}${log ? ` (${log})` : ''}` : 'kameraet stoppet aldri'
@@ -156,6 +163,19 @@ function report(drive, input, file, exportVersion) {
     if (holes.length) more(`uten bilder fra veikameraet: ${holes.slice(0, 6).join(', ')}${holes.length > 6 ? ` og ${holes.length - 6} til` : ''}`);
   }
 
+  // Skilt kameraet leste: fulgte kartet etter (samme grense innen 15 s), eller sa kartet noe annet (midlertidig skilt
+  // eller feillesning)? Fra 0.13.9 også skilt som ble lest uten å bli godtatt
+  const ll = [...(drive.liveLimits || [])].sort((a, b) => a.t - b.t), camSigns = ll.filter(x => x.src === 'kamera');
+  if (camSigns.length || (perf && perf.signs)) {
+    const hms0 = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    const mapAt = t => { let v = null; for (const x of ll) { if (x.t > t) break; if (x.src !== 'kamera') v = x.limit; } return v; };
+    const seen = [];
+    for (const x of camSigns) { const p = seen[seen.length - 1]; if (!p || p.limit !== x.limit || x.t - p.t > 5) seen.push(x); }
+    const alone = seen.filter(x => mapAt(x.t) !== x.limit && !ll.some(y => y.src !== 'kamera' && y.t >= x.t && y.t <= x.t + 15 && y.limit === x.limit));
+    line('Skilt', `${n0(seen.length)} lest av kameraet${perf && perf.signReads ? ` (${n0(perf.signReads)} lesninger)` : ''} · kartet hadde eller fikk samme grense for ${n0(seen.length - alone.length)}`);
+    if (alone.length) more(`kartet sa noe annet (midlertidig skilt eller feillesning): ${alone.slice(0, 6).map(x => `${hms0(x.t)} skilt ${x.limit}, kart ${mapAt(x.t) ?? '–'}`).join(' · ')}`);
+    if (perf && perf.signMissed) more(`lest uten å bli godtatt: ${n0(perf.signMissed)}${(perf.signMissLog || []).length ? ` (${perf.signMissLog.slice(0, 8).map(m => `${m.limit} lest ${m.reads} ganger, ${m.w} piksler`).join(' · ')})` : ''}`);
+  }
   const sw = speedWarnings(loc, drive.liveLimits || []);
   const n = sw.episodes.length;
   if (!sw.hasLimits) line('Fartsvarsler', 'ingen fartsgrenser lagret (Veidata av, eller ingen nett)');

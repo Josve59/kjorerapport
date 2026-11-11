@@ -52,3 +52,66 @@ test('fartsgrense fra kameraet: gjelder til ny NVDB-strekning, nytt skilt eller 
   assert.equal(cl.current(4900, 80).limit, 70);
   assert.equal(cl.current(5100, 80), null, 'etter 3 km');
 });
+
+/* 0.13.9: skiltet gjelder fra der det står, tåler feil i kartet, og legges over kartets grenser i rapporten */
+import { signAhead, overlayCamSigns } from '../kamera/js/signs.js';
+
+test('fartsgrense fra kameraet: gjelder fra der skiltet står', () => {
+  assert.equal(signAhead(30, 985), 25, '30 piksler bredt skilt er rundt 25 m unna');
+  assert.equal(signAhead(0, 985), 0);
+  const cl = createCamLimit();
+  cl.sign(50, 1000, 60, 25);   // lest 25 m før skiltet, i 60-sonen
+  assert.equal(cl.current(1010, 60), null, 'før skiltet gjelder fortsatt 60');
+  assert.deepEqual(cl.pending, { limit: 50, d0: 1025 });
+  assert.equal(cl.current(1026, 60).limit, 50, 'ved skiltet');
+  assert.equal(cl.current(1100, 50).agree, true, 'kartet følger etter');
+});
+
+test('fartsgrense fra kameraet: et kort feiltreff i kartet tar ikke bort et midlertidig skilt', () => {
+  const cl = createCamLimit();
+  cl.sign(50, 0, 80);   // veiarbeid: 50 der kartet sier 80
+  assert.equal(cl.current(400, 80).limit, 50);
+  assert.equal(cl.current(420, 30).limit, 50, 'kartet treffer en kryssende gate');
+  assert.equal(cl.current(480, 30).limit, 50, '60 m: fortsatt et feiltreff');
+  assert.equal(cl.current(500, 80).limit, 50, 'tilbake på veien: skiltet gjelder');
+  assert.equal(cl.current(900, 60).limit, 50, 'kartet skifter til 60 …');
+  assert.equal(cl.current(1010, 60), null, '… og når det har stått i 100 m, er det en ny strekning');
+});
+
+test('fartsgrense fra kameraet: høyere enn kartet gjelder bare til kartet har hatt sjansen til å følge etter', () => {
+  const up = createCamLimit();
+  up.sign(80, 0, 60);   // feillesning eller skiltet til en annen vei
+  assert.equal(up.current(200, 60).limit, 80);
+  assert.equal(up.current(320, 60), null, 'kartet fulgte ikke etter på 300 m');
+  const ok = createCamLimit();
+  ok.sign(80, 0, 60);
+  assert.equal(ok.current(60, 80).agree, true, 'kartet følger etter');
+  assert.equal(ok.current(140, 80).limit, 80);
+  assert.equal(ok.current(500, 80), null, 'kartet har tatt over med samme grense');
+});
+
+test('skilt i rapporten: kameraets skilt legges over kartets grenser', () => {
+  // 100 punkter, ett per sekund og 20 m (72 km/t). Kartet sier 80 hele veien. Kameraet leser 50 ved punkt 20, 30 m unna
+  const points = Array.from({ length: 100 }, (_, i) => ({ t: i, lat: 60 + i * 20 / 111195, lon: 10 }));
+  const limits = points.map(() => 80);
+  const o = overlayCamSigns(points, limits, [{ t: 20, limit: 50, ahead: 30 }, { t: 60, limit: 80, ahead: 30 }]);
+  assert.equal(o.limits[20], 80, 'der skiltet ble lest gjelder fortsatt 80');
+  assert.equal(o.limits[21], 80);
+  assert.equal(o.limits[22], 50, 'fra skiltet (30 m lenger fram)');
+  assert.equal(o.limits[60], 50);
+  assert.equal(o.limits[62], 80, 'nytt skilt: veiarbeidet er slutt');
+  assert.deepEqual(o.cam, [[22, 61, 50]]);
+  assert.deepEqual(limits, points.map(() => 80), 'kartets liste endres ikke');
+  assert.deepEqual(overlayCamSigns(points, limits, []).cam, []);
+});
+
+test('fartsskilt: skilt som ble lest, men ikke godtatt, meldes', () => {
+  const tr = signTracker();
+  const r = (limit, x, w = 30) => ({ limit, score: 0.8, box: { x, y: 100, w, h: w } });
+  tr.update([r(50, 500)], 0);
+  tr.update([r(50, 506, 33)], 250);
+  assert.deepEqual(tr.takeMissed(), []);
+  tr.update([], 1300);   // skiltet er ute av bildet
+  assert.deepEqual(tr.takeMissed(), [{ limit: 50, reads: 2, share: 1, w: 33 }]);
+  assert.deepEqual(tr.takeMissed(), [], 'meldes én gang');
+});

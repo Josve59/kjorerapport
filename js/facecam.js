@@ -7,7 +7,7 @@ import { processDetections, detectTaillights, roadDets, focalPx, onRoad as onRoa
 import { detectLanes, toGray, rowMeans, dashLine, scaleLane, LANE_WIDTH, createLaneTracker, laneGamma, roadEdgeLines } from './lanes.js';
 import { createTracker } from './track.js';
 import { matchShift } from './flow.js';
-import { readSigns, signTracker } from './signs.js';
+import { readSigns, signTracker, signAhead } from './signs.js';
 import * as native from './nativecam.js';
 import { createDriverPicker, createFaceMask } from './calibcheck.js';
 
@@ -29,17 +29,17 @@ let laneCanvas = null, laneCtx = null, tailCanvas = null, tailCtx = null, signCa
 let flowPrev = null, flowPrevT = 0, flowRgba = null, signN = 0, lastSign = null, signReads = [];
 const tracker = createTracker();   // biler og folk mellom svarene fra bilgjenkjenningen
 const signs = signTracker();
-const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, roadKnown: 0, offRoad: 0,
-  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0, stalls: 0, stallLog: [] });
-const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, roadKnown: 0, offRoad: 0,
-  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, slow: false, slowSince: 0, drops: 0, stallLog: [] };
+const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, laneRunMs: 0, roadKnown: 0, offRoad: 0,
+  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stalls: 0, stallLog: [] });
+const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, laneRunMs: 0, roadKnown: 0, offRoad: 0,
+  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stallLog: [] };
 
 export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver, native: !!driver,
   stalled: !!driver && driver.stalledMs > 3000,   // ingen nye bilder fra kameraene på 3 s
   road: !!road, roadModel, roadSize: road && road.ready ? `${road.width}x${road.height}` : null, roadBottom,
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, lastPose, lastRoad, video,
   perf: { ...perf, faceMs: Math.round(perf.faceMs), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10,
-    flowMs: Math.round(perf.flowMs * 10) / 10, signMs: Math.round(perf.signMs * 10) / 10, dfineMs: Math.round(perf.dfineMs), laneMlMs: Math.round(perf.laneMlMs) } });
+    flowMs: Math.round(perf.flowMs * 10) / 10, signMs: Math.round(perf.signMs * 10) / 10, dfineMs: Math.round(perf.dfineMs), laneMlMs: Math.round(perf.laneMlMs), laneRunMs: Math.round(perf.laneRunMs) } });
 
 /* Førerplassen (0.12.6): lært av kameraet, på nytt hver gang kameraet startes. Fra 0.13.2 med plassen fra
    kalibreringen som utgangspunkt (setDriverHome), og ledsagerens side av bildet skjult når modellen finner ledsageren. */
@@ -47,6 +47,7 @@ let driverHome = null;
 let driverPick = createDriverPicker();
 let faceMask = createFaceMask(), maskCanvas = null, maskCtx = null;
 let laneTrack = createLaneTracker();   // feltlinjene over tid (0.12.6)
+let laneRaw = null, laneRawW = 0, laneAnsAt = null;   // siste utregnede linjer og svaret de kom fra (0.13.9)
 
 /* Ansiktets plass fra kalibreringen ({ x, y, z } fra facePosition), eller null: under kalibreringen og uten kalibrering */
 export function setDriverHome(pos) { driverHome = pos || null; driverPick.setHome(driverHome); }
@@ -93,7 +94,7 @@ function show(videoEl, s) {
 /* Starter førerkameraet (og veikameraet med road: true, bare i iPhone-appen). Må kalles fra et trykk første gang. */
 export async function startCamera(videoEl, { road: withRoad = false, home } = {}) {
   if (home !== undefined) driverHome = home || null;
-  driverPick = createDriverPicker({ home: driverHome }); faceMask = createFaceMask(); laneTrack = createLaneTracker();
+  driverPick = createDriverPicker({ home: driverHome }); faceMask = createFaceMask(); laneTrack = createLaneTracker(); laneRaw = null; laneAnsAt = null;
   if (native.available()) {
     const want = withRoad ? ['user', 'environment'] : ['user'];
     if (driver && !!road === withRoad) { video = videoEl; await show(videoEl, driver.stream()); return; }
@@ -110,7 +111,7 @@ export async function startCamera(videoEl, { road: withRoad = false, home } = {}
       detsUnsub = native.onDets(onDets);
       // Feltmodellen (0.13.0): siste svar brukes av feltlinjene i roadTick
       mlLanes = null;
-      lanesUnsub = native.onLanes(r => { mlLanes = r; perf.laneMlFrames++; if (r.gamma < 0.99) perf.laneMlDim++; if (r.backend) perf.laneMl = r.backend; if (Number.isFinite(r.ms)) ema('laneMlMs', r.ms); });
+      lanesUnsub = native.onLanes(r => { mlLanes = r; perf.laneMlFrames++; if (r.hot) perf.laneMlHot++; if (Number.isFinite(r.run)) ema('laneRunMs', r.run); if (r.gamma < 0.99) perf.laneMlDim++; if (r.backend) perf.laneMl = r.backend; if (Number.isFinite(r.ms)) ema('laneMlMs', r.ms); });
     }
     video = videoEl;
     await show(videoEl, driver.stream());
@@ -299,15 +300,23 @@ function roadTick() {
     // Linjene kameraet så i forrige bilde (ikke de tegnet etter feltbredden), så valget holder seg til samme linje (0.12.5)
     const pv = lastView && lastView.lane && lastView.lane.W === W && performance.now() - (lastView.lane.at || 0) < 600 ? lastView.lane : null;
     const painted = L => (L && !L.predicted && !L.edge ? L : null);
-    const prev = pv ? { left: painted(pv.left), right: painted(pv.right) } : null;
+    const sure = L => (painted(L) && !L.carried ? L : null);
+    const prev = pv ? { left: sure(pv.left), right: sure(pv.right) } : null;
     // Feltmodellen (0.13.0): punktene på linjene den fant, skalert til det lille bildet. Punkter godt utenfor veien
     // foran (gang- og sykkelvei, linjer bak en fortauskant) tas ikke med. Uten ferskt svar: den enkle bildeanalysen.
-    const ml = mlLanes && mlLanes.w > 0 && Math.abs(mlLanes.h / mlLanes.w - vh / vw) < 0.02 && performance.now() - mlLanes.at < 600 ? mlLanes : null;
-    const points = ml ? mlPoints(ml, W / ml.w, W) : null;
-    const raw = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
-      focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true, prev, points });
+    // 0.13.9: svaret gjelder i 1,2 s (var 0,6): varm telefon gir 3 svar i sekundet, og ett tapt svar sendte ellers
+    // linjene over på den enkle bildeanalysen i et par bilder. Det samme svaret regnes heller ikke ut på nytt.
+    const ml = mlLanes && mlLanes.w > 0 && Math.abs(mlLanes.h / mlLanes.w - vh / vw) < 0.02 && performance.now() - mlLanes.at < 1200 ? mlLanes : null;
+    const fresh = !ml || ml.at !== laneAnsAt || !laneRaw || laneRawW !== W;
+    if (fresh) {
+      const points = ml ? mlPoints(ml, W / ml.w, W) : null;
+      laneRaw = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
+        focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true, prev, points });
+      laneRaw.ml = !!points; laneRawW = W; laneAnsAt = ml ? ml.at : performance.now();
+    }
+    const raw = laneRaw;
     // Det som vises og lagres: linjer som er sett mer enn én gang, og som står litt når de faller ut (0.12.6)
-    const ln = { ...raw, ...laneTrack.step(raw, W) };
+    const ln = { ...raw, ...laneTrack.step(raw, W, { t: performance.now(), fresh }) };
     // Kamerahøyden fra feltbredden: telefonen står i en holder ved rattet, så bare rimelige høyder tas med (0.12.5)
     if (Number.isFinite(ln.camH) && ln.camH > 0.8 && ln.camH < 1.8) camHEst += (ln.camH - camHEst) * 0.05;
     // Smale veier uten oppmalte linjer (0.13.3): ingen linje sett, men feltmodellen ser veien. Da vises høyre veikant og
@@ -317,9 +326,10 @@ function roadTick() {
       const e = roadEdgeLines(scaleRoad(ml.road, W / ml.w), W, { vh: base.horizon * H, yBottom: base.bottom * H });
       if (e.right) { ln.left = e.left; ln.right = e.right; edge = true; }
     }
-    const seenL = !!painted(ln.left), seenR = !!painted(ln.right);
+    // En linje som bæres etter feltbredden mens den er borte (carried, 0.13.9), vises, men lagres ikke som sett
+    const seenL = !!painted(ln.left) && !ln.left.carried, seenR = !!painted(ln.right) && !ln.right.carried;
     r.lane = { l: seenL, r: seenR, offset: ln.offset, ...(edge ? { e: 1 } : {}), ...(ln.curve ? { k: Math.round(ln.curve.kappa * 1e4) / 1e4 } : {}), ...(shape.laneWidth ? { lw: shape.laneWidth } : {}) };
-    Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H, at: performance.now(), ml: !!points, road: ml ? scaleRoad(ml.road, W / ml.w) : null, kappa: ln.curve ? ln.curve.kappa : null,
+    Object.assign(lastView, { lane: { left: ln.left, right: ln.right, offset: ln.offset, W, H, at: performance.now(), ansAt: laneAnsAt, ml: !!raw.ml, road: ml ? scaleRoad(ml.road, W / ml.w) : null, kappa: ln.curve ? ln.curve.kappa : null,
       prior: shape.kappa, src: shape.src, lanes: shape.lanes, laneWidth: shape.laneWidth }, lum: r.lum, roadBottom });
   } catch { /* ingen feltlinjer */ }
   ema('laneMs', performance.now() - t2);
@@ -390,8 +400,11 @@ function signStep(r, el, t, vw, vh) {
   perf.signReads += signReads.length;
   if (signReads.length) r.signRead = signReads.map(s => ({ limit: s.limit, score: s.score, w: s.box.w }));
   const conf = signs.update(signReads, t);
+  // Skilt som ble lest, men ikke godtatt (0.13.9): følger med eksporten, så det synes hva som ble mistet
+  for (const m of signs.takeMissed()) { perf.signMissed++; if (perf.signMissLog.length < 40) perf.signMissLog.push({ at: Date.now(), ...m }); }
   if (conf) {
     perf.signs++;
+    conf.ahead = signAhead(conf.w, focalPx(vw, vh));   // avstanden til skiltet: grensen gjelder fra der det står
     const b = signReads.slice().sort((a, b2) => b2.box.w - a.box.w)[0].box;
     lastSign = { ...conf, at: performance.now(), box: b };
     r.sign = conf;

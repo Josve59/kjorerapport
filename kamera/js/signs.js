@@ -200,6 +200,7 @@ export function refineBox(rgba, W, H, b) {
    minst 3 ganger med samme tall (60 % av stemmene) før det godtas. update(reads, t ms) → nytt godtatt skilt eller null. */
 export function signTracker({ maxGap = 900, minReads = 3, minShare = 0.6 } = {}) {
   let tracks = [];
+  const missed = [];
   const update = (reads, t) => {
     let confirmed = null;
     for (const r of reads) {
@@ -215,25 +216,85 @@ export function signTracker({ maxGap = 900, minReads = 3, minShare = 0.6 } = {})
         if (v / tot >= minShare) { tr.done = true; confirmed = { limit: +lim, reads: tr.n, share: Math.round(v / tot * 100) / 100, w: Math.round(r.box.w) }; }
       }
     }
+    // Skilt som forsvant uten å bli godtatt (0.13.9): lest minst to ganger. Viser i eksporten hva som ble mistet
+    for (const k of tracks) if (!k.done && k.n >= 2 && t - k.t > maxGap) {
+      const tot = Object.values(k.votes).reduce((a, b) => a + b, 0);
+      const [lim, v] = Object.entries(k.votes).sort((a, b) => b[1] - a[1])[0];
+      missed.push({ limit: +lim, reads: k.n, share: Math.round(v / tot * 100) / 100, w: Math.round(k.w) });
+    }
     tracks = tracks.filter(k => t - k.t <= maxGap);
     return confirmed;
   };
-  return { update, get size() { return tracks.length; } };
+  /* Skilt som ble lest, men ikke godtatt, siden sist: [{ limit, reads, share, w }] */
+  const takeMissed = () => missed.splice(0);
+  return { update, takeMissed, get size() { return tracks.length; } };
 }
 
 /* Fartsgrensen fra kameraet under kjøring (k0.7.6). Et godtatt skilt gjelder til (a) et nytt skilt, (b) 3 km
    senere, eller (c) NVDB-grensen endrer seg mer enn 150 m etter skiltet (ny strekning; midlertidige skilt og
-   digitale skilt gjelder ellers til neste skilt). current(distM, nvdb) → null eller { limit, nvdb, agree, sinceM }. */
-export function createCamLimit({ maxM = 3000, nvdbM = 150 } = {}) {
-  let cam = null;
-  const sign = (limit, distM, nvdb) => { cam = { limit, d0: distM, nvdb0: nvdb }; };
-  const current = (distM, nvdb) => {
-    if (!cam) return null;
-    const since = distM - cam.d0;
-    if (since > maxM || (Number.isFinite(nvdb) && Number.isFinite(cam.nvdb0) && nvdb !== cam.nvdb0 && since > nvdbM)) { cam = null; return null; }
-    // Skiltet sett der NVDB ennå ikke var kjent: husk første kjente verdi
-    if (!Number.isFinite(cam.nvdb0) && Number.isFinite(nvdb)) cam.nvdb0 = nvdb;
-    return { limit: cam.limit, nvdb: Number.isFinite(nvdb) ? nvdb : null, agree: cam.limit === nvdb, sinceM: Math.round(since) };
+   digitale skilt gjelder ellers til neste skilt). current(distM, nvdb) → null eller { limit, nvdb, agree, sinceM }.
+   0.13.9, etter turen 11. nov. kl. 20.00 (11 skilt lest, alle 1–2 s før bilen var framme):
+   - Skiltet gjelder fra der det står: sign(limit, distM, nvdb, aheadM), der aheadM er avstanden til skiltet da det
+     ble lest (signAhead). Før gjaldt det med en gang, og føreren fikk fartsvarsel for 56 km/t «i 50-sone» mens
+     bilen ennå var i 60-sonen.
+   - (c) krever at den nye NVDB-verdien har stått i stableM. Et kort feiltreff i kartet (kryssende gate, vei under)
+     tok ellers bort et midlertidig skilt.
+   - Et skilt som viser høyere enn NVDB, og som NVDB ikke følger etter innen upM, gjelder ikke lenger: midlertidige
+     og digitale skilt setter farten ned, så høyere er som regel en feillesning eller skiltet til en annen vei, og
+     for høy grense er den farlige feilen. */
+export function createCamLimit({ maxM = 3000, nvdbM = 150, stableM = 100, upM = 300 } = {}) {
+  let cam = null, next = null;
+  const sign = (limit, distM, nvdb, aheadM = 0) => {
+    const ahead = Number.isFinite(aheadM) && aheadM > 0 ? aheadM : 0;
+    const x = { limit, d0: distM + ahead, nvdb0: nvdb, chg: null, agreed: false };
+    if (ahead > 0) next = x; else { cam = x; next = null; }
   };
-  return { sign, current, reset: () => { cam = null; } };
+  const current = (distM, nvdb) => {
+    if (next && distM >= next.d0) { cam = next; next = null; }
+    if (!cam) return null;
+    const since = distM - cam.d0, known = Number.isFinite(nvdb);
+    // Skiltet sett der NVDB ennå ikke var kjent: husk første kjente verdi
+    if (!Number.isFinite(cam.nvdb0) && known) cam.nvdb0 = nvdb;
+    if (known && nvdb === cam.limit) cam.agreed = true;
+    if (known && Number.isFinite(cam.nvdb0) && nvdb !== cam.nvdb0) { if (!cam.chg || cam.chg.v !== nvdb) cam.chg = { v: nvdb, d: distM }; }
+    else if (known) cam.chg = null;
+    const newStretch = cam.chg && since > nvdbM && distM - cam.chg.d >= stableM;
+    // Mot kartets verdi ved skiltet, ikke et kort feiltreff i kartet akkurat nå
+    const tooHigh = Number.isFinite(cam.nvdb0) && cam.limit > cam.nvdb0 && !cam.agreed && since > upM;
+    if (since > maxM || newStretch || tooHigh) { cam = null; return null; }
+    return { limit: cam.limit, nvdb: known ? nvdb : null, agree: cam.limit === nvdb, sinceM: Math.round(since) };
+  };
+  return { sign, current, reset: () => { cam = null; next = null; }, get pending() { return next ? { limit: next.limit, d0: next.d0 } : null; } };
+}
+
+/* Avstanden til et skilt (m) fra bredden i bildet: et fartsskilt er 60–100 cm bredt, her regnet som 75 cm.
+   widthPx: skiltets bredde i kamerabildet, focal: brennvidden i piksler (focalPx i road.js). */
+export function signAhead(widthPx, focal, { sizeM = 0.75, minM = 3, maxM = 80 } = {}) {
+  if (!(widthPx > 0) || !(focal > 0)) return 0;
+  return Math.round(Math.max(minM, Math.min(maxM, sizeM * focal / widthPx)));
+}
+
+/* Skiltene kameraet leste under turen, lagt over fartsgrensene fra kartet (0.13.9). Rapporten etter turen brukte bare
+   kartet, så midlertidige og digitale skilt telte ikke: farten ble målt mot en grense som ikke gjaldt.
+   points: [{ t, lat, lon }], limits: kartets grense per punkt (tall, null eller NaN), signs: [{ t, limit, ahead }] med
+   samme tid som punktene. Reglene er de samme som under kjøring (createCamLimit).
+   → { limits (kopi med skiltene lagt inn), cam: [[fra, til, grense], …] punktnumre der skiltet avvek fra kartet }. */
+export function overlayCamSigns(points, limits, signs, opts) {
+  const cam = createCamLimit(opts), out = limits.slice(), runs = [];
+  const list = (signs || []).filter(x => x && Number.isFinite(x.t) && Number.isFinite(x.limit)).sort((a, b) => a.t - b.t);
+  if (!list.length) return { limits: out, cam: runs };
+  const rad = Math.PI / 180;
+  let dist = 0, si = 0, run = null;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i], q = points[i - 1];
+    if (q && Number.isFinite(p.lat) && Number.isFinite(q.lat)) dist += Math.hypot((p.lat - q.lat) * 111195, (p.lon - q.lon) * 111195 * Math.cos(p.lat * rad));
+    const nv = Number.isFinite(limits[i]) ? limits[i] : null;
+    // Eldre turer lagret ikke avstanden til skiltet: 25 m er vanlig leseavstand
+    while (si < list.length && list[si].t <= p.t) { const x = list[si++]; cam.sign(x.limit, dist, nv, Number.isFinite(x.ahead) ? x.ahead : 25); }
+    const cl = cam.current(dist, nv);
+    if (!cl || cl.agree) continue;
+    out[i] = cl.limit;
+    if (run && run[1] === i - 1 && run[2] === cl.limit) run[1] = i; else runs.push(run = [i, i, cl.limit]);
+  }
+  return { limits: out, cam: runs };
 }

@@ -153,3 +153,56 @@ test('smal vei uten linjer: høyre veikant og midten av veien fra feltmodellens 
   assert.deepEqual(roadEdgeLines(road.slice(0, 3), 240, { vh, yBottom: 330 }), { left: null, right: null });
   assert.deepEqual(roadEdgeLines(null, 240, { vh, yBottom: 330 }), { left: null, right: null });
 });
+
+/* 0.13.9: følgeren teller svar og tid, ikke bilder */
+test('feltlinjer over tid: samme svar telles ikke to ganger, og en tapt linje står i tid', () => {
+  const L = x => ({ xBottom: x, xTop: x + 30, yBottom: 100, yTop: 60 }), R = x => ({ xBottom: x, xTop: x - 30, yBottom: 100, yTop: 60 });
+  const tr = createLaneTracker({ holdMs: 800 }), w = 160, a = { left: L(20), right: R(140), offset: 0.1 };
+  assert.equal(tr.step(a, w, { t: 0 }).left, null, 'første svar: ikke vist ennå');
+  assert.equal(tr.step(a, w, { t: 120, fresh: false }).left, null, 'samme svar en gang til teller ikke');
+  let o = tr.step({ left: L(21), right: R(139), offset: 0.1 }, w, { t: 330 });
+  assert.ok(o.left && o.right, 'andre svar: vist');
+  // Begge borte: linjene står i 800 ms, også i bildene uten nytt svar
+  const none = { left: null, right: null, offset: null };
+  o = tr.step(none, w, { t: 660 });
+  assert.ok(o.left && o.left.held && !o.left.carried);
+  o = tr.step(none, w, { t: 1000 });
+  assert.ok(o.left, 'ett tapt svar til tar ikke linjen (0,67 s)');
+  o = tr.step(none, w, { t: 1150, fresh: false });
+  assert.equal(o.left, null, 'borte etter 0,8 s, også uten nytt svar');
+});
+
+test('feltlinjer over tid: en tapt linje følger feltbredden mens den andre ses', () => {
+  const L = x => ({ xBottom: x, xTop: x + 30, yBottom: 100, yTop: 60 }), R = x => ({ xBottom: x, xTop: x - 30, yBottom: 100, yTop: 60 });
+  const tr = createLaneTracker({ holdMs: 800, carryMs: 2200 }), w = 160;
+  tr.step({ left: L(20), right: R(140) }, w, { t: 0 });
+  tr.step({ left: L(20), right: R(140) }, w, { t: 330 });
+  // Venstre faller ut, høyre flytter seg: detectLanes tegner venstre etter feltbredden (predicted)
+  const lost = x => ({ left: { ...L(x), predicted: true }, right: R(x + 120), offset: null });
+  let o = tr.step(lost(26), w, { t: 660 });
+  assert.ok(o.left.carried && o.left.held && !o.left.predicted, 'vises heltrukket');
+  assert.equal(o.left.xBottom, 26, 'og følger den andre linjen i stedet for å stå stille');
+  assert.equal(o.offset, null, 'sideavvik bare når begge er sett');
+  o = tr.step(lost(30), w, { t: 2400 });
+  assert.ok(o.left.carried, 'bæres lenger enn en linje som bare står');
+  o = tr.step(lost(30), w, { t: 3000 });
+  assert.ok(o.left.predicted && !o.left.carried, 'etter 2,2 s: stiplet etter feltbredden, som før');
+  // Tilbake på det nye stedet: sees igjen etter to svar
+  tr.step({ left: L(30), right: R(150) }, w, { t: 3330 });
+  o = tr.step({ left: L(30), right: R(150), offset: 0.2 }, w, { t: 3660 });
+  assert.ok(o.left && !o.left.held && o.offset === 0.2);
+});
+
+test('feltlinjer over tid: en båret linje kjennes igjen med en gang når den ses igjen', () => {
+  const L = x => ({ xBottom: x, xTop: x + 30, yBottom: 100, yTop: 60 }), R = x => ({ xBottom: x, xTop: x - 30, yBottom: 100, yTop: 60 });
+  const tr = createLaneTracker(), w = 160;
+  tr.step({ left: L(20), right: R(120) }, w, { t: 0 });
+  tr.step({ left: L(20), right: R(120) }, w, { t: 330 });
+  // Venstre borte i 1,3 s mens bilen flytter seg 40 piksler til siden: langt fra der linjen sist ble sett
+  let o;
+  for (let i = 1; i <= 4; i++) o = tr.step({ left: { ...L(20 + i * 10), predicted: true }, right: R(120 + i * 10) }, w, { t: 330 + i * 330 });
+  assert.ok(o.left.carried && o.left.xBottom === 60);
+  o = tr.step({ left: L(62), right: R(160), offset: 0.3 }, w, { t: 1980 });
+  assert.ok(o.left && !o.left.held && !o.left.carried, 'sett igjen i første svar, uten blink');
+  assert.equal(o.offset, 0.3);
+});

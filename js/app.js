@@ -18,7 +18,8 @@ import { SURFACES, SURFACE_LABEL, surfaceFactor, suggestSurface, surfaceSplit, d
 import { CLASS_LABEL, CALIB_STEPS, MIRRORS, closeMirrorText, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
 import { roadSummary } from './road.js';
 import { laneX, scaleLane } from './lanes.js';
-import { createCamLimit } from './signs.js';
+import { createCamLimit, overlayCamSigns } from './signs.js';
+import { createLaneEase } from './laneease.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
@@ -28,7 +29,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.8';
+export const APP_VERSION = '0.13.9';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1370,7 +1371,8 @@ async function startRecording(replay = null) {
       if (live) {
         const res = live.update(st.pos && { ...st.pos, acc: st.acc });   // GPS-ens usikkerhet: veien bilen er på, holdes (0.13.1)
         // Skilt fra veikameraet (midlertidige og digitale skilt) går foran NVDB til neste skilt, 3 km eller ny NVDB-strekning
-        if (camSignNew) { camLimit.sign(camSignNew.limit, st.distanceM, res.limit); liveLog.push({ t: Math.round(st.elapsed), limit: camSignNew.limit, src: 'kamera' }); camSignNew = null; }
+        // 0.13.9: skiltet gjelder fra der det står (ahead = avstanden da det ble lest), ikke fra der kameraet leste det
+        if (camSignNew) { camLimit.sign(camSignNew.limit, st.distanceM, res.limit, camSignNew.ahead); liveLog.push({ t: Math.round(st.elapsed), limit: camSignNew.limit, src: 'kamera', ...(camSignNew.ahead ? { ahead: camSignNew.ahead } : {}) }); camSignNew = null; }
         const cl = camLimit.current(st.distanceM, res.limit);
         const lim = cl ? cl.limit : res.limit;
         liveLimitNow = lim;
@@ -1556,6 +1558,7 @@ let camViewRaf = null, camViewFacing = 'user';
 // Myk visning (k0.7.5): boksene, feltlinjene og avstanden glir mot nye verdier (boksene på rundt 70 ms) i stedet for
 // å hoppe hver gang et nytt svar kommer. Følgingen sier hvor bilen er nå; dette jevner bare ut det som tegnes.
 const camEase = { boxes: new Map(), lanes: {}, dist: null, leadId: null, t: 0, face: null };
+const laneEase = createLaneEase();   // feltlinjene på skjermen glir og tones (0.13.9)
 let camPoseUnsub = null, faceRun = { cls: null, n: 0, t0: 0 };
 const faceLog = [];   // siste blikk i speil og over skulderen mens fullskjerm er åpen
 // Ansiktets omriss og øynene (MediaPipe Face Mesh-punkter), og regnbuehinnene (468–477)
@@ -1599,7 +1602,7 @@ function stopCamViewDraw() {
   camViewRaf = null;
   if (camPoseUnsub) { camPoseUnsub(); camPoseUnsub = null; }
   camEase.face = null;
-  camEase.boxes.clear(); camEase.lanes = {}; camEase.dist = null; camEase.t = 0;
+  camEase.boxes.clear(); laneEase.reset(); camEase.dist = null; camEase.t = 0;
 }
 async function closeCamView() {
   const box = $('#cam-full');
@@ -1626,7 +1629,7 @@ function drawCamView() {
   const kmh = recorder && Number.isFinite(recorder.speed) ? recorder.speed * 3.6 : NaN;
   const now = performance.now(), dt = Math.min(250, Math.max(0, now - (camEase.t || now)));
   camEase.t = now;
-  const ease = tau => 1 - Math.exp(-dt / tau), aBox = ease(70), aLane = ease(120), aDist = ease(400);
+  const ease = tau => 1 - Math.exp(-dt / tau), aBox = ease(70), aDist = ease(400);
   const seen = new Set();
   const smooth = d => {
     if (d.id == null) return d;
@@ -1660,17 +1663,12 @@ function drawCamView() {
   if (v.lane) {
     const k = v.w / v.lane.W, N = 16;
     const sample = L => { const S = scaleLane(L, k); return Array.from({ length: N }, (_, i) => { const y = S.yBottom + (S.yTop - S.yBottom) * i / (N - 1); return [laneX(S, y), y]; }); };
-    const lines = {};
-    for (const side of ['left', 'right']) {
-      const raw = v.lane[side], o = camEase.lanes[side];
-      if (!raw) { delete camEase.lanes[side]; continue; }
-      const pts = sample(raw);
-      const eased = o && o.pts.length === N ? pts.map(([x, y], i) => [o.pts[i][0] + (x - o.pts[i][0]) * aLane, o.pts[i][1] + (y - o.pts[i][1]) * aLane]) : pts;
-      camEase.lanes[side] = { pts: eased };
-      lines[side] = { pts: eased, predicted: !!raw.predicted, edge: raw.edge || null };
-    }
+    // Myk tegning (0.13.9, laneease.js): linjene glir mot siste svar og tones inn og ut
+    const target = {};
+    for (const side of ['left', 'right']) { const raw = v.lane[side]; target[side] = raw ? { pts: sample(raw), predicted: !!raw.predicted, carried: !!raw.carried, edge: raw.edge || null } : null; }
+    const lines = laneEase.step(target, now, { ansAt: v.lane.ansAt ?? null, width: v.w });
     if (lines.left && lines.right) {
-      g.fillStyle = lines.right.edge ? 'rgba(255, 167, 38, 0.12)' : 'rgba(61, 220, 132, 0.16)'; g.beginPath();
+      g.fillStyle = lines.right.edge ? `rgba(255, 167, 38, ${(0.12 * lines.fill).toFixed(3)})` : `rgba(61, 220, 132, ${(0.16 * lines.fill).toFixed(3)})`; g.beginPath();
       lines.left.pts.forEach(([x, y], i) => (i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))));
       lines.right.pts.slice().reverse().forEach(([x, y]) => g.lineTo(X(x), Y(y)));
       g.closePath(); g.fill();
@@ -1679,10 +1677,10 @@ function drawCamView() {
     for (const [side, col] of [['left', '#3ddc84'], ['right', '#ff4fd8']]) {
       const Ln = lines[side];
       if (!Ln) continue;
-      g.save(); g.strokeStyle = col;
-      if (Ln.predicted) { g.setLineDash([10, 9]); g.globalAlpha = 0.6; }
+      g.save(); g.strokeStyle = col; g.globalAlpha = Ln.alpha;
+      if (Ln.predicted) g.setLineDash([10, 9]);
       // Veikant og midten av veien uten oppmalte linjer (0.13.3): oransje prikker, så de ikke forveksles med linjer
-      if (Ln.edge) { g.strokeStyle = '#ffa726'; g.setLineDash([2, 10]); g.globalAlpha = 0.9; }
+      if (Ln.edge) { g.strokeStyle = '#ffa726'; g.setLineDash([2, 10]); g.globalAlpha = 0.9 * Ln.alpha; }
       g.beginPath(); Ln.pts.forEach(([x, y], i) => (i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y)))); g.stroke();
       g.restore();
     }
@@ -1923,6 +1921,19 @@ async function shareText(text) {
 
 /* En rapport som blir ferdig etter at brukeren har gått videre, skal ikke tegnes over neste side (0.11.3) */
 let reportSeq = 0;
+/* Skiltene kameraet leste under turen (midlertidige og digitale skilt) legges over kartets fartsgrenser (0.13.9), så
+   rapporten måler farten mot grensen som faktisk gjaldt. Kartets egne verdier beholdes i limitsNvdb. */
+const CAM_V = 1;
+function applyCamSigns(drive, r) {
+  const en = drive.enrich;
+  if (!en || !Array.isArray(en.limits) || en.limits.length !== r.points.length || en.camV === CAM_V) return false;
+  const signs = (drive.liveLimits || []).filter(x => x && x.src === 'kamera' && Number.isFinite(x.limit)).map(x => ({ t: x.t - (r.t0 || 0), limit: x.limit, ahead: x.ahead }));
+  const base = Array.isArray(en.limitsNvdb) && en.limitsNvdb.length === en.limits.length ? en.limitsNvdb : en.limits;
+  const o = overlayCamSigns(r.points, base, signs);
+  en.limitsNvdb = base; en.limits = o.limits.map(v => (Number.isFinite(v) ? v : null)); en.limitsCam = o.cam; en.camV = CAM_V;
+  return true;
+}
+
 async function renderDriveReport(id, { keepScroll = false } = {}) {
   const tok = ++reportSeq, stale = () => tok !== reportSeq || location.hash !== '#/rapport/' + id;
   const y = window.scrollY;
@@ -1959,6 +1970,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
   try {
     const r = await analyzeDrive(drive);
     if (stale()) return;
+    if (applyCamSigns(drive, r)) await putDrive(drive);
     const settings = getSettings();
     // Samme rute: andre ekte turer (samme fører) som har kjørt samme strekning
     if (isReal(drive)) {

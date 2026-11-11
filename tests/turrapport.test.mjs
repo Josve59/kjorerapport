@@ -49,6 +49,10 @@ test('turrapport: tall fra en oppdiktet tur', () => {
     // Over 50 + 3 fra 31 s gir varsel fra 33 s; kameraskiltet (40) fra 35 s gjør det verre, slutt ved 50 s
     assert.match(a, /Fartsvarsler +1 varsel, 17 s til sammen/);
     assert.match(a, /verst: 0:33 60 km\/t i 40-sone \(skilt fra kameraet\), 17 s/);
+    // 0.13.9: takten på feltmodellen, og skilt der kartet sa noe annet
+    assert.match(a, /rundt 7,9 svar i sekundet/);
+    assert.match(a, /Skilt +1 lest av kameraet · kartet hadde eller fikk samme grense for 0/);
+    assert.match(a, /kartet sa noe annet \(midlertidig skilt eller feillesning\): 0:35 skilt 40, kart 50/);
     assert.match(b, /Feltmodell +ikke med i 0\.13\.0/);
     assert.match(b, /D-FINE +kjørte ikke/);
     assert.doesNotMatch(out, /59[,.]9/);   // ingen koordinater i rapporten

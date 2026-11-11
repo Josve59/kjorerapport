@@ -385,30 +385,50 @@ export function dashLine(rowMean, { from = 0.6, to = 0.97, win = 5, minStep = 12
 
 /* Feltlinjer over tid (0.12.6). Bildeanalysen ser linjene i noen bilder og ikke i andre (stiplet linje, lys fra
    møtende bil, skygger), og tar av og til feil. Linjene vekslet derfor rundt to ganger i sekundet. Her må en ny linje
-   ses to bilder på rad på samme sted før den vises, og en linje som forsvinner, blir stående i opptil `hold` bilder
-   (rundt et halvt sekund). Den andre linjen tegnes etter feltbredden bare når den ene er bekreftet.
-   step(ln, w) tar svaret fra detectLanes og bildebredden, og gir { left, right, offset }. */
-export function createLaneTracker({ need = 2, hold = 5, tol = 0.1 } = {}) {
-  const T = { left: { line: null, hits: 0, miss: 0, cand: null }, right: { line: null, hits: 0, miss: 0, cand: null } };
+   ses to ganger på rad på samme sted før den vises, og en linje som forsvinner, blir stående en stund.
+   Den andre linjen tegnes etter feltbredden bare når den ene er bekreftet.
+   step(ln, w, { t, fresh }) tar svaret fra detectLanes og bildebredden, og gir { left, right, offset }.
+   0.13.9: feltmodellen svarer 3–5 ganger i sekundet (3 når telefonen er varm), men step kalles 8 ganger. Det samme
+   svaret telte derfor flere ganger: ett svar var nok til å vise en ny linje, og to tapte svar tok den bort (turen
+   11. nov. kl. 20.00: linjene falt ut 220 ganger i fart, to av tre ganger var de tilbake innen 1,5 s).
+   - fresh: false når svaret er det samme som sist. Da telles ingenting.
+   - t (ms): med tid står en tapt linje i holdMs i stedet for i `hold` bilder.
+   - Tapt linje mens den andre ses: den tegnes der feltbredden sier (carried), så den følger veien i stedet for å stå
+     stille, i opptil carryMs. Den regnes ikke som sett (held og carried skilles i det som lagres). */
+export function createLaneTracker({ need = 2, hold = 5, holdMs = 800, carryMs = 2200, tol = 0.1 } = {}) {
+  const T = { left: { line: null, hits: 0, miss: 0, cand: null, seenAt: 0 }, right: { line: null, hits: 0, miss: 0, cand: null, seenAt: 0 } };
   const near = (a, b, w) => Math.abs(a.xBottom - b.xBottom) < w * tol * 1.5 && Math.abs(laneX(a, a.yTop) - laneX(b, a.yTop)) < w * tol;
+  const drop = s => { s.line = null; s.hits = 0; s.miss = 0; };
   return {
-    step(ln, w) {
+    step(ln, w, { t = null, fresh = true } = {}) {
       const out = { left: null, right: null, offset: null };
+      const timed = Number.isFinite(t);
+      // Lengste tid en tapt linje vises: lenger når den andre linjen ses og bærer den
+      const limit = side => { const o = T[side === 'left' ? 'right' : 'left']; return timed && o.line && !o.miss ? carryMs : holdMs; };
       for (const side of ['left', 'right']) {
         const s = T[side], raw = ln && ln[side] && !ln[side].predicted ? ln[side] : null;
-        if (raw && s.line && near(raw, s.line, w)) { s.line = raw; s.hits++; s.miss = 0; s.cand = null; }
+        if (!fresh) { if (timed && s.line && s.miss && t - s.seenAt > limit(side)) drop(s); continue; }
+        if (raw && s.line && near(raw, s.line, w)) { s.line = raw; s.hits++; s.miss = 0; s.cand = null; s.seenAt = t; }
         else {
           if (raw) {
             s.cand = s.cand && near(raw, s.cand.line, w) ? { line: raw, hits: s.cand.hits + 1 } : { line: raw, hits: 1 };
-            if (s.cand.hits >= need) { s.line = s.cand.line; s.hits = s.cand.hits; s.miss = 0; s.cand = null; continue; }
+            if (s.cand.hits >= need) { s.line = s.cand.line; s.hits = s.cand.hits; s.miss = 0; s.cand = null; s.seenAt = t; continue; }
           } else s.cand = null;
-          if (s.line && ++s.miss > hold) { s.line = null; s.hits = 0; s.miss = 0; }
+          if (s.line) { s.miss++; if (timed ? t - s.seenAt > limit(side) : s.miss > hold) drop(s); }
         }
       }
       for (const side of ['left', 'right']) if (T[side].line && T[side].hits >= need) out[side] = T[side].miss ? { ...T[side].line, held: true } : T[side].line;
-      // Den andre linjen etter feltbredden: bare ved siden av en bekreftet linje
       for (const [side, other] of [['left', 'right'], ['right', 'left']]) {
-        if (!out[side] && out[other] && ln && ln[side] && ln[side].predicted && !out[other].held) out[side] = ln[side];
+        const p = ln && ln[side] && ln[side].predicted ? ln[side] : null;
+        // Tapt linje ved siden av en linje som ses nå: følger feltbredden, heltrukket (carried)
+        // Den bårne linjen er også stedet linjen ventes tilbake, så den kjennes igjen med en gang når den ses igjen
+        if (timed && p && out[side] && out[side].held && out[other] && !out[other].held) {
+          T[side].line = { ...p, predicted: false };
+          out[side] = { ...T[side].line, held: true, carried: true };
+          continue;
+        }
+        // Den andre linjen etter feltbredden: bare ved siden av en bekreftet linje
+        if (!out[side] && out[other] && p && !out[other].held) out[side] = p;
       }
       // Sideavviket bare når begge linjene er sett i dette bildet og stemmer med det som vises
       if (ln && Number.isFinite(ln.offset) && out.left === ln.left && out.right === ln.right) out.offset = ln.offset;

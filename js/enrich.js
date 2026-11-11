@@ -607,6 +607,8 @@ export async function enrichDrive(r, marks, wants, existing, onProgress = () => 
     enrich.limits = stabilizeLimits(r.points, smoothBlips(fillGaps(matchLimits(r.points, segs)))).map(v => (Number.isFinite(v) ? v : null));
     enrich.limitsV = LIMITS_V;
     enrich.limitsFetchedAt = new Date().toISOString();
+    // Skiltene kameraet leste legges over på nytt av appen (0.13.9)
+    delete enrich.limitsNvdb; delete enrich.limitsCam; delete enrich.camV;
   }
   if (wants.limits && (!enrich.road || enrich.road.v !== ROAD_V)) {   // v2: skilt, gangfelt, fartsdempere, lyskryss; v3: ATK
     onProgress('Henter skilt og rundkjøringer fra Statens vegvesen …');

@@ -59,19 +59,26 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         lock.lock(); self.roadBottom = roadBottom; self.gamma = min(1, max(0.3, gamma)); lock.unlock()
     }
 
-    /// Nytt veibilde: høyst rundt 8 ganger i sekundet (3 når telefonen er varm), og bare når forrige svar er ferdig.
+    /// Nytt veibilde: 5 ganger i sekundet (3 når telefonen er varm), og bare når forrige svar er ferdig.
+    /// 0.13.9: grensen var 8, men uten optimalisering rakk appen bare rundt 5. Med optimalisering (ship.sh) ville den gått
+    /// opp til 7–8 og varmet telefonen mer, og varm telefon gir 3 i sekundet resten av turen. Derfor holdes takten på 5.
     func feed(_ frame: CameraHub.Frame) {
         let now = CACurrentMediaTime()
         let hot = ProcessInfo.processInfo.thermalState.rawValue >= ProcessInfo.ThermalState.serious.rawValue
         lock.lock()
-        guard !busy, !models.isEmpty, now - lastStart >= (hot ? 0.33 : 0.125) else { lock.unlock(); return }
+        guard !busy, !models.isEmpty, now - lastStart >= (hot ? 0.33 : 0.19) else { lock.unlock(); return }
         busy = true
         lastStart = now
         let bottom = roadBottom, gamma = self.gamma
         lock.unlock()
         queue.async { [self] in
             defer { lock.lock(); busy = false; lock.unlock() }
-            guard let out = run(frame, roadBottom: bottom, gamma: gamma) else { return }
+            let t0 = CACurrentMediaTime()
+            guard var out = run(frame, roadBottom: bottom, gamma: gamma) else { return }
+            // Til eksporten (0.13.9): varm telefon (da kjøres modellen 3 ganger i sekundet) og tiden for hele svaret,
+            // med klargjøring av bildet og lesing av svaret, ikke bare modellen
+            out["hot"] = hot
+            out["run"] = (CACurrentMediaTime() - t0) * 1000
             onResult?(out)
         }
     }
