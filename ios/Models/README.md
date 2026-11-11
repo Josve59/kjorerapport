@@ -98,4 +98,42 @@ On the 495 test pictures, against the labels with joined dashes (`compare.py`), 
 - Speed and heat on the phone (same network, so no change is expected).
 - The real test is a drive: compare lane lines and how often they flip in `tools/turrapport.mjs` with earlier exports, in the dark and on dashed lines.
 
+## Tested on German roads (A2D2), 11 Nov 2026
+
+The first test on pictures from another source than the training pictures. Audi's A2D2 ([a2d2.audi](https://www.a2d2.audi), CC BY-ND 4.0) has 12 497 labelled frames from the front camera on 18 drives in southern Germany, all in daylight.
+
+- `prep_a2d2.py` reads `camera_lidar_semantic_bboxes.tar` (52 GB) without unpacking it, straightens the lens distortion, scales to the same focal length as comma10k (910 px) and writes the same label codes. Then `connect.py` as for comma10k. Work folder: `.local-test/a2d2/`.
+- **Lines across the road** (stop lines, the edges of crossings) are lane lines in A2D2's labels. The app only wants the lines along the road, so `prep_a2d2.py` turns them into road.
+- **Four whole drives are the test set** (`data/test_scenes.json`, 1 633 frames): a city drive (20181008095521), a motorway drive (20181108084007) and two short drives on wet country roads (20181204154421, 20181204170238). The frames are film, so every 20th frame would have been too close to its neighbours.
+- Run with `KJ_A2D2=../a2d2/data KJ_TEST=a2d2` in front of `compare.py` and `applevel.py`. `KJ_A2D2` alone adds the other 14 drives (10 864 frames) to the training.
+
+| A2D2 test drives | BDD100K (until 0.13.5) | comma10k (0.13.6) |
+| --- | --- | --- |
+| Lane points found | 82 % | 84 % |
+| Reported points that are right | 69 % | 55 % |
+| City: found / right | 66 % / 38 % | 68 % / 25 % |
+| Motorway: found / right | 86 % / 82 % | 87 % / 72 % |
+| Wet country roads: found / right | 85 % / 80 % and 84 % / 87 % | 91 % / 70 % and 91 % / 82 % |
+| Right lines out of the app's line fit | 2 109 | 2 036 |
+| Wrong lines | 398 | 671 |
+| Pictures with no line | 226 | 115 |
+| Road, overlap with the labels | 76 % | 93 % |
+| Road edge, mean error (of 640 px) | 93 px | 16 px |
+
+**What it shows:** the 0.13.6 weights find the road much better, but in city streets they draw lines that are not painted: along kerbs, along the cobbled gutter beside parked cars, on tram rails and on seams in the asphalt. On the motorway the extra lines are mostly the other carriageway and seams in the concrete. The BDD100K weights draw the lines across junctions instead. The road number is unfair to the BDD100K weights here too.
+
+**Training with weather (`KJ_AUG=2`, run `n1`):** `weather()` in `train.py` adds shadows across the road, darkness, glare from headlights or a low sun, fog, reflections in the windscreen, rain drops with a wiper, blur and noise. `KJ_HARD=1` measures on the test pictures with one fixed disturbance each (artificial, and it favours a model trained with them). Fine-tuned from the 0.13.6 weights on comma10k only: `KJ_AUG=2 python train.py --init best.pth --epochs 10 --low 6 --lr 4e-4` (94 min).
+
+| | 0.13.6 | n1 (comma10k + weather) |
+| --- | --- | --- |
+| comma10k test: found / right | 83 % / 80 % | 84 % / 81 % |
+| The 122 dark pictures | 82 % / 83 % | 83 % / 83 % |
+| App's line fit: right / wrong / no line | 609 / 41 / 69 | 615 / 30 / 75 |
+| With disturbances: found / right | 81 % / 80 % | 83 % / 80 % |
+| With shadows: road overlap / edge error | 89 % / 57 px | 94 % / 20 px |
+| A2D2 test drives: found / right | 84 % / 55 % | 86 % / 56 % |
+| A2D2, app's line fit: right / wrong / no line | 2 036 / 671 / 115 | 2 052 / 654 / 122 |
+
+A little better on every set, but the extra lines in city streets are still there: they need training pictures that show such streets.
+
 **Licence:** the model code is MIT (© 2025 Chế Quang Huy), the training pictures and labels are MIT (© 2020 Comma.ai, Inc.), and the weights are our own. Both notices are on the app's licence page (`lisenser/index.html`). Nothing in the lane model is limited to non-commercial use now.

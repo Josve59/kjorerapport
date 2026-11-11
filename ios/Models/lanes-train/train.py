@@ -4,8 +4,13 @@
 # 1. Fra bunnen av, etiketter som comma10k:   KJ_LBL=lbl python train.py --epochs 22 --low 16
 # 2. Etterlæring på hele linjer (connect.py):  python train.py --init best.pth --epochs 9 --low 6 --lr 4e-4
 # Måling: python train.py --eval vekter.pth   |   Fart: python train.py --bench   |   Fortsett etter stopp: --resume
+# KJ_AUG=2: trener også med regn, vindusvisker, motlys, tåke, skygger og speiling i ruta (se weather).
+# KJ_HARD=1: måler på testbildene med de samme forstyrrelsene, én fast per bilde.
+# KJ_A2D2=mappe: tar også med A2D2-bildene (prep_a2d2.py) i treningen. Sammen med KJ_TEST=a2d2 måles det på
+# A2D2-turene som er holdt utenfor (test_scenes.json) i stedet for på comma10k.
 import os, sys, math, time, json, random, argparse, copy, numpy as np, torch, torch.nn.functional as F
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageDraw
+from scipy.ndimage import uniform_filter1d
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))   # tln_model.py ligger i mappen over
 import tln_model as T
 
@@ -13,23 +18,34 @@ DATA = 'data'
 # Etiketter: lbl2 = strekene i stiplede linjer bundet sammen (connect.py), lbl = som comma10k (bare malingen).
 # Miljøvariabel, så den også gjelder i datalasterens egne prosesser.
 LBL = os.environ.get('KJ_LBL', 'lbl2')
+AUG = os.environ.get('KJ_AUG', '1')
+HARD = os.environ.get('KJ_HARD')
+A2D2 = os.environ.get('KJ_A2D2')
+TEST = os.environ.get('KJ_TEST')
 FX = 910.0                # comma two-kameraet: 1164x874, brennvidde 910 px (65 grader bredt)
 HOOD = None
 
 def hood():
     global HOOD
-    if HOOD is None: HOOD = json.load(open(f'{DATA}/hood.json'))
+    if HOOD is None:
+        HOOD = json.load(open(f'{DATA}/hood.json'))
+        if A2D2: HOOD.update({f'{A2D2}|{n}': h for n, h in json.load(open(f'{A2D2}/hood.json')).items()})   # navn: mappe|bilde
     return HOOD
 
 def split():
-    names = sorted(hood().keys())
-    return [n for i, n in enumerate(names) if i % 20], [n for i, n in enumerate(names) if i % 20 == 0]
+    names = sorted(n for n in hood() if '|' not in n)
+    tr, te = [n for i, n in enumerate(names) if i % 20], [n for i, n in enumerate(names) if i % 20 == 0]
+    if A2D2:   # A2D2 er film: hele turer holdes utenfor, ellers ligner testbildene på nabobildene i treningen
+        held = set(json.load(open(f'{A2D2}/test_scenes.json'))); a = sorted(n for n in hood() if '|' in n)
+        tr += [n for n in a if n.split('|')[1][:14] not in held]
+        if TEST == 'a2d2': te = [n for n in a if n.split('|')[1][:14] in held]
+    return tr, te
 
 def band(W, H, hood_y, rng, train):
     """Utsnitt som telefonens veibånd: hele bredden av et stående 16:9-bilde (rundt 42 grader), 16:9, og
     nederst ved panserkanten slik appens bånd ender ved dashbordkanten."""
     if train:
-        fov = rng.uniform(34, 58)
+        fov = rng.uniform(34 if AUG == '1' else 30, 58)   # telefonen ser veien litt nærmere enn 34 grader gir
         w = min(W, 2 * FX * math.tan(math.radians(fov / 2))); h = w * 9 / 16
         x0 = (W - w) / 2 + rng.uniform(-0.5, 0.5) * (W - w)
         y1 = (hood_y + rng.uniform(-0.10, 0.05)) * H
@@ -47,14 +63,109 @@ def photometric(x, rng, nrng):
         x = np.clip(x, 0, 1) ** rng.uniform(0.45, 0.8)
     return np.clip(x, 0, 1).astype(np.float32)
 
+def u8(x): return Image.fromarray((np.clip(x, 0, 1) * 255).astype(np.uint8))
+
+def blob(h, w, cx, cy, sx, sy):
+    y = np.arange(h, dtype=np.float32)[:, None]; x = np.arange(w, dtype=np.float32)[None]
+    return np.exp(-((x - cx) ** 2 / (2 * sx * sx) + (y - cy) ** 2 / (2 * sy * sy)))
+
+def darken(x, rng, nrng):
+    x = np.clip(x, 0, 1) * rng.uniform(0.12, 0.45) + nrng.normal(0, rng.uniform(0.004, 0.02), x.shape)
+    return np.clip(x, 0, 1) ** rng.uniform(0.45, 0.8)
+
+def shadows(x, rng):
+    """Skygger over veien (trær, bruer, stolper): mørke felt med myke kanter, flate fordi de ligger på bakken."""
+    h, w = x.shape[:2]; im = Image.new('L', (w, h), 0); dr = ImageDraw.Draw(im)
+    for _ in range(rng.randint(2, 9)):
+        cx = rng.uniform(-0.1, 1.1) * w; cy = rng.uniform(0.35, 1.0) * h
+        a = rng.uniform(0, math.pi); L = rng.uniform(0.2, 0.9) * w; t = rng.uniform(0.01, 0.12) * w
+        dx, dy = math.cos(a) * L / 2, math.sin(a) * L / 2 * 0.35; nx, ny = -math.sin(a) * t / 2, math.cos(a) * t / 2 + 1
+        dr.polygon([(cx - dx - nx, cy - dy - ny), (cx + dx - nx, cy + dy - ny), (cx + dx + nx, cy + dy + ny), (cx - dx + nx, cy - dy + ny)], fill=255)
+    m = np.asarray(im.filter(ImageFilter.GaussianBlur(rng.uniform(1, 5) * w / 640)), np.float32)[..., None] / 255
+    return x * (1 - m * rng.uniform(0.3, 0.65))
+
+def glare(x, rng, dark):
+    """Motlys: billykter i mørket eller lav sol. Lys kjerne, glorie og av og til en stripe bortover."""
+    h, w = x.shape[:2]; add = np.zeros((h, w), np.float32)
+    for _ in range(rng.randint(1, 4) if dark else 1):
+        cx = rng.uniform(0.05, 0.95) * w; cy = rng.uniform(0.15, 0.6) * h
+        s = rng.uniform(0.004, 0.016) * w if dark else rng.uniform(0.03, 0.08) * w
+        add += rng.uniform(0.8, 2.0) * blob(h, w, cx, cy, s, s)
+        g = s * rng.uniform(5, 12); add += rng.uniform(0.1, 0.5) * blob(h, w, cx, cy, g, g)
+        if rng.random() < 0.4: add += rng.uniform(0.1, 0.4) * blob(h, w, cx, cy, s * rng.uniform(15, 40), s * rng.uniform(0.4, 1.0))
+    return x + add[..., None] * np.array([1.0, rng.uniform(0.9, 1.0), rng.uniform(0.7, 1.0)], np.float32)
+
+def haze(x, rng, dark):
+    """Tåke, regnrøyk eller skitten rute: mindre kontrast, mest langt framme."""
+    h = x.shape[0]
+    a = rng.uniform(0.15, 0.6) * (0.4 + 0.6 * np.clip(1.3 - np.arange(h, dtype=np.float32) / h * 1.6, 0, 1))[:, None, None]
+    return x * (1 - a) + a * (rng.uniform(0.1, 0.3) if dark else rng.uniform(0.55, 0.9))
+
+def reflection(x, rng, nrng):
+    """Dashbordet som speiler seg i frontruta: et svakt, uskarpt mønster oppå bildet, av og til med en tydelig form (et ark)."""
+    h, w = x.shape[:2]; c = rng.randint(3, 9)
+    g = (nrng.random((max(2, c * h // w + 1), c + 1)) * 255).astype(np.uint8)
+    m = np.asarray(Image.fromarray(g).resize((w, h), Image.BICUBIC), np.float32) / 255
+    if rng.random() < 0.5:
+        im = Image.new('L', (w, h), 0); cx, cy = rng.uniform(0.1, 0.9) * w, rng.uniform(0.3, 0.9) * h
+        ImageDraw.Draw(im).polygon([(cx + rng.uniform(-0.25, 0.25) * w, cy + rng.uniform(-0.2, 0.2) * h) for _ in range(4)], fill=255)
+        m = np.maximum(m * 0.5, np.asarray(im.filter(ImageFilter.GaussianBlur(rng.uniform(1, 4))), np.float32) / 255)
+    tint = np.array([rng.uniform(0.7, 1), rng.uniform(0.7, 1), rng.uniform(0.6, 1)], np.float32)
+    return x + m[..., None] * rng.uniform(0.04, 0.2) * tint
+
+def rain(x, rng):
+    """Regn på ruta: dråper som gjør bildet uskarpt i flekker, og av og til vindusviskeren som en mørk stripe."""
+    h, w = x.shape[:2]
+    soft = np.asarray(u8(x).filter(ImageFilter.GaussianBlur(rng.uniform(2, 5) * w / 640)), np.float32) / 255
+    im = Image.new('L', (w, h), 0); dr = ImageDraw.Draw(im)
+    for _ in range(rng.randint(15, 140)):
+        cx, cy = rng.uniform(0, w), rng.uniform(0, h); r = rng.uniform(0.004, 0.022) * w; e = rng.uniform(1, 1.6)
+        dr.ellipse([cx - r, cy - r * e, cx + r, cy + r * e], fill=255)
+    m = np.asarray(im.filter(ImageFilter.GaussianBlur(1)), np.float32)[..., None] / 255
+    x = x * (1 - m) + (soft * rng.uniform(0.9, 1.25) + rng.uniform(0, 0.04)) * m
+    if rng.random() < 0.35:   # viskeren svinger om et punkt under bildet
+        im = Image.new('L', (w, h), 0); px = rng.uniform(-0.2, 1.2) * w; py = h * rng.uniform(1.0, 1.5); a = math.radians(rng.uniform(-80, 80))
+        ImageDraw.Draw(im).line([(px, py), (px + math.sin(a) * 2 * w, py - math.cos(a) * 2 * w)], fill=255, width=max(3, int(rng.uniform(0.012, 0.04) * w)))
+        m = np.asarray(im.filter(ImageFilter.GaussianBlur(rng.uniform(0.5, 6))), np.float32)[..., None] / 255
+        x = x * (1 - m * rng.uniform(0.6, 0.95))
+    return x
+
+def soften(x, rng):
+    """Uskarpt av bevegelse (bortover eller nedover) eller av lav oppløsning."""
+    h, w = x.shape[:2]
+    if rng.random() < 0.5: return uniform_filter1d(x, rng.randint(3, 9), axis=rng.choice((0, 1)), mode='nearest')
+    f = rng.uniform(0.4, 0.7)
+    return np.asarray(u8(x).resize((int(w * f), int(h * f)), Image.BILINEAR).resize((w, h), Image.BILINEAR), np.float32) / 255
+
+KINDS = ('regn', 'motlys', 'tåke', 'skygger', 'speiling')
+def weather(x, rng, nrng, kind=None):
+    """Lys og farge som photometric, og i tillegg det en telefon bak frontruta møter: skygger, motlys, tåke, speiling
+    og regn. kind=None: tilfeldig utvalg (trening). Ellers akkurat den ene forstyrrelsen (testen med KJ_HARD)."""
+    on = lambda p, k: (rng.random() < p) if kind is None else (kind == k)
+    dark = float(x.mean()) < 0.24
+    if on(0.15, 'skygger') and (not dark or kind): x = shadows(x, rng)
+    if kind is None:
+        x = x * rng.uniform(0.6, 1.3) + rng.uniform(-0.08, 0.08)
+        m = x.mean(); x = (x - m) * rng.uniform(0.7, 1.3) + m
+        g = x.mean(axis=2, keepdims=True); x = g + (x - g) * rng.uniform(0.5, 1.4)
+        if rng.random() < 0.3: x = darken(x, rng, nrng); dark = True
+    elif kind == 'motlys' and not dark and rng.random() < 0.6: x = darken(x, rng, nrng); dark = True
+    if on(0.25 if dark else 0.06, 'motlys'): x = glare(x, rng, dark)
+    if on(0.10, 'tåke'): x = haze(x, rng, dark)
+    if on(0.12, 'speiling'): x = reflection(x, rng, nrng)
+    if on(0.12, 'regn'): x = rain(x, rng)
+    if kind is None and rng.random() < 0.1: x = soften(x, rng)
+    if kind is None and rng.random() < 0.3: x = x + nrng.normal(0, rng.uniform(0.003, 0.015), x.shape)
+    return np.clip(x, 0, 1).astype(np.float32)
+
 class DS(torch.utils.data.Dataset):
     def __init__(s, names, train, low=False): s.names, s.train, s.low = names, train, low
     def __len__(s): return len(s.names)
     def __getitem__(s, i):
         rng = random.Random() if s.train else random.Random(i)
         nrng = np.random.default_rng(rng.getrandbits(32))
-        n = s.names[i]
-        im = Image.open(f'{DATA}/img/{n}.jpg').convert('RGB'); lb = Image.open(f'{DATA}/{LBL}/{n}.png')
+        n = s.names[i]; root, f = n.split('|') if '|' in n else (DATA, n)
+        im = Image.open(f'{root}/img/{f}.jpg').convert('RGB'); lb = Image.open(f'{root}/{LBL}/{f}.png')
         box = band(*im.size, hood()[n], rng, s.train)
         if s.train and rng.random() < 0.5:   # telefonen står sjelden helt rett
             ang = rng.uniform(-4, 4); c = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
@@ -72,7 +183,8 @@ class DS(torch.utils.data.Dataset):
         x = np.asarray(im, np.float32) / 255
         if s.train:
             if rng.random() < 0.5: x, y = x[:, ::-1], y[:, ::-1]
-            x = photometric(x, rng, nrng)
+            x = photometric(x, rng, nrng) if AUG == '1' else weather(x, rng, nrng)
+        elif HARD: x = weather(x, rng, nrng, KINDS[i % len(KINDS)])
         X = np.full((H + 2 * P, W, 3), 114 / 255, np.float32); X[P:P + H] = x
         Y = np.zeros((H + 2 * P, W), np.uint8); Y[P:P + H] = y
         return torch.from_numpy(X).permute(2, 0, 1).contiguous(), torch.from_numpy(Y.astype(np.int64))
