@@ -136,4 +136,25 @@ The first test on pictures from another source than the training pictures. Audi'
 
 A little better on every set, but the extra lines in city streets are still there: they need training pictures that show such streets.
 
+**Training with the A2D2 drives too (run `n2`, not in the app):** the 14 A2D2 drives that are not test drives added to comma10k, 20 257 pictures in all, fine-tuned from the 0.13.6 weights: `KJ_AUG=2 KJ_A2D2=../../a2d2/data python train.py --init best.pth --epochs 15 --low 8 --lr 4e-4` (287 min).
+
+| | 0.13.6 | n1 | n2 (comma10k + A2D2 + weather) |
+| --- | --- | --- | --- |
+| comma10k test: found / right | 83 % / 80 % | 84 % / 81 % | 85 % / 81 % |
+| The 122 dark pictures | 82 % / 83 % | 83 % / 83 % | 84 % / 83 % |
+| Road edge, mean error (dark pictures) | 15.7 px (14.9) | 15.6 px (15.3) | 16.6 px (17.3) |
+| App's line fit: right / wrong / no line (lost) | 609 / 41 / 69 (13) | 615 / 30 / 75 (14) | 621 / 26 / 75 (15) |
+| With disturbances: found / right | 81 % / 80 % | 83 % / 80 % | 84 % / 80 % |
+| A2D2 test drives: found / right | 84 % / 55 % | 86 % / 56 % | 89 % / 76 % |
+| City: found / right | 68 % / 25 % | 70 % / 25 % | 75 % / 48 % |
+| Motorway: found / right | 87 % / 72 % | 89 % / 73 % | 93 % / 87 % |
+| Wet country roads: found / right | 91 % / 70 % and 91 % / 82 % | 91 % / 70 % and 92 % / 82 % | 93 % / 85 % and 94 % / 88 % |
+| A2D2, app's line fit: right / wrong / no line (lost) | 2 036 / 671 / 115 (25) | 2 052 / 654 / 122 (27) | 2 147 / 216 / 263 (36) |
+| A2D2 road: overlap / edge error | 93 % / 16 px | 93 % / 15 px | 97 % / 8 px |
+
+- «No line (lost)»: pictures where the app's line fit gives no line, and in brackets those where the labels do have lines (`applevel.mjs`). The rest are streets with no painted line, where no line is the right answer. The BDD100K weights: 2 109 / 398 / 226 (48).
+- The test is less independent for `n2` than for the others: the motorway drive and the two country drives were filmed on the same days as drives in the training. The city drive is the clean one. There the app's line fit gives 442 right and 198 wrong lines with `n2`, 389 and 574 with 0.13.6, 423 and 356 with BDD100K.
+- Still wrong with `n2`: lines on tram rails, and a little worse road edge on dark comma10k pictures.
+- **Not in the app:** A2D2 is CC BY-ND 4.0. Commercial use is allowed with attribution, but changed material may not be shared, and whether trained weights are changed material is not settled. The owner decides.
+
 **Licence:** the model code is MIT (© 2025 Chế Quang Huy), the training pictures and labels are MIT (© 2020 Comma.ai, Inc.), and the weights are our own. Both notices are on the app's licence page (`lisenser/index.html`). Nothing in the lane model is limited to non-commercial use now.

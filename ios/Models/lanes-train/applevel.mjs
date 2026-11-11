@@ -28,12 +28,14 @@ const bases = {
 for (const [bn, base] of Object.entries(bases)) {
   for (const sel of ['alle', 'mørke']) {
     for (const name of D.models) {
-      const s = { n: 0, right: 0, wrong: 0, both: 0, none: 0, err: [] };
+      const s = { n: 0, right: 0, wrong: 0, both: 0, none: 0, lost: 0, err: [] };
       D.frames.forEach((f, fi) => {
         if (sel === 'mørke' && f.lum >= 60) return;
         s.n++;
         const k = W / f.w, g = GT ? GT.frames[fi].gt : f.gt, rows = new Map();
         for (let i = 0; i + 1 < g.length; i += 2) { const y = Math.round(g[i + 1] * k); if (!rows.has(y)) rows.set(y, []); rows.get(y).push(g[i] * k); }
+        // Fasiten har linjer når minst 20 rader i båndet appen ser på har et linjepunkt: da er «ingen linje» et tap, ellers riktig
+        let gtRows = 0; for (let y = Math.ceil(H * base.top); y <= Math.floor(H * base.bottom); y++) if (rows.has(y)) gtRows++;
         const b = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: 0, kappaWeight: 1, focal: focalPx(W, H), camH: 1.2, predict: true, points: mlPoints(f[name], k) });
         let ok = 0, seen = 0; const dump = [];
         for (const side of ['left', 'right']) {
@@ -50,11 +52,11 @@ for (const [bn, base] of Object.entries(bases)) {
           if (good) { ok++; s.right++; s.err.push(ds[ds.length >> 1]); } else s.wrong++;
           if (DUMP && sel === 'alle') { const xs = []; for (let y = Math.ceil(H * base.top); y <= Math.floor(H * base.bottom); y += 3) xs.push(+(laneX(L, y) / k).toFixed(1), +(y / k).toFixed(1)); dump.push({ side, good, xs }); }
         }
-        if (ok === 2) s.both++; if (!seen) s.none++;
+        if (ok === 2) s.both++; if (!seen) { s.none++; if (gtRows >= 20) s.lost++; }
         if (DUMP && sel === 'alle') ((DUMP[f.name] ||= {})[bn] ||= {})[name] = dump;
       });
       const e = s.err.sort((a, c) => a - c);
-      console.log(bn.padEnd(6), sel.padEnd(6), name.padEnd(8), `bilder ${s.n}  riktige linjer ${s.right}  feil linjer ${s.wrong}  begge riktige ${s.both}  ingen linje ${s.none}  feil på riktige (median) ${e.length ? e[e.length >> 1].toFixed(2) : '-'} px`);
+      console.log(bn.padEnd(6), sel.padEnd(6), name.padEnd(8), `bilder ${s.n}  riktige linjer ${s.right}  feil linjer ${s.wrong}  begge riktige ${s.both}  ingen linje ${s.none} (${s.lost} der fasiten har linjer)  feil på riktige (median) ${e.length ? e[e.length >> 1].toFixed(2) : '-'} px`);
     }
   }
 }
