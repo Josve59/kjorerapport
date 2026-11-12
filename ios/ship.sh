@@ -22,6 +22,7 @@ for x in d.get('result',{}).get('devices',[]):
 fi
 [ -n "$DEVICE" ] || { echo "Fant ingen tilkoblet iPhone (sett KJ_DEVICE)"; exit 1; }
 if [ -d ../.local-test/app-models/Lanes.mlmodelc ]; then echo "Feltmodell: testvekter fra .local-test/app-models (ikke i git)"; fi
+if [ -d ../.local-test/app-models/DFine.mlmodelc ]; then echo "Bilmodell: testmodell fra .local-test/app-models (ikke i git)"; fi
 echo "Bygger for $DEVICE …"
 # Swift-koden optimaliseres (0.13.9), men bygget er fortsatt et testbygg (DEBUG: utviklerverktøy og logg virker).
 # Uten optimalisering brukte lesingen av feltmodellens svar mer tid enn modellen selv: 3–5 svar i sekundet og varm telefon.

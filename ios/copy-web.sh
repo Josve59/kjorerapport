@@ -18,6 +18,8 @@ echo "Webappen kopiert til $DST"
 # fordi GitHub ikke tar imot filer over 100 MB; bitene settes sammen her.
 MODEL="$SRCROOT/Models/DFine.mlmodelc"
 OUT="$RES/DFine.mlmodelc"
+# Lå det en testmodell her fra forrige bygg (se under), ryddes mappen: vektfilen ville ellers blitt stående igjen
+if [ -f "$OUT/.testmodell" ]; then rm -rf "$OUT"; fi
 mkdir -p "$OUT"
 rsync -a --delete --exclude='weight.bin*' "$MODEL/" "$OUT/"
 mkdir -p "$OUT/weights"
@@ -25,6 +27,16 @@ if [ ! -f "$OUT/weights/weight.bin" ] || [ -n "$(find "$MODEL/weights" -name 'we
   cat "$MODEL/weights/"weight.bin.part* > "$OUT/weights/weight.bin"
 fi
 echo "D-FINE kopiert til $OUT"
+
+# Bilmodell på prøve (0.13.17), samme ordning som for feltmodellen: ligger det en ferdig kompilert modell i
+# .local-test/app-models/DFine.mlmodelc, brukes den i stedet for den i git. Appen leser størrelsen fra modellen,
+# så eksporten viser hvilken som kjørte («D-FINE small»). Slett mappen for å gå tilbake.
+LOCALD="$SRC/.local-test/app-models/DFine.mlmodelc"
+if [ -d "$LOCALD" ]; then
+  rsync -a --delete "$LOCALD/" "$OUT/"
+  touch "$OUT/.testmodell"
+  echo "warning: Bilgjenkjenningen er en testmodell fra $LOCALD (ikke i git)"
+fi
 
 # En bilmodell til måling ved siden av den vanlige (0.13.16): ligger det en kompilert modell i
 # .local-test/app-models/DFineTest.mlmodelc (ikke i git), blir den med i appen som DFineTest. Den brukes bare når et

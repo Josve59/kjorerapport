@@ -142,6 +142,15 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.17 – the small car model on trial
+
+After the measurements in 0.13.16 the owner chose to try D-FINE small on a drive.
+
+- The build uses a compiled car model in the git-ignored `.local-test/app-models/DFine.mlmodelc` in place of `ios/Models/DFine.mlmodelc` when there is one, the same arrangement as for the lane test weights. The model in git is still medium. The app reads the size from the model, so the «D-FINE» line from `tools/turrapport.mjs` reads `D-FINE small` for a drive with it.
+- With a small (or nano) car model the car detection runs 5 times per second again, and 3 when the phone is hot (`ModelPace.lightCars`). With medium the pace is as in 0.13.12.
+- To go back to medium: delete `.local-test/app-models/DFine.mlmodelc` and run `ios/ship.sh`.
+- **Tested:** the measurements in 0.13.16 (accuracy on test pictures; heat and speed on the phone on a desk), the unit tests and the iPhone build with the small model in it. **Not tested:** a drive. To check in the next export: the «Varme» line, how often a car ahead is found and for how long, and all of it in the dark.
+
 ## What's new in 0.13.16 – a smaller car model measured (the app still uses medium)
 
 The phone was still at «serious» in 88–92 % of two drives with the 0.13.12 pace, so the lighter car model was tried: **D-FINE small, trained on COCO only** (`ustc-community/dfine-small-coco`, Apache 2.0, 10.3 M parameters against 19.6 M for medium). Nothing changes in how the app runs: this version only adds what the measurement needed.

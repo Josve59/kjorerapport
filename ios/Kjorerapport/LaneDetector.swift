@@ -10,17 +10,21 @@ import QuartzCore
 /// Bilgjenkjenningen (grafikkprosessoren) er altså varmekilden, og feltmodellen er billig. Før gikk begge 5 ganger i
 /// sekundet til telefonen ble «varm», og så 3 resten av turen uten at den kjølte seg ned (varm i 97 % av en tur).
 /// Nå: bilgjenkjenningen 2,5 og feltmodellen 5 ganger i sekundet. Varm telefon: 2 og 3. Bilen står stille: 1,5 og 1,5.
+/// Med den lille bilmodellen (lightCars): 5 og 5, og 3 og 3 når telefonen er varm.
 /// Svært varm: 1 og 1. Følgingen i nettappen (track.js) flytter boksene mellom svarene og tåler 0,5 s mellom dem.
 nonisolated enum ModelPace {
     /// Bilen står stille (fra nettappen, GPS-farten under 2 km/t): ingenting å følge med på
     nonisolated(unsafe) static var still = false
+    /// Bilmodellen er den lille (0.13.17, satt av RoadDetector). Målt 12. nov.: med den holdt telefonen normal temperatur
+    /// med begge modellene 5 ganger i sekundet, der medium gjorde den «varm» på to minutter. Da kan den gå 5 igjen.
+    nonisolated(unsafe) static var lightCars = false
 
     /// Minste tid mellom to svar, i sekunder. Kamerabildene kommer 15 ganger i sekundet (hvert 0,067 s).
     static func gate(cars: Bool) -> Double {
         if still { return 0.65 }   // 1,5 i sekundet: følgingen i nettappen slipper en bil etter 1 s uten svar
         switch ProcessInfo.processInfo.thermalState {
-        case .nominal, .fair: return cars ? 0.39 : 0.19
-        case .serious: return cars ? 0.46 : 0.31
+        case .nominal, .fair: return cars && !lightCars ? 0.39 : 0.19
+        case .serious: return cars && !lightCars ? 0.46 : 0.31
         default: return 0.95
         }
     }

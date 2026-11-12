@@ -65,6 +65,7 @@ nonisolated final class RoadDetector: @unchecked Sendable {
         if let d = models.first?.model.modelDescription.metadata[.description] as? String,
            let size = ["xlarge", "large", "medium", "small", "nano"].first(where: { d.contains("dfine-\($0)") }) {
             name = "D-FINE \(size)"
+            ModelPace.lightCars = size == "small" || size == "nano"
         }
         trials = Array(repeating: [], count: models.count)
         var attrs: [String: Any] = [kCVPixelBufferWidthKey as String: Self.size, kCVPixelBufferHeightKey as String: Self.size,
