@@ -230,6 +230,9 @@ function laneStats(s) {
   if (both.length < 10) return { share: both.length / fast.length, medianOffset: null, spread: null, nearEdge: 0 };
   const off = both.map(x => x.lane.offset);
   const m = med(off);
+  // Typisk avvik på en halv meter eller mer er telefonen, ikke kjøringen (0.13.15): ingen ligger så skjevt en hel tur.
+  // Turer fra før 0.13.15 målte fra midten av bildet, og en vridd telefon forskjøv alt.
+  if (Math.abs(m) >= 0.5) return { share: Math.round(both.length / fast.length * 100) / 100, medianOffset: null, spread: null, nearEdge: 0, skewed: true };
   return {
     share: Math.round(both.length / fast.length * 100) / 100,
     medianOffset: Math.round(m * 100) / 100,

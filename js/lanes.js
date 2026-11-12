@@ -146,7 +146,11 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
   const seenL = left && !left.predicted ? left : null, seenR = right && !right.predicted ? right : null;
   if (seenL && seenR && seenR.xBottom > seenL.xBottom) {
     width = seenR.xBottom - seenL.xBottom;
-    if (width > w * 0.25) offset = Math.round(((w / 2) - (seenL.xBottom + seenR.xBottom) / 2) / width * laneWidth * 100) / 100;
+    // Kjøreretningen i bildet er linjenes forsvinningspunkt, ikke midten av bildet (0.13.15): midten stemmer bare når
+    // telefonen peker rett fram. Etter en ny montering 12. nov. var telefonen vridd noen grader, og «bilen» lå 0,70 m
+    // til høyre for midten av feltet hele turen. Langt unna midten (dårlig tilpasning) brukes midten som før.
+    const xV = vanishX(seenL, seenR), cx = Number.isFinite(xV) && Math.abs(xV - w / 2) < 0.3 * w ? xV : w / 2;
+    if (width > w * 0.25) offset = Math.round((cx - (seenL.xBottom + seenR.xBottom) / 2) / width * laneWidth * 100) / 100;
     else width = null;
     // Kamerahøyden følger av feltbredden: B(høyre) − B(venstre) = feltbredde / høyde
     if (width && seenL.curve && seenR.curve) { const dB = seenR.curve.B - seenL.curve.B; if (dB > 0) camHeight = Math.round(laneWidth / dB * 100) / 100; }
@@ -157,6 +161,19 @@ export function detectLanes(gray, w, h, { top = 0.6, bottom = 0.92, horizon = 0.
 /* Feltlinjen er en lys rygg (0.12.5): lysere enn asfalten rett på begge sider. Overgangen fra asfalt til lys grus,
    gress, fortau eller snøkant er et trinn (lyst bare på den ene siden) og tas ikke med. Det var det som oftest ble
    tatt for en feltlinje ute på siden. Ved bildekanten holder det med den ene siden. */
+/* Der kjøreretningen treffer nederste rad: for buede linjer A + C/d (linjene deler A og C), for rette linjer
+   skjæringspunktet mellom dem. NaN når linjene er nesten parallelle i bildet. */
+function vanishX(L, R) {
+  if (L.curve && R.curve) {
+    const d = Math.max(1, L.yBottom - L.curve.vh);
+    return (L.curve.A + R.curve.A) / 2 + (L.curve.C + R.curve.C) / 2 / d;
+  }
+  const sL = (L.xTop - L.xBottom) / ((L.yTop - L.yBottom) || 1), sR = (R.xTop - R.xBottom) / ((R.yTop - R.yBottom) || 1);
+  if (Math.abs(sL - sR) < 1e-3) return NaN;
+  const y = (R.xBottom - L.xBottom + sL * L.yBottom - sR * R.yBottom) / (sL - sR);
+  return L.xBottom + sL * (y - L.yBottom);
+}
+
 function ridge(gray, row, start, end, w) {
   const len = end - start, f = Math.max(2, Math.min(6, len));
   let m = 0; for (let x = start; x < end; x++) m += gray[row + x]; m /= len;

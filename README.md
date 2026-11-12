@@ -142,6 +142,13 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.15 – position in the lane no longer shifts when the phone is turned
+
+- On the second drive on 12 Nov the report said the car lay 0.70 m to the right of the middle of the lane for the whole drive. The phone had been put back in the holder turned a few degrees before that drive (the drives before it, with the same lane model, lie around 0). The position was measured from the middle of the picture, which is only the driving direction when the phone points straight ahead.
+- It is now measured from where the two lane lines meet (their vanishing point), which is the driving direction however the phone is turned (`vanishX` in `lanes.js`).
+- A drive where the typical position is half a metre or more off (recorded before this fix) gets «Telefonen sto vridd på denne turen» in place of a position.
+- **Tested:** unit tests (a turned camera gives the same position, a car that really is off-centre is still measured). **Not tested:** on the phone. A phone mounted far to the side of the car still shifts the numbers.
+
 ## What's new in 0.13.14 – leave the driver camera out of a drive afterwards
 
 - The report has a link under «Speil og skulderblikk»: «Se bort fra førerkameraet på denne turen». It is for a drive where the holder stood wrong or the calibration did not fit (the first drive on 12 Nov: the face was in the picture in only 56 % of it). The camera part then leaves the report and the data-quality list says so. The head positions stay stored, and the same link brings them back.

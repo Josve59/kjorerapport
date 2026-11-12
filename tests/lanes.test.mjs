@@ -206,3 +206,20 @@ test('feltlinjer over tid: en båret linje kjennes igjen med en gang når den se
   assert.ok(o.left && !o.left.held && !o.left.carried, 'sett igjen i første svar, uten blink');
   assert.equal(o.offset, 0.3);
 });
+
+/* 0.13.15: plasseringen i feltet måles fra linjenes forsvinningspunkt, så en vridd telefon ikke forskyver den */
+test('plassering i feltet: en vridd telefon flytter ikke bilen i feltet', () => {
+  const w = 160, h = 120;
+  // Punkter på to rette linjer som møtes i (xv, 54): bilen midt i feltet, feltet 80 piksler bredt nederst (y = 110)
+  const scene = xv => { const pts = []; for (let y = 66; y <= 110; y++) { const f = (y - 54) / 56; pts.push({ x: xv - 40 * f, y }, { x: xv + 40 * f, y }); } return pts; };
+  const blank = new Uint8Array(w * h).fill(70);
+  const straight = detectLanes(blank, w, h, { points: scene(80) });
+  const turned = detectLanes(blank, w, h, { points: scene(92) });   // telefonen vridd: alt flyttet 12 piksler
+  assert.ok(straight.left && straight.right && turned.left && turned.right);
+  assert.ok(Math.abs(straight.offset) < 0.1, 'rett fram: ' + straight.offset);
+  assert.ok(Math.abs(turned.offset) < 0.1, 'vridd: fortsatt midt i feltet, ikke ' + turned.offset);
+  // Bilen 20 piksler (en fjerdedel av feltet) til høyre for midten, telefonen rett: linjene flytter seg nederst, ikke i det fjerne
+  const off = []; for (let y = 66; y <= 110; y++) { const f = (y - 54) / 56; off.push({ x: 80 - 60 * f, y }, { x: 80 + 20 * f, y }); }
+  const right = detectLanes(blank, w, h, { points: off });
+  assert.ok(right.offset > 0.6 && right.offset < 1.0, 'en fjerdedel av 3,25 m til høyre: ' + right.offset);
+});
