@@ -20,6 +20,7 @@ import { roadSummary } from './road.js';
 import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit, overlayCamSigns } from './signs.js';
 import { createLaneEase } from './laneease.js';
+import { crestSpeed, speedScore, totalScore } from './speedfit.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
@@ -29,7 +30,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.12';
+export const APP_VERSION = '0.13.13';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -119,18 +120,33 @@ function analysisOptions() {
   };
 }
 
+/* Fartsdelen inn i totalpoengene (0.13.13, speedfit.js): tid over fartsgrensen (når grensene er hentet) og for høy fart
+   over bakketopper. Kjøringen teller 60 % og farten 40 %. Regnes hver gang, fordi fartsgrensene kommer etter analysen. */
+function finalizeScore(drive, r) {
+  if (!r || !r.stats) return false;
+  if (!Number.isFinite(r.overallBase)) r.overallBase = r.overall;
+  r.speed = speedScore({ speeding: speedingFor(r, drive.enrich || null), crest: r.crest || null, km: r.stats.km });
+  const total = totalScore(r.overallBase, r.speed);
+  const changed = total !== r.overall;
+  r.overall = total;
+  return changed;
+}
+
 async function analyzeDrive(drive) {
   const opts = analysisOptions();
   // Føre (0.12.0): på glatt føre er grensene for brå bremsing, gass og sving lavere
   const sf = surfaceFactor(drive.surface);
   if (sf !== 1) opts.factor = +(opts.factor * sf).toFixed(3);
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|15`;
-  if (drive.result && drive.resultKey === key) return drive.result;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|16`;
+  if (drive.result && drive.resultKey === key) { if (finalizeScore(drive, drive.result)) await putDrive(drive); return drive.result; }
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
   let result;
   try {
     result = analyze(raw, opts);
+    result.overallBase = result.overall;
+    // Bakketopper der farten var høyere enn sikten tillot (ikke demoturen: den har oppdiktede sensordata)
+    try { result.crest = drive.demo ? null : crestSpeed(raw, { axes: result.gyroAxes, surface: drive.surface, t0: result.t0 }); } catch { result.crest = null; }
     // Veikameraet (0.10.0): bildebredden gjør at bilens eget dashbord (over 70 % av bredden) ikke regnes som en bil
     const frameW = drive.cameraPlan && /^\d+x\d+$/.test(drive.cameraPlan.roadSize || '') ? +drive.cameraPlan.roadSize.split('x')[0] : null;
     if (raw.road && raw.road.length > 10) result.road = roadSummary(raw.road, result.points, { t0: result.t0, frameW });
@@ -141,6 +157,7 @@ async function analyzeDrive(drive) {
     await putDrive(drive);
     throw err;
   }
+  finalizeScore(drive, result);
   drive.result = result; drive.error = null; drive.resultKey = key;
   await putDrive(drive);
   return result;
@@ -485,6 +502,7 @@ function getCalib() {
 function saveCalib(c) { const s = getSettings(); saveSettings({ ...s, calib: { ...(s.calib || {}), [calibKey()]: c } }); }
 let camUnsub = null;
 let calibForDrive = null;   // tur som skal få kalibreringen når den er ferdig (fra rapporten)
+let noFaceDrive = false;    // «Kjør uten førerkameraet» valgt for turen som startes nå (0.13.13)
 
 /* Veikameraet samtidig (0.10.0): bare i iPhone-appen, på telefoner som kan ha begge kameraene på (iPhone XS og nyere) */
 let roadOk = false;
@@ -1149,6 +1167,20 @@ function renderPrecheck() {
   cam.roadSupported().then(v => { roadOk = v; showRoadCheck(); }).catch(() => {});
   const preCalib = $('#btn-pre-calib');
   preCalib.hidden = true;
+  // Uten førerkameraet denne turen (0.13.13): når holderen står dårlig eller kalibreringen ikke blir bra, er det bedre
+  // å la blikk og speilbruk være umålt enn å måle feil. Veikameraet går som før. Gjelder bare turen som startes nå.
+  const noFaceBtn = $('#btn-no-face');
+  noFaceDrive = false; cam.setFaceOff(false);
+  noFaceBtn.hidden = !camWanted();
+  const noFaceText = () => { noFaceBtn.textContent = noFaceDrive ? 'Bruk førerkameraet likevel' : 'Kjør denne turen uten førerkameraet'; };
+  noFaceText();
+  noFaceBtn.onclick = () => {
+    noFaceDrive = !noFaceDrive; cam.setFaceOff(noFaceDrive); noFaceText();
+    preCalib.hidden = noFaceDrive || !cam.state().running;
+    camCheck.classList.remove('todo');
+    if (noFaceDrive) setCheck(camCheck, true, 'Førerkameraet er av for denne turen. Blikk og speilbruk blir ikke vurdert.');
+    else setCheck(camCheck, null, 'Førerkameraet er på igjen …');
+  };
   if (camWanted()) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
   preCalib.onclick = async () => {
     unlockSpeech();
@@ -1190,6 +1222,7 @@ function renderPrecheck() {
           n++; if (p) { seen++; recent.push(p); if (recent.length > 40) recent.shift(); }
           if (n % 8) return;
           const share = seen / 8; seen = 0;
+          if (noFaceDrive) return;
           if (share <= 0.6) { setCheck(camCheck, null, 'Ser ikke ansiktet – juster holderen'); return; }
           const chk = checkCalibration(getCalib(), recent);
           const todo = chk.state === 'moved' || chk.state === 'none';
@@ -1363,6 +1396,7 @@ async function startRecording(replay = null) {
     driver: replay ? '' : recordDriver(settings),
     focus: replay ? [] : (settings.focus || []),
     surface: replay ? '' : currentSurface(),
+    noFace: !replay && noFaceDrive,
     calib: replay ? null : getCalib(),
     replay,
     onStatus: st => {
@@ -1447,9 +1481,11 @@ async function startRecording(replay = null) {
   hitR.onclick = () => openCamView('environment');
   if (!replay && settings.cameraOn && cam.state().running) {
     await cam.attachVideo(recVideo);
-    recVideo.hidden = false; hitV.hidden = false;
+    recVideo.hidden = noFaceDrive; hitV.hidden = noFaceDrive;
+    cam.setFaceOff(noFaceDrive);
     if (camUnsub) camUnsub();
-    let seen = 0, n = 0, face = 'Kamera: på', lastRoad = null;
+    let seen = 0, n = 0, face = noFaceDrive ? 'Førerkameraet er av' : 'Kamera: på', lastRoad = null;
+    if (noFaceDrive) camPill.dataset.state = 'ok';   // ingenting å melde om ansiktet
     const pillText = () => {
       const st = cam.state();
       // Kamerapillen vises bare når noe er galt (0.12.0)
@@ -1990,6 +2026,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     if (stale()) return;
     const drawBase = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
+      noFace: !!drive.noFace,
       // Tittelen er når turen var (0.12.2): «Kjørerapport» står allerede øverst
       title: shortDay(drive.startedAt), subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),
       eyebrow: [isTeacher() && drive.driver ? drive.driver : '', ...tags].filter(Boolean).join(' · '),

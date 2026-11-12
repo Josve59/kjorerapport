@@ -142,6 +142,21 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.13 – speed counts in the score, and a drive can start without the driver camera
+
+From two drives on 12 Nov (60 and 47 km, 0.13.12) and a driving instructor's verdict on the second: it should have scored 90–92, not 98, because the speed was a little high on some country roads and over blind hill crests.
+
+- **Speed is part of the total score** (`js/speedfit.js`). The total only counted braking, acceleration, turns and smooth speed. Now a speed part (0–100) counts 40 % and the driving 60 %. The speed part has two deductions, both per 10 km like the other scores:
+  - **Time over the speed limit**, from the limits in the report (the camera's signs included), weighted by how much over and for how long. Without fetched limits this part is left out.
+  - **Blind hill crests.** Going over a crest the nose of the car tips down. The phone's rotation sensor gives how fast, and with the speed that gives the radius of the crest and so how far ahead the driver can see (eye height 1.1 m, something 0.6 m high). The speed is too high when the car cannot stop within that distance (1 s reaction, braking 0.7 g, less on slippery roads), with a margin of 5 km/h. On a road where the road camera saw no centre line, the car must stop within half the distance to an oncoming car, since both have to stop.
+- The report shows a «Fart» bar with the other scores and a «Bakketopper» list with the time, the speed, the sight distance and the speed that would have been enough.
+- On the instructor's drive the app now gives 90: 8 crests of 146 and 7 periods over the limit (the worst 77 in a 50 zone and 69 in a 40 zone). The night drives on main roads the day before have no crests flagged and keep 99–100. **The weights are fitted to this one drive and one instructor**, so they should be adjusted when more drives have been judged.
+- Old drives get the new score when they are opened. Until then lists show the old one.
+- **Start without the driver camera:** the check before a drive has a «Kjør denne turen uten førerkameraet» button. The face model is then not run, no head positions are stored, and the report says that glances and mirror use were not judged. The road camera runs as before. It only applies to the drive being started.
+
+- **Tested:** unit tests for the crest and score calculation, replays on the two drives and three older ones, the report in the browser with a test drive, and the iPhone build. **Not tested:** the button on the phone, and the crest measurement against the real roads: the radius comes from a phone in a holder, and for a crest shorter than about 1.5 s it comes out too large, in the driver's favour.
+- **Heat:** the two drives show the phone at «serious» in 92 % and 88 % of the drive with the 0.13.12 pace. The desk result did not carry over to the car. Not solved here.
+
 ## What's new in 0.13.12 – a cooler phone: the car detection runs less often
 
 On the drive on 11 Nov at 21:33 iOS reported the phone as hot in 97 % of the drive. Measured the same evening with the phone on a desk, connected to the Mac and starting from normal temperature each time (iOS reports four heat steps: normal, fair, serious, critical):

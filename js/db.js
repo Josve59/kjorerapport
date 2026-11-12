@@ -122,6 +122,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
     focus: Array.isArray(meta.focus) ? meta.focus.filter(f => typeof f === 'string').slice(0, 3) : [],
     surface: typeof meta.surface === 'string' ? meta.surface.slice(0, 10) : '',
+    ...(meta.noFace ? { noFace: true } : {}),
     liveLimits: Array.isArray(meta.liveLimits) ? meta.liveLimits.filter(x => x && Number.isFinite(x.t)).map(x => ({ t: x.t, limit: Number.isFinite(x.limit) ? x.limit : null, ...(x.src === 'kamera' ? { src: 'kamera', ...(Number.isFinite(x.ahead) ? { ahead: x.ahead } : {}) } : {}) })).slice(0, 5000) : [],
     counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length, road: raw.road.length },
     calib: meta.calib && typeof meta.calib === 'object' ? meta.calib : null,

@@ -76,6 +76,7 @@ export class Recorder {
     this.focus = Array.isArray(opts.focus) ? opts.focus.slice(0, 3) : [];
     this.surface = typeof opts.surface === 'string' ? opts.surface : '';   // føre (0.12.0)
     this.calib = opts.calib || null;
+    this.noFace = !!opts.noFace;   // førerkameraet slått av for denne turen (0.13.13)
     this.replay = opts.replay || null;        // { data, speed } – utvikleralternativ: spill av demotur
     this.reset();
   }
@@ -128,6 +129,7 @@ export class Recorder {
       driver: this.driver,
       focus: this.focus,
       surface: this.surface,
+      ...(this.noFace ? { noFace: true } : {}),
       calib: this.calib || null,
       gaps: [],
       marks: [],

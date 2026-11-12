@@ -50,6 +50,17 @@ export function speedingFor(r, enrich) {
   return { ...sp, limits };
 }
 
+/* Forklaringen under delpoengene: hva fartsdelen bygger på (0.13.13) */
+export function speedLine(r) {
+  const s = r.speed;
+  if (!s) return '';
+  const parts = [];
+  if (s.over === null) parts.push('fartsgrensene er ikke hentet ennå');
+  else parts.push(s.over ? `over fartsgrensen ${s.over} ${s.over === 1 ? 'gang' : 'ganger'}` : 'aldri over fartsgrensen');
+  if (s.crests !== null) parts.push(s.crests ? `for høy fart over ${s.crests} ${s.crests === 1 ? 'bakketopp' : 'bakketopper'}` : 'rolig nok over bakketoppene');
+  return `Fart: ${parts.join(', ')}. I totalpoengene teller kjøringen (de fire øverste) 60 % og farten 40 %.`;
+}
+
 const MARK_LETTER = i => String.fromCharCode(65 + (i % 26));
 
 /* Fasit fra ledsageren (v0.7.6): merket «Feltskifte» trykkes like etter hvert feltskifte. Et merke hører
@@ -85,7 +96,7 @@ export function buildSummary(r, ctx = {}) {
   lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}${ctx.driver && !(ctx.subtitle || '').includes(ctx.driver) ? ' – ' + ctx.driver : ''}`);
   lines.push(`Poeng: ${r.overall} – ${rating(r.overall)}`);
   lines.push(`Distanse ${km(r.stats.km)} · Tid ${duration(r.stats.duration)} · Snittfart ${kmh(r.stats.avgKmh)} · Toppfart ${kmh(r.stats.maxKmh)}`);
-  lines.push(`Bremsing ${r.scores.brake} · Akselerasjon ${r.scores.accel} · Svinger ${r.scores.turn} · Jevn fart ${r.scores.smooth}`);
+  lines.push(`Bremsing ${r.scores.brake} · Akselerasjon ${r.scores.accel} · Svinger ${r.scores.turn} · Jevn fart ${r.scores.smooth}${r.speed ? ` · Fart ${r.speed.score}` : ''}`);
   const names = ctx.enrich && ctx.enrich.names ? ctx.enrich.names : { events: {}, marks: {} };
   if (r.events.length) {
     lines.push(`Hendelser (${r.events.length}):`);
@@ -133,6 +144,7 @@ export function renderReport(root, r, ctx = {}) {
 
   // Datakvalitet: alt teknisk samlet ett sted
   const quality = [];
+  if (ctx.noFace) quality.push({ sev: 1, text: 'Førerkameraet var slått av for denne turen, så blikk og speilbruk er ikke vurdert.' });
   if (interrupted) quality.push({ sev: 2, text: 'Opptaket ble avbrutt før «Stopp» ble trykket. Rapporten gjelder den delen som ble lagret.' });
   if (short) quality.push({ sev: 2, text: `Kort tur (${km(r.stats.km)}). Grunnlaget er tynt, så poengene bør ikke vektlegges.` });
   if (r.holder && r.holder.episodes.length) quality.push({ sev: r.holder.permanentShift ? 2 : 1, text: `${r.holder.episodes.map(e => `Telefonen ble flyttet i holderen ${mss(e.from)}–${mss(e.to)}.`).join(' ')} ${r.holder.permanentShift
@@ -243,7 +255,8 @@ export function renderReport(root, r, ctx = {}) {
     <section class="card" id="score-section">
       <h2 class="card-title">${icon('chart')}Slik gikk det</h2>
       ${prev ? '<p class="muted small">Pilene viser endring fra forrige tur.</p>' : ''}
-      <div class="bars">${['brake', 'accel', 'turn', 'smooth'].map(k => scoreBar(k, r.scores[k], prev ? prev.scores[k] : null)).join('')}</div>
+      <div class="bars">${['brake', 'accel', 'turn', 'smooth'].map(k => scoreBar(k, r.scores[k], prev ? prev.scores[k] : null)).join('')}${r.speed ? scoreBar('speed', r.speed.score, prev && prev.speed ? prev.speed.score : null) : ''}</div>
+      ${r.speed ? `<p class="muted small">${esc(speedLine(r))}</p>` : ''}
     </section>
 
     ${sameRoute.length > 1 ? `<section class="card" id="route-section">
@@ -291,7 +304,7 @@ export function renderReport(root, r, ctx = {}) {
     ${sits.length ? eventsHtml : ''}
     ${sp ? `<section class="card" id="limits-section">
       <h2 class="card-title">${icon('speed')}Fartsgrenser</h2>
-      <p class="muted small">Fra Statens vegvesen (NVDB). Teller når farten er minst 4 km/t over grensen i minst 3 sekunder. Inngår ikke i samlet poengsum.</p>
+      <p class="muted small">Fra Statens vegvesen (NVDB). Teller når farten er minst 4 km/t over grensen i minst 3 sekunder. Tiden over grensen teller med i «Fart» i poengene.</p>
       <div class="bars">${scoreBar('limits', sp.score, null)}</div>
       <dl class="stats limits-stats">
         <div><dt>Over grensen</dt><dd>${n0(sp.secondsOver)} s</dd></div>
@@ -302,6 +315,13 @@ export function renderReport(root, r, ctx = {}) {
         <li><span class="limit-pill">${e.limit}</span>
           <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t${e.cam ? ' · skilt sett av kameraet' : ''}</span></span></li>`).join('')}</ol>`
         : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
+    </section>` : ''}
+    ${r.crest && r.crest.crests.length ? `<section class="card" id="crest-section">
+      <h2 class="card-title">${icon('speed')}Bakketopper</h2>
+      <p class="muted small">Over en bakketopp ser du bare et stykke fram. Her var farten høyere enn at bilen rakk å stoppe på den strekningen. På vei uten midtlinje regnes halve strekningen, fordi en møtende bil også må stoppe. Målt med telefonens bevegelsessensor, så tallene er omtrentlige.</p>
+      <ol class="episodes">${r.crest.crests.slice(0, 12).map(c => `
+        <li><span class="ev-text"><strong>${c.kmh} km/t over en bakketopp</strong><span class="muted">${mss(c.t)} inn i turen · sikt rundt ${c.sight} m · ${c.safeKmh} km/t hadde holdt${c.narrow ? ' · vei uten midtlinje' : ''}</span></span></li>`).join('')}</ol>
+      ${r.crest.crests.length > 12 ? `<p class="muted small">… og ${r.crest.crests.length - 12} til.</p>` : ''}
     </section>` : ''}
     ${maneuverSection(r, road, log, marks, !!(enrich && enrich.road))}
 
@@ -1053,7 +1073,7 @@ function label(x, y, text, W) {
 function scoreBar(k, v, prevV) {
   const cls = v >= 90 ? 'good' : v >= 75 ? 'mid' : 'bad';
   return `<div class="bar-row">
-    <span class="bar-label">${k === 'limits' ? 'Fartsgrense' : CATS[k]}</span>
+    <span class="bar-label">${k === 'limits' ? 'Fartsgrense' : k === 'speed' ? 'Fart' : CATS[k]}</span>
     <span class="bar"><span class="bar-fill ${cls}" style="width:${v}%"></span></span>
     <span class="bar-val">${v}${prevV !== null && prevV !== undefined ? delta(v, prevV) : ''}</span>
   </div>`;

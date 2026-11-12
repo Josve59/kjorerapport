@@ -64,6 +64,9 @@ export async function roadSupported() {
 }
 
 export function setSpeed(kmh) { speedKmh = kmh; }   // fartsskilt leses bare når bilen kjører
+/* Førerkameraet av for denne turen (0.13.13): ansiktsmodellen kjøres ikke, og ingen hodestillinger sendes videre */
+let faceOff = false;
+export function setFaceOff(v) { faceOff = !!v; if (faceOff) { lastPose = null; lastFace = null; } }
 
 export function loadModel(onStatus = () => {}) {
   if (landmarker) return Promise.resolve(landmarker);
@@ -196,7 +199,7 @@ function watchdog() {
 
 function faceTick() {
   watchdog();
-  if (!landmarker) return;
+  if (!landmarker || faceOff) return;
   let src, w, h;
   if (driver) {
     if (!driver.ready || driver.seq === driverSeq) return;
@@ -522,6 +525,7 @@ function stopSources() {
   driver = null; road = null; roadModel = null; driverSeq = -1; roadSeq = -1;
   tracker.reset(); flowPrev = null; lastView = null; lastRoad = null; rowEma = null; rowN = 0; roadBottom = null; lastLum = null;
   speedKmh = NaN;   // ukjent fart til neste tur, så modellene ikke blir stående på «bilen står» (0.13.12)
+  faceOff = false;
 }
 
 export function stopCamera() {

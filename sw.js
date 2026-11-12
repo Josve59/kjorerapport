@@ -1,13 +1,13 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.13.12';
+const VERSION = 'v0.13.13';
 const CACHE = 'kjorerapport-' + VERSION;
 const ML_CACHE = 'kjorerapport-ml';   // ansiktsgjenkjenningen, beholdes mellom versjoner
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css', './css/theme.css',
   './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js', './js/camera.js', './js/facecam.js', './js/situations.js', './js/livelimit.js', './js/roadshape.js', './js/readiness.js', './js/modes.js', './js/testdata.js', './js/speedwarn.js', './js/surface.js', './js/calibcheck.js', './js/devchart.js', './js/game.js', './js/liveatk.js', './js/teacher.js', './js/sound.js',
-  './js/nativecam.js', './js/guides.js', './js/plus.js', './js/road.js', './js/track.js', './js/lanes.js', './js/laneease.js', './js/facelight.js', './js/flow.js', './js/signs.js', './js/sign-tpl.js',
+  './js/nativecam.js', './js/guides.js', './js/plus.js', './js/road.js', './js/track.js', './js/lanes.js', './js/laneease.js', './js/facelight.js', './js/speedfit.js', './js/flow.js', './js/signs.js', './js/sign-tpl.js',
   './fonts/overpass-latin.woff2', './fonts/overpass-latin-ext.woff2',
   './vendor/leaflet/leaflet.js', './vendor/leaflet/leaflet.css',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'
