@@ -142,6 +142,11 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.14 – leave the driver camera out of a drive afterwards
+
+- The report has a link under «Speil og skulderblikk»: «Se bort fra førerkameraet på denne turen». It is for a drive where the holder stood wrong or the calibration did not fit (the first drive on 12 Nov: the face was in the picture in only 56 % of it). The camera part then leaves the report and the data-quality list says so. The head positions stay stored, and the same link brings them back.
+- **Tested:** in the browser with a test drive (off, notice shown, on again). **Not tested:** on the phone with a real drive.
+
 ## What's new in 0.13.13 – speed counts in the score, and a drive can start without the driver camera
 
 From two drives on 12 Nov (60 and 47 km, 0.13.12) and a driving instructor's verdict on the second: it should have scored 90–92, not 98, because the speed was a little high on some country roads and over blind hill crests.

@@ -30,7 +30,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.13';
+export const APP_VERSION = '0.13.14';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -137,7 +137,7 @@ async function analyzeDrive(drive) {
   // Føre (0.12.0): på glatt føre er grensene for brå bremsing, gass og sving lavere
   const sf = surfaceFactor(drive.surface);
   if (sf !== 1) opts.factor = +(opts.factor * sf).toFixed(3);
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|16`;
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|16${drive.noFace ? 'n' : ''}`;
   if (drive.result && drive.resultKey === key) { if (finalizeScore(drive, drive.result)) await putDrive(drive); return drive.result; }
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -150,7 +150,8 @@ async function analyzeDrive(drive) {
     // Veikameraet (0.10.0): bildebredden gjør at bilens eget dashbord (over 70 % av bredden) ikke regnes som en bil
     const frameW = drive.cameraPlan && /^\d+x\d+$/.test(drive.cameraPlan.roadSize || '') ? +drive.cameraPlan.roadSize.split('x')[0] : null;
     if (raw.road && raw.road.length > 10) result.road = roadSummary(raw.road, result.points, { t0: result.t0, frameW });
-    if (raw.head && raw.head.length > 20) result.camera = evaluateMirrors(raw.head, drive.calib, { points: result.points, t0: result.t0, laneChanges: result.maneuvers.laneChanges,
+    // noFace: førerkameraet er valgt bort for turen (før start i 0.13.13, eller i rapporten etterpå i 0.13.14)
+    if (raw.head && raw.head.length > 20 && !drive.noFace) result.camera = evaluateMirrors(raw.head, drive.calib, { points: result.points, t0: result.t0, laneChanges: result.maneuvers.laneChanges,
       markedLanes: (drive.marks || []).filter(m => m.cat === 'felt').map(m => m.t - result.t0) });
   } catch (err) {
     drive.result = null; drive.error = err.message; drive.resultKey = key;
@@ -2026,7 +2027,15 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     if (stale()) return;
     const drawBase = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
-      noFace: !!drive.noFace,
+      noFace: !!drive.noFace, hasHead: !!(drive.counts && drive.counts.head > 20),
+      onNoFace: async off => {
+        const d = await getDrive(id);
+        if (!d) return;
+        if (off) d.noFace = true; else delete d.noFace;
+        await putDrive(d);
+        toast(off ? 'Førerkameraet er tatt ut av vurderingen av denne turen.' : 'Førerkameraet er med i vurderingen igjen.', { type: 'ok', ms: 2500 });
+        await renderDriveReport(id, { keepScroll: true });
+      },
       // Tittelen er når turen var (0.12.2): «Kjørerapport» står allerede øverst
       title: shortDay(drive.startedAt), subtitle: date(drive.startedAt) + (drive.driver ? ' · ' + drive.driver : '') + (tags.length ? ' · ' + tags.join(', ') : ''),
       eyebrow: [isTeacher() && drive.driver ? drive.driver : '', ...tags].filter(Boolean).join(' · '),

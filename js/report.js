@@ -144,7 +144,7 @@ export function renderReport(root, r, ctx = {}) {
 
   // Datakvalitet: alt teknisk samlet ett sted
   const quality = [];
-  if (ctx.noFace) quality.push({ sev: 1, text: 'Førerkameraet var slått av for denne turen, så blikk og speilbruk er ikke vurdert.' });
+  if (ctx.noFace) quality.push({ sev: 1, text: 'Førerkameraet er ikke med i vurderingen av denne turen, så blikk og speilbruk er ikke vurdert.' });
   if (interrupted) quality.push({ sev: 2, text: 'Opptaket ble avbrutt før «Stopp» ble trykket. Rapporten gjelder den delen som ble lagret.' });
   if (short) quality.push({ sev: 2, text: `Kort tur (${km(r.stats.km)}). Grunnlaget er tynt, så poengene bør ikke vektlegges.` });
   if (r.holder && r.holder.episodes.length) quality.push({ sev: r.holder.permanentShift ? 2 : 1, text: `${r.holder.episodes.map(e => `Telefonen ble flyttet i holderen ${mss(e.from)}–${mss(e.to)}.`).join(' ')} ${r.holder.permanentShift
@@ -272,6 +272,7 @@ export function renderReport(root, r, ctx = {}) {
 
 
     ${r.camera ? cameraSection(r, ctx) : ''}
+    ${ctx.onNoFace && (r.camera || (ctx.noFace && ctx.hasHead)) ? `<p class="center"><button type="button" class="link" id="btn-noface">${ctx.noFace ? 'Ta med førerkameraet på denne turen igjen' : 'Stemmer ikke speil og blikk? Se bort fra førerkameraet på denne turen'}</button></p>` : ''}
     ${r.road ? roadSection(r, ctx) : ''}
 
     ${marks.length ? `<section class="card" id="marks-section">
@@ -456,6 +457,9 @@ export function renderReport(root, r, ctx = {}) {
   const driverSel = root.querySelector('#drive-driver');
   if (driverSel && onDriverChange) driverSel.addEventListener('change', () => onDriverChange(driverSel.value));
 
+  // Se bort fra førerkameraet på en tur som er kjørt (0.13.14), f.eks. når holderen sto feil eller kalibreringen ikke passet
+  const nf = root.querySelector('#btn-noface');
+  if (nf && ctx.onNoFace) nf.onclick = () => ctx.onNoFace(!ctx.noFace);
   if (onNoteChange) {
     const ta = root.querySelector('#drive-note'), status = root.querySelector('#note-status');
     let timer = null;
