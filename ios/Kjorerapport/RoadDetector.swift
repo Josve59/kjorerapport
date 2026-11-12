@@ -42,7 +42,12 @@ nonisolated final class RoadDetector: @unchecked Sendable {
     func load(modelURL: URL? = nil) -> Bool {
         lock.lock(); defer { lock.unlock() }
         if !models.isEmpty { return true }
-        guard let url = modelURL ?? Bundle.main.url(forResource: "DFine", withExtension: "mlmodelc") else { return false }
+        var file = "DFine"
+        #if DEBUG
+        // Måling (0.13.16): KJ_DFINE_MODEL=test bruker modellen ios/copy-web.sh la ved som DFineTest, når den finnes
+        if ProcessInfo.processInfo.environment["KJ_DFINE_MODEL"] == "test", Bundle.main.url(forResource: "DFineTest", withExtension: "mlmodelc") != nil { file = "DFineTest" }
+        #endif
+        guard let url = modelURL ?? Bundle.main.url(forResource: file, withExtension: "mlmodelc") else { return false }
         #if targetEnvironment(simulator)
         let choices = [("prosessor", MLComputeUnits.cpuOnly)]   // simulatoren gir bare nuller på grafikkprosessoren
         #else

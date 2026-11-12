@@ -50,6 +50,11 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         guard let body = message.body as? [String: Any], let cmd = body["cmd"] as? String else { return (nil, "ukjent melding") }
         switch cmd {
         case "info":
+            #if DEBUG
+            // Måling fra Macen (KJ_JS): skjermen holdes på så lenge måleskriptet spør. Én gang ved start var ikke nok:
+            // telefonen låste seg etter 1–2 minutter i hvile (12. nov.), og da stopper siden
+            if ProcessInfo.processInfo.environment["KJ_JS"] != nil { UIApplication.shared.isIdleTimerDisabled = true }
+            #endif
             // thermal (0.13.12): varmetrinnet fra iOS (0 normal, 1 lunken, 2 varm, 3 svært varm)
             return (["devTools": await Self.devTools(), "thermal": ProcessInfo.processInfo.thermalState.rawValue], nil)
         case "camInfo":

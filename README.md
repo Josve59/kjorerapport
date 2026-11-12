@@ -142,6 +142,36 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.13.16 – a smaller car model measured (the app still uses medium)
+
+The phone was still at «serious» in 88–92 % of two drives with the 0.13.12 pace, so the lighter car model was tried: **D-FINE small, trained on COCO only** (`ustc-community/dfine-small-coco`, Apache 2.0, 10.3 M parameters against 19.6 M for medium). Nothing changes in how the app runs: this version only adds what the measurement needed.
+
+**Accuracy** on 162 COCO val2017 pictures with vehicles (575 cars, trucks, buses and motorcycles), at the app's score of 0.35 and overlap 0.5 (`.local-test/dfine/compare2.py`):
+
+| Vehicles | medium (in the app) | small |
+| --- | --- | --- |
+| All | 85 % found | 79 % found |
+| At least 32 px | 92 % | 88 % |
+| At least 96 px (close) | 96 % | 91 % |
+| Right class (of those found) | 94 % | 93 % |
+
+Core ML fp16 matched PyTorch fp32 on 649 of 649 boxes. Not compared in the dark: there are no night pictures to test on.
+
+**Heat and speed on the iPhone** (on a desk, connected to the Mac, from normal temperature, 6.5 min each, the evening of 12 Nov):
+
+| Running | Per answer | Time to «fair» | Time to «serious» |
+| --- | --- | --- | --- |
+| medium alone, 5 per second | 54 ms | 3:15 | not in 6.5 min (5:45 the evening before) |
+| small alone, 5 per second | 34 ms | never | never |
+| small and the lane model, both 5 per second | 54 ms (it chose «all» compute units) | never | never |
+| medium and the lane model, both 5 per second (11 Nov) | 57 ms | 0:25 | 2:00 |
+
+So with the small model the phone stays at normal temperature at the pace that made it hot in two minutes with medium. Whether that holds in the car is not measured.
+
+- `ios/copy-web.sh` bundles a second car model from the git-ignored `.local-test/app-models/DFineTest.mlmodelc` when it is there, and a test build uses it when launched with `KJ_DFINE_MODEL=test`.
+- While a measurement script runs (`KJ_JS`), the screen is kept on for as long as the script asks the app for the heat step. Once at start was not enough: the phone locked after a minute or two at rest.
+- **Tested:** the unit tests and the iPhone build; the measurements above. **Not tested:** the small model on a drive, and in the dark.
+
 ## What's new in 0.13.15 – position in the lane no longer shifts when the phone is turned
 
 - On the second drive on 12 Nov the report said the car lay 0.70 m to the right of the middle of the lane for the whole drive. The phone had been put back in the holder turned a few degrees before that drive (the drives before it, with the same lane model, lie around 0). The position was measured from the middle of the picture, which is only the driving direction when the phone points straight ahead.
