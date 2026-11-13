@@ -7,7 +7,15 @@
    Fremgangen ligger i innstillingene (og dermed i sikkerhetskopien): { q, exams, safety, car }.
    Rene funksjoner, testes i Node. */
 
-export const EXAM = { n: 45, pass: 38, minutes: 90 };
+export const EXAM = { n: 45, pass: 38, minutes: 90, solid: 40 };
+
+/* Prøven her skal være litt vanskeligere enn den ekte (0.16.0), så den som består her, består der:
+   - minst 40 % av oppgavene på hver prøve er vanskelige (lvl 3: unntak, tall, regler som virker sammen), når det
+     finnes nok av dem, og
+   - for å regnes som klar må du ha minst EXAM.solid (40) riktige, ikke bare grensen på den ekte prøven (38).
+   Vanskelighet per spørsmål: q.lvl 1 lett, 2 middels (standard), 3 vanskelig. */
+export const HARD_SHARE = 0.4;
+export const level = q => q.lvl || 2;
 
 /* Hvor mange oppgaver hvert tema får på en prøve (sum 45). Vegvesenet oppgir ikke fordelingen; denne følger hvor mye
    hvert tema dekker i temalisten. */
@@ -99,16 +107,22 @@ export function pickPractice(questions, p, { theme = null, tags = null, wrongOnl
   return shuffle(picked, rand);
 }
 
-/* En prøve som den ekte: oppgaver fra hvert tema etter kvoten, helst ikke de samme som på de to siste prøvene.
-   Har et tema for få spørsmål, fylles resten fra de andre temaene. → liste med id-er */
-export function buildExam(questions, { quota = EXAM_QUOTA, n = EXAM.n, recent = [], rand = Math.random } = {}) {
+/* En prøve som den ekte: oppgaver fra hvert tema etter kvoten, helst ikke de samme som på de to siste prøvene, og med
+   minst hardShare vanskelige i hvert tema. Har et tema for få spørsmål, fylles resten fra de andre temaene. → id-er */
+export function buildExam(questions, { quota = EXAM_QUOTA, n = EXAM.n, recent = [], rand = Math.random, hardShare = HARD_SHARE } = {}) {
   const used = new Set(recent);
   const pick = (pool, k) => {
     const fresh = shuffle(pool.filter(q => !used.has(q.id)), rand), old = shuffle(pool.filter(q => used.has(q.id)), rand);
     return fresh.concat(old).slice(0, k);
   };
   let chosen = [];
-  for (const [t, k] of Object.entries(quota)) chosen = chosen.concat(pick(questions.filter(q => q.t === t), k));
+  for (const [t, k] of Object.entries(quota)) {
+    // Akkurat andelen vanskelige: resten tas fra de lette og middels, og bare fra de vanskelige hvis de ikke rekker
+    const pool = questions.filter(q => q.t === t), hard = pool.filter(q => level(q) >= 3);
+    const h = pick(hard, Math.round(k * hardShare));
+    const rest = pick(pool.filter(q => level(q) < 3), k - h.length);
+    chosen = chosen.concat(h, rest, pick(hard.filter(q => !h.includes(q)), k - h.length - rest.length));
+  }
   if (chosen.length < n) {
     const have = new Set(chosen.map(q => q.id));
     chosen = chosen.concat(pick(questions.filter(q => !have.has(q.id)), n - chosen.length));
@@ -116,40 +130,45 @@ export function buildExam(questions, { quota = EXAM_QUOTA, n = EXAM.n, recent = 
   return shuffle(chosen.slice(0, n), rand).map(q => q.id);
 }
 
-/* Retting av en prøve. answers: { id: valgt indeks i q.a }. → { correct, total, passed, byTheme, wrong: [id] } */
+/* Retting av en prøve. answers: { id: valgt indeks i q.a }. → { correct, total, passed, solid, byTheme, hard, wrong: [id] }
+   solid: nok riktige til å regnes som klar (EXAM.solid). hard: de vanskelige oppgavene for seg. */
 export function scoreExam(questions, ids, answers, { pass = EXAM.pass } = {}) {
   const byId = new Map(questions.map(q => [q.id, q]));
-  const byTheme = {}, wrong = [];
+  const byTheme = {}, wrong = [], hard = { n: 0, correct: 0 };
   let correct = 0;
   for (const id of ids) {
     const q = byId.get(id); if (!q) continue;
     const b = byTheme[q.t] || (byTheme[q.t] = { n: 0, correct: 0 });
     b.n++;
-    if (answers[id] === 0) { correct++; b.correct++; } else wrong.push(id);
+    const ok = answers[id] === 0;
+    if (ok) { correct++; b.correct++; } else wrong.push(id);
+    if (level(q) >= 3) { hard.n++; if (ok) hard.correct++; }
   }
-  return { correct, total: ids.length, passed: correct >= pass, byTheme, wrong };
+  return { correct, total: ids.length, passed: correct >= pass, solid: correct >= EXAM.solid, byTheme, hard, wrong };
 }
 
-/* Hvor klar du er for teoriprøven, ut fra de siste prøvene */
+/* Hvor klar du er for teoriprøven, ut fra de siste prøvene. Klar: minst EXAM.solid riktige på 3 av de 5 siste,
+   og på den siste. passed teller prøver over grensen på den ekte prøven, solid de med margin. */
 export function theoryReady(p, { last = READY_RULE.last, passed = READY_RULE.passed } = {}) {
   const ex = p.exams.slice(-last);
-  const ok = ex.filter(e => e.passed).length;
-  const lastOk = ex.length ? ex[ex.length - 1].passed : false;
-  if (!ex.length) return { level: 'start', passed: 0, taken: 0, need: passed };
-  if (ok >= passed && lastOk) return { level: 'klar', passed: ok, taken: ex.length, need: passed };
-  return { level: ok >= 1 ? 'nesten' : 'ovelse', passed: ok, taken: ex.length, need: passed };
+  const isSolid = e => e.correct >= EXAM.solid;
+  const ok = ex.filter(e => e.passed).length, solid = ex.filter(isSolid).length;
+  const base = { passed: ok, solid, taken: ex.length, need: passed };
+  if (!ex.length) return { level: 'start', ...base };
+  if (solid >= passed && isSolid(ex[ex.length - 1])) return { level: 'klar', ...base };
+  return { level: ok >= 1 ? 'nesten' : 'ovelse', ...base };
 }
 
 export const READY_TEXT = {
-  start: 'Ta en prøve når du har øvd litt på temaene. Den er bygget som den ekte: 45 oppgaver og 90 minutter.',
+  start: 'Ta en prøve når du har øvd litt på temaene. Den er bygget som den ekte, med 45 oppgaver og 90 minutter, men er litt vanskeligere.',
   ovelse: 'Øv mer på temaene der du har flest feil, og ta en ny prøve.',
-  nesten: 'Du er på vei. Bestå 3 av 5 prøver på rad, og den siste, før du bestiller teoriprøven.',
-  klar: 'Du har bestått flere prøver på rad. Du ser klar ut for teoriprøven.'
+  nesten: 'Du er på vei. Få minst 40 riktige på 3 av 5 prøver, og på den siste, før du bestiller teoriprøven.',
+  klar: 'Du har fått minst 40 riktige på flere prøver. Prøven her er litt vanskeligere enn den ekte, så du ser klar ut.'
 };
 
 /* En prøve lagres med bare det som trengs for oversikten og «øv på feilene fra prøven» (høyst 20 prøver) */
 export function addExam(p, result, { at = Date.now(), sec = null, ids = [] } = {}) {
-  const e = { at, correct: result.correct, total: result.total, passed: result.passed, byTheme: result.byTheme, wrong: result.wrong, ids, ...(sec !== null ? { sec } : {}) };
+  const e = { at, correct: result.correct, total: result.total, passed: result.passed, byTheme: result.byTheme, wrong: result.wrong, ids, ...(result.hard ? { hard: result.hard } : {}), ...(sec !== null ? { sec } : {}) };
   return { ...p, exams: p.exams.concat([e]).slice(-20) };
 }
 
@@ -190,7 +209,7 @@ export function theoryBrief(p, { questions, signQuestions = [], tasks = [] }) {
   if (!Object.keys(p.q).length && !p.exams.length && !Object.keys(p.safety).length) return null;
   const r = theoryReady(p), last = p.exams[p.exams.length - 1] || null;
   return {
-    level: r.level, taken: r.taken, passed: r.passed,
+    level: r.level, taken: r.taken, passed: r.passed, solid: r.solid,
     last: last ? { correct: last.correct, total: last.total, passed: last.passed, at: last.at } : null,
     learned: questions.filter(q => isLearned(p.q[q.id])).length, total: questions.length,
     signs: signQuestions.filter(q => isLearned(p.q[q.id])).length, signsTotal: signQuestions.length,

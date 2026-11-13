@@ -9,7 +9,7 @@ import { THEMES, QUESTIONS } from './theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from './safety-check.js';
 import { figure } from './trafficsvg.js';
 import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS } from './theory-signs.js';
-import { EXAM, LEARNED, READY_RULE, READY_TEXT, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
+import { EXAM, LEARNED, READY_RULE, READY_TEXT, HARD_SHARE, level, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
   optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief } from './theory.js';
 
 const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS).map(q => [q.id, q]));
@@ -69,8 +69,8 @@ export async function renderTheoryHub(root, ctx) {
     <section class="card th-hero lv-${sum.ready.level}">
       <p class="eyebrow">Teoriprøven klasse B</p>
       <h2>${esc(head)}</h2>
-      ${exams.length ? `<div class="th-dots" aria-label="De siste prøvene">${exams.map(e => `<span class="th-dot ${e.passed ? 'ok' : 'no'}" title="${e.correct} av ${e.total}">${e.correct}</span>`).join('')}</div>
-        <p class="muted small">Bestått ${sum.ready.passed} av de ${Math.min(exams.length, READY_RULE.last)} siste prøvene. Grensen er ${EXAM.pass} riktige av ${EXAM.n}.</p>` : ''}
+      ${exams.length ? `<div class="th-dots" aria-label="De siste prøvene">${exams.map(e => `<span class="th-dot ${e.correct >= EXAM.solid ? 'ok' : e.passed ? 'mid' : 'no'}" title="${e.correct} av ${e.total}">${e.correct}</span>`).join('')}</div>
+        <p class="muted small">Minst ${EXAM.solid} riktige på ${sum.ready.solid} av de ${Math.min(exams.length, READY_RULE.last)} siste prøvene. Grensen på den ekte prøven er ${EXAM.pass}, men her sikter du mot ${EXAM.solid} for å ha margin.</p>` : ''}
       <p>${esc(READY_TEXT[sum.ready.level])}</p>
       <p class="muted small">${ongoing ? `${Object.keys(ongoing.answers).length} av ${ongoing.ids.length} oppgaver besvart` : `${EXAM.n} oppgaver · ${EXAM.minutes} minutter · ${EXAM.pass} riktige for å bestå`}</p>
       <button type="button" class="btn primary" id="th-exam">${icon('clock', 20)}${ongoing ? 'Fortsett prøven' : 'Ta en prøve'}</button>
@@ -91,7 +91,7 @@ export async function renderTheoryHub(root, ctx) {
     }).join('')}</ul></section>
     <button type="button" class="card t-cta th-signs-cta" id="th-to-signs"><span class="card-title">${icon('sign')}Skiltprøven</span><span class="muted small">${signsLearned(p)} av ${SIGNS.length} skilt lært. Se alle skiltene og hva de betyr, og øv til du kjenner dem igjen.</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
     <button type="button" class="card t-cta th-safety-cta" id="th-to-safety"><span class="card-title">${icon('wrench')}Sikkerhetskontrollen på oppkjøringen</span><span class="muted small">${sum.safety.known} av ${sum.safety.total} oppgaver kan du. Øv ved bilen på det sensor kan spørre om.</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
-    <p class="muted small th-note">Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad. Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
+    <p class="muted small th-note">Prøven her er laget litt vanskeligere enn den ekte: minst ${Math.round(HARD_SHARE * 10)} av 10 oppgaver er vanskelige, og du bør ha ${EXAM.solid} riktige, ikke ${EXAM.pass}, før du regner deg som klar. Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad. Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
     ${Object.keys(p.q).length || p.exams.length ? '<button type="button" class="link th-reset" id="th-reset">Begynn på nytt</button>' : ''}`;
   root.querySelector('#th-exam').onclick = () => { if (!examInProgress()) startExam(ctx); ctx.go('#/teori/prove'); };
   root.querySelector('#th-wrong').onclick = () => startPractice(ctx, { title: 'Feilene dine', wrongOnly: true, n: 15 });
@@ -139,7 +139,7 @@ export function renderPractice(root, ctx) {
       <button type="button" class="icon-btn" id="q-close" aria-label="Avslutt øvingen">${icon('close', 22)}</button></div>
     <span class="th-bar q-prog"><span style="width:${(P.i + (answered ? 1 : 0)) / P.items.length * 100}%"></span></span>
     <section class="card q-card">
-      <p class="eyebrow">${esc(q.eyebrow || t.title)}</p>
+      <p class="eyebrow">${esc(q.eyebrow || t.title)}${level(q) >= 3 ? ' <span class="q-hard">Vanskelig</span>' : ''}</p>
       ${q.img ? `<div class="q-fig">${figure(q.img)}</div>` : ''}
       <div class="q-head"><h2 class="q-text">${esc(q.q)}</h2>${speakBtn('q-read')}</div>
       <div class="q-opts" role="group" aria-label="Svaralternativer">${P.orders[q.id].map((oi, k) => {
@@ -152,7 +152,7 @@ export function renderPractice(root, ctx) {
       <p>${esc(q.why)}</p>
       <p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
     </section>
-    <button type="button" class="btn primary" id="q-next">${P.i + 1 < P.items.length ? 'Neste spørsmål' : 'Se hvordan det gikk'}</button>` : ''}`;
+    <div class="q-dock"><button type="button" class="btn primary" id="q-next">${P.i + 1 < P.items.length ? 'Neste spørsmål' : 'Se hvordan det gikk'}${icon('chev', 20)}</button></div>` : ''}`;
   root.querySelector('#q-close').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
   root.querySelector('#q-read').onclick = () => speak(answered ? `${q.q} Riktig svar: ${q.a[0]}. ${q.why}` : readLine({ ...q, a: P.orders[q.id].map(i => q.a[i]) }));
   root.querySelectorAll('.q-opt').forEach(b => b.onclick = () => {
@@ -250,6 +250,7 @@ export function renderExam(root, ctx) {
     <div class="q-top"><span class="q-step"><strong>Oppgave ${E.i + 1} av ${E.ids.length}</strong><span class="muted small">${done} besvart</span></span>
       <span class="q-timer" id="q-timer">${icon('clock', 18)}<span>${mmss(left())}</span></span>
       <button type="button" class="icon-btn" id="q-grid-btn" aria-label="Oversikt over oppgavene" aria-expanded="false">${icon('layers', 22)}</button></div>
+    <span class="th-bar q-prog"><span id="q-prog" style="width:${done / E.ids.length * 100}%"></span></span>
     <div class="q-grid" id="q-grid" hidden>${E.ids.map((x, k) => `<button type="button" class="q-cell ${E.answers[x] !== undefined ? 'done' : ''} ${k === E.i ? 'cur' : ''} ${E.flagged.includes(x) ? 'flag' : ''}" data-k="${k}" aria-label="Oppgave ${k + 1}${E.answers[x] !== undefined ? ', besvart' : ''}${E.flagged.includes(x) ? ', merket' : ''}">${k + 1}</button>`).join('')}</div>
     <section class="card q-card">
       ${q.img ? `<div class="q-fig">${figure(q.img)}</div>` : ''}
@@ -257,31 +258,34 @@ export function renderExam(root, ctx) {
       <div class="q-opts" role="radiogroup" aria-label="Svaralternativer">${E.orders[id].map((oi, k) => `<button type="button" role="radio" aria-checked="${E.answers[id] === oi}" class="q-opt ${E.answers[id] === oi ? 'picked' : ''}" data-oi="${oi}"><span class="q-letter">${LETTERS[k]}</span><span>${esc(q.a[oi])}</span></button>`).join('')}</div>
       <button type="button" class="link q-flag ${flagged ? 'on' : ''}" id="q-flag">${icon('flag', 18)}${flagged ? 'Merket for å se på igjen' : 'Merk for å se på igjen'}</button>
     </section>
-    <div class="btn-row">
+    <div class="q-dock two">
       <button type="button" class="btn secondary" id="q-prev" ${E.i ? '' : 'disabled'}>${icon('back', 20)}Forrige</button>
-      <button type="button" class="btn secondary" id="q-nextx" ${E.i + 1 < E.ids.length ? '' : 'disabled'}>Neste${icon('chev', 20)}</button>
+      ${E.i + 1 < E.ids.length ? `<button type="button" class="btn secondary" id="q-nextx">Neste${icon('chev', 20)}</button>` : `<button type="button" class="btn primary" id="q-last">Lever</button>`}
     </div>
-    <button type="button" class="btn primary" id="q-deliver">Lever prøven</button>
+    <button type="button" class="btn primary q-deliver" id="q-deliver">Lever prøven</button>
     <button type="button" class="link q-quit" id="q-quit">Avbryt prøven</button>`;
   const go = k => { E.i = k; saveExam(E); renderExam(root, ctx); window.scrollTo(0, 0); };
   root.querySelectorAll('.q-opt').forEach(b => b.onclick = () => {
     E.answers[id] = +b.dataset.oi; saveExam(E); ctx.vibrate(10);
     root.querySelectorAll('.q-opt').forEach(x => { const on = x === b; x.classList.toggle('picked', on); x.setAttribute('aria-checked', on); });
     root.querySelector('.q-step .muted').textContent = `${Object.keys(E.answers).length} besvart`;
+    root.querySelector('#q-prog').style.width = `${Object.keys(E.answers).length / E.ids.length * 100}%`;
     const cell = root.querySelector('.q-cell.cur'); if (cell) cell.classList.add('done');
   });
   root.querySelector('#q-read').onclick = () => speak(readLine({ ...q, a: E.orders[id].map(i => q.a[i]) }));
   root.querySelector('#q-flag').onclick = () => { E.flagged = flagged ? E.flagged.filter(x => x !== id) : E.flagged.concat(id); saveExam(E); renderExam(root, ctx); };
   root.querySelector('#q-prev').onclick = () => go(E.i - 1);
-  root.querySelector('#q-nextx').onclick = () => go(E.i + 1);
+  const nx = root.querySelector('#q-nextx'); if (nx) nx.onclick = () => go(E.i + 1);
   const gridBtn = root.querySelector('#q-grid-btn'), grid = root.querySelector('#q-grid');
   gridBtn.onclick = () => { grid.hidden = !grid.hidden; gridBtn.setAttribute('aria-expanded', !grid.hidden); };
   grid.querySelectorAll('.q-cell').forEach(c => c.onclick = () => go(+c.dataset.k));
-  root.querySelector('#q-deliver').onclick = async () => {
-    const open = E.ids.length - Object.keys(E.answers).length;
-    const ok = await confirmDialog({ title: 'Levere prøven?', text: open ? `${open} ${open === 1 ? 'oppgave er' : 'oppgaver er'} ikke besvart, og ${open === 1 ? 'den' : 'de'} teller som feil.` : 'Du har svart på alle oppgavene. Du kan ikke endre svarene etterpå.', ok: 'Lever' });
-    if (ok) deliver(ctx);
+  const askDeliver = async () => {
+    const open = E.ids.length - Object.keys(E.answers).length, marked = E.flagged.filter(x => E.answers[x] !== undefined).length;
+    const text = open ? `${open} ${open === 1 ? 'oppgave er' : 'oppgaver er'} ikke besvart, og ${open === 1 ? 'den' : 'de'} teller som feil.` : marked ? `Du har merket ${marked} ${marked === 1 ? 'oppgave' : 'oppgaver'} for å se på igjen. Du kan ikke endre svarene etterpå.` : 'Du har svart på alle oppgavene. Du kan ikke endre svarene etterpå.';
+    if (await confirmDialog({ title: 'Levere prøven?', text, ok: 'Lever' })) deliver(ctx);
   };
+  root.querySelector('#q-deliver').onclick = askDeliver;
+  const last = root.querySelector('#q-last'); if (last) last.onclick = askDeliver;
   root.querySelector('#q-quit').onclick = async () => {
     if (!await confirmDialog({ title: 'Avbryte prøven?', text: 'Svarene på denne prøven blir ikke lagret.', ok: 'Avbryt prøven', cancel: 'Fortsett', danger: true })) return;
     saveExam(null); stopTheory(); ctx.go('#/teori');
@@ -317,11 +321,12 @@ export function renderExamResult(root, ctx) {
   if (!R) { ctx.go('#/teori'); return; }
   const wrong = R.wrong.map(id => byId.get(id));
   root.innerHTML = `
-    <section class="card th-hero ${R.passed ? 'lv-klar' : 'lv-ovelse'}">
+    <section class="card th-hero ${R.correct >= EXAM.solid ? 'lv-klar' : R.passed ? 'lv-nesten' : 'lv-ovelse'}">
       <p class="eyebrow">Prøve · ${mmss(Math.min(R.sec, EXAM.minutes * 60))} brukt</p>
-      <h2>${R.passed ? 'Bestått' : 'Ikke bestått'}</h2>
-      <p class="th-score"><strong>${R.correct}</strong> av ${R.total} riktige <span class="muted">· ${EXAM.pass} kreves</span></p>
-      <p>${R.passed ? (R.correct === R.total ? 'Alt riktig!' : 'Se gjennom feilene under, så du lærer av dem.') : `Du trengte ${EXAM.pass - R.correct} riktige til. Øv på feilene, og ta en ny prøve.`}</p>
+      <h2>${R.correct >= EXAM.solid ? 'Bestått med margin' : R.passed ? 'Bestått, uten margin' : 'Ikke bestått'}</h2>
+      <p class="th-score"><strong>${R.correct}</strong> av ${R.total} riktige <span class="muted">· ${EXAM.pass} kreves på den ekte prøven</span></p>
+      <p>${R.correct === R.total ? 'Alt riktig!' : R.correct >= EXAM.solid ? 'Godt over grensen. Se gjennom feilene under, så du lærer av dem.' : R.passed ? `Over grensen på den ekte prøven, men sikt mot ${EXAM.solid} riktige så du har margin. Øv på feilene under.` : `Du trengte ${EXAM.pass - R.correct} riktige til. Øv på feilene, og ta en ny prøve.`}</p>
+      ${R.hard && R.hard.n ? `<p class="muted small">Vanskelige oppgaver: ${R.hard.correct} av ${R.hard.n} riktige.</p>` : ''}
     </section>
     <h2 class="group-title">Per tema</h2>
     <section class="card"><div class="bars">${THEMES.filter(t => R.byTheme[t.id]).map(t => {
@@ -371,7 +376,7 @@ export function renderSafetyHub(root, ctx) {
       if (!items.length) return '';
       return `<h2 class="group-title">${icon(a.icon, 16)}${esc(a.title)}</h2><section class="card s-area">${items.map(t => `
         <details class="s-task" data-id="${t.id}"><summary><span class="s-state ${known(t.id) ? 'ok' : ''}">${known(t.id) ? icon('check', 16) : ''}</span><span>${esc(t.task)}</span>${icon('chev', 18)}</summary>
-          <ol class="s-how">${t.how.map(h => `<li>${esc(h)}</li>`).join('')}</ol>
+          ${t.img ? `<div class="s-lamp">${figure(t.img)}</div>` : ''}<ol class="s-how">${t.how.map(h => `<li>${esc(h)}</li>`).join('')}</ol>
           <p class="s-fault"><strong>Hvis noe er feil:</strong> ${esc(t.fault)}</p>
           <div class="btn-row"><button type="button" class="btn small-btn ${known(t.id) ? 'primary' : 'secondary'}" data-know="1">${icon('check', 18)}Kan denne</button><button type="button" class="btn small-btn secondary" data-know="0">Øv mer</button></div>
         </details>`).join('')}</section>`;
@@ -418,7 +423,7 @@ export function renderSafetyDrill(root, ctx) {
     <span class="th-bar q-prog"><span style="width:${(D.i + (D.shown ? 1 : 0)) / D.items.length * 100}%"></span></span>
     <section class="card q-card">
       <p class="eyebrow">${icon(area.icon, 14)} ${esc(area.title)} · sensor sier</p>
-      <div class="q-head"><h2 class="q-text">«${esc(t.task)}»</h2>${speakBtn('d-read')}</div>
+      ${t.img ? `<div class="q-fig s-lamp">${figure(t.img)}</div>` : ''}<div class="q-head"><h2 class="q-text">«${esc(t.task)}»</h2>${speakBtn('d-read')}</div>
       <p class="muted small">Gjør det ved bilen eller si høyt hvordan du gjør det. Forklar også hva en feil kan føre til.</p>
     </section>
     ${D.shown ? `<section class="card q-why">

@@ -20,6 +20,9 @@ const hm = sec => { const m = Math.round(sec / 60); return m >= 60 ? `${Math.flo
 const list = a => (a.length > 1 ? `${a.slice(0, -1).join(', ')} og ${a[a.length - 1]}` : a[0] || '');
 const nf = n => Math.round(n).toLocaleString('nb-NO').replace(/ /g, ' ');
 
+/* Øveprøver med minst 40 riktige (0.16.0); eldre kall uten solid bruker bestått */
+const solidOf = t => (typeof t.solid === 'number' ? t.solid : t.passed);
+
 export function readiness(rows, { plan = {}, theory = null } = {}) {
   const items = [];
   const sum = f => rows.reduce((s, x) => s + (f(x) || 0), 0);
@@ -99,8 +102,8 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
   if (theory) {
     const passedReal = !!(plan.teori && plan.teori.done);
     items.push({ id: 'theory', group: 'Teori og oppkjøring', label: 'Teoriprøven', ok: passedReal || theory.level === 'klar',
-      have: passedReal ? 'bestått (krysset av i Opplæring)' : theory.taken >= 5 ? `bestått ${theory.passed} av de siste 5 øveprøvene` : theory.taken ? `bestått ${theory.passed} av ${theory.taken} ${theory.taken === 1 ? 'øveprøve' : 'øveprøver'}` : 'ingen øveprøver ennå',
-      need: '3 av 5 øveprøver bestått', progress: passedReal ? 1 : Math.min(1, theory.passed / 3), tip: 'Øv på temaene i Teori og ta øveprøver til du består flere på rad.' });
+      have: passedReal ? 'bestått (krysset av i Opplæring)' : theory.taken >= 5 ? `minst 40 riktige på ${solidOf(theory)} av de siste 5 øveprøvene` : theory.taken ? `minst 40 riktige på ${solidOf(theory)} av ${theory.taken} ${theory.taken === 1 ? 'øveprøve' : 'øveprøver'}` : 'ingen øveprøver ennå',
+      need: '40 riktige på 3 av 5 øveprøver', progress: passedReal ? 1 : Math.min(1, solidOf(theory) / 3), tip: 'Øv på temaene i Teori og ta øveprøver til du får minst 40 riktige flere ganger. Prøven i appen er litt vanskeligere enn den ekte.' });
     const share = theory.safetyTotal ? theory.safetyKnown / theory.safetyTotal : 0;
     items.push({ id: 'safety', group: 'Teori og oppkjøring', label: 'Sikkerhetskontrollen', ok: share >= 0.9,
       have: `${theory.safetyKnown} av ${theory.safetyTotal} oppgaver`, need: 'nesten alle', progress: Math.min(1, share / 0.9),

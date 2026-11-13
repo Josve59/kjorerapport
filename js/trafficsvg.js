@@ -9,7 +9,7 @@ const RED = '#c8102e', BLUE = '#0b5aa6', YEL = '#f5c400', BLK = '#141414', WH = 
 const svg = (body, label, vb = '0 0 100 100', cls = '') =>
   `<svg class="tsvg ${cls}" viewBox="${vb}" role="img" aria-label="${label}" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
 
-const tri = sym => `<polygon points="50,10 92,84 8,84" fill="${WH}" stroke="${RED}" stroke-width="8" stroke-linejoin="round"/>${sym}`;
+const tri = (sym, fill = WH) => `<polygon points="50,10 92,84 8,84" fill="${fill}" stroke="${RED}" stroke-width="8" stroke-linejoin="round"/>${sym}`;
 const ring = (inner = WH, w = 10) => `<circle cx="50" cy="50" r="${46 - w / 2}" fill="${inner}" stroke="${RED}" stroke-width="${w}"/>`;
 const blueDisc = `<circle cx="50" cy="50" r="46" fill="${BLUE}" stroke="${WH}" stroke-width="2"/>`;
 const blueSquare = `<rect x="6" y="6" width="88" height="88" rx="8" fill="${BLUE}" stroke="${WH}" stroke-width="3"/>`;
@@ -30,13 +30,17 @@ function roundArrows(cx, cy, r, color, w) {
   }
   return arcs.join('');
 }
+/* Sonetavle: hvit med «Sone» øverst; ended: grått med sorte skråstriper (slutt på sonen) */
+const zone = (inner, ended = false) => `<rect x="12" y="4" width="76" height="92" rx="6" fill="${WH}" stroke="${BLK}" stroke-width="2"/><text x="50" y="23" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="16" fill="${ended ? '#9a9a9a' : BLK}">Sone</text>${inner}${ended ? `<g stroke="${BLK}" stroke-width="2.5"><line x1="84" y1="14" x2="22" y2="92"/><line x1="76" y1="8" x2="16" y2="84"/><line x1="86" y1="26" x2="30" y2="94"/></g>` : ''}`;
+/* Sykkel sett fra siden, midt i (x, y), skalert */
+const bicycle = (x, y, k = 1, col = BLK) => `<g transform="translate(${x} ${y}) scale(${k}) translate(-50 -66)" fill="none" stroke="${col}" stroke-width="${(3 / k).toFixed(1)}" stroke-linejoin="round" stroke-linecap="round"><circle cx="36" cy="70" r="8.5"/><circle cx="64" cy="70" r="8.5"/><path d="M36 70 L50 70 L45 56 Z M45 56 H61 L50 70 M61 56 L64 70 M45 56 L43 51 M39 51 H47 M61 56 L59 50 H64"/></g>`;
 const slash = () => `<line x1="24" y1="24" x2="76" y2="76" stroke="${RED}" stroke-width="8"/>`;
 /* «Slutt på»-skilt: sorte skråstriper over et grått symbol (klippes til skiltet) */
 const ended = id => `<clipPath id="${id}"><circle cx="50" cy="50" r="40"/></clipPath><g clip-path="url(#${id})" stroke="${BLK}" stroke-width="2.5"><line x1="78" y1="30" x2="32" y2="76"/><line x1="70" y1="22" x2="24" y2="68"/><line x1="84" y1="38" x2="40" y2="82"/></g>`;
-/* Barn som løper, h høy fra top */
-const runner = (x, top, h) => {
+/* Person som går eller løper, h høy fra top */
+const runner = (x, top, h, col = BLK) => {
   const P = (dx, dy) => `${(x + dx * h).toFixed(1)} ${(top + dy * h).toFixed(1)}`;
-  return `<circle cx="${(x + 0.02 * h).toFixed(1)}" cy="${(top + 0.1 * h).toFixed(1)}" r="${(0.1 * h).toFixed(1)}" fill="${BLK}"/><g stroke="${BLK}" stroke-width="${(0.11 * h).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M${P(0.02, 0.26)} L${P(-0.04, 0.58)} L${P(-0.22, 0.98)}"/><path d="M${P(-0.04, 0.58)} L${P(0.14, 0.78)} L${P(0.08, 0.98)}"/><path d="M${P(-0.18, 0.5)} L${P(0.01, 0.32)} L${P(0.2, 0.44)}"/></g>`;
+  return `<circle cx="${(x + 0.02 * h).toFixed(1)}" cy="${(top + 0.1 * h).toFixed(1)}" r="${(0.1 * h).toFixed(1)}" fill="${col}"/><g stroke="${col}" stroke-width="${(0.11 * h).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M${P(0.02, 0.26)} L${P(-0.04, 0.58)} L${P(-0.22, 0.98)}"/><path d="M${P(-0.04, 0.58)} L${P(0.14, 0.78)} L${P(0.08, 0.98)}"/><path d="M${P(-0.18, 0.5)} L${P(0.01, 0.32)} L${P(0.2, 0.44)}"/></g>`;
 };
 
 const SIGNS = {
@@ -73,37 +77,43 @@ const SIGNS = {
   156: () => tri(`<rect x="45.5" y="34" width="9" height="28" rx="2" fill="${BLK}"/><circle cx="50" cy="71" r="5" fill="${BLK}"/>`),
   // Skiltprøven (0.15.0). Symbolene holdes innenfor den hvite flaten i trekanten, som er smal øverst.
   102: () => tri(`<path d="M44 79 V70 C44 60 56 62 56 52 V48" fill="none" stroke="${BLK}" stroke-width="6"/><polygon points="49,49 63,49 56,37" fill="${BLK}"/>`),
-  104: () => tri(`<polygon points="27,79 74,79 27,64" fill="${BLK}"/>${`<text x="58" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" fill="${BLK}">10%</text>`}`),
+  104: () => tri(`<polygon points="27,62 74,79 27,79" fill="${BLK}"/><g transform="translate(45 68.5) rotate(19.9)"><path d="M-11 -2 H11 V-6 H7 L4 -11 H-5 L-8.5 -6 H-11 Z" fill="${BLK}"/><circle cx="-6" cy="-1.5" r="2.6" fill="${BLK}" stroke="${WH}" stroke-width="1"/><circle cx="6" cy="-1.5" r="2.6" fill="${BLK}" stroke="${WH}" stroke-width="1"/></g>`),
   106: () => tri(`<path d="M36 80 V68 L43 58 V40 M64 80 V68 L57 58 V40" fill="none" stroke="${BLK}" stroke-width="5"/>`),
   108: () => tri(`<path d="M22 79 V73 H28 Q35 57 42 73 H58 Q65 57 72 73 H78 V79 Z" fill="${BLK}"/>`),
-  110: () => tri(`<polygon points="60,79 82,79 73,69" fill="${BLK}"/><circle cx="46" cy="41" r="4.5" fill="${BLK}"/><g stroke="${BLK}" stroke-width="4.5" stroke-linecap="round" fill="none"><path d="M47 47 L50 62 L43 78"/><path d="M50 62 L57 78"/><path d="M48 52 L60 58"/></g><path d="M54 47 L67 66" stroke="${BLK}" stroke-width="3" stroke-linecap="round"/><polygon points="63,65 71,62 74,70 66,73" fill="${BLK}"/>`),
-  114: () => tri(`<polygon points="30,79 30,64 38,46 46,41 46,79" fill="${BLK}"/><circle cx="55" cy="52" r="3.5" fill="${BLK}"/><circle cx="60" cy="63" r="4.5" fill="${BLK}"/><circle cx="68" cy="74" r="4" fill="${BLK}"/>`),
+  110: () => tri(`<polygon points="60,79 82,79 73,69" fill="${BLK}"/><circle cx="46" cy="41" r="4.5" fill="${BLK}"/><g stroke="${BLK}" stroke-width="4.5" stroke-linecap="round" fill="none"><path d="M47 47 L50 62 L43 78"/><path d="M50 62 L57 78"/><path d="M48 52 L60 58"/></g><path d="M54 47 L67 66" stroke="${BLK}" stroke-width="3" stroke-linecap="round"/><polygon points="63,65 71,62 74,70 66,73" fill="${BLK}"/>`, YEL),
+  114: () => tri(`<polygon points="70,79 70,64 62,46 54,41 54,79" fill="${BLK}"/><circle cx="45" cy="52" r="3.5" fill="${BLK}"/><circle cx="40" cy="63" r="4.5" fill="${BLK}"/><circle cx="32" cy="74" r="4" fill="${BLK}"/>`),
   116: () => tri(`<g transform="rotate(-12 50 47) translate(50 47) scale(.62) translate(-50 -48)">${carRear(50, BLK)}</g><path d="M44 79 C37 72 50 68 44 59 M56 79 C49 72 62 68 56 59" fill="none" stroke="${BLK}" stroke-width="3"/>`),
   122: () => tri(`<path d="M32 79 V64 A18 20 0 0 1 68 64 V79 H60 V66 A10 11 0 0 0 40 66 V79 Z" fill="${BLK}"/>`),
   124: () => tri(`<rect x="45" y="36" width="10" height="43" fill="${BLK}"/><rect x="30" y="58" width="40" height="10" fill="${BLK}"/>`),
   134: () => tri(`<g fill="${BLK}"><rect x="31" y="58" width="38" height="5"/><rect x="31" y="68" width="38" height="5"/><rect x="34" y="52" width="5" height="27"/><rect x="47.5" y="52" width="5" height="27"/><rect x="61" y="52" width="5" height="27"/></g>`),
   140: () => tri(`<g fill="${BLK}"><rect x="31" y="74" width="7" height="4"/><rect x="41" y="74" width="7" height="4"/><rect x="51" y="74" width="7" height="4"/><rect x="61" y="74" width="7" height="4"/><circle cx="50" cy="42" r="4"/></g><g stroke="${BLK}" stroke-width="4" stroke-linecap="round" fill="none"><path d="M49 47 L47 59 L53 71"/><path d="M47 59 L41 70"/><path d="M49 50 L56 56"/><path d="M49 50 L42 55"/></g>`),
   142: () => tri(`${runner(43, 40, 38)}${runner(60, 52, 27)}`),
-  144: () => tri(`<g fill="none" stroke="${BLK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><circle cx="36" cy="70" r="8.5"/><circle cx="64" cy="70" r="8.5"/><path d="M36 70 L50 70 L45 56 Z M45 56 H61 L50 70 M61 56 L64 70 M45 56 L43 51 M39 51 H47 M61 56 L59 50 H64"/></g>`),
+  144: () => tri(`<g fill="none" stroke="${BLK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><circle cx="36" cy="70" r="8.5"/><circle cx="64" cy="70" r="8.5"/><path d="M36 70 L50 70 L45 56 Z M45 56 H61 L50 70 M61 56 L64 70 M45 56 L43 51 M39 51 H47 M61 56 L59 50 H64"/></g><circle cx="49" cy="35.5" r="4" fill="${BLK}"/><path d="M48 40 L45 51 M48 42 L58 49 M45 51 L51 60 L50 66" fill="none" stroke="${BLK}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>`),
   146: () => tri(`<g transform="translate(52 66) scale(.82) translate(-52 -66)" fill="${BLK}"><ellipse cx="56" cy="60" rx="13" ry="7"/><ellipse cx="48" cy="55" rx="6" ry="5"/><rect x="45" y="63" width="3" height="16"/><rect x="50" y="63" width="3" height="15"/><rect x="60" y="63" width="3" height="16"/><rect x="65" y="62" width="3" height="16"/><polygon points="44,53 38,47 35,50 42,60"/><polygon points="39,46 31,50 29,55 33,56 38,52"/><path d="M38 47 L35 41 M36.5 44 L32 42 M38 47 L42 41 M40 44 L45 43" stroke="${BLK}" stroke-width="2.5" stroke-linecap="round"/></g>`),
   148: () => tri(`<path d="M42 40 V64" stroke="${BLK}" stroke-width="5"/><polygon points="35,62 49,62 42,76" fill="${BLK}"/><path d="M58 78 V52" stroke="${BLK}" stroke-width="5"/><polygon points="51,53 65,53 58,39" fill="${BLK}"/>`),
   152: () => tri(`<rect x="34" y="48" width="3.5" height="31" fill="${BLK}"/><g fill="${BLK}"><polygon points="38,50 46,51.7 46,61.4 38,62"/><polygon points="50,52.6 57,54.1 57,60.7 50,61.1"/><polygon points="60,54.7 66,56 66,60 60,60.4"/></g>`),
   330: () => `${ring()}<path d="M58 74 V52 Q58 43 48 43 H42" fill="none" stroke="${BLK}" stroke-width="7"/><polygon points="43,34 43,52 30,43" fill="${BLK}"/>${slash()}`,
   332: () => `${ring()}<path d="M60 74 V48 A10 10 0 0 0 40 48 V56" fill="none" stroke="${BLK}" stroke-width="7"/><polygon points="33,55 47,55 40,68" fill="${BLK}"/>${slash()}`,
   336: () => `<circle cx="50" cy="50" r="45" fill="${WH}" stroke="${BLK}" stroke-width="2"/><g transform="translate(0 -1)">${carRear(35, '#9a9a9a')}${carRear(65, '#9a9a9a')}</g>${ended('c336')}`,
-  366: (n = 30) => `<rect x="12" y="4" width="76" height="92" rx="6" fill="${WH}" stroke="${BLK}" stroke-width="2"/><circle cx="50" cy="40" r="26" fill="${WH}" stroke="${RED}" stroke-width="7"/><text x="50" y="41" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="26" fill="${BLK}">${n}</text><text x="50" y="82" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="16" fill="${BLK}">SONE</text>`,
-  368: (n = 30) => `<rect x="12" y="4" width="76" height="92" rx="6" fill="${WH}" stroke="${BLK}" stroke-width="2"/><circle cx="50" cy="40" r="26" fill="${WH}" stroke="#9a9a9a" stroke-width="5"/><text x="50" y="41" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="26" fill="#9a9a9a">${n}</text><text x="50" y="82" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="16" fill="#9a9a9a">SONE</text><line x1="80" y1="12" x2="20" y2="88" stroke="${BLK}" stroke-width="3"/>`,
+  366: (n = 30) => zone(`<circle cx="50" cy="61" r="25" fill="${WH}" stroke="${RED}" stroke-width="7"/><text x="50" y="62" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="24" fill="${BLK}">${n}</text>`),
+  368: (n = 30) => zone(`<circle cx="50" cy="61" r="25" fill="${WH}" stroke="#9a9a9a" stroke-width="5"/><text x="50" y="62" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="24" fill="#9a9a9a">${n}</text>`, true),
   406: () => `${blueDisc}${roundArrows(50, 50, 22, WH, 7)}`,
   524: () => `${blueSquare}${num('M', WH, 60)}`,
-  556: () => `${blueSquare}<rect x="20" y="40" width="50" height="28" rx="4" fill="${WH}"/><rect x="27" y="34" width="13" height="8" rx="2" fill="${WH}"/><polygon points="70,46 82,40 82,68 70,62" fill="${WH}"/><circle cx="45" cy="54" r="9" fill="${BLUE}"/><circle cx="45" cy="54" r="4.5" fill="${WH}"/>`
+  556: () => `${blueSquare}<rect x="40" y="16" width="14" height="8" rx="2" fill="${WH}"/><rect x="27" y="22" width="46" height="28" rx="5" fill="${WH}"/><circle cx="50" cy="36" r="10" fill="${BLUE}"/><circle cx="50" cy="36" r="5" fill="${WH}"/><g fill="none" stroke="${WH}" stroke-width="5" stroke-linecap="round"><path d="M34 60 Q50 69 66 60"/><path d="M26 70 Q50 83 74 70"/><path d="M18 80 Q50 97 82 80"/></g>`,
+  // Nye i 0.16.0, tegnet etter de ekte skiltene
+  212: () => `<circle cx="50" cy="50" r="41" fill="${WH}" stroke="${RED}" stroke-width="9"/><rect x="35" y="25" width="7" height="34" fill="${BLK}"/><polygon points="28,57 49,57 38.5,76" fill="${BLK}"/><rect x="58" y="41" width="7" height="34" fill="${RED}"/><polygon points="51,43 72,43 61.5,24" fill="${RED}"/>`,
+  214: () => `${blueSquare}<rect x="31" y="20" width="7" height="38" fill="${RED}"/><polygon points="24,56 45,56 34.5,78" fill="${RED}"/><rect x="59" y="38" width="9" height="46" fill="${WH}"/><polygon points="50,40 77,40 63.5,16" fill="${WH}"/>`,
+  518: () => `${blueSquare}${runner(42, 18, 66, WH)}${runner(64, 46, 40, WH)}`,
+  520: () => `${blueSquare}${bicycle(50, 58, 1.5, WH)}`,
+  522: () => `${blueSquare}${runner(43, 12, 38, WH)}${runner(59, 26, 25, WH)}${bicycle(50, 74, 1.05, WH)}`,
+  540: () => zone(`<rect x="22" y="31" width="56" height="58" rx="4" fill="${BLUE}"/><polygon points="58,46 67,38 76,46 76,56 58,56" fill="${WH}"/>${runner(36, 42, 40, WH)}${runner(55, 60, 25, WH)}<circle cx="70" cy="82" r="4" fill="${WH}"/>`),
+  548: () => zone(`<rect x="22" y="31" width="56" height="58" rx="4" fill="${BLUE}"/><text x="50" y="43" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="10" fill="${WH}">Gågate</text>${runner(43, 48, 38, WH)}${runner(59, 61, 25, WH)}`),
 };
 
 /* ---------- Oppmerking: veien sett ovenfra, kjøreretning oppover ---------- */
-/* Bil sett ovenfra, med frontruta foran. Bokstaven står alltid rett, litt bak frontruta. */
-const car = (x, y, fill, label = '', rot = 0) => {
-  const r = rot * Math.PI / 180, lx = (-Math.sin(r) * 4).toFixed(1), ly = (Math.cos(r) * 4).toFixed(1);
-  return `<g transform="translate(${x} ${y})"><g transform="rotate(${rot})"><rect x="-8" y="-13" width="16" height="26" rx="4" fill="${fill}" stroke="#0d1013" stroke-width="1.2"/><rect x="-6" y="-9" width="12" height="5" rx="1.5" fill="#cfe3f5" opacity=".9"/></g>${label ? `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="9" fill="#fff">${label}</text>` : ''}</g>`;
-};
+/* Bil sett ovenfra (0.16.0): skygge, frontrute (foran = opp før rotering), tak, bakrute, speil og lys.
+   Bokstaven står i et hvitt merke midt på bilen og står alltid rett. */
+const car = (x, y, fill, label = '', rot = 0) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="-8.5" y="-14.5" width="17" height="29" rx="5.5" fill="#000" opacity=".2" transform="translate(1.2 1.6)"/><rect x="-10.4" y="-6.5" width="2.4" height="3.2" rx="1" fill="${fill}"/><rect x="8" y="-6.5" width="2.4" height="3.2" rx="1" fill="${fill}"/><rect x="-8.5" y="-14.5" width="17" height="29" rx="5.5" fill="${fill}" stroke="rgba(0,0,0,.45)" stroke-width="1"/><path d="M-6.6 -7.5 Q0 -10.5 6.6 -7.5 L5.6 -2.8 H-5.6 Z" fill="#dbe9f5"/><rect x="-5.6" y="-2.8" width="11.2" height="9.6" rx="1.5" fill="rgba(0,0,0,.16)"/><path d="M-5.6 7.6 H5.6 L6.2 10.6 Q0 12.2 -6.2 10.6 Z" fill="#c9dbe9"/><rect x="-6.6" y="-14.3" width="3.6" height="1.7" rx=".8" fill="#fff4bf"/><rect x="3" y="-14.3" width="3.6" height="1.7" rx=".8" fill="#fff4bf"/></g>${label ? `<g transform="translate(${x} ${y})"><circle r="6.2" fill="#fff" stroke="${fill}" stroke-width="1.6"/><text y=".4" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="8.5" fill="#14181b">${label}</text></g>` : ''}`;
 const road = (body, label) => svg(`<rect width="120" height="160" rx="10" fill="#c9d3c4"/><rect x="20" y="0" width="80" height="160" fill="#5a6066"/><g stroke="#f4f4f4" stroke-width="2"><line x1="24" y1="0" x2="24" y2="160"/><line x1="96" y1="0" x2="96" y2="160"/></g>${body}`, label, '0 0 120 160', 'tsvg-scene');
 const LINES = {
   sperre: () => road(`<line x1="60" y1="0" x2="60" y2="160" stroke="${YEL}" stroke-width="3.5"/>${car(78, 128, '#2e7dd1')}`, 'Vei med gul linje i midten'),
@@ -129,62 +139,143 @@ const light = k => {
 };
 
 /* ---------- Kryss sett ovenfra (200 × 200). Trafikken kjører på høyre side. ---------- */
-const GRASS = '#c9d3c4', ASP = '#5a6066', LINE = '#f2d24a';
-const arrow = (d, color = '#111') => `<path d="${d}" fill="none" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ah)"/>`;
-const defs = `<defs><marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#111"/></marker></defs>`;
-const vRoad = `<rect x="80" y="0" width="40" height="200" fill="${ASP}"/>`, hRoad = `<rect x="0" y="80" width="200" height="40" fill="${ASP}"/>`;
-const vLine = (y0, y1) => `<line x1="100" y1="${y0}" x2="100" y2="${y1}" stroke="${LINE}" stroke-width="2" stroke-dasharray="8 8"/>`;
-const hLine = (x0, x1) => `<line x1="${x0}" y1="100" x2="${x1}" y2="100" stroke="${LINE}" stroke-width="2" stroke-dasharray="8 8"/>`;
-/* Fotgjenger: hode, kropp, armer og bein, så den ikke forveksles med en pil */
-const person = (x, y) => `<g stroke="#111" stroke-width="2.6" stroke-linecap="round" fill="none"><circle cx="${x}" cy="${y - 12}" r="3.8" fill="#111" stroke="none"/><path d="M${x} ${y - 7} V${y + 2} M${x} ${y + 2} L${x - 4} ${y + 10} M${x} ${y + 2} L${x + 4} ${y + 10} M${x - 5} ${y - 3} L${x + 5} ${y - 3}"/></g>`;
-const bike = (x, y) => `<g transform="translate(${x} ${y})"><rect x="-2" y="-10" width="4" height="20" rx="2" fill="#111"/><circle cx="0" cy="-2" r="4" fill="#e3a21a"/></g>`;
-const scene = (body, label) => svg(`${defs}<rect width="200" height="200" rx="12" fill="${GRASS}"/>${body}`, label, '0 0 200 200', 'tsvg-scene');
+/* 0.16.0: fortau og avrundede hjørner, biler med vinduer, lys og speil, og piler i bilens farge med hvit kant */
+const GRASS = '#c9d3c4', ASP = '#5a6066', LINE = '#f2d24a', SIDE = '#dcdfd8';
+const CAR_COLORS = { '#2e7dd1': '#1d5fa6', '#d9472b': '#a8321b', '#2f9e5b': '#1e7442', '#111': '#111' };
+const MARK = { '#1d5fa6': 'ahb', '#a8321b': 'ahr', '#1e7442': 'ahg', '#111': 'ahk' };
+const arrow = (d, color = '#111') => {
+  const c = CAR_COLORS[color] || color, m = MARK[c] || 'ahk';
+  return `<path d="${d}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${m})"/>`;
+};
+const marker = (id, c) => `<marker id="${id}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="${c}"/></marker>`;
+const defs = `<defs>${Object.entries(MARK).map(([c, id]) => marker(id, c)).join('')}<clipPath id="scl"><rect width="200" height="200" rx="12"/></clipPath></defs>`;
+const vLine = (y0, y1, x = 100) => `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="${LINE}" stroke-width="2" stroke-dasharray="8 8"/>`;
+const hLine = (x0, x1, y = 100) => `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${LINE}" stroke-width="2" stroke-dasharray="8 8"/>`;
+const grass = (x, y, w, h, rx = 14) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${GRASS}"/>`;
+/* Veiene i et kryss: arms er de armene som finnes (n, e, s, w). Fortau (6 px) langs veien og runde hjørner. */
+function roads(arms = 'nesw', { shoulderS = false } = {}) {
+  const has = c => arms.includes(c);
+  let s = `<rect width="200" height="200" fill="${SIDE}"/>`;
+  if (has('n')) s += `<rect x="80" y="0" width="40" height="100" fill="${ASP}"/>`;
+  if (has('s')) s += `<rect x="80" y="100" width="${shoulderS ? 48 : 40}" height="100" fill="${ASP}"/>`;
+  if (has('w')) s += `<rect x="0" y="80" width="100" height="40" fill="${ASP}"/>`;
+  if (has('e')) s += `<rect x="100" y="80" width="100" height="40" fill="${ASP}"/>`;
+  s += `<rect x="80" y="80" width="40" height="40" fill="${ASP}"/>`;
+  const se = shoulderS ? 134 : 126;
+  s += grass(-30, -30, 104, 104) + grass(126, -30, 104, 104) + grass(-30, 126, 104, 104) + grass(se, 126, 230 - se, 104);
+  if (!has('n')) s += grass(-30, -30, 260, 104);
+  if (!has('s')) s += grass(-30, 126, 260, 104);
+  if (!has('w')) s += grass(-30, -30, 104, 260);
+  if (!has('e')) s += grass(126, -30, 104, 260);
+  if (has('n')) s += vLine(0, 76);
+  if (has('s')) s += vLine(124, 200);
+  if (has('w')) s += hLine(0, 76);
+  if (has('e')) s += hLine(124, 200);
+  if (shoulderS) s += `<line x1="120.5" y1="126" x2="120.5" y2="200" stroke="#f4f4f4" stroke-width="1.5"/>`;
+  return s;
+}
+/* Vikelinje (haitenner) tvers over et felt; spissene peker mot den som kommer */
+const shark = (x0, x1, y, dir = 1) => { const out = []; for (let x = x0 + 1; x + 5 <= x1; x += 6.5) out.push(`<polygon points="${x},${y} ${x + 5},${y} ${x + 2.5},${y + dir * 6}" fill="#f4f4f4"/>`); return out.join(''); };
+const sharkV = (y0, y1, x, dir = 1) => { const out = []; for (let y = y0 + 1; y + 5 <= y1; y += 6.5) out.push(`<polygon points="${x},${y} ${x},${y + 5} ${x + dir * 6},${y + 2.5}" fill="#f4f4f4"/>`); return out.join(''); };
+/* Fotgjenger (sett fra siden, så den kjennes igjen) og syklist sett ovenfra */
+const person = (x, y) => `<g stroke="#14181b" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" fill="none"><circle cx="${x}" cy="${y - 12}" r="3.9" fill="#14181b" stroke="none"/><path d="M${x} ${y - 7} V${y + 2} M${x} ${y + 2} L${x - 4.5} ${y + 10} M${x} ${y + 2} L${x + 4} ${y + 10} M${x - 5} ${y - 4} L${x} ${y - 6} L${x + 5} ${y - 2}"/></g>`;
+const bike = (x, y, rot = 0) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="-1.4" y="-12" width="2.8" height="24" rx="1.4" fill="#2a2f33"/><line x1="-5" y1="-7" x2="5" y2="-7" stroke="#2a2f33" stroke-width="2" stroke-linecap="round"/><ellipse cx="0" cy="0" rx="5.6" ry="3.4" fill="#e3a21a"/><circle cx="0" cy="-1.5" r="3" fill="#1f2a33"/></g>`;
+const scene = (body, label) => svg(`${defs}<g clip-path="url(#scl)"><rect width="200" height="200" fill="${GRASS}"/>${body}</g>`, label, '0 0 200 200', 'tsvg-scene');
 const zebra = (x, y, w, h, vertical) => {
   const out = [];
   if (vertical) for (let yy = y; yy < y + h; yy += 8) out.push(`<rect x="${x}" y="${yy}" width="${w}" height="5" fill="#f4f4f4"/>`);
   else for (let xx = x; xx < x + w; xx += 8) out.push(`<rect x="${xx}" y="${y}" width="5" height="${h}" fill="#f4f4f4"/>`);
   return out.join('');
 };
-const smallSign202 = (x, y) => `<polygon points="${x - 7},${y - 6} ${x + 7},${y - 6} ${x},${y + 7}" fill="#fff" stroke="${RED}" stroke-width="2.4" stroke-linejoin="round"/>`;
+const smallSign202 = (x, y) => `<line x1="${x}" y1="${y + 6}" x2="${x}" y2="${y + 14}" stroke="#6b7177" stroke-width="1.6"/><polygon points="${x - 7},${y - 6} ${x + 7},${y - 6} ${x},${y + 7}" fill="#fff" stroke="${RED}" stroke-width="2.4" stroke-linejoin="round"/>`;
+const smallSign206 = (x, y) => `<line x1="${x}" y1="${y + 8}" x2="${x}" y2="${y + 15}" stroke="#6b7177" stroke-width="1.6"/><polygon points="${x},${y - 9} ${x + 9},${y} ${x},${y + 9} ${x - 9},${y}" fill="#fff" stroke="#14181b" stroke-width="1"/><polygon points="${x},${y - 6} ${x + 6},${y} ${x},${y + 6} ${x - 6},${y}" fill="${YEL}"/>`;
+const smallSpeed = (x, y, n) => `<g transform="translate(${x} ${y})"><line x1="0" y1="10" x2="0" y2="17" stroke="#6b7177" stroke-width="1.6"/><circle r="10" fill="#fff" stroke="${RED}" stroke-width="2.5"/><text y="1" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="10" fill="#111">${n}</text></g>`;
+const bus = (x, y, rot, blinkLeft = false) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="-9" y="-26" width="18" height="52" rx="4" fill="#000" opacity=".18" transform="translate(1.2 1.6)"/><rect x="-9" y="-26" width="18" height="52" rx="4" fill="#d9472b" stroke="rgba(0,0,0,.45)" stroke-width="1"/><rect x="-7" y="-24" width="14" height="5" rx="1.5" fill="#dbe9f5"/><rect x="-6" y="-14" width="12" height="34" rx="2" fill="rgba(0,0,0,.14)"/>${blinkLeft ? '<circle cx="-7.5" cy="-24.5" r="2.8" fill="#ffb300" class="tsvg-blink"/>' : ''}</g>`;
+/* Rundkjøring: ring, øy og fire armer (2 felt inn og ut). twoLanes: stiplet linje mellom indre og ytre felt. */
+function roundabout(twoLanes = false) {
+  const R = twoLanes ? 64 : 58, isl = twoLanes ? 30 : 26;
+  let s = `<rect width="200" height="200" fill="${SIDE}"/>${grass(-30, -30, 106, 106, 30)}${grass(124, -30, 106, 106, 30)}${grass(-30, 124, 106, 106, 30)}${grass(124, 124, 106, 106, 30)}`;
+  s += `<circle cx="100" cy="100" r="${R + 6}" fill="${SIDE}"/><circle cx="100" cy="100" r="${R}" fill="${ASP}"/>`;
+  s += `<rect x="82" y="150" width="36" height="50" fill="${ASP}"/><rect x="0" y="82" width="50" height="36" fill="${ASP}"/><rect x="150" y="82" width="50" height="36" fill="${ASP}"/><rect x="82" y="0" width="36" height="50" fill="${ASP}"/>`;
+  s += vLine(0, 40) + vLine(160, 200) + hLine(0, 40) + hLine(160, 200);
+  if (twoLanes) s += `<circle cx="100" cy="100" r="47" fill="none" stroke="#f4f4f4" stroke-width="1.6" stroke-dasharray="7 7"/>`;
+  return s + `<circle cx="100" cy="100" r="${isl + 3}" fill="${SIDE}"/><circle cx="100" cy="100" r="${isl}" fill="${GRASS}"/>`;
+}
 
 const SCENES = {
-  hoyre: () => scene(`${vRoad}${hRoad}${vLine(0, 80)}${vLine(120, 200)}${hLine(0, 80)}${hLine(120, 200)}
-    ${car(110, 158, '#2e7dd1', 'A')}${arrow('M110 140 V60')}
-    ${car(158, 90, '#d9472b', 'B', -90)}${arrow('M140 90 H60')}`,
+  hoyre: () => scene(`${roads('nesw')}
+    ${car(110, 160, '#2e7dd1', 'A')}${arrow('M110 143 V66', '#2e7dd1')}
+    ${car(160, 90, '#d9472b', 'B', -90)}${arrow('M143 90 H66', '#d9472b')}`,
     'Kryss uten skilt eller lys. Bil A kommer nedenfra og skal rett fram. Bil B kommer fra høyre side av bildet og skal rett fram.'),
-  venstresving: () => scene(`${vRoad}${hRoad}${vLine(0, 80)}${vLine(120, 200)}${hLine(0, 80)}${hLine(120, 200)}
-    ${car(110, 158, '#2e7dd1', 'A')}${arrow('M110 140 V108 Q110 90 92 90 H52')}
-    ${car(90, 40, '#d9472b', 'B', 180)}${arrow('M90 58 V150')}`,
+  venstresving: () => scene(`${roads('nesw')}
+    ${car(110, 160, '#2e7dd1', 'A')}${arrow('M110 143 V108 Q110 90 92 90 H40', '#2e7dd1')}
+    ${car(90, 40, '#d9472b', 'B', 180)}${arrow('M90 57 V150', '#d9472b')}`,
     'Kryss. Bil A kommer nedenfra og skal svinge til venstre. Bil B kommer ovenfra mot A og skal rett fram.'),
-  't-kryss': () => scene(`${hRoad}<rect x="80" y="100" width="40" height="100" fill="${ASP}"/>${hLine(0, 200)}${vLine(120, 200)}
-    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M58 110 H150')}
-    ${car(110, 170, '#d9472b', 'B')}${arrow('M110 152 V126')}`,
+  't-kryss': () => scene(`${roads('esw')}
+    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M57 110 H150', '#2e7dd1')}
+    ${car(110, 170, '#d9472b', 'B')}${arrow('M110 153 V128', '#d9472b')}`,
     'T-kryss uten skilt. Bil A kjører fra venstre mot høyre på den gjennomgående veien. Bil B kommer nedenfra fra sideveien.'),
-  parkering: () => scene(`${hRoad}${hLine(0, 200)}<rect x="96" y="120" width="70" height="66" fill="#8a9097"/><text x="131" y="170" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="22" fill="#fff">P</text>
-    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M58 110 H94')}
-    ${car(112, 146, '#d9472b', 'B')}${arrow('M112 128 V112 Q112 108 120 108 H150')}`,
+  parkering: () => scene(`${roads('ew')}<rect x="96" y="134" width="74" height="56" rx="6" fill="#8a9097"/><rect x="104" y="118" width="16" height="18" fill="${ASP}"/><g stroke="#f4f4f4" stroke-width="1.4"><line x1="132" y1="140" x2="132" y2="160"/><line x1="148" y1="140" x2="148" y2="160"/></g><text x="156" y="182" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="18" fill="#fff">P</text>
+    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M57 110 H92', '#2e7dd1')}
+    ${car(112, 154, '#d9472b', 'B')}${arrow('M112 137 V118 Q112 110 122 110 H162', '#d9472b')}`,
     'Vei med en parkeringsplass nedenfor. Bil A kjører på veien fra venstre mot høyre. Bil B kjører ut fra parkeringsplassen.'),
-  buss: () => scene(`${hRoad}${hLine(0, 200)}<path d="M110 120 L120 132 H178 L188 120 Z" fill="${ASP}"/>
-    <g transform="translate(150 122) rotate(90)"><rect x="-8" y="-24" width="16" height="48" rx="3" fill="#d9472b" stroke="#0d1013" stroke-width="1.2"/><circle cx="-7" cy="-22" r="2.6" fill="#ffb300"/></g>
-    ${arrow('M126 118 Q128 110 150 110 H186')}
-    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M58 110 H96')}
-    <g transform="translate(30 140)"><circle r="10" fill="#fff" stroke="${RED}" stroke-width="2.5"/><text y="1" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="10" fill="#111">50</text></g>`,
+  buss: () => scene(`${roads('ew')}<path d="M112 120 L122 132 H176 L186 120 Z" fill="${ASP}"/>
+    ${bus(150, 122, 90, true)}${arrow('M128 116 Q132 110 150 110 H186', '#d9472b')}
+    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M57 110 H96', '#2e7dd1')}
+    ${smallSpeed(30, 146, 50)}`,
     'Vei med fartsgrense 50. En buss står ved holdeplassen foran bil A, blinker til venstre og skal kjøre ut.'),
-  gangfelt: () => scene(`${vRoad}${vLine(0, 60)}${vLine(90, 200)}${zebra(82, 64, 36, 22, false)}${person(125, 76)}
-    ${car(110, 158, '#2e7dd1', 'A')}${arrow('M110 140 V100')}`,
+  gangfelt: () => scene(`${roads('ns')}${zebra(83, 62, 36, 24, false)}${person(129, 78)}
+    ${car(110, 160, '#2e7dd1', 'A')}${arrow('M110 143 V98', '#2e7dd1')}`,
     'Gangfelt uten trafikklys. En fotgjenger står ved kanten og er på vei ut i gangfeltet. Bil A nærmer seg nedenfra.'),
-  'hoyresving-sykkel': () => scene(`${vRoad}${hRoad}${vLine(0, 80)}${vLine(120, 200)}${hLine(0, 80)}${hLine(120, 200)}
-    ${car(108, 158, '#2e7dd1', 'A')}${arrow('M108 140 V128 Q108 110 126 110 H170')}
-    ${bike(124, 150)}${arrow('M124 136 V60', '#111')}`,
+  'hoyresving-sykkel': () => scene(`${roads('nesw', { shoulderS: true })}
+    ${car(110, 172, '#2e7dd1', 'A')}${arrow('M110 155 V130 Q110 110 130 110 H178', '#2e7dd1')}
+    ${bike(124.5, 146)}${arrow('M124.5 130 V58', '#111')}`,
     'Kryss. Bil A kommer nedenfra og skal svinge til høyre. En syklist på vegskulderen til høyre for bilen skal rett fram.'),
-  rundkjoring: () => scene(`<circle cx="100" cy="100" r="58" fill="${ASP}"/><circle cx="100" cy="100" r="26" fill="${GRASS}"/><rect x="82" y="150" width="36" height="50" fill="${ASP}"/><rect x="0" y="82" width="50" height="36" fill="${ASP}"/><rect x="150" y="82" width="50" height="36" fill="${ASP}"/><rect x="82" y="0" width="36" height="50" fill="${ASP}"/>
-    ${smallSign202(132, 168)}
-    ${car(108, 176, '#2e7dd1', 'A')}${arrow('M108 160 V150')}
-    ${car(56, 122, '#d9472b', 'B', 140)}${arrow('M66 136 Q80 150 96 150')}`,
+  rundkjoring: () => scene(`${roundabout()}${shark(100, 118, 152, 1)}
+    ${smallSign202(134, 168)}
+    ${car(109, 178, '#2e7dd1', 'A')}${arrow('M109 161 V152', '#2e7dd1')}
+    ${car(56, 122, '#d9472b', 'B', 140)}${arrow('M67 135 Q80 150 96 150', '#d9472b')}`,
     'Rundkjøring med vikepliktskilt ved innkjøringen. Bil A skal kjøre inn nedenfra. Bil B er allerede i rundkjøringen og kommer fra venstre mot A.'),
-  'sving-gangfelt': () => scene(`${vRoad}${hRoad}${vLine(0, 80)}${vLine(120, 200)}${hLine(0, 80)}${hLine(120, 200)}${zebra(132, 82, 22, 36, true)}${person(142, 96)}
-    ${car(108, 158, '#2e7dd1', 'A')}${arrow('M108 140 V128 Q108 110 124 110 H180')}`,
-    'Kryss. Bil A kommer nedenfra og skal svinge til høyre. I veien A svinger inn i, er det et gangfelt der en fotgjenger går over.')
+  'sving-gangfelt': () => scene(`${roads('nesw')}${zebra(132, 82, 22, 36, true)}${person(143, 98)}
+    ${car(108, 160, '#2e7dd1', 'A')}${arrow('M108 143 V128 Q108 110 126 110 H182', '#2e7dd1')}`,
+    'Kryss. Bil A kommer nedenfra og skal svinge til høyre. I veien A svinger inn i, er det et gangfelt der en fotgjenger går over.'),
+  // Nye i 0.16.0, til vanskelige vikepliktspørsmål
+  'kryss-tre': () => scene(`${roads('nesw')}
+    ${car(110, 162, '#2e7dd1', 'A')}${arrow('M110 145 V62', '#2e7dd1')}
+    ${car(162, 90, '#d9472b', 'B', -90)}${arrow('M145 90 H62', '#d9472b')}
+    ${car(38, 110, '#2f9e5b', 'C', 90)}${arrow('M55 110 H138', '#2f9e5b')}`,
+    'Kryss uten skilt eller lys. Bil A kommer nedenfra, bil B fra høyre side av bildet og bil C fra venstre side. Alle skal rett fram.'),
+  'forkjorsvei-venstre': () => scene(`${roads('nesw')}${shark(100, 120, 124, 1)}${shark(80, 100, 76, -1)}
+    ${smallSign206(30, 140)}${smallSign202(134, 146)}
+    ${car(36, 110, '#2e7dd1', 'A', 90)}${arrow('M53 110 H88 Q110 110 110 88 V30', '#2e7dd1')}
+    ${car(164, 90, '#d9472b', 'B', -90)}${arrow('M147 90 H40', '#d9472b')}
+    ${car(110, 168, '#2f9e5b', 'C')}${arrow('M110 151 V132', '#2f9e5b')}`,
+    'Kryss der veien fra venstre til høyre er forkjørsvei. Bil A kjører på forkjørsveien fra venstre og skal svinge til venstre. Bil B kommer imot på forkjørsveien og skal rett fram. Bil C står ved vikepliktskiltet i sideveien nedenfra og skal rett fram.'),
+  'rundkjoring-to': () => scene(`${roundabout(true)}
+    ${car(111.5, 154.3, '#d9472b', 'B', 78)}${arrow('M122.6 150.7 A55.5 55.5 0 0 0 150.3 76.5', '#d9472b')}
+    ${car(131.5, 122.1, '#2e7dd1', 'A', 35)}${arrow('M140 110 Q156 106 184 109', '#2e7dd1')}`,
+    'Rundkjøring med to felt. Bil A ligger i det indre feltet og skal ut i neste avkjøring til høyre. Bil B ligger i det ytre feltet litt bak A og skal videre rundt.')
+};
+
+/* ---------- Varsellamper i instrumentpanelet (0.16.0), til sikkerhetskontrollen ---------- */
+/* Symbolene følger de vanlige internasjonale symbolene (ISO 2575), forenklet. Mørk bakgrunn som i bilen, lampen lyser. */
+const LAMP = { rod: '#ff453a', gul: '#ffb020', gronn: '#32d74b', bla: '#4a9dff' };
+const paren = c => `<path d="M25 30 A28 28 0 0 0 25 70 M75 30 A28 28 0 0 1 75 70" fill="none" stroke="${c}" stroke-width="5.5" stroke-linecap="round"/>`;
+const bang = (x, y, c, h = 20) => `<rect x="${x - 3}" y="${y}" width="6" height="${h * .62}" rx="2" fill="${c}"/><circle cx="${x}" cy="${y + h * .88}" r="3.4" fill="${c}"/>`;
+const headlamp = c => `<path d="M56 30 Q80 30 80 50 Q80 70 56 70 Z" fill="none" stroke="${c}" stroke-width="5.5" stroke-linejoin="round"/>`;
+const LAMPS = {
+  brems: ['rod', 'Varsellampe for bremser', c => `<circle cx="50" cy="50" r="19" fill="none" stroke="${c}" stroke-width="5.5"/>${paren(c)}${bang(50, 37, c, 26)}`],
+  abs: ['gul', 'Varsellampe for ABS', c => `<circle cx="50" cy="50" r="19" fill="none" stroke="${c}" stroke-width="5.5"/>${paren(c)}<text x="50" y="51" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="13" fill="${c}">ABS</text>`],
+  lading: ['rod', 'Varsellampe for lading', c => `<rect x="22" y="36" width="56" height="34" rx="4" fill="none" stroke="${c}" stroke-width="5.5"/><rect x="30" y="28" width="11" height="8" rx="1.5" fill="${c}"/><rect x="59" y="28" width="11" height="8" rx="1.5" fill="${c}"/><path d="M30 53 H41 M59 53 H70 M64.5 47.5 V58.5" stroke="${c}" stroke-width="5" stroke-linecap="round"/>`],
+  dekk: ['gul', 'Varsellampe for dekktrykk', c => `<path d="M29 30 C21 46 22 62 31 71 H69 C78 62 79 46 71 30" fill="none" stroke="${c}" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 78 V82 M42 78 V82 M50 78 V82 M58 78 V82 M66 78 V82" stroke="${c}" stroke-width="4" stroke-linecap="round"/>${bang(50, 34, c, 30)}`],
+  olje: ['rod', 'Varsellampe for oljetrykk', c => `<path d="M20 50 Q12 50 14 42 L22 44" fill="none" stroke="${c}" stroke-width="4.5" stroke-linecap="round"/><rect x="22" y="44" width="38" height="22" rx="3" fill="${c}"/><rect x="34" y="37" width="10" height="7" rx="1.5" fill="${c}"/><path d="M58 50 L80 38" stroke="${c}" stroke-width="6" stroke-linecap="round"/><path d="M82 50 Q78 58 82 62 Q86 58 82 50 Z" fill="${c}"/>`],
+  styring: ['gul', 'Varsellampe for styring', c => `<circle cx="44" cy="50" r="22" fill="none" stroke="${c}" stroke-width="5.5"/><circle cx="44" cy="50" r="6" fill="${c}"/><path d="M24 46 H38 M50 46 H64 M44 56 V71" stroke="${c}" stroke-width="5"/>${bang(79, 32, c, 34)}`],
+  naerlys: ['gronn', 'Kontrollampe for nærlys', c => `${headlamp(c)}<path d="M46 36 L22 44 M46 46 L22 54 M46 56 L22 64 M46 66 L22 74" stroke="${c}" stroke-width="5" stroke-linecap="round"/>`],
+  fjernlys: ['bla', 'Kontrollampe for fjernlys', c => `${headlamp(c)}<path d="M46 36 H20 M46 46 H20 M46 56 H20 M46 66 H20" stroke="${c}" stroke-width="5" stroke-linecap="round"/>`]
+};
+const lampSvg = k => {
+  const [col, label, draw] = LAMPS[k], c = LAMP[col];
+  return svg(`<rect width="100" height="100" rx="20" fill="#15191c"/><g opacity=".45" filter="url(#lgl)">${draw(c)}</g>${draw(c)}`.replace('<rect', '<defs><filter id="lgl" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter></defs><rect'), label, '0 0 100 100', 'tsvg-lamp');
 };
 
 export function figure(key) {
@@ -194,10 +285,11 @@ export function figure(key) {
   if (kind === 'line' && LINES[a]) return LINES[a]();
   if (kind === 'light' && LIGHTS[a]) return light(a);
   if (kind === 'scene' && SCENES[a]) return SCENES[a]();
+  if (kind === 'lamp' && LAMPS[a]) return lampSvg(a);
   return '';
 }
 
 export const FIGURE_KEYS = [
   ...Object.keys(SIGNS).map(k => 'sign:' + k), ...Object.keys(LINES).map(k => 'line:' + k),
-  ...Object.keys(LIGHTS).map(k => 'light:' + k), ...Object.keys(SCENES).map(k => 'scene:' + k)
+  ...Object.keys(LIGHTS).map(k => 'light:' + k), ...Object.keys(SCENES).map(k => 'scene:' + k), ...Object.keys(LAMPS).map(k => 'lamp:' + k)
 ];

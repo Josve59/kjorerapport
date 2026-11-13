@@ -356,3 +356,17 @@ p, li, dd { text-wrap: pretty; }
 .q-sum-sign .tsvg { width: 26px; height: 26px; display: block; }
 .q-sum-sign { flex: none; }
 dialog.sheet .q-head h2 { margin: 0; }
+
+/* Vanskelige spørsmål og prøver med og uten margin (0.16.0) */
+.q-hard { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--brake) 14%, transparent); color: var(--brake); font-size: .68rem; letter-spacing: .04em; vertical-align: 1px; }
+.th-dot.mid { background: var(--primary); color: var(--on-primary); }
+/* Knappene for neste og forrige ligger fast nederst, over fanelinjen (0.16.0) */
+.q-dock { position: sticky; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 20; margin: 6px -16px 0; padding: 10px 16px; background: color-mix(in srgb, var(--bg) 88%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.q-dock .btn { width: 100%; margin: 0; }
+.q-dock.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.q-deliver { margin-top: 14px; }
+.q-why { scroll-margin-bottom: calc(150px + env(safe-area-inset-bottom)); }
+/* Varsellamper i sikkerhetskontrollen (0.16.0) */
+.s-lamp { display: flex; justify-content: center; margin: 4px 0 10px; }
+.s-lamp .tsvg-lamp { width: 84px; height: 84px; }
+.tsvg-lamp { border-radius: 17px; box-shadow: 0 0 0 1px var(--line); }

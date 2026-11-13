@@ -32,7 +32,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.15.0';
+export const APP_VERSION = '0.16.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1107,7 +1107,7 @@ async function renderReady() {
 /* Teori og sikkerhetskontroll til «Hva må du øve mer på?» (0.14.0) */
 function theoryForReady() {
   const t = theorySummary(theoryProgress());
-  return { level: t.ready.level, passed: t.ready.passed, taken: t.ready.taken, safetyKnown: t.safety.known, safetyTotal: t.safety.total };
+  return { level: t.ready.level, passed: t.ready.passed, solid: t.ready.solid, taken: t.ready.taken, safetyKnown: t.safety.known, safetyTotal: t.safety.total };
 }
 
 function planState() {

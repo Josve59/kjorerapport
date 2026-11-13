@@ -56,9 +56,9 @@ test('uten kamera og uten veidata telles ikke speil og fart', () => {
 test('teori og sikkerhetskontroll i oversikten', () => {
   const rows = Array.from({ length: 5 }, () => row());
   assert.ok(!readiness(rows).items.some(i => i.id === 'theory'), 'uten teoritall: som før');
-  const r = readiness(rows, { theory: { level: 'nesten', passed: 2, taken: 4, safetyKnown: 10, safetyTotal: 40 } });
+  const r = readiness(rows, { theory: { level: 'nesten', passed: 2, solid: 1, taken: 4, safetyKnown: 10, safetyTotal: 40 } });
   const th = r.items.find(i => i.id === 'theory'), sk = r.items.find(i => i.id === 'safety');
-  assert.equal(th.ok, false); assert.match(th.have, /bestått 2 av 4 øveprøver$/);
+  assert.equal(th.ok, false); assert.match(th.have, /minst 40 riktige på 1 av 4 øveprøver$/);
   assert.equal(sk.ok, false); assert.equal(sk.have, '10 av 40 oppgaver');
   const r2 = readiness(rows, { plan: { teori: { done: true } }, theory: { level: 'start', passed: 0, taken: 0, safetyKnown: 39, safetyTotal: 40 } });
   assert.equal(r2.items.find(i => i.id === 'theory').ok, true, 'teoriprøven bestått på ekte');

@@ -44,6 +44,8 @@ export const SIGNS = [
   S('204', 'vike', 'Stopp', 'Du skal stanse helt ved stopplinjen, eller så nær kryssende veg som mulig, og har vikeplikt for kjørende i begge retninger.'),
   S('206', 'vike', 'Forkjørsveg', 'Du kjører på forkjørsveg: de som kommer fra sideveger og kryssende veger, har vikeplikt for deg. Gjelder til skilt 208, 202 eller 204.'),
   S('208', 'vike', 'Slutt på forkjørsveg', 'Forkjørsvegen slutter. Etter skiltet gjelder vanlig vikeplikt for kjørende fra høyre, om ikke annet er skiltet.'),
+  S('212', 'vike', 'Vikeplikt overfor møtende kjørende', 'Forbudt å kjøre inn på den smale strekningen hvis møtende blir hindret. Den røde pilen er din retning: du venter på dem som kommer imot.'),
+  S('214', 'vike', 'Møtende kjørende har vikeplikt', 'Møtende har vikeplikt for deg på den smale strekningen (de har skilt 212). Kjør likevel varsomt: noen kan allerede være på vei inn.'),
   S('210', 'vike', 'Forkjørskryss', 'Varsler om kryss der de som kommer fra sidevegen eller kryssende veg, har vikeplikt for deg.'),
   // Forbudsskilt, § 8
   S('302', 'forbud', 'Innkjøring forbudt', 'Forbudt å kjøre forbi skiltet. Står typisk der en enveiskjørt gate har utkjøring.'),
@@ -66,9 +68,14 @@ export const SIGNS = [
   S('502', 'opplysning', 'Motorveg', 'Reglene for motorveg gjelder: det er forbudt å stanse, rygge og vende, og bare motorvogn som lovlig kan kjøre minst 40 km/t, får kjøre der. Gjelder til skilt 504 «Slutt på motorveg».'),
   S('503', 'opplysning', 'Motortrafikkveg', 'Reglene for motortrafikkveg gjelder: som på motorveg er det forbudt å stanse, rygge og vende, og bare motorvogn som lovlig kan kjøre minst 40 km/t, får kjøre der.'),
   S('516', 'opplysning', 'Gangfelt', 'Kryssingssted for gående. Du har vikeplikt for gående som er ute i gangfeltet eller på vei ut i det.'),
+  S('518', 'opplysning', 'Gangveg', 'Vei som er laget for gående. Det er forbudt å kjøre bil der.'),
+  S('520', 'opplysning', 'Sykkelveg', 'Vei som er laget for syklende og elsparkesykler. Andre kjørende får ikke bruke den.'),
+  S('522', 'opplysning', 'Gang- og sykkelveg', 'Vei for gående, syklende og elsparkesykler. Det er forbudt å kjøre bil der.'),
   S('524', 'opplysning', 'Møteplass', 'Sted på smal veg der kjøretøy kan møtes. Det er forbudt å parkere på møteplassen.'),
   S('526', 'opplysning', 'Envegskjøring', 'Kjøring er bare lov i pilens retning, fram til første kryss.'),
   S('527', 'opplysning', 'Blindveg', 'Vegen er stengt lenger fram, så du kommer ikke gjennom.'),
+  S('540', 'opplysning', 'Gatetun', 'Området er et gatetun: du kjører ikke fortere enn gangfart, har vikeplikt for gående og parkerer bare på merkede plasser. Gjelder til skilt 542 «Slutt på gatetun».'),
+  S('548', 'opplysning', 'Gågate', 'Forbudt å kjøre motorvogn, unntatt elsparkesykkel, om ikke et underskilt gir unntak. Den som har lov til å kjøre der, holder gangfart og har vikeplikt for gående. Parkering er forbudt.'),
   S('552', 'opplysning', 'Parkering', 'Parkering er tillatt her, så lenge det ikke bryter med reglene om stans og parkering. Underskilt kan gi tid og vilkår.'),
   S('556', 'opplysning', 'Automatisk trafikkontroll', 'Farten blir målt med kamera på stedet (fotoboks).')
 ];

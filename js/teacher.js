@@ -76,11 +76,12 @@ function theoryCard(b) {
       <dl class="stats t-man">
         <div><dt>Siste øveprøve</dt><dd>${b.last ? `${b.last.correct} av ${b.last.total} · ${b.last.passed ? 'bestått' : 'ikke bestått'}` : '–'}</dd></div>
         ${b.taken ? `<div><dt>Øveprøver bestått</dt><dd>${b.passed} av ${b.taken >= 5 ? 'de 5 siste' : b.taken}</dd></div>` : ''}
+        ${b.taken && typeof b.solid === 'number' ? `<div><dt>Med minst 40 riktige</dt><dd>${b.solid} av ${b.taken >= 5 ? 'de 5 siste' : b.taken}</dd></div>` : ''}
         <div><dt>Spørsmål lært</dt><dd>${b.learned} av ${b.total}</dd></div>
         <div><dt>Skilt lært</dt><dd>${b.signs} av ${b.signsTotal}</dd></div>
         <div><dt>Sikkerhetskontroll</dt><dd>${b.safety.known} av ${b.safety.total} oppgaver</dd></div>
       </dl>
-      <p class="muted small">Øveprøvene er bygget som teoriprøven: 45 oppgaver og 38 riktige for å bestå. Spørsmålene er appens egne. Sikkerhetskontrollen teller oppgavene eleven selv har merket som kan.</p>
+      <p class="muted small">Øveprøvene er bygget som teoriprøven, med 45 oppgaver og 38 riktige for å bestå, men er litt vanskeligere. Eleven regnes som klar ved minst 40 riktige på 3 av 5. Spørsmålene er appens egne. Sikkerhetskontrollen teller oppgavene eleven selv har merket som kan.</p>
     </section>`;
 }
 

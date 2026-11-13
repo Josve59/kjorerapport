@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EXAM, EXAM_QUOTA, emptyProgress, normProgress, rng, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
-  safetyFor, pickSafety, markSafety, safetyStats, tagsFromDrives, optionOrder, theoryBrief } from '../js/theory.js';
+  safetyFor, pickSafety, markSafety, safetyStats, tagsFromDrives, optionOrder, theoryBrief, HARD_SHARE, level } from '../js/theory.js';
 import { THEMES, QUESTIONS } from '../js/theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from '../js/safety-check.js';
 import { figure, FIGURE_KEYS } from '../js/trafficsvg.js';
@@ -169,4 +169,28 @@ test('status til trafikklæreren: tom før eleven har øvd, ellers prøver, spø
   assert.deepEqual([b.learned, b.signs, b.safety.known, b.taken, b.passed, b.last.correct], [1, 1, 1, 1, 1, 39]);
   assert.equal(b.total, QUESTIONS.length);
   assert.equal(b.signsTotal, SIGN_QUESTIONS.length);
+});
+
+test('prøven er litt vanskeligere enn den ekte: vanskelige oppgaver i hvert tema, og 40 riktige for å være klar', () => {
+  // Hvert tredje spørsmål merket som vanskelig, så testen ikke avhenger av hvordan spørsmålene er merket
+  const qs = QUESTIONS.map((q, i) => ({ ...q, lvl: i % 3 === 0 ? 3 : q.lvl === 3 ? 2 : q.lvl }));
+  const ids = buildExam(qs, { rand: rng(11) });
+  const byId = new Map(qs.map(q => [q.id, q]));
+  assert.equal(ids.length, EXAM.n);
+  for (const [t, k] of Object.entries(EXAM_QUOTA)) {
+    const mine = ids.filter(id => byId.get(id).t === t);
+    assert.equal(mine.length, k, t);
+    assert.ok(mine.filter(id => level(byId.get(id)) >= 3).length >= Math.round(k * HARD_SHARE), `${t}: for få vanskelige`);
+  }
+  const r = scoreExam(qs, ids, Object.fromEntries(ids.map((id, i) => [id, i < 39 ? 0 : 1])));
+  assert.deepEqual([r.correct, r.passed, r.solid], [39, true, false]);
+  assert.ok(r.hard.n >= 15 && r.hard.correct <= r.hard.n);
+  // 38 og 39 er bestått, men gir ikke «klar»
+  let p = emptyProgress();
+  const res = c => ({ correct: c, total: 45, passed: c >= EXAM.pass, byTheme: {}, wrong: [] });
+  for (const c of [39, 38, 39]) p = addExam(p, res(c), { at: c });
+  assert.equal(theoryReady(p).level, 'nesten');
+  assert.equal(theoryReady(p).solid, 0);
+  for (const c of [40, 41, 42]) p = addExam(p, res(c), { at: 100 + c });
+  assert.equal(theoryReady(p).level, 'klar');
 });

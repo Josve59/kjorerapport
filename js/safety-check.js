@@ -25,8 +25,10 @@ export const CAR_TYPES = [
 ];
 
 const T = (id, area, car, task, how, fault) => ({ id, area, car, task, how, fault });
+/* Tegning av varsellampen (trafficsvg.js) for oppgavene der den hører til (0.16.0) */
+const LAMP_FOR = { 'lys-naer': 'lamp:naerlys', 'lys-fjern': 'lamp:fjernlys', 'brems-abs': 'lamp:abs', 'vaeske-olje': 'lamp:olje', 'varsel-brems': 'lamp:brems', 'varsel-lading': 'lamp:lading', 'varsel-dekk': 'lamp:dekk', 'styr-servo': 'lamp:styring' };
 
-export const SAFETY = [
+const LIST = [
   /* ---------- Lys ---------- */
   T('lys-naer', 'lys', 'alle', 'Vis hvordan du slår på nærlyset, og kontroller at det virker.',
     ['Slå på nærlyset med lysbryteren (eller sjekk at automatisk lys står på).', 'Se at symbolet for nærlys lyser i instrumentpanelet.', 'Gå rundt bilen, eller se refleksen i en vegg eller i bilen foran, og sjekk at begge lyktene lyser.'],
@@ -185,3 +187,5 @@ export const SAFETY = [
     ['Se fram med en gang, og brems kraftig hvis det trengs.', 'Systemet kan bremse selv, men stol ikke på det.', 'Vis i menyen hvor varselet kan stilles inn.'],
     'Systemet ser ikke alt, og virker dårligere i mørke, regn og snø. Du er alltid ansvarlig for avstanden.')
 ];
+
+export const SAFETY = LIST.map(t => (LAMP_FOR[t.id] ? { ...t, img: LAMP_FOR[t.id] } : t));

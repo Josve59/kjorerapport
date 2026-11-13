@@ -142,6 +142,29 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.16.0 – a harder theory test, better drawings, easier to use
+
+The owner wants the app's test to be **a bit harder than the real one**, so a learner who passes here will pass the real test.
+
+**Harder test** (`js/theory.js`, questions in `js/theory-b.js`)
+- Every question has a difficulty (`lvl`: 1 easy, 2 medium, 3 hard: exceptions, exact numbers, rules that combine). Every test has about 40 % hard questions (19 of 45), spread over the themes (`HARD_SHARE`).
+- The pass mark stays at 38 of 45 as on the real test, but «klar for teoriprøven» now needs **at least 40 correct** on 3 of the last 5 tests and on the last one (`EXAM.solid`). The result says «Bestått med margin», «Bestått, uten margin» or «Ikke bestått», and how many of the hard questions were right. The dots on the theory page are green at 40 or more, yellow at 38–39, red below. «Hva må du øve mer på?» and the teacher page use the new rule.
+- **All 235 questions reviewed** (by four helper agents, one per theme pair, checked against the saved legal texts and merged with `.local-test/merge-review.mjs`). Before, the correct answer was the longest option in 161 of 235 questions, so it could often be guessed. Now it is the longest in 29 of 281. Silly wrong answers are replaced by plausible ones (a rule that applies elsewhere, a number close to the right one, a common misunderstanding), and wrong answers that a driving teacher could argue were right are removed.
+- **Fixes:** studded tyres may be on one axle with chains on the other (bruksforskriften § 1-4 (4)); road-work vehicles may break only some traffic rules (trafikkreglene § 2 nr. 4); «two learners taking turns» was ambiguous and the question is reworded; the mobile-phone ban also applies in queues and at red lights (Høyesterett HR-2020-2019-A and HR-2020-2020-A); several explanations name the exact exception.
+- **46 new hard questions**: 6 per theme plus 4 with new drawings (three cars at an unmarked crossing, a left turn on a priority road, a two-lane roundabout). 281 questions in all: 84 easy, 129 medium, 68 hard. Hard questions show a «Vanskelig» label in practice.
+
+**Drawings** (`js/trafficsvg.js`)
+- Crossings redrawn with pavements and rounded corners, cars seen from above with windows, lights, mirrors and a shadow, a white letter badge, and arrows in each car's colour.
+- Signs compared with pictures of the real Norwegian signs: steep hill (car on a slope), road works (yellow), falling rocks (from the right), cyclists (with rider), speed limit zone («Sone» at the top) and speed camera (with waves) corrected. Seven new signs: 212, 214, 518, 520, 522, 540 and 548. The sign test now has 57 signs.
+- The safety check has drawings of eight dashboard lights (brakes, ABS, charging, tyre pressure, oil pressure, steering, dipped and main beam) in the tasks they belong to.
+
+**Easier to use**
+- «Neste spørsmål» in practice, and «Forrige»/«Neste» in the test, stay at the bottom of the screen above the tab bar; on the last question «Neste» becomes «Lever».
+- A progress bar under the timer shows how many of the 45 are answered, and delivering reminds you of questions you marked to look at again.
+
+- **Tested:** all unit tests (235), including the hard share per theme, «klar» only from 40 correct, the merged questions (complete, sources, explanations, 3–4 different answers) and every drawing. In the browser at phone width, light and dark: the new crossings, signs and lights, a practice with a hard scene question, the test with the bottom buttons and progress bar, the safety check with lights, and the teacher page. The iPhone build.
+- **Not tested:** on the phone by a learner. The reviewed and new questions still need a driving teacher's read-through; the agents flagged f22, f36, a05 (rules change on 1 January 2027), v31 and s43 as worth a look.
+
 ## What's new in 0.15.0 – the sign test, more questions, and theory for the driving teacher
 
 **Sign test** (`js/theory-signs.js`, new page `#/teori/skilt`)
