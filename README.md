@@ -142,6 +142,28 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.14.0 – the theory test and the safety check
+
+The app now covers more of the way to a licence: practice for the **theory test for class B** and the **safety check** (sikkerhetskontrollen) on the driving test. Both are under Opplæring, with two small cards on Hjem. They are **free for now**, not part of Pluss; the owner decides that.
+
+**Theory test** (`js/theory.js`, questions in `js/theory-b.js`, screens in `js/theoryui.js`)
+- 215 questions in the 7 themes of Statens vegvesen's list for class B: speed and position (40), other road users (19), driver and owner responsibility (35), the vehicle (30), laws and rules (19), signs and markings (42), give way (30). 50 of them have a drawing (`js/trafficsvg.js`): signs, road markings, traffic lights and crossings seen from above.
+- The questions are the app's own, written from vegtrafikkloven, trafikkreglene, skiltforskriften, bruksforskriften, trafikkopplæringsforskriften, førerkortforskriften and vegvesen.no. Every question has an explanation and names its source. No question is taken from the real test or from other services. The practice format (themes, a test like the real one, explanations, mistakes to practise again) was inspired by Teoritentamen.
+- **Practice:** by theme, mixed, or only your mistakes. You see right or wrong at once, with the explanation and the source, and can have it read aloud. Mistakes come back first; a question counts as learned after 3 right answers in a row.
+- **Test like the real one:** 45 questions in 90 minutes, 38 right to pass, one right answer each, go back and forth, mark questions to look at again, an overview of all 45. The questions are spread over the themes in fixed numbers and change from test to test. Afterwards: the score per theme and every wrong answer with the explanation. An unfinished test survives closing the app.
+- **Ready for the theory test** when 3 of the last 5 tests are passed, and the last one.
+- **From your drives:** if the last drives show speeding, too high speed over crests, too short distance, lane changes without a mirror check, dark or slippery roads, the app suggests the questions about that.
+
+**Safety check** (`js/safety-check.js`)
+- 46 tasks in 10 areas (lights, tyres, brakes, steering, fluids, warning equipment, view, equipment, electric car, driver assistance), each as the examiner might ask it: how to check it, and what a fault means and why it matters.
+- Choose electric, petrol/diesel or hybrid, and only the tasks for that car are shown.
+- «Øv som på oppkjøringen» gives 5 tasks from different areas, the ones you don't know yet first: try to answer, show the answer, then «Kunne det» or «Må øve mer».
+
+**Elsewhere:** «Hva må du øve mer på?» has a new group «Teori og oppkjøring» with the theory test and the safety check. Progress is kept per learner in the settings, so it is in the backup.
+
+- **Tested:** unit tests for the questions (every question complete, with source and explanation, no duplicates, enough per theme), the drawings, practice order, building and scoring a test, the ready rule, the safety tasks and the drive suggestions. In the browser at phone width, light and dark: Hjem and Opplæring cards, the theory page, practice, a full test with result, the safety check and the drill. The iPhone build.
+- **Not tested:** on the phone by a learner, and **the questions have not been checked by a driving teacher**. They follow the rules as of November 2026, but a driving teacher should read them before the app is given to others. Motorcycle theory comes later.
+
 ## What's new in 0.13.17 – the small car model on trial
 
 After the measurements in 0.13.16 the owner chose to try D-FINE small on a drive.

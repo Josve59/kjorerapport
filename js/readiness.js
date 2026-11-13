@@ -20,7 +20,7 @@ const hm = sec => { const m = Math.round(sec / 60); return m >= 60 ? `${Math.flo
 const list = a => (a.length > 1 ? `${a.slice(0, -1).join(', ')} og ${a[a.length - 1]}` : a[0] || '');
 const nf = n => Math.round(n).toLocaleString('nb-NO').replace(/ /g, ' ');
 
-export function readiness(rows, { plan = {} } = {}) {
+export function readiness(rows, { plan = {}, theory = null } = {}) {
   const items = [];
   const sum = f => rows.reduce((s, x) => s + (f(x) || 0), 0);
   const recent = rows.slice(0, READY.recent);
@@ -93,6 +93,19 @@ export function readiness(rows, { plan = {} } = {}) {
   const left = MANDATORY.filter(id => !doneM.includes(id)).map(id => MANDATORY_LABEL[id]);
   items.push({ id: 'mandatory', group: 'Opplæringen', label: 'Obligatorisk opplæring', ok: !left.length, have: `${doneM.length} av ${MANDATORY.length} krysset av`, need: `${MANDATORY.length} av ${MANDATORY.length}`,
     progress: doneM.length / MANDATORY.length, tip: left.length ? `Gjenstår: ${left.join(', ')}. Kryss av i Opplæring når det er gjort.` : '' });
+
+  // 9. Teoriprøven og sikkerhetskontrollen (0.14.0): øveprøvene og sikkerhetskontrollen i appen. Er teoriprøven
+  // krysset av som bestått i opplæringsplanen, er den på plass.
+  if (theory) {
+    const passedReal = !!(plan.teori && plan.teori.done);
+    items.push({ id: 'theory', group: 'Teori og oppkjøring', label: 'Teoriprøven', ok: passedReal || theory.level === 'klar',
+      have: passedReal ? 'bestått (krysset av i Opplæring)' : theory.taken >= 5 ? `bestått ${theory.passed} av de siste 5 øveprøvene` : theory.taken ? `bestått ${theory.passed} av ${theory.taken} ${theory.taken === 1 ? 'øveprøve' : 'øveprøver'}` : 'ingen øveprøver ennå',
+      need: '3 av 5 øveprøver bestått', progress: passedReal ? 1 : Math.min(1, theory.passed / 3), tip: 'Øv på temaene i Teori og ta øveprøver til du består flere på rad.' });
+    const share = theory.safetyTotal ? theory.safetyKnown / theory.safetyTotal : 0;
+    items.push({ id: 'safety', group: 'Teori og oppkjøring', label: 'Sikkerhetskontrollen', ok: share >= 0.9,
+      have: `${theory.safetyKnown} av ${theory.safetyTotal} oppgaver`, need: 'nesten alle', progress: Math.min(1, share / 0.9),
+      tip: 'Øv ved bilen med «Øv som på oppkjøringen» under Sikkerhetskontroll.' });
+  }
 
   const counted = items.filter(i => i.ok !== null), done = counted.filter(i => i.ok).length;
   const level = rows.length < READY.minDrives ? 'tidlig' : done === counted.length ? 'klar' : done >= counted.length - 2 ? 'nesten' : 'ikke';

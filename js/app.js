@@ -21,6 +21,8 @@ import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit, overlayCamSigns } from './signs.js';
 import { createLaneEase } from './laneease.js';
 import { crestSpeed, speedScore, totalScore } from './speedfit.js';
+import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, stopTheory, theorySummary, theoryMiniCards } from './theoryui.js';
+import { normProgress, tagsFromDrives } from './theory.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
@@ -30,7 +32,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.13.17';
+export const APP_VERSION = '0.14.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -371,7 +373,7 @@ async function renderHome() {
     const allRows = sugRows;
     const spots = hotspots(allRows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
     const plan = planProgress(allRows);
-    const rd = readiness(allRows, { plan: planState().mine });
+    const rd = readiness(allRows, { plan: planState().mine, theory: theoryForReady() });
     more.innerHTML = `<button type="button" class="card t-cta" id="btn-go-teacher"><span class="card-title">${icon('school')}Til trafikklæreren</span><span class="muted small">Det som er øvd siden forrige kjøretime, klart til å vise fram eller dele</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
       ${spots.length ? `<button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>` : ''}
       <button type="button" class="card mini-card" id="btn-go-plan"${spots.length ? '' : ' style="grid-column: 1 / -1"'}><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
@@ -386,7 +388,52 @@ async function renderHome() {
     $('#btn-go-ready').onclick = () => { location.hash = '#/klar'; };
   } else { more.hidden = true; $('#ready-card').hidden = true; }
   $('#update-banner').hidden = !swUpdateReady;
+  renderTheoryHome();
   renderInstallHint();
+}
+
+/* ---------- Teori og sikkerhetskontroll (0.14.0, theoryui.js) ---------- */
+/* Fremgangen lagres per elev i innstillingene, som opplæringsplanen, og kommer med i sikkerhetskopien */
+function theoryProgress() { const s = getSettings(); return normProgress((s.theory || {})[personKey(s)]); }
+function saveTheory(p) { const s = getSettings(); saveSettings({ ...s, theory: { ...(s.theory || {}), [personKey(s)]: p } }); }
+/* Det de siste turene tyder på at eleven bør lese seg opp på */
+async function theoryDriveTags() {
+  const rows = (await gatherRows(scopeDriver(getSettings()))).slice(0, 5);
+  const sig = { speeding: 0, crests: 0, close: 0, dark: 0, slippery: 0, laneNoMirror: 0 };
+  for (const x of rows) {
+    sig.speeding += x.sp ? x.sp.episodes.length : 0;
+    sig.crests += x.res.crest ? x.res.crest.crests.length : 0;
+    sig.close += x.res.road && x.res.road.close ? x.res.road.close.length : 0;
+    sig.dark += x.log && x.log.light && x.log.light.dark > 600 ? 1 : 0;
+    sig.slippery += ['snow', 'ice'].includes(x.d.surface) ? 1 : 0;
+    sig.laneNoMirror += x.res.camera && x.res.camera.calibrated && x.res.camera.lane ? x.res.camera.lane.filter(l => l.mirror === false).length : 0;
+  }
+  return tagsFromDrives(sig);
+}
+const theoryCtx = { progress: theoryProgress, save: saveTheory, driveTags: theoryDriveTags, go: h => { location.hash = h; }, vibrate };
+function renderTheoryRoute(h) {
+  show('theory');
+  const head = $('#theory-head'), title = $('#theory-title'), root = $('#theory-root');
+  const titles = { '#/teori': 'Teori', '#/teori/resultat': 'Resultat', '#/sikkerhetskontroll': 'Sikkerhetskontroll' };
+  head.hidden = !titles[h];
+  title.textContent = titles[h] || '';
+  if (h === '#/teori') renderTheoryHub(root, theoryCtx);
+  else if (h === '#/teori/ov') renderPractice(root, theoryCtx);
+  else if (h === '#/teori/prove') renderExam(root, theoryCtx);
+  else if (h === '#/teori/resultat') renderExamResult(root, theoryCtx);
+  else if (h === '#/sikkerhetskontroll') renderSafetyHub(root, theoryCtx);
+  else if (h === '#/sikkerhetskontroll/ov') renderSafetyDrill(root, theoryCtx);
+  else location.hash = '#/teori';
+}
+/* Kortene på Hjem: synlige for alle, også uten turer, siden teorien kommer før øvelseskjøringen */
+function renderTheoryHome() {
+  const el = $('#theory-home');
+  if (!el || isTeacher()) { if (el) el.hidden = true; return; }
+  const p = theoryProgress(), t = theorySummary(p);
+  el.innerHTML = theoryMiniCards(p, ['btn-go-theory', 'btn-go-safety']);
+  el.hidden = false;
+  $('#btn-go-theory').onclick = () => { location.hash = t.exam ? '#/teori/prove' : '#/teori'; };
+  $('#btn-go-safety').onclick = () => { location.hash = '#/sikkerhetskontroll'; };
 }
 
 function logFor(d, res) {
@@ -1035,7 +1082,7 @@ async function renderReady() {
   const driver = isTeacher() ? (getSettings().activeStudent || '') : '';
   root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
   const rows = await gatherRows(scopeDriver(getSettings()));
-  const r = readiness(rows, { plan: planState().mine });
+  const r = readiness(rows, { plan: planState().mine, theory: theoryForReady() });
   const t = READY_TEXT[r.level];
   const groups = [...new Set(r.items.map(i => i.group))];
   const mark = i => i.ok === true ? `<span class="rd-ok">${icon('check', 18)}</span>` : i.ok === false ? '<span class="rd-no"></span>' : '<span class="rd-na">–</span>';
@@ -1053,6 +1100,12 @@ async function renderReady() {
     <p class="muted small ready-note">Målene er appens egne, satt ut fra vanlige råd for øvelseskjøring. Det er trafikklæreren som vurderer når du er klar for oppkjøring, og ingen app kan love at du består.</p>
     <button type="button" class="btn secondary" id="btn-ready-teacher">${icon('school', 20)}Vis trafikklæreren</button>`;
   $('#btn-ready-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
+}
+
+/* Teori og sikkerhetskontroll til «Hva må du øve mer på?» (0.14.0) */
+function theoryForReady() {
+  const t = theorySummary(theoryProgress());
+  return { level: t.ready.level, passed: t.ready.passed, taken: t.ready.taken, safetyKnown: t.safety.known, safetyTotal: t.safety.total };
 }
 
 function planState() {
@@ -1076,8 +1129,13 @@ async function renderPlan() {
   const { key, mine } = planState();
   const prog = planProgress();
   const dfmt = iso => new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
+  // Teori og sikkerhetskontroll (0.14.0) øverst: de skal være klare før oppkjøringen
+  const thP = theoryProgress();
   // Faresteder er flyttet til Turer (0.12.1): Opplæring er bare læreplanen
   root.innerHTML = `
+    <div class="mini-grid">
+      ${theoryMiniCards(thP, ['plan-theory', 'plan-safety'])}
+    </div>
     <section class="card plan-head">
       <p class="eyebrow">${driver ? esc(driver) : esc(s.name || 'Din opplæring')}</p>
       <p class="plan-prog"><strong>${prog.done}</strong> av ${prog.total} punkter krysset av</p>
@@ -1092,6 +1150,8 @@ async function renderPlan() {
         ${it.help ? `<span class="muted small">${esc(it.help)}</span>` : ''}
         ${it.auto ? `<span class="plan-ev ${e && e.good ? 'good' : ''}">${e ? esc(e.text) : 'Ikke øvd på turene ennå'}</span>` : ''}</span></label></li>`;
     }).join('')}</ul></section>`).join('')}`;
+  $('#plan-theory').onclick = () => { location.hash = '#/teori'; };
+  $('#plan-safety').onclick = () => { location.hash = '#/sikkerhetskontroll'; };
   root.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => {
     const cur = getSettings();
     const allC = { ...(cur.curriculum || {}) };
@@ -2428,7 +2488,7 @@ function updateTabbar(h) {
   bar.hidden = hide;
   document.body.classList.toggle('has-tabbar', !hide);
   if (TAB_ROOTS[h]) lastTab = h;
-  const active = TAB_ROOTS[h] || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips' })[h] || TAB_ROOTS[lastTab];
+  const active = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') ? 'plan' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -2462,6 +2522,10 @@ function wireTabbar() {
 /* Tilbake: fra en rapport til fanen den kom fra, fra Faresteder til Turer, ellers til Hjem */
 function goBack() {
   const h = location.hash;
+  // Teori og sikkerhetskontroll (0.14.0): fra øving og prøve til oversikten, fra oversikten dit du kom fra
+  if (/^#\/teori\//.test(h)) { location.hash = '#/teori'; return; }
+  if (h === '#/sikkerhetskontroll/ov') { location.hash = '#/sikkerhetskontroll'; return; }
+  if (h === '#/teori' || h === '#/sikkerhetskontroll') { location.hash = theoryFrom || '#/'; return; }
   location.hash = h === '#/faresteder' ? '#/logg' : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
 }
 
@@ -2476,10 +2540,13 @@ function releaseOverlays() {
   if (calibAbort) calibAbort();
 }
 
-let guidesFrom = null, prevHash = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
+let guidesFrom = null, prevHash = null, theoryFrom = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
 function route() {
   const h = location.hash || '#/';
   if (h === '#/pluss' && prevHash !== h) guidesFrom = prevHash;
+  const inTheory = x => !!x && (x.startsWith('#/teori') || x.startsWith('#/sikkerhetskontroll'));
+  if (inTheory(h) && !inTheory(prevHash)) theoryFrom = prevHash || '#/';
+  if (!inTheory(h)) stopTheory();   // klokka på prøven og opplesingen stopper når du går ut
   if (h !== prevHash) window.scrollTo(0, 0);   // ny side (også rapport til rapport) begynner øverst
   prevHash = h;
   if (recorder && recorder.running && h !== '#/opptak') { location.hash = '#/opptak'; return; }
@@ -2511,6 +2578,7 @@ function route() {
   else if (h === '#/opplaering') renderPlan();
   else if (h === '#/kamera') renderCamera();
   else if (h === '#/guider') renderGuides();
+  else if (h === '#/teori' || h.startsWith('#/teori/') || h === '#/sikkerhetskontroll' || h === '#/sikkerhetskontroll/ov') renderTheoryRoute(h);
   else if (h.startsWith('#/rapport/')) renderDriveReport(h.slice('#/rapport/'.length));
   else location.hash = '#/';
 }
@@ -2518,7 +2586,7 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress', 'theory'].forEach(n => { screens[n] = document.getElementById(n); });
   // Bevegelsesdata (0.12.4): iPhone gir dem bare etter et trykk. «Start kjøretur» er trykket, så tilgangen bes om her;
   // sjekken før kjøring starter av seg selv uten trykk, og fikk ellers aldri data.
   $('#btn-go-precheck').onclick = () => { requestMotionPermission().catch(() => {}); location.hash = '#/sjekk'; };

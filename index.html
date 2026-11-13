@@ -51,6 +51,7 @@
     <section id="log-card" hidden></section>
     <section id="more-cards" class="mini-grid" hidden></section>
     <section id="ready-card" hidden></section>
+    <section id="theory-home" class="mini-grid" hidden></section>
     <section class="card" id="goals" hidden></section>
     <section class="card" id="trend"></section>
     <section id="drive-section">
@@ -284,6 +285,17 @@
     <div id="ready-root"></div>
   </section>
 
+  <!-- Teori og sikkerhetskontroll (0.14.0, js/theoryui.js) -->
+  <section id="theory" class="screen" hidden>
+    <header class="appbar">
+      <button type="button" class="btn-back icon-btn" aria-label="Tilbake" data-icon="back"></button>
+      <span class="brand"><img src="./icons/icon.svg" alt="" width="30" height="30">Kjørerapport</span>
+      <button type="button" class="icon-btn btn-gear" aria-label="Innstillinger" data-icon="gear"></button>
+    </header>
+    <div class="page-head" id="theory-head"><h1 class="page-title" id="theory-title">Teori</h1></div>
+    <div id="theory-root"></div>
+  </section>
+
   <!-- Fremgang (0.12.0): nivå, ukesringer, uker på rad, rekorder og merker (js/game.js) -->
   <section id="progress" class="screen" hidden>
     <header class="appbar">
@@ -461,7 +473,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.13.17</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.14.0</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

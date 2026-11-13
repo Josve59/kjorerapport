@@ -107,7 +107,7 @@ input.switch:checked { background: var(--good); }
 #home:not([hidden]) { display: flex; flex-direction: column; }
 #home > .appbar { order: 0; } #home > #update-banner { order: 1; } #home > .start-card { order: 2; }
 #home > #backup-banner { order: 3; } #home > #install-hint { order: 4; } #home > #guide-card { order: 5; }
-#home > #driver-chips { order: 6; } #home > #last-drive { order: 7; } #home > #more-cards { order: 8; } #home > #ready-card { order: 8; }
+#home > #driver-chips { order: 6; } #home > #last-drive { order: 7; } #home > #more-cards { order: 8; } #home > #ready-card { order: 8; } #home > #theory-home { order: 8; }
 #home > #summary { order: 9; display: none !important; }   /* samme tall står i kjøreloggen og utviklingen */ #home > #log-card { order: 10; } #home > #goals { order: 11; } #home > #trend { order: 12; }
 #home > .cam-card { order: 13; } #home > #drive-section { order: 14; } #home > .report-foot { order: 15; }
 .start-card { background: radial-gradient(120% 90% at 0% 0%, #343c42 0%, #20262a 55%, #171b1e 100%); border-radius: 24px; padding: 24px 20px 16px; }
@@ -235,3 +235,108 @@ p, li, dd { text-wrap: pretty; }
 .enrich-status:not(.error)::before { content: ''; display: inline-block; width: .9em; height: .9em; margin-right: .5em; vertical-align: -.1em;
   border: 2px solid color-mix(in srgb, var(--muted) 35%, transparent); border-top-color: var(--link); border-radius: 50%; animation: kj-spin .8s linear infinite; }
 @keyframes kj-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Teori og sikkerhetskontroll (0.14.0, js/theoryui.js) ----------
+   Samme kort og knapper som resten av appen. Grønt og rødt bare for riktig og feil, blått for det du har valgt. */
+.th-hero h2 { font-size: 1.45rem; margin: 2px 0 8px; }
+.th-hero { border-top: 4px solid var(--line); }
+.th-hero.lv-klar { border-top-color: var(--good); }
+.th-hero.lv-klar h2 { color: var(--good); }
+.th-hero.lv-nesten { border-top-color: var(--primary); }
+.th-hero.lv-ovelse { border-top-color: var(--brake); }
+.th-hero .btn { margin: 6px 0 0; }
+.th-score { font-size: 1.15rem; margin: 0 0 6px; }
+.th-score strong { font-size: 2.2rem; font-weight: 800; }
+.th-dots { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.th-dot { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: .9rem; color: var(--on-color); }
+.th-dot.ok { background: var(--good); }
+.th-dot.no { background: var(--brake); }
+.th-bar { display: block; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin: 6px 0 4px; }
+.th-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--good); transition: width .4s var(--ease, ease); }
+.th-list { list-style: none; margin: 0; padding: 0; }
+.th-list li + li { border-top: 1px solid var(--line); }
+.th-theme { display: grid; grid-template-columns: 44px 1fr 18px; gap: 12px; align-items: center; width: 100%; padding: 12px 2px; background: none; border: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.th-ico { width: 44px; height: 44px; border-radius: 12px; background: var(--surface-2); display: grid; place-items: center; }
+.th-tt { display: flex; flex-direction: column; min-width: 0; }
+.th-themes { padding-top: 4px; padding-bottom: 4px; }
+.th-why { margin: 0 0 8px; padding-left: 20px; }
+.th-safety-cta { margin-top: 4px; }
+.th-note { margin: 10px 4px; }
+.th-reset { display: block; margin: 0 auto 8px; }
+
+/* Øving og prøve */
+.q-top { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
+.q-step { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.q-prog { margin: 0 0 12px; }
+.q-card .eyebrow { margin-bottom: 6px; }
+.q-fig { display: flex; justify-content: center; margin: 4px 0 14px; }
+.q-fig .tsvg { width: 100%; height: auto; max-height: 260px; }
+.q-fig .tsvg-sign { max-width: 170px; }
+.q-fig .tsvg-light { max-width: 74px; }
+.q-fig .tsvg-scene { max-width: 290px; border-radius: 14px; }
+.q-fig.small .tsvg { max-height: 150px; }
+.q-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.q-text { flex: 1; font-size: 1.22rem; line-height: 1.3; margin: 0; }
+.q-speak { flex: none; }
+.q-opts { display: grid; gap: 10px; }
+.q-opt { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 12px 14px; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: border-color .15s, background .15s; }
+.q-opt:active:not(:disabled) { transform: scale(.99); }
+.q-opt:disabled { cursor: default; }
+.q-letter { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-weight: 800; font-size: .9rem; }
+.q-mark { margin-left: auto; flex: none; }
+.q-opt.picked { border-color: var(--link); background: color-mix(in srgb, var(--link) 10%, var(--surface)); }
+.q-opt.picked .q-letter { background: var(--link); color: var(--surface); }
+.q-opt.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 13%, var(--surface)); }
+.q-opt.right .q-letter, .q-opt.right .q-mark { background: var(--good); color: var(--on-color); border-radius: 50%; }
+.q-opt.wrong { border-color: var(--brake); background: color-mix(in srgb, var(--brake) 11%, var(--surface)); }
+.q-opt.wrong .q-letter, .q-opt.wrong .q-mark { background: var(--brake); color: var(--on-color); border-radius: 50%; }
+.q-opt.dim { opacity: .55; }
+.q-why { border-left: 4px solid var(--line); }
+.q-why.ok { border-left-color: var(--good); }
+.q-why.no { border-left-color: var(--brake); }
+.q-verdict { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.1rem; margin-bottom: 6px; }
+.q-why.ok .q-verdict { color: var(--good); }
+.q-why.no .q-verdict { color: var(--brake); }
+.q-why .muted .ico { vertical-align: -3px; }
+.q-timer { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 18px; background: var(--surface-2); font-weight: 800; font-variant-numeric: tabular-nums; }
+.q-timer.low { background: color-mix(in srgb, var(--brake) 18%, var(--surface)); color: var(--brake); }
+.q-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 6px; margin: 0 0 12px; padding: 12px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--card-border); }
+.q-cell { position: relative; min-height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+.q-cell:not(.done) { border-style: dashed; color: var(--muted); }
+.q-cell.done { background: color-mix(in srgb, var(--link) 14%, var(--surface)); border-color: color-mix(in srgb, var(--link) 40%, var(--surface)); }
+.q-cell.cur { outline: 3px solid var(--link); outline-offset: -2px; }
+.q-cell.flag::after { content: ''; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--turn); }
+.q-flag { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted); }
+.q-flag.on { color: var(--turn); }
+.q-quit { display: block; margin: 0 auto 8px; color: var(--muted); }
+.q-sum { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.q-sum li { display: flex; gap: 10px; align-items: flex-start; }
+.q-sum li.ok > .ico { color: var(--good); flex: none; margin-top: 2px; }
+.q-sum li.no > .ico { color: var(--brake); flex: none; margin-top: 2px; }
+.r-wrong summary { font-size: 1rem; gap: 10px; }
+.r-wrong summary::before { display: none; }
+.r-wrong summary > span { flex: 1; }
+.r-wrong[open] summary > .ico { transform: rotate(90deg); }
+.r-ans { display: flex; gap: 8px; align-items: flex-start; font-weight: 700; margin: 8px 0; }
+.r-ans .ico { flex: none; margin-top: 2px; }
+.r-ans.no { color: var(--brake); }
+.r-ans.ok { color: var(--good); }
+
+/* Sikkerhetskontrollen */
+.s-area { padding-top: 2px; padding-bottom: 2px; }
+.s-task + .s-task { border-top: 1px solid var(--line); }
+.s-task summary { font-size: 1rem; font-weight: 700; gap: 10px; padding: 10px 0; }
+.s-task summary::before { display: none; }
+.s-task summary > span:nth-child(2) { flex: 1; }
+.s-task[open] summary > .ico { transform: rotate(90deg); }
+.s-state { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; }
+.s-state.ok { background: var(--good); border-color: var(--good); color: var(--on-color); }
+.s-how { margin: 4px 0 10px; padding-left: 22px; display: grid; gap: 6px; }
+.s-fault { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+.s-task .btn-row { margin-bottom: 10px; }
+.s-task .btn-row .btn { width: 100%; margin: 0; padding: 10px 12px; white-space: nowrap; }
+
+/* Gult blinkende lys på tegningen */
+.tsvg-blink { animation: tsvg-blink 1.1s steps(1) infinite; }
+@keyframes tsvg-blink { 50% { opacity: .15; } }
+@media (prefers-reduced-motion: reduce) { .tsvg-blink { animation: none; } }

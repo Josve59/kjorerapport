@@ -62,7 +62,12 @@ const P = {
   camera: 'M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   repeat: 'M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4',
   sign: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 18.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13z',   // fartsgrenseskilt: tykk ring
-  checkbox: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z'
+  checkbox: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z',
+  // 0.14.0: teori og sikkerhetskontroll
+  bolt: 'M13 2L4 14h7l-1 8 9-12h-7z',
+  quiz: 'M9.1 9a3 3 0 1 1 4.1 2.8c-.8.3-1.2 1-1.2 1.8v.4M12 17h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  wrench: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z'
 };
 
 /* Leser opp tekst med norsk stemme hvis telefonen har en. Returnerer false hvis tale ikke støttes. */

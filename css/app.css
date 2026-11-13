@@ -690,8 +690,9 @@ details.gw summary { font-size: 1rem; min-height: 48px; }
 .start-suggest { margin: -8px 0 16px; font-weight: 700; color: #f2be22; font-size: .95rem; max-width: 80%; }
 .banner > span:first-child { display: flex; align-items: center; gap: 8px; }
 .banner-actions { display: flex; align-items: center; gap: 6px; flex: none; }
-.mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-.mini-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; font: inherit; color: inherit; cursor: pointer; margin: 0; padding: 14px; }
+/* minmax(0, 1fr): et langt ord i et kort skal ikke gjøre kolonnen bredere enn skjermen */
+.mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.mini-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; font: inherit; color: inherit; cursor: pointer; margin: 0; padding: 14px; min-width: 0; }
 .mini-card strong { font-size: 1.5rem; margin-top: 6px; }
 .mini-card .card-title { font-size: .95rem; font-weight: 800; }
 .focus-suggest { margin-top: 12px; padding: 12px; border-radius: 14px; background: var(--bg); }
