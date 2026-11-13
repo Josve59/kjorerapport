@@ -32,7 +32,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.17.0';
+export const APP_VERSION = '0.17.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -173,6 +173,7 @@ const num = v => (v === '' || v === null || v === undefined ? NaN : Number(Strin
 function updateCamCard() {
   const settings = getSettings(), calibrated = !!getCalib();
   $('#btn-go-camera').classList.toggle('warn', hasPlus() && !!settings.cameraOn && !calibrated && !roadOnly());
+  $('#cam-card-title').textContent = roadOnly() ? 'Veikamera' : 'Speil og skulderblikk';
   $('#cam-card-text').textContent = !hasPlus() ? (plusState().trialAvailable ? 'Prøv Pluss gratis i 14 dager: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.' : 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.')
     : roadOnly() ? (settings.cameraOn ? 'Veikameraet er slått på: bilen foran, feltlinjene og fartsskiltene. Trykk for å teste.' : 'Veikameraet er valgt, men ikke slått på. Trykk for å teste og slå det på.')
     : !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
@@ -2361,6 +2362,8 @@ function renderDriverSettings() {
 /* Visning (0.12.0, midlertidig): bytt mellom gratis, Pluss, koblet til trafikkskole og trafikklærer. Bare i
    testbyggene (Xcode og TestFlight) og i nettversjonen; App Store-utgaven følger alltid App Store. */
 async function viewModesAllowed() {
+  // Ikke for testere som kom via testlenken (0.17.1): valget er et verktøy for eieren, og «Gratis» ville skjult Pluss
+  if (getSettings().linkSetup) return false;
   if (!window.kjNative) return true;
   const info = window.kjNative.info ? await window.kjNative.info().catch(() => null) : null;
   return !!(info && info.devTools);

@@ -11,7 +11,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Kjørerapport">
-  <link rel="manifest" href="./manifest.webmanifest">
+  <!-- Manifestet velges her (0.17.1): med testlenken ?kamera=vei starter også appen på Hjem-skjermen med veikameraet.
+       iPhone bruker manifestets start_url når siden legges på Hjem-skjermen, ikke adressen som står i Safari. -->
+  <script>(function () { var l = document.createElement('link'); l.rel = 'manifest'; l.href = /[?&]kamera=vei(&|$)/.test(location.search) ? './manifest-vei.webmanifest' : './manifest.webmanifest'; document.head.appendChild(l); })();</script>
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="preload" href="./fonts/overpass-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -366,7 +368,7 @@
     </section>
 
     <h2 class="group-title"><span data-icon="camera"></span>Kamera</h2>
-    <button type="button" class="card cam-card" id="btn-go-camera"><span class="cam-card-ico" data-icon="mirror"></span><span><strong>Speil og skulderblikk</strong><span class="muted small" id="cam-card-text">Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.</span></span><span class="cam-chev" data-icon="chev"></span></button>
+    <button type="button" class="card cam-card" id="btn-go-camera"><span class="cam-card-ico" data-icon="mirror"></span><span class="cam-card-body"><strong id="cam-card-title">Speil og skulderblikk</strong><span class="muted small" id="cam-card-text">Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.</span></span><span class="cam-chev" data-icon="chev"></span></button>
 
     <h2 class="group-title"><span data-icon="volume"></span>Rapporten</h2>
     <section class="card">
@@ -484,7 +486,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.17.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.17.1</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 
