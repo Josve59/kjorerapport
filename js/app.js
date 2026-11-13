@@ -21,7 +21,7 @@ import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit, overlayCamSigns } from './signs.js';
 import { createLaneEase } from './laneease.js';
 import { crestSpeed, speedScore, totalScore } from './speedfit.js';
-import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, stopTheory, theorySummary, theoryMiniCards } from './theoryui.js';
+import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory } from './theoryui.js';
 import { normProgress, tagsFromDrives } from './theory.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
@@ -32,7 +32,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.14.0';
+export const APP_VERSION = '0.15.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -414,13 +414,14 @@ const theoryCtx = { progress: theoryProgress, save: saveTheory, driveTags: theor
 function renderTheoryRoute(h) {
   show('theory');
   const head = $('#theory-head'), title = $('#theory-title'), root = $('#theory-root');
-  const titles = { '#/teori': 'Teori', '#/teori/resultat': 'Resultat', '#/sikkerhetskontroll': 'Sikkerhetskontroll' };
+  const titles = { '#/teori': 'Teori', '#/teori/resultat': 'Resultat', '#/teori/skilt': 'Skilt', '#/sikkerhetskontroll': 'Sikkerhetskontroll' };
   head.hidden = !titles[h];
   title.textContent = titles[h] || '';
   if (h === '#/teori') renderTheoryHub(root, theoryCtx);
   else if (h === '#/teori/ov') renderPractice(root, theoryCtx);
   else if (h === '#/teori/prove') renderExam(root, theoryCtx);
   else if (h === '#/teori/resultat') renderExamResult(root, theoryCtx);
+  else if (h === '#/teori/skilt') renderSignHub(root, theoryCtx);
   else if (h === '#/sikkerhetskontroll') renderSafetyHub(root, theoryCtx);
   else if (h === '#/sikkerhetskontroll/ov') renderSafetyDrill(root, theoryCtx);
   else location.hash = '#/teori';
@@ -914,9 +915,10 @@ async function renderTeacher() {
   // Fra starten av dagen for forrige time (lokal tid)
   const from = mode === 'lesson' ? new Date(lesson + 'T00:00:00').getTime() : mode === '30' ? Date.now() - 30 * 86400000 : null;
   const sum = teacherSummary(rows, { from, driver, plan: planState().mine });
-  root.innerHTML = teacherHtml(sum, { note: noteIn.value.trim() });
+  const theory = teacherTheory(theoryProgress());   // teori og sikkerhetskontroll (0.15.0), null før eleven har øvd
+  root.innerHTML = teacherHtml(sum, { note: noteIn.value.trim(), theory });
   $('#btn-teacher-print').onclick = () => window.print();
-  $('#btn-teacher-share').onclick = () => shareText(teacherText(sum, { note: noteIn.value.trim() }));
+  $('#btn-teacher-share').onclick = () => shareText(teacherText(sum, { note: noteIn.value.trim(), theory }));
   $('#btn-teacher-done').onclick = () => {
     const d = new Date(), iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const cur = getSettings();
@@ -2523,6 +2525,7 @@ function wireTabbar() {
 function goBack() {
   const h = location.hash;
   // Teori og sikkerhetskontroll (0.14.0): fra øving og prøve til oversikten, fra oversikten dit du kom fra
+  if (h === '#/teori/ov') { location.hash = practiceBack(); return; }
   if (/^#\/teori\//.test(h)) { location.hash = '#/teori'; return; }
   if (h === '#/sikkerhetskontroll/ov') { location.hash = '#/sikkerhetskontroll'; return; }
   if (h === '#/teori' || h === '#/sikkerhetskontroll') { location.hash = theoryFrom || '#/'; return; }

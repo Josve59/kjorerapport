@@ -340,3 +340,19 @@ p, li, dd { text-wrap: pretty; }
 .tsvg-blink { animation: tsvg-blink 1.1s steps(1) infinite; }
 @keyframes tsvg-blink { 50% { opacity: .15; } }
 @media (prefers-reduced-motion: reduce) { .tsvg-blink { animation: none; } }
+
+/* ---------- Skiltprøven (0.15.0) ---------- */
+.th-signs-cta { margin-top: 4px; }
+.th-hero .th-bar { margin: 4px 0 8px; }
+.sg-blurb { margin: 0 0 12px; }
+.sg-grid { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sg-tile { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px 10px; border: 0; border-radius: 14px; background: var(--surface-2); color: inherit; font: inherit; cursor: pointer; transition: transform .12s var(--ease, ease); }
+.sg-tile:active { transform: scale(.96); }
+.sg-fig .tsvg { width: 58px; height: 58px; display: block; }
+.sg-name { font-size: .78rem; font-weight: 700; line-height: 1.2; text-align: center; overflow-wrap: anywhere; hyphens: auto; }
+/* Status: grønn lært, rød feil sist, gul under øving, ingen prikk før du har øvd */
+.sg-dot { position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%; }
+.sg-dot.lart { background: var(--good); } .sg-dot.feil { background: var(--brake); } .sg-dot.ov { background: var(--primary); }
+.q-sum-sign .tsvg { width: 26px; height: 26px; display: block; }
+.q-sum-sign { flex: none; }
+dialog.sheet .q-head h2 { margin: 0; }

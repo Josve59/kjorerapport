@@ -44,3 +44,18 @@ test('trafikklærer: tomt tidsrom', () => {
   assert.match(teacherHtml(s), /Ingen turer i perioden/);
   assert.equal(fmtHours(3900), '1 t 05 min');
 });
+
+test('teori og sikkerhetskontroll på trafikklærersiden (0.15.0)', () => {
+  const theory = { level: 'nesten', taken: 2, passed: 1, last: { correct: 40, total: 45, passed: true, at: 1 }, learned: 120, total: 235, signs: 12, signsTotal: 50, safety: { known: 30, total: 43 } };
+  const s = teacherSummary([], { from: Date.parse('2026-12-01T00:00:00Z') });
+  // Også uten turer i perioden skal teorien vises
+  assert.match(teacherText(s, { theory }), /Teori: siste øveprøve 40 av 45 \(bestått\), 1 av 2 øveprøver bestått, 120 av 235 spørsmål lært, 12 av 50 skilt lært, sikkerhetskontroll 30 av 43 oppgaver\./);
+  const html = teacherHtml(s, { theory });
+  assert.match(html, /Ingen turer i perioden/);
+  assert.match(html, /Teori og sikkerhetskontroll/);
+  assert.match(html, /40 av 45 · bestått/);
+  // Uten øving: ingen teorilinje og ikke noe kort
+  assert.doesNotMatch(teacherText(s), /Teori:/);
+  assert.doesNotMatch(teacherHtml(s), /Teori og sikkerhetskontroll/);
+  assert.match(teacherText(s, { theory: { ...theory, taken: 7, passed: 4, last: { correct: 33, total: 45, passed: false, at: 2 } } }), /33 av 45 \(ikke bestått\), 4 av de 5 siste øveprøvene bestått/);
+});

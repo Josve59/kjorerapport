@@ -142,6 +142,22 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.15.0 – the sign test, more questions, and theory for the driving teacher
+
+**Sign test** (`js/theory-signs.js`, new page `#/teori/skilt`)
+- 50 signs a driver must know, in five groups: danger, give way and priority, prohibition, mandatory and information signs. The names are the ones in skiltforskriften. Each sign has a short meaning, written from the regulation and the traffic rules.
+- 22 of them are newly drawn in `js/trafficsvg.js` (for example narrowing road, road works, falling rocks, children, cyclists, elk, crosswind, no turning, no U-turn, speed limit zone, mandatory roundabout, passing place, speed camera). The drawings are simplified; the real signs can look a little different.
+- The page shows every sign with a dot for its status (learned, wrong last time, being practised). Tap a sign to see its name and meaning, and have it read aloud.
+- Practise all the signs, one group, or only the ones you got wrong: «Hva betyr dette skiltet?» with four sign names to choose from. The wrong answers are other signs from the same group, so you have to tell similar signs apart. A sign counts as learned after 3 right answers in a row, as for the questions.
+- Back from a sign practice goes to the sign page, not to the theory page.
+
+**More questions:** 20 new questions in the two thinnest themes, «Fører og andre trafikanter» (now 29) and «Lover og regler» (now 29), so the tests repeat less. Among them: school patrols, pedestrians walking on the left, flashing yellow lights, cyclists turning left from the right side, a ball rolling into the road, the windscreen pillar hiding pedestrians, trams at stops, not stopping in a crossing, dazzle at night, passing near junctions, bus lanes, level crossings, passing places, home zones, shared lanes, queues across a junction and cycle lanes. 235 questions in all, each with an explanation and its source.
+
+**For the driving teacher:** «Til trafikklæreren» now has a card «Teori og sikkerhetskontroll» (last practice test, tests passed, questions and signs learned, safety-check tasks known), and the shared text has a «Teori:» line. It is shown only after the learner has practised theory or the safety check, and also in a period without drives.
+
+- **Tested:** unit tests for the sign list (every sign drawn, named, explained and in the right group by its number; four different answers, all of them real sign names), sign practice by group, the teacher card and text, and the theory status. In the browser at phone width, light and dark: the new signs, the sign page, the sign sheet with read-aloud, a sign practice with a wrong answer, the back button, the theory page and the teacher page. 234 tests pass.
+- **Not tested:** on the phone. The new questions and sign meanings, like the rest, should be read by a driving teacher.
+
 ## What's new in 0.14.0 – the theory test and the safety check
 
 The app now covers more of the way to a licence: practice for the **theory test for class B** and the **safety check** (sikkerhetskontrollen) on the driving test. Both are under Opplæring, with two small cards on Hjem. They are **free for now**, not part of Pluss; the owner decides that.

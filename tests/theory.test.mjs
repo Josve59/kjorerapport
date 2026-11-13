@@ -2,10 +2,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EXAM, EXAM_QUOTA, emptyProgress, normProgress, rng, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
-  safetyFor, pickSafety, markSafety, safetyStats, tagsFromDrives, optionOrder } from '../js/theory.js';
+  safetyFor, pickSafety, markSafety, safetyStats, tagsFromDrives, optionOrder, theoryBrief } from '../js/theory.js';
 import { THEMES, QUESTIONS } from '../js/theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from '../js/safety-check.js';
 import { figure, FIGURE_KEYS } from '../js/trafficsvg.js';
+import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS } from '../js/theory-signs.js';
 
 const TAGS = new Set(['bakketopp', 'fart', 'avstand', 'feltskifte', 'glatt', 'morket', 'rundkjoring', 'forbikjoring']);
 
@@ -126,4 +127,46 @@ test('fra turene: hva eleven bør lese seg opp på', () => {
   assert.deepEqual(t.map(x => x.tag), ['bakketopp', 'fart', 'morket']);
   assert.match(t[0].why, /2 bakketopper/);
   assert.match(t[1].why, /1 gang$/);
+});
+
+test('skiltprøven: hvert skilt har tegning, navn, betydning og fire ulike svar', () => {
+  const groups = new Set(SIGN_GROUPS.map(g => g.id)), ids = new Set(), names = new Set();
+  for (const s of SIGNS) {
+    assert.ok(!ids.has(s.id), 'dobbelt skilt ' + s.id); ids.add(s.id);
+    assert.ok(!names.has(s.name), 'likt navn ' + s.name); names.add(s.name);
+    assert.ok(groups.has(s.g), `${s.id}: ukjent gruppe`);
+    assert.ok(figure(s.img).startsWith('<svg'), `${s.id}: tegningen ${s.img} finnes ikke`);
+    assert.ok(s.meaning.length > 30, `${s.id}: betydningen mangler`);
+    // Nummeret bestemmer gruppen i skiltforskriften: 1xx fare, 2xx vikeplikt, 3xx forbud, 4xx påbud, 5xx opplysning
+    assert.equal(s.g, { 1: 'fare', 2: 'vike', 3: 'forbud', 4: 'pabud', 5: 'opplysning' }[s.id[0]], s.id);
+  }
+  for (const g of SIGN_GROUPS) assert.ok(SIGNS.filter(s => s.g === g.id).length >= 3, 'for få skilt i ' + g.id);
+  assert.equal(SIGN_QUESTIONS.length, SIGNS.length);
+  for (const q of SIGN_QUESTIONS) {
+    const s = SIGNS.find(x => x.id === q.sign);
+    assert.equal(q.a[0], s.name, q.id);
+    assert.equal(new Set(q.a).size, 4, `${q.id}: fire ulike svar`);
+    assert.ok(q.a.slice(1).every(n => names.has(n) && n !== s.name), `${q.id}: gale svar er andre skilt`);
+    assert.match(q.ref, new RegExp('skilt ' + q.sign), q.id);
+  }
+  // Øving på én gruppe: bare skiltene i gruppen
+  const pabud = SIGN_QUESTIONS.filter(q => SIGNS.find(s => s.id === q.sign).g === 'pabud').map(q => q.id);
+  const round = pickPractice(SIGN_QUESTIONS, emptyProgress(), { ids: pabud, n: 10, rand: rng(5) });
+  assert.deepEqual(round.map(q => q.id).sort(), pabud.slice().sort());
+  // Svar på skilt lagres som andre spørsmål, uten å telle med i temaene
+  const p = answer(emptyProgress(), 'sk100', 0, 1);
+  assert.equal(themeStats(QUESTIONS, p, THEMES).skilt.seen, 0);
+});
+
+test('status til trafikklæreren: tom før eleven har øvd, ellers prøver, spørsmål, skilt og sikkerhetskontroll', () => {
+  const opts = { questions: QUESTIONS, signQuestions: SIGN_QUESTIONS, tasks: SAFETY };
+  assert.equal(theoryBrief(emptyProgress(), opts), null);
+  let p = emptyProgress();
+  for (let i = 0; i < 3; i++) { p = answer(p, 'v01', 0, i); p = answer(p, 'sk100', 0, i); }
+  p = markSafety(p, SAFETY[0].id, true, 1);
+  p = addExam(p, { correct: 39, total: 45, passed: true, byTheme: {}, wrong: [] }, { at: 5 });
+  const b = theoryBrief(p, opts);
+  assert.deepEqual([b.learned, b.signs, b.safety.known, b.taken, b.passed, b.last.correct], [1, 1, 1, 1, 1, 39]);
+  assert.equal(b.total, QUESTIONS.length);
+  assert.equal(b.signsTotal, SIGN_QUESTIONS.length);
 });

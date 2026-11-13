@@ -60,11 +60,35 @@ export function teacherSummary(rows, { from = null, to = Infinity, driver = '', 
 const trendWord = s => (s.early === null ? null : s.late - s.early >= 5 ? `Bedre: snittet gikk fra ${s.early} til ${s.late} poeng` : s.early - s.late >= 5 ? `Svakere: snittet gikk fra ${s.early} til ${s.late} poeng` : `Stabilt rundt ${s.avg} poeng`);
 const period = s => (s.from === null ? 'alle turer' : `${dateFmt(s.from)} – ${dateFmt(s.to)}`);
 
-/* Teksten som deles (melding eller e-post til trafikklæreren). */
-export function teacherText(s, { note = '' } = {}) {
+/* Teori og sikkerhetskontroll (0.15.0), fra theoryBrief i theory.js: det eleven har øvd på i appen */
+const examWord = b => (b.taken >= 5 ? `${b.passed} av de 5 siste øveprøvene bestått` : `${b.passed} av ${b.taken} ${b.taken === 1 ? 'øveprøve' : 'øveprøver'} bestått`);
+function theoryLine(b) {
+  const parts = [];
+  if (b.last) parts.push(`siste øveprøve ${b.last.correct} av ${b.last.total} (${b.last.passed ? 'bestått' : 'ikke bestått'}), ${examWord(b)}`);
+  else parts.push('ingen øveprøver ennå');
+  parts.push(`${b.learned} av ${b.total} spørsmål lært`, `${b.signs} av ${b.signsTotal} skilt lært`, `sikkerhetskontroll ${b.safety.known} av ${b.safety.total} oppgaver`);
+  return `Teori: ${parts.join(', ')}.`;
+}
+function theoryCard(b) {
+  if (!b) return '';
+  return `<section class="card">
+      <h2 class="card-title">${icon('quiz')}Teori og sikkerhetskontroll</h2>
+      <dl class="stats t-man">
+        <div><dt>Siste øveprøve</dt><dd>${b.last ? `${b.last.correct} av ${b.last.total} · ${b.last.passed ? 'bestått' : 'ikke bestått'}` : '–'}</dd></div>
+        ${b.taken ? `<div><dt>Øveprøver bestått</dt><dd>${b.passed} av ${b.taken >= 5 ? 'de 5 siste' : b.taken}</dd></div>` : ''}
+        <div><dt>Spørsmål lært</dt><dd>${b.learned} av ${b.total}</dd></div>
+        <div><dt>Skilt lært</dt><dd>${b.signs} av ${b.signsTotal}</dd></div>
+        <div><dt>Sikkerhetskontroll</dt><dd>${b.safety.known} av ${b.safety.total} oppgaver</dd></div>
+      </dl>
+      <p class="muted small">Øveprøvene er bygget som teoriprøven: 45 oppgaver og 38 riktige for å bestå. Spørsmålene er appens egne. Sikkerhetskontrollen teller oppgavene eleven selv har merket som kan.</p>
+    </section>`;
+}
+
+/* Teksten som deles (melding eller e-post til trafikklæreren). theory: fra theoryBrief, eller null. */
+export function teacherText(s, { note = '', theory = null } = {}) {
   const L = [];
   L.push(`Øvingskjøring${s.driver ? ' – ' + s.driver : ''} (${period(s)})`);
-  if (!s.count) { L.push('Ingen turer i perioden.'); return L.join('\n'); }
+  if (!s.count) { L.push('Ingen turer i perioden.'); if (theory) L.push(theoryLine(theory)); return L.join('\n'); }
   L.push(`${s.count} ${s.count === 1 ? 'tur' : 'turer'}, ${fmtHours(s.time)}, ${km(s.km)}. By ${fmtHours(s.road.by)}, landevei ${fmtHours(s.road.land)}, motorvei ${fmtHours(s.road.motor)}. Mørke ${fmtHours(s.light.dark)}.`);
   const m = s.maneuvers;
   L.push(`Manøvrer: ${m.roundabouts} rundkjøringer, ${m.laneChanges} feltskifter${m.junctions ? `, ${m.junctions} kryss med vikeplikt eller stopp` : ''}.`);
@@ -76,14 +100,15 @@ export function teacherText(s, { note = '' } = {}) {
   const mk = Object.entries(s.marks);
   if (mk.length) L.push(`Ledsageren merket: ${mk.map(([c, n]) => `${(MARK_CATS[c] ? MARK_CATS[c].label : c).toLowerCase()} ${n}`).join(', ')}.`);
   for (const n of s.notes) L.push(`– ${dateFmt(n.at)}: ${n.text}`);
+  if (theory) L.push(theoryLine(theory));
   if (note) L.push(`Spørsmål til trafikklæreren: ${note}`);
   L.push('Fra Kjørerapport. Målingene er veiledende.');
   return L.join('\n');
 }
 
 /* Selve siden. */
-export function teacherHtml(s, { note = '' } = {}) {
-  if (!s.count) return `<section class="card empty"><strong>Ingen turer i perioden</strong><span class="muted small">Velg et lengre tidsrom over, eller kjør en tur.</span></section>`;
+export function teacherHtml(s, { note = '', theory = null } = {}) {
+  if (!s.count) return `<section class="card empty"><strong>Ingen turer i perioden</strong><span class="muted small">Velg et lengre tidsrom over, eller kjør en tur.</span></section>${theoryCard(theory)}`;
   const bar = (obj, keys, labels, cls) => {
     const tot = keys.reduce((a, k) => a + obj[k], 0) || 1;
     return `<div class="road-mix">${keys.filter(k => obj[k] > 0).map(k => `<span class="${cls}-${k}" style="width:${(obj[k] / tot * 100).toFixed(1)}%"></span>`).join('')}</div>
@@ -141,6 +166,8 @@ export function teacherHtml(s, { note = '' } = {}) {
         <ul class="t-plan">${st.items.filter(it => it.done || it.evidence).map(it => `<li class="${it.done ? 'done' : ''}">${it.done ? icon('check', 16) : '<span class="t-dot"></span>'}<span>${esc(it.label)}${it.evidence ? ` <span class="muted small">· ${esc(it.evidence)}</span>` : ''}</span></li>`).join('')}</ul>`).join('') || '<p class="muted">Ingen punkter krysset av eller øvd ennå.</p>'}
       <p class="muted small">Haken er satt av eleven eller ledsageren. Grå tekst er hva appen har sett på alle turene.</p>
     </section>
+
+    ${theoryCard(theory)}
 
     ${note ? `<section class="card"><h2 class="card-title">${icon('note')}Spørsmål til trafikklæreren</h2><p class="t-q">${esc(note)}</p></section>` : ''}
     <p class="muted small center">Fra Kjørerapport. Målt med telefonens GPS og bevegelsessensorer. Målingene er veiledende.</p>`;

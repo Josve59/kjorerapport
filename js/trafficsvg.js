@@ -18,6 +18,27 @@ const arrowUp = (fill = WH) => `<path d="M44 78 V44 H34 L50 22 L66 44 H56 V78 Z"
 /* Bil sett bakfra (til forbikjøringsforbud) */
 const carRear = (x, fill) => `<g transform="translate(${x} 0)"><path d="M-11 44 L-8 34 H8 L11 44 Z" fill="${fill}"/><rect x="-14" y="43" width="28" height="15" rx="3" fill="${fill}"/><rect x="-13" y="57" width="6" height="6" rx="1" fill="${fill}"/><rect x="7" y="57" width="6" height="6" rx="1" fill="${fill}"/></g>`;
 
+/* Tre piler i ring mot klokka, som trafikken i en rundkjøring */
+function roundArrows(cx, cy, r, color, w) {
+  const arcs = [], hl = w * 1.35, hw = w;
+  for (let k = 0; k < 3; k++) {
+    const a0 = (-90 + k * 120) * Math.PI / 180, a1 = a0 - 85 * Math.PI / 180;
+    const p0 = [cx + r * Math.cos(a0), cy + r * Math.sin(a0)], p1 = [cx + r * Math.cos(a1), cy + r * Math.sin(a1)];
+    const t = [Math.sin(a1), -Math.cos(a1)];   // retningen videre mot klokka ved enden
+    const h = [p1[0] + t[0] * hl, p1[1] + t[1] * hl], n = [Math.cos(a1) * hw, Math.sin(a1) * hw];
+    arcs.push(`<path d="M${p0[0].toFixed(1)} ${p0[1].toFixed(1)} A${r} ${r} 0 0 0 ${p1[0].toFixed(1)} ${p1[1].toFixed(1)}" fill="none" stroke="${color}" stroke-width="${w}"/><polygon points="${(p1[0] + n[0]).toFixed(1)},${(p1[1] + n[1]).toFixed(1)} ${h[0].toFixed(1)},${h[1].toFixed(1)} ${(p1[0] - n[0]).toFixed(1)},${(p1[1] - n[1]).toFixed(1)}" fill="${color}"/>`);
+  }
+  return arcs.join('');
+}
+const slash = () => `<line x1="24" y1="24" x2="76" y2="76" stroke="${RED}" stroke-width="8"/>`;
+/* «Slutt på»-skilt: sorte skråstriper over et grått symbol (klippes til skiltet) */
+const ended = id => `<clipPath id="${id}"><circle cx="50" cy="50" r="40"/></clipPath><g clip-path="url(#${id})" stroke="${BLK}" stroke-width="2.5"><line x1="78" y1="30" x2="32" y2="76"/><line x1="70" y1="22" x2="24" y2="68"/><line x1="84" y1="38" x2="40" y2="82"/></g>`;
+/* Barn som løper, h høy fra top */
+const runner = (x, top, h) => {
+  const P = (dx, dy) => `${(x + dx * h).toFixed(1)} ${(top + dy * h).toFixed(1)}`;
+  return `<circle cx="${(x + 0.02 * h).toFixed(1)}" cy="${(top + 0.1 * h).toFixed(1)}" r="${(0.1 * h).toFixed(1)}" fill="${BLK}"/><g stroke="${BLK}" stroke-width="${(0.11 * h).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M${P(0.02, 0.26)} L${P(-0.04, 0.58)} L${P(-0.22, 0.98)}"/><path d="M${P(-0.04, 0.58)} L${P(0.14, 0.78)} L${P(0.08, 0.98)}"/><path d="M${P(-0.18, 0.5)} L${P(0.01, 0.32)} L${P(0.2, 0.44)}"/></g>`;
+};
+
 const SIGNS = {
   202: () => `<polygon points="8,14 92,14 50,88" fill="${WH}" stroke="${RED}" stroke-width="8" stroke-linejoin="round"/>`,
   204: () => {
@@ -46,20 +67,35 @@ const SIGNS = {
   552: () => `${blueSquare}${num('P', WH, 64)}`,
   100: () => tri(`<path d="M40 76 V58 Q40 44 56 42" fill="none" stroke="${BLK}" stroke-width="7"/><polygon points="54,33 68,42 54,51" fill="${BLK}"/>`),
   109: () => tri(`<path d="M24 74 Q50 46 76 74 Z" fill="${BLK}"/>`),
-  126: () => {
-    const cx = 50, cy = 58, r = 13, arcs = [];
-    for (let k = 0; k < 3; k++) {
-      const a0 = (-90 + k * 120) * Math.PI / 180, a1 = a0 - 85 * Math.PI / 180;   // mot klokka, som trafikken i en rundkjøring
-      const p0 = [cx + r * Math.cos(a0), cy + r * Math.sin(a0)], p1 = [cx + r * Math.cos(a1), cy + r * Math.sin(a1)];
-      const t = [Math.sin(a1), -Math.cos(a1)];   // retningen videre mot klokka ved enden
-      const h = [p1[0] + t[0] * 6, p1[1] + t[1] * 6], n = [Math.cos(a1) * 4.5, Math.sin(a1) * 4.5];
-      arcs.push(`<path d="M${p0[0].toFixed(1)} ${p0[1].toFixed(1)} A${r} ${r} 0 0 0 ${p1[0].toFixed(1)} ${p1[1].toFixed(1)}" fill="none" stroke="${BLK}" stroke-width="4.5"/><polygon points="${(p1[0] + n[0]).toFixed(1)},${(p1[1] + n[1]).toFixed(1)} ${h[0].toFixed(1)},${h[1].toFixed(1)} ${(p1[0] - n[0]).toFixed(1)},${(p1[1] - n[1]).toFixed(1)}" fill="${BLK}"/>`);
-    }
-    return tri(arcs.join(''));
-  },
+  126: () => tri(roundArrows(50, 58, 13, BLK, 4.5)),
   132: () => tri(`<rect x="41" y="33" width="18" height="44" rx="5" fill="${BLK}"/><circle cx="50" cy="42" r="5" fill="#e53935"/><circle cx="50" cy="55" r="5" fill="#fbc02d"/><circle cx="50" cy="68" r="5" fill="#43a047"/>`),
   138: () => `<g transform="rotate(45 50 50)"><rect x="4" y="42" width="92" height="16" rx="2" fill="${WH}" stroke="${RED}" stroke-width="4"/></g><g transform="rotate(-45 50 50)"><rect x="4" y="42" width="92" height="16" rx="2" fill="${WH}" stroke="${RED}" stroke-width="4"/></g>`,
-  156: () => tri(`<rect x="45.5" y="34" width="9" height="28" rx="2" fill="${BLK}"/><circle cx="50" cy="71" r="5" fill="${BLK}"/>`)
+  156: () => tri(`<rect x="45.5" y="34" width="9" height="28" rx="2" fill="${BLK}"/><circle cx="50" cy="71" r="5" fill="${BLK}"/>`),
+  // Skiltprøven (0.15.0). Symbolene holdes innenfor den hvite flaten i trekanten, som er smal øverst.
+  102: () => tri(`<path d="M44 79 V70 C44 60 56 62 56 52 V48" fill="none" stroke="${BLK}" stroke-width="6"/><polygon points="49,49 63,49 56,37" fill="${BLK}"/>`),
+  104: () => tri(`<polygon points="27,79 74,79 27,64" fill="${BLK}"/>${`<text x="58" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" fill="${BLK}">10%</text>`}`),
+  106: () => tri(`<path d="M36 80 V68 L43 58 V40 M64 80 V68 L57 58 V40" fill="none" stroke="${BLK}" stroke-width="5"/>`),
+  108: () => tri(`<path d="M22 79 V73 H28 Q35 57 42 73 H58 Q65 57 72 73 H78 V79 Z" fill="${BLK}"/>`),
+  110: () => tri(`<polygon points="60,79 82,79 73,69" fill="${BLK}"/><circle cx="46" cy="41" r="4.5" fill="${BLK}"/><g stroke="${BLK}" stroke-width="4.5" stroke-linecap="round" fill="none"><path d="M47 47 L50 62 L43 78"/><path d="M50 62 L57 78"/><path d="M48 52 L60 58"/></g><path d="M54 47 L67 66" stroke="${BLK}" stroke-width="3" stroke-linecap="round"/><polygon points="63,65 71,62 74,70 66,73" fill="${BLK}"/>`),
+  114: () => tri(`<polygon points="30,79 30,64 38,46 46,41 46,79" fill="${BLK}"/><circle cx="55" cy="52" r="3.5" fill="${BLK}"/><circle cx="60" cy="63" r="4.5" fill="${BLK}"/><circle cx="68" cy="74" r="4" fill="${BLK}"/>`),
+  116: () => tri(`<g transform="rotate(-12 50 47) translate(50 47) scale(.62) translate(-50 -48)">${carRear(50, BLK)}</g><path d="M44 79 C37 72 50 68 44 59 M56 79 C49 72 62 68 56 59" fill="none" stroke="${BLK}" stroke-width="3"/>`),
+  122: () => tri(`<path d="M32 79 V64 A18 20 0 0 1 68 64 V79 H60 V66 A10 11 0 0 0 40 66 V79 Z" fill="${BLK}"/>`),
+  124: () => tri(`<rect x="45" y="36" width="10" height="43" fill="${BLK}"/><rect x="30" y="58" width="40" height="10" fill="${BLK}"/>`),
+  134: () => tri(`<g fill="${BLK}"><rect x="31" y="58" width="38" height="5"/><rect x="31" y="68" width="38" height="5"/><rect x="34" y="52" width="5" height="27"/><rect x="47.5" y="52" width="5" height="27"/><rect x="61" y="52" width="5" height="27"/></g>`),
+  140: () => tri(`<g fill="${BLK}"><rect x="31" y="74" width="7" height="4"/><rect x="41" y="74" width="7" height="4"/><rect x="51" y="74" width="7" height="4"/><rect x="61" y="74" width="7" height="4"/><circle cx="50" cy="42" r="4"/></g><g stroke="${BLK}" stroke-width="4" stroke-linecap="round" fill="none"><path d="M49 47 L47 59 L53 71"/><path d="M47 59 L41 70"/><path d="M49 50 L56 56"/><path d="M49 50 L42 55"/></g>`),
+  142: () => tri(`${runner(43, 40, 38)}${runner(60, 52, 27)}`),
+  144: () => tri(`<g fill="none" stroke="${BLK}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><circle cx="36" cy="70" r="8.5"/><circle cx="64" cy="70" r="8.5"/><path d="M36 70 L50 70 L45 56 Z M45 56 H61 L50 70 M61 56 L64 70 M45 56 L43 51 M39 51 H47 M61 56 L59 50 H64"/></g>`),
+  146: () => tri(`<g transform="translate(52 66) scale(.82) translate(-52 -66)" fill="${BLK}"><ellipse cx="56" cy="60" rx="13" ry="7"/><ellipse cx="48" cy="55" rx="6" ry="5"/><rect x="45" y="63" width="3" height="16"/><rect x="50" y="63" width="3" height="15"/><rect x="60" y="63" width="3" height="16"/><rect x="65" y="62" width="3" height="16"/><polygon points="44,53 38,47 35,50 42,60"/><polygon points="39,46 31,50 29,55 33,56 38,52"/><path d="M38 47 L35 41 M36.5 44 L32 42 M38 47 L42 41 M40 44 L45 43" stroke="${BLK}" stroke-width="2.5" stroke-linecap="round"/></g>`),
+  148: () => tri(`<path d="M42 40 V64" stroke="${BLK}" stroke-width="5"/><polygon points="35,62 49,62 42,76" fill="${BLK}"/><path d="M58 78 V52" stroke="${BLK}" stroke-width="5"/><polygon points="51,53 65,53 58,39" fill="${BLK}"/>`),
+  152: () => tri(`<rect x="34" y="48" width="3.5" height="31" fill="${BLK}"/><g fill="${BLK}"><polygon points="38,50 46,51.7 46,61.4 38,62"/><polygon points="50,52.6 57,54.1 57,60.7 50,61.1"/><polygon points="60,54.7 66,56 66,60 60,60.4"/></g>`),
+  330: () => `${ring()}<path d="M58 74 V52 Q58 43 48 43 H42" fill="none" stroke="${BLK}" stroke-width="7"/><polygon points="43,34 43,52 30,43" fill="${BLK}"/>${slash()}`,
+  332: () => `${ring()}<path d="M60 74 V48 A10 10 0 0 0 40 48 V56" fill="none" stroke="${BLK}" stroke-width="7"/><polygon points="33,55 47,55 40,68" fill="${BLK}"/>${slash()}`,
+  336: () => `<circle cx="50" cy="50" r="45" fill="${WH}" stroke="${BLK}" stroke-width="2"/><g transform="translate(0 -1)">${carRear(35, '#9a9a9a')}${carRear(65, '#9a9a9a')}</g>${ended('c336')}`,
+  366: (n = 30) => `<rect x="12" y="4" width="76" height="92" rx="6" fill="${WH}" stroke="${BLK}" stroke-width="2"/><circle cx="50" cy="40" r="26" fill="${WH}" stroke="${RED}" stroke-width="7"/><text x="50" y="41" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="26" fill="${BLK}">${n}</text><text x="50" y="82" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="16" fill="${BLK}">SONE</text>`,
+  368: (n = 30) => `<rect x="12" y="4" width="76" height="92" rx="6" fill="${WH}" stroke="${BLK}" stroke-width="2"/><circle cx="50" cy="40" r="26" fill="${WH}" stroke="#9a9a9a" stroke-width="5"/><text x="50" y="41" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="26" fill="#9a9a9a">${n}</text><text x="50" y="82" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="16" fill="#9a9a9a">SONE</text><line x1="80" y1="12" x2="20" y2="88" stroke="${BLK}" stroke-width="3"/>`,
+  406: () => `${blueDisc}${roundArrows(50, 50, 22, WH, 7)}`,
+  524: () => `${blueSquare}${num('M', WH, 60)}`,
+  556: () => `${blueSquare}<rect x="20" y="40" width="50" height="28" rx="4" fill="${WH}"/><rect x="27" y="34" width="13" height="8" rx="2" fill="${WH}"/><polygon points="70,46 82,40 82,68 70,62" fill="${WH}"/><circle cx="45" cy="54" r="9" fill="${BLUE}"/><circle cx="45" cy="54" r="4.5" fill="${WH}"/>`
 };
 
 /* ---------- Oppmerking: veien sett ovenfra, kjøreretning oppover ---------- */

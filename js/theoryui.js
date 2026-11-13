@@ -3,21 +3,22 @@
    Rutene: #/teori (oversikt), #/teori/ov (øving), #/teori/prove (prøve), #/teori/resultat, #/sikkerhetskontroll,
    #/sikkerhetskontroll/ov. Øving og prøve holdes i minnet; en påbegynt prøve lagres også lokalt, så den overlever
    at appen lukkes. */
-import { icon, speak, stopSpeaking, confirmDialog, toast } from './ui.js';
+import { icon, speak, stopSpeaking, confirmDialog, sheetDialog, toast } from './ui.js';
 import { esc } from './format.js';
 import { THEMES, QUESTIONS } from './theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from './safety-check.js';
 import { figure } from './trafficsvg.js';
+import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS } from './theory-signs.js';
 import { EXAM, LEARNED, READY_RULE, READY_TEXT, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
-  optionOrder, safetyFor, pickSafety, markSafety, safetyStats } from './theory.js';
+  optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief } from './theory.js';
 
-const byId = new Map(QUESTIONS.map(q => [q.id, q]));
+const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS).map(q => [q.id, q]));
 const theme = id => THEMES.find(t => t.id === id) || { title: '', icon: 'quiz' };
 const LETTERS = 'ABCD';
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /* ---------- Tilstand ---------- */
-let practice = null;   // { title, items: [id], orders, i, chosen, results: [bool], back }
+let practice = null;   // { title, filter, items: [id], orders, i, chosen, results: [bool], back: rute å gå tilbake til }
 let drill = null;      // sikkerhetskontroll: { items: [id], i, shown, results: [bool] }
 let examTimer = null;
 const EXAM_KEY = 'kj-teori-prove';
@@ -27,6 +28,10 @@ let lastResult = null;   // siste leverte prøve, til resultatskjermen
 
 export function stopTheory() { if (examTimer) { clearInterval(examTimer); examTimer = null; } stopSpeaking(); }
 export const examInProgress = () => { const e = loadExam(); return e && !e.done ? e : null; };
+/* Status til trafikklærersiden (teacher.js) */
+export const teacherTheory = p => theoryBrief(p, { questions: QUESTIONS, signQuestions: SIGN_QUESTIONS, tasks: SAFETY });
+/* Hvor tilbakeknappen fører fra en øverunde: skiltøving tilbake til skiltene */
+export const practiceBack = () => (practice && practice.back) || '#/teori';
 
 /* Kort sammendrag til Hjem og Opplæring */
 export function theorySummary(p) {
@@ -84,6 +89,7 @@ export async function renderTheoryHub(root, ctx) {
           <span class="th-bar"><span style="width:${pct}%"></span></span><span class="muted small">${s.learned} av ${s.total} lært${s.seen ? ` · ${Math.round(s.right / Math.max(1, s.answers) * 100)} % riktige svar` : ''}</span></span>
         ${icon('chev', 18)}</button></li>`;
     }).join('')}</ul></section>
+    <button type="button" class="card t-cta th-signs-cta" id="th-to-signs"><span class="card-title">${icon('sign')}Skiltprøven</span><span class="muted small">${signsLearned(p)} av ${SIGNS.length} skilt lært. Se alle skiltene og hva de betyr, og øv til du kjenner dem igjen.</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
     <button type="button" class="card t-cta th-safety-cta" id="th-to-safety"><span class="card-title">${icon('wrench')}Sikkerhetskontrollen på oppkjøringen</span><span class="muted small">${sum.safety.known} av ${sum.safety.total} oppgaver kan du. Øv ved bilen på det sensor kan spørre om.</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
     <p class="muted small th-note">Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad. Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
     ${Object.keys(p.q).length || p.exams.length ? '<button type="button" class="link th-reset" id="th-reset">Begynn på nytt</button>' : ''}`;
@@ -91,6 +97,7 @@ export async function renderTheoryHub(root, ctx) {
   root.querySelector('#th-wrong').onclick = () => startPractice(ctx, { title: 'Feilene dine', wrongOnly: true, n: 15 });
   root.querySelector('#th-mix').onclick = () => startPractice(ctx, { title: 'Blandet øving', n: 10 });
   root.querySelector('#th-to-safety').onclick = () => ctx.go('#/sikkerhetskontroll');
+  root.querySelector('#th-to-signs').onclick = () => ctx.go('#/teori/skilt');
   root.querySelectorAll('.th-theme').forEach(b => b.onclick = () => startPractice(ctx, { title: theme(b.dataset.theme).title, theme: b.dataset.theme, n: 10 }));
   const reset = root.querySelector('#th-reset');
   if (reset) reset.onclick = async () => {
@@ -114,10 +121,10 @@ export async function renderTheoryHub(root, ctx) {
 }
 
 /* ---------- Øving med svar og forklaring etter hvert spørsmål ---------- */
-function startPractice(ctx, { title, n = 10, ...filter }) {
-  const items = pickPractice(QUESTIONS, ctx.progress(), { n, ...filter });
+function startPractice(ctx, { title, n = 10, pool = 'teori', back = '#/teori', ...filter }) {
+  const items = pickPractice(pool === 'skilt' ? SIGN_QUESTIONS : QUESTIONS, ctx.progress(), { n, ...filter });
   if (!items.length) { toast('Ingen spørsmål å øve på her akkurat nå.', { type: 'ok' }); return; }
-  practice = { title, filter: { n, ...filter }, items: items.map(q => q.id), orders: Object.fromEntries(items.map(q => [q.id, optionOrder(q)])), i: 0, chosen: null, results: [] };
+  practice = { title, back, filter: { n, pool, back, ...filter }, items: items.map(q => q.id), orders: Object.fromEntries(items.map(q => [q.id, optionOrder(q)])), i: 0, chosen: null, results: [] };
   ctx.go('#/teori/ov');
 }
 
@@ -132,7 +139,7 @@ export function renderPractice(root, ctx) {
       <button type="button" class="icon-btn" id="q-close" aria-label="Avslutt øvingen">${icon('close', 22)}</button></div>
     <span class="th-bar q-prog"><span style="width:${(P.i + (answered ? 1 : 0)) / P.items.length * 100}%"></span></span>
     <section class="card q-card">
-      <p class="eyebrow">${esc(t.title)}</p>
+      <p class="eyebrow">${esc(q.eyebrow || t.title)}</p>
       ${q.img ? `<div class="q-fig">${figure(q.img)}</div>` : ''}
       <div class="q-head"><h2 class="q-text">${esc(q.q)}</h2>${speakBtn('q-read')}</div>
       <div class="q-opts" role="group" aria-label="Svaralternativer">${P.orders[q.id].map((oi, k) => {
@@ -146,7 +153,7 @@ export function renderPractice(root, ctx) {
       <p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
     </section>
     <button type="button" class="btn primary" id="q-next">${P.i + 1 < P.items.length ? 'Neste spørsmål' : 'Se hvordan det gikk'}</button>` : ''}`;
-  root.querySelector('#q-close').onclick = () => { practice = null; ctx.go('#/teori'); };
+  root.querySelector('#q-close').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
   root.querySelector('#q-read').onclick = () => speak(answered ? `${q.q} Riktig svar: ${q.a[0]}. ${q.why}` : readLine({ ...q, a: P.orders[q.id].map(i => q.a[i]) }));
   root.querySelectorAll('.q-opt').forEach(b => b.onclick = () => {
     if (P.chosen !== null) return;
@@ -169,11 +176,57 @@ function renderPracticeDone(root, ctx) {
       <h2>${ok} av ${P.items.length} riktige</h2>
       <p>${ok === P.items.length ? 'Alt riktig. Bra jobbet!' : 'Spørsmålene du svarte feil på, kommer igjen neste gang du øver.'}</p>
     </section>
-    <section class="card"><ul class="q-sum">${P.items.map((id, i) => `<li class="${P.results[i] ? 'ok' : 'no'}">${icon(P.results[i] ? 'check' : 'close', 18)}<span>${esc(byId.get(id).q)}</span></li>`).join('')}</ul></section>
+    <section class="card"><ul class="q-sum">${P.items.map((id, i) => `<li class="${P.results[i] ? 'ok' : 'no'}">${icon(P.results[i] ? 'check' : 'close', 18)}${byId.get(id).sign ? `<span class="q-sum-sign">${figure(byId.get(id).img)}</span>` : ''}<span>${esc(byId.get(id).label || byId.get(id).q)}</span></li>`).join('')}</ul></section>
     <button type="button" class="btn primary" id="q-again">${icon('repeat', 20)}Øv videre</button>
     <button type="button" class="btn secondary" id="q-hub">Til oversikten</button>`;
   root.querySelector('#q-again').onclick = () => startPractice(ctx, { title: P.title, ...P.filter });
-  root.querySelector('#q-hub').onclick = () => { practice = null; ctx.go('#/teori'); };
+  root.querySelector('#q-hub').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
+}
+
+/* ---------- Skiltprøven ---------- */
+const signsLearned = p => SIGN_QUESTIONS.filter(q => isLearned(p.q[q.id])).length;
+const signState = e => !e ? 'ny' : isWrong(e) ? 'feil' : isLearned(e) ? 'lart' : 'ov';
+const SIGN_STATE_TEXT = { ny: 'Ikke øvd ennå', feil: 'Feil sist', ov: 'Under øving', lart: 'Lært' };
+
+export function renderSignHub(root, ctx) {
+  stopTheory();
+  const p = ctx.progress();
+  const learned = signsLearned(p), wrong = SIGN_QUESTIONS.filter(q => isWrong(p.q[q.id])).length;
+  root.innerHTML = `
+    <section class="card th-hero ${learned === SIGNS.length ? 'lv-klar' : learned ? 'lv-nesten' : 'lv-start'}">
+      <p class="eyebrow">Skiltprøven</p>
+      <h2>Kjenn igjen skiltene</h2>
+      <span class="th-bar"><span style="width:${learned / SIGNS.length * 100}%"></span></span>
+      <p class="muted small">${learned} av ${SIGNS.length} skilt lært. Et skilt er lært når du har svart riktig på det ${LEARNED} ganger på rad.</p>
+      <button type="button" class="btn primary" id="sg-go">${icon('quiz', 20)}Øv på skiltene</button>
+      ${wrong ? `<button type="button" class="btn secondary" id="sg-wrong">${icon('repeat', 20)}Øv på feilene (${wrong})</button>` : ''}
+    </section>
+    <p class="muted small th-note">Trykk på et skilt for å se hva det betyr.</p>
+    ${SIGN_GROUPS.map(g => {
+      const list = SIGNS.filter(s => s.g === g.id);
+      return `<h2 class="group-title">${esc(g.title)}</h2>
+      <section class="card sg-card"><p class="muted small sg-blurb">${esc(g.blurb)}</p>
+        <ul class="sg-grid">${list.map(s => { const st = signState(p.q['sk' + s.id]); return `<li><button type="button" class="sg-tile" data-sign="${s.id}" aria-label="${esc(s.name)}: ${SIGN_STATE_TEXT[st]}">
+          <span class="sg-fig">${figure(s.img)}</span><span class="sg-name">${esc(s.name)}</span><span class="sg-dot ${st}" aria-hidden="true"></span></button></li>`; }).join('')}</ul>
+        <button type="button" class="btn secondary sg-group-go" data-group="${g.id}">${icon('quiz', 20)}Øv på ${esc(g.title.toLowerCase())}</button>
+      </section>`;
+    }).join('')}
+    <p class="muted small th-note">Navnene og betydningen er hentet fra skiltforskriften. Tegningene er forenklet, så de ekte skiltene kan se litt annerledes ut.</p>`;
+  const go = (title, extra = {}) => startPractice(ctx, { title, pool: 'skilt', back: '#/teori/skilt', n: 10, ...extra });
+  root.querySelector('#sg-go').onclick = () => go('Skiltprøven');
+  const w = root.querySelector('#sg-wrong'); if (w) w.onclick = () => go('Skiltene du bommet på', { wrongOnly: true, n: 15 });
+  root.querySelectorAll('.sg-group-go').forEach(b => b.onclick = () => {
+    const g = SIGN_GROUPS.find(x => x.id === b.dataset.group);
+    go(g.title, { ids: SIGN_QUESTIONS.filter(q => SIGNS.find(s => s.id === q.sign).g === g.id).map(q => q.id) });
+  });
+  root.querySelectorAll('.sg-tile').forEach(b => b.onclick = () => {
+    const s = SIGNS.find(x => x.id === b.dataset.sign), st = signState(ctx.progress().q['sk' + s.id]);
+    sheetDialog({
+      body: `<div class="q-fig small">${figure(s.img)}</div><div class="q-head"><h2 class="q-text">${esc(s.name)}</h2>${speakBtn('sg-read').replace('<button', '<button value=""')}</div>
+        <p>${esc(s.meaning)}</p><p class="muted small">${icon('book', 16)} Skiltforskriften, skilt ${s.id === '306' ? '306.0' : s.id} · ${SIGN_STATE_TEXT[st]}</p>`,
+      onOpen: d => { const r = d.querySelector('#sg-read'); if (r) r.onclick = e => { e.preventDefault(); speak(`${s.name}. ${s.meaning}`); }; }
+    }).then(stopSpeaking);
+  });
 }
 
 /* ---------- Prøve som den ekte ---------- */

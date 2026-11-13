@@ -198,6 +198,19 @@ export function promptDialog({ title, text = '', placeholder = '', ok = 'Lagre',
   });
 }
 
+/* Ark med innhold appen selv har laget (aldri tekst fra brukeren). onOpen(d) kobler til egne knapper. */
+export function sheetDialog({ body, ok = 'Lukk', onOpen = null }) {
+  return new Promise(resolve => {
+    const d = dialogShell();
+    d.innerHTML = `<form method="dialog" class="sheet-body">${body}<div class="sheet-actions"><button value="ok" class="btn primary">${esc(ok)}</button></div></form>`;
+    const done = () => { d.removeEventListener('close', done); resolve(); };
+    d.addEventListener('close', done);
+    d.returnValue = '';
+    openDialog(d);
+    if (onOpen) onOpen(d);
+  });
+}
+
 function openDialog(d) {
   if (typeof d.showModal === 'function') { if (!d.open) d.showModal(); }
   else { d.setAttribute('open', ''); }

@@ -183,6 +183,21 @@ export function safetyStats(tasks, p, car = '') {
   return { total: list.length, known: list.filter(t => p.safety[t.id] && p.safety[t.id].known).length };
 }
 
+/* ---------- Til trafikklæreren (0.15.0) ---------- */
+
+/* Kort status for teori og sikkerhetskontroll. null når eleven ikke har øvd på noe av det ennå. */
+export function theoryBrief(p, { questions, signQuestions = [], tasks = [] }) {
+  if (!Object.keys(p.q).length && !p.exams.length && !Object.keys(p.safety).length) return null;
+  const r = theoryReady(p), last = p.exams[p.exams.length - 1] || null;
+  return {
+    level: r.level, taken: r.taken, passed: r.passed,
+    last: last ? { correct: last.correct, total: last.total, passed: last.passed, at: last.at } : null,
+    learned: questions.filter(q => isLearned(p.q[q.id])).length, total: questions.length,
+    signs: signQuestions.filter(q => isLearned(p.q[q.id])).length, signsTotal: signQuestions.length,
+    safety: safetyStats(tasks, p, p.car)
+  };
+}
+
 /* ---------- Fra turene ---------- */
 
 /* Hva turene tyder på at eleven bør lese seg opp på. signals: { speeding, crests, close, dark, slippery, laneNoMirror,
