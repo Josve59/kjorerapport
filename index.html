@@ -208,34 +208,45 @@
       <button type="button" class="icon-btn btn-gear" aria-label="Innstillinger" data-icon="gear"></button>
     </header>
     <div class="page-head"><h1 class="page-title">Kamera</h1></div>
+    <!-- Nettversjonen (0.17.0): Safari kan bare ha ett kamera på om gangen -->
+    <section class="card" id="cam-mode-row" hidden>
+      <p class="sug-title">Kameraet i nettleseren</p>
+      <div class="segment" role="radiogroup" aria-label="Kamera">
+        <label><input type="radio" name="webCam" value="face"><span>Førerkamera</span></label>
+        <label><input type="radio" name="webCam" value="road"><span>Veikamera</span></label>
+      </div>
+      <p class="muted small">Nettleseren kan bare bruke ett kamera om gangen. Førerkameraet ser speil- og skulderblikk. Veikameraet ser bilen foran, avstanden, feltlinjene og fartsskiltene. iPhone-appen bruker begge samtidig.</p>
+    </section>
     <section class="card">
-      <p>Kameraet ser om føreren sjekker speil og skulder<span id="cam-road-intro" hidden>, og bakkameraet ser bilen foran og feltlinjene</span>. Bilder lagres aldri.</p>
-      <p class="muted small">Sett telefonen i holderen der den står under kjøring, med ansiktet godt synlig. Korte blikk kan bli borte.</p>
+      <p class="face-only">Kameraet ser om føreren sjekker speil og skulder<span id="cam-road-intro" hidden>, og bakkameraet ser bilen foran og feltlinjene</span>. Bilder lagres aldri.</p>
+      <p class="face-only muted small">Sett telefonen i holderen der den står under kjøring, med ansiktet godt synlig. Korte blikk kan bli borte.</p>
+      <p class="road-only-text">Veikameraet ser bilen foran og avstanden til den, feltlinjene og fartsskiltene. Rapporten får en del om avstand og plassering i feltet. Bilder lagres aldri.</p>
+      <p class="road-only-text muted small">Fest telefonen i holderen med bakkameraet rett fram mot veien og skjermen mot ledsageren. Ingen kalibrering trengs. Første gang lastes bilgjenkjenningen ned (rundt 40 MB): bruk gjerne wifi.</p>
       <p class="notice" id="cam-for-drive" hidden></p>
-      <p class="cam-calib-status" id="cam-calib-status"></p>
-      <button type="button" class="btn primary" id="btn-cam-calib"><span data-icon="target"></span>Kalibrer</button>
-      <p class="muted small">Tar rundt 30 sekunder. Telefonen leser opp hvor du skal se: rett fram, venstre speil, høyre speil og bakspeilet.</p>
+      <p class="cam-calib-status face-only" id="cam-calib-status"></p>
+      <button type="button" class="btn primary face-only" id="btn-cam-calib"><span data-icon="target"></span>Kalibrer</button>
+      <p class="muted small face-only">Tar rundt 30 sekunder. Telefonen leser opp hvor du skal se: rett fram, venstre speil, høyre speil og bakspeilet.</p>
       <p class="small" id="cam-status" aria-live="polite"></p>
       <button type="button" class="btn secondary" id="btn-cam-start"><span data-icon="play"></span>Start kamera</button>
       <button type="button" class="btn secondary" id="btn-cam-stop" hidden>Stopp kamera</button>
     </section>
     <section class="card" id="cam-stage" hidden>
-      <div class="cam-view">
+      <div class="cam-view face-only">
         <video id="cam-video" playsinline muted></video>
         <p class="cam-label" id="cam-label" data-cls="none" aria-live="polite">Ser ikke ansiktet</p>
       </div>
-      <p class="muted small center" id="cam-nums"></p>
+      <p class="muted small center face-only" id="cam-nums"></p>
       <div class="cam-road" id="cam-road" hidden>
         <video id="cam-road-video" class="road" playsinline muted></video>
         <p class="small" id="cam-road-text" aria-live="polite">Veikameraet starter …</p>
       </div>
       <p class="muted small center">Trykk på et kamerabilde for å se hva appen ser, i full skjerm.</p>
-      <h3 class="mt">Siste blikk</h3>
-      <ul class="cam-log" id="cam-log"><li class="muted small">Se i et speil, så dukker det opp her.</li></ul>
+      <h3 class="mt face-only">Siste blikk</h3>
+      <ul class="cam-log face-only" id="cam-log"><li class="muted small">Se i et speil, så dukker det opp her.</li></ul>
     </section>
     <section class="card">
       <div class="toggle-list">
-        <label class="toggle"><span><strong>Bruk kamera under kjøring</strong><br><span class="muted small">Kameraet starter når ledsageren gir tilgang før turen, og rapporten får en del om speil- og skulderblikk.</span></span><input type="checkbox" class="switch" id="cameraOn"></label>
+        <label class="toggle"><span><strong>Bruk kamera under kjøring</strong><br><span class="muted small face-only">Kameraet starter når ledsageren gir tilgang før turen, og rapporten får en del om speil- og skulderblikk.</span><span class="muted small road-only-text">Veikameraet starter når ledsageren gir tilgang før turen.</span></span><input type="checkbox" class="switch" id="cameraOn"></label>
         <label class="toggle" id="roadCam-row" hidden><span><strong>Veikamera samtidig</strong><br><span class="muted small">Bakkameraet ser bilen foran, feltlinjene og fartsskiltene mens frontkameraet ser føreren. Rapporten får en del om avstand og plassering i feltet. Bruker mer strøm: ha laderen i.</span></span><input type="checkbox" class="switch" id="roadCam"></label>
       </div>
     </section>
@@ -473,7 +484,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.16.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.17.0</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

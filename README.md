@@ -142,6 +142,22 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.17.0 – the road camera in the web version, and a test link
+
+So a tester without the iPhone app can try theory and the road camera with one link: **https://josve59.github.io/kjorerapport/?kamera=vei**
+
+- **Road camera in Safari** (`js/webroad.js`, `js/facecam.js`). Safari can only use one camera at a time, so the web version now has a choice under Kamera: «Førerkamera» (mirror and shoulder checks, as before) or «Veikamera» (the car ahead and its distance, lane lines and speed signs). The iPhone app is unchanged and still uses both at once.
+  - The browser source looks like the iPhone app's camera sources, so lane lines, signs, the car ahead, tracking and image matching run through the same code as in the iPhone app.
+  - Cars are found with D-FINE nano (Apache 2.0, ONNX Runtime Web) in its own thread (`js/dfine-worker.js`), on the graphics processor (WebGPU) where Safari has it, otherwise on the processor. At most 4 times a second, once a second when the car stands still. `js/dfine.js` is the camera test app's file and is now in the shared-file test.
+  - Lane lines come from the plain image analysis in `lanes.js`; the lane model only exists in the iPhone app.
+  - The models (about 40 MB) are downloaded the first time and kept by the service worker, like the face model.
+  - A road-only drive is saved without the driver camera (`noFace`), with `cameraPlan.mode: 'vei'`; `tools/turrapport.mjs` shows «Kamera: bare veikameraet».
+- **The camera screen** shows only what belongs to the chosen camera: no calibration for the road camera.
+- **Test link:** `?kamera=vei` turns on the camera and chooses the road camera, once per storage (Safari and the home-screen app each have their own), and skips the camera intro about calibration. `?kamera=forer` chooses the driver camera. The parameter stays in the address so it comes along if the page is added to the home screen. Pluss is always on in the web version.
+
+- **Tested:** in the browser with a fake road camera (a road photo, 720×1280): the link set the road camera; the car model ran on WebGPU in its own thread at about 62 ms per picture on the Mac and found 3 cars, the car ahead at 13 m and both lane lines; the check before the drive showed «Veikamera på · bil 13 m foran · feltlinjer · D-FINE nano»; a 21-second test recording saved 202 road samples and no driver camera; switching between the cameras on the Kamera screen. All unit tests, and the iPhone build.
+- **Not tested:** on a phone in Safari, or on a drive. In the camera test app in November, D-FINE nano took about 350 ms per picture on the iPhone. Safari must stay open with the screen on during the whole drive.
+
 ## What's new in 0.16.0 – a harder theory test, better drawings, easier to use
 
 The owner wants the app's test to be **a bit harder than the real one**, so a learner who passes here will pass the real test.

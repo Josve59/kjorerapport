@@ -117,6 +117,8 @@ function report(drive, input, file, exportVersion) {
   line('Varighet', `${duration(sec)} · ${n1(distanceKm(loc))} km`);
 
   const cp = drive.cameraPlan, perf = cp && cp.perf;
+  // Fra 0.17.0: nettversjonen kan ha bare veikameraet (Safari har ett kamera om gangen)
+  if (cp && cp.mode === 'vei') line('Kamera', 'bare veikameraet (nettleseren): ingen førerkamera, feltlinjer fra bildeanalysen');
   if (head.length) {
     const ok = head.filter(h => h.ok).length;
     line('Ansikt', `funnet i ${pct(ok, head.length)} av ${n0(head.length)} bilder (${perSec(head.length, sec)} per s), ${ms(perf && perf.faceMs || 0)} per bilde`);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 // Veikameraets moduler finnes både i hovedappen (iPhone-appen, 0.10.0) og i kameratestappen, og skal være like
-const SHARED = ['road', 'track', 'lanes', 'flow', 'signs', 'sign-tpl', 'camera', 'analysis', 'situations', 'roadshape', 'livelimit', 'enrich'];
+const SHARED = ['road', 'track', 'lanes', 'flow', 'signs', 'sign-tpl', 'camera', 'analysis', 'situations', 'roadshape', 'livelimit', 'enrich', 'dfine'];
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
 for (const name of SHARED) {

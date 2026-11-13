@@ -370,3 +370,8 @@ dialog.sheet .q-head h2 { margin: 0; }
 .s-lamp { display: flex; justify-content: center; margin: 4px 0 10px; }
 .s-lamp .tsvg-lamp { width: 84px; height: 84px; }
 .tsvg-lamp { border-radius: 17px; box-shadow: 0 0 0 1px var(--line); }
+/* Bare veikamera i nettversjonen (0.17.0): det som gjelder førerkameraet, skjules på kameraskjermen */
+#camera.road-only .face-only { display: none !important; }
+#camera:not(.road-only) .road-only-text { display: none !important; }
+#camera.road-only .cam-road { margin-top: 0; }
+#cam-mode-row .segment { margin: 6px 0 10px; }

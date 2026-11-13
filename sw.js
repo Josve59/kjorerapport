@@ -1,13 +1,13 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.16.0';
+const VERSION = 'v0.17.0';
 const CACHE = 'kjorerapport-' + VERSION;
 const ML_CACHE = 'kjorerapport-ml';   // ansiktsgjenkjenningen, beholdes mellom versjoner
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './css/app.css', './css/theme.css',
   './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js', './js/camera.js', './js/facecam.js', './js/situations.js', './js/livelimit.js', './js/roadshape.js', './js/readiness.js', './js/modes.js', './js/testdata.js', './js/speedwarn.js', './js/surface.js', './js/calibcheck.js', './js/devchart.js', './js/game.js', './js/liveatk.js', './js/teacher.js', './js/sound.js',
-  './js/nativecam.js', './js/guides.js', './js/plus.js', './js/road.js', './js/track.js', './js/lanes.js', './js/laneease.js', './js/facelight.js', './js/speedfit.js', './js/theory.js', './js/theory-b.js', './js/theory-signs.js', './js/safety-check.js', './js/trafficsvg.js', './js/theoryui.js', './js/flow.js', './js/signs.js', './js/sign-tpl.js',
+  './js/nativecam.js', './js/guides.js', './js/plus.js', './js/road.js', './js/track.js', './js/lanes.js', './js/laneease.js', './js/facelight.js', './js/speedfit.js', './js/theory.js', './js/theory-b.js', './js/theory-signs.js', './js/safety-check.js', './js/trafficsvg.js', './js/theoryui.js', './js/webroad.js', './js/dfine.js', './js/dfine-worker.js', './js/flow.js', './js/signs.js', './js/sign-tpl.js',
   './fonts/overpass-latin.woff2', './fonts/overpass-latin-ext.woff2',
   './vendor/leaflet/leaflet.js', './vendor/leaflet/leaflet.css',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'
@@ -47,7 +47,8 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (url.pathname.includes('/kamera/')) return;   // kamera-testversjonen har sin egen service worker
   /* Ansiktsgjenkjenningen (rundt 13 MB) lastes først når kameraet brukes, og lagres da for bruk uten nett */
-  if (url.pathname.includes('/vendor/mediapipe/')) {
+  // Modellene: ansiktsgjenkjenningen, og bilgjenkjenningen for veikameraet i nettversjonen (0.17.0)
+  if (url.pathname.includes('/vendor/mediapipe/') || url.pathname.includes('/vendor/dfine/') || url.pathname.includes('/vendor/ort/')) {
     e.respondWith(caches.open(ML_CACHE).then(c => c.match(e.request).then(hit => hit || fetch(e.request).then(res => {
       if (res.ok) c.put(e.request, res.clone());
       return res;

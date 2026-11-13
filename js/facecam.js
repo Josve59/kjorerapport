@@ -9,6 +9,7 @@ import { createTracker } from './track.js';
 import { matchShift } from './flow.js';
 import { readSigns, signTracker, signAhead } from './signs.js';
 import * as native from './nativecam.js';
+import { webRoadSource, loadCarModel, webCameraSupported } from './webroad.js';
 import { createDriverPicker, createFaceMask } from './calibcheck.js';
 import { createFaceLight, meanLum } from './facelight.js';
 
@@ -17,6 +18,7 @@ const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) er det mørkt: b
 let landmarker = null, loading = null, stream = null, video = null, timer = null, roadTimer = null;
 const listeners = new Set(), roadListeners = new Set();
 let lastPose = null, lastTs = 0, frames = 0, startedAt = 0, fpsWanted = 8, fpsNow = 8;
+let webCars = null, webBusy = false, webCarsAt = -Infinity;   // bilgjenkjenningen i nettleseren (0.17.0, webroad.js)
 let driver = null, road = null, roadModel = null, detsUnsub = null, lanesUnsub = null, mlLanes = null, driverSeq = -1, roadSeq = -1;   // kildene i iPhone-appen
 let wantFacings = [], lastKick = 0;   // vakten: kameraene startes på nytt hvis bildene stopper (0.10.1)
 let perfSince = 0;   // når tallene sist ble nullstilt (kameraene startet)
@@ -35,7 +37,8 @@ const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, 
 const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, thermalS: [0, 0, 0, 0], laneRunMs: 0, roadKnown: 0, offRoad: 0,
   flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stallLog: [] };
 
-export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver, native: !!driver,
+export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver || !!road, native: !!driver,
+  roadOnly: !!road && !driver,   // bare veikameraet (nettversjonen, 0.17.0)
   stalled: !!driver && driver.stalledMs > 3000,   // ingen nye bilder fra kameraene på 3 s
   road: !!road, roadModel, roadSize: road && road.ready ? `${road.width}x${road.height}` : null, roadBottom,
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, lastPose, lastRoad, video,
@@ -56,6 +59,9 @@ let laneRaw = null, laneRawW = 0, laneAnsAt = null;   // siste utregnede linjer 
 
 /* Ansiktets plass fra kalibreringen ({ x, y, z } fra facePosition), eller null: under kalibreringen og uten kalibrering */
 export function setDriverHome(pos) { driverHome = pos || null; driverPick.setHome(driverHome); }
+
+/* Bare veikameraet i nettleseren (0.17.0): utenfor iPhone-appen, når nettleseren kan åpne et kamera */
+export const webRoadOk = () => !native.available() && webCameraSupported();
 
 /* Kan telefonen ha begge kameraene på samtidig (iPhone-appen på iPhone XS og nyere, med bilgjenkjenningen)? */
 export async function roadSupported() {
@@ -99,9 +105,12 @@ function show(videoEl, s) {
   return Promise.race([videoEl.play().catch(() => {}), new Promise(r => setTimeout(r, 2000))]);
 }
 
-/* Starter førerkameraet (og veikameraet med road: true, bare i iPhone-appen). Må kalles fra et trykk første gang. */
-export async function startCamera(videoEl, { road: withRoad = false, home } = {}) {
+/* Starter førerkameraet (og veikameraet med road: true, bare i iPhone-appen). Må kalles fra et trykk første gang.
+   roadOnly (nettversjonen, 0.17.0): bare bakkameraet, uten ansiktsgjenkjenning. videoEl viser da veien. */
+export async function startCamera(videoEl, { road: withRoad = false, roadOnly = false, home } = {}) {
   if (home !== undefined) driverHome = home || null;
+  if (roadOnly && !native.available()) return startWebRoad(videoEl);
+  if (road && road.web) stopSources();   // fra veikamera til førerkamera i nettleseren
   driverPick = createDriverPicker({ home: driverHome }); faceMask = createFaceMask(); laneTrack = createLaneTracker(); laneRaw = null; laneAnsAt = null;
   if (native.available()) {
     const want = withRoad ? ['user', 'environment'] : ['user'];
@@ -135,6 +144,41 @@ export async function startCamera(videoEl, { road: withRoad = false, home } = {}
   if (!stream) stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 30 } }, audio: false });
   video = videoEl;
   await show(videoEl, stream);
+}
+
+/* Bare veikameraet i nettleseren (0.17.0): kilden fra webroad.js, og bilgjenkjenningen lastes ved siden av. Kameraet
+   og feltlinjene er i gang med en gang; bilene kommer når modellen er lastet (første gang rundt 40 MB). */
+async function startWebRoad(videoEl) {
+  if (road && road.web) { video = videoEl; await show(videoEl, road.stream()); return; }
+  stopSources();
+  if (stream) { for (const tr of stream.getTracks()) tr.stop(); stream = null; }
+  laneTrack = createLaneTracker(); laneRaw = null; laneAnsAt = null;
+  Object.assign(perf, freshPerf());
+  perfSince = performance.now();
+  road = await webRoadSource({ fps: 10 });
+  faceOff = true;   // ingen fører å se på
+  roadModel = null; perf.dfine = 'laster';
+  loadCarModel().then(m => {
+    webCars = m;
+    if (!road || !road.web) return;
+    roadModel = 'D-FINE nano'; perf.dfine = `D-FINE nano · ${m.backend}`;
+  }).catch(err => { perf.dfine = 'feilet: ' + String(err && err.message || err).slice(0, 80); });
+  video = videoEl;
+  await show(videoEl, road.stream());
+  if (timer) { stopLoop(); startLoop(fpsWanted); }
+}
+
+/* Bilgjenkjenningen i nettleseren: et nytt bilde til modellen når forrige svar er kommet, høyst 4 ganger i sekundet
+   (1 gang i sekundet når bilen står, som i iPhone-appen fra 0.13.12). Svaret går samme vei som svarene fra appen. */
+function webCarsStep(el, vw, vh, t, dark) {
+  if (!webCars || webBusy || !road || !road.web) return;
+  if (t - webCarsAt < (speedKmh < 2 ? 1000 : 250)) return;
+  webBusy = true; webCarsAt = t;
+  const t0 = performance.now();
+  webCars.detect(el, vw, vh, dark, roadBottom)
+    .then(dets => onDets({ dets, w: vw, at: t, ms: performance.now() - t0, backend: `D-FINE nano · ${webCars.backend}` }))
+    .catch(() => { perf.dfineErr = (perf.dfineErr || 0) + 1; })
+    .finally(() => { webBusy = false; });
 }
 
 /* Flytter førerkamerabildet til et annet <video>-element (f.eks. fra testskjermen til opptaket). */
@@ -295,6 +339,7 @@ function roadTick() {
   const area = roadArea(vw, vh);   // veien foran fra feltmodellen: biler og baklys må stå på den (0.13.2)
   // still (0.13.12): bilen står stille, så modellene i appen går 1 gang i sekundet (varme). Ukjent fart regnes som kjøring
   native.configure({ roadBottom, dark, laneGamma: laneGamma(lastLum), faceBias, still: speedKmh < 2 });
+  try { webCarsStep(el, vw, vh, now0, dark); } catch { webBusy = false; }   // bare i nettleseren
   // Bildesammenligning (k0.7.5): hvor bilene har flyttet seg siden forrige bilde, før boksene brukes
   flowRgba = null;
   try { const tf = performance.now(); flowStep(el, now0); ema('flowMs', performance.now() - tf); } catch { flowPrev = null; }
@@ -521,8 +566,8 @@ function stopSources() {
   if (lanesUnsub) lanesUnsub(); lanesUnsub = null; mlLanes = null;
   if (driver) driver.stop();
   if (road) road.stop();
-  if (driver || road) native.stop();
-  driver = null; road = null; roadModel = null; driverSeq = -1; roadSeq = -1;
+  if (native.available() && (driver || road)) native.stop();
+  driver = null; road = null; webBusy = false; webCarsAt = -Infinity; roadModel = null; driverSeq = -1; roadSeq = -1;
   tracker.reset(); flowPrev = null; lastView = null; lastRoad = null; rowEma = null; rowN = 0; roadBottom = null; lastLum = null;
   speedKmh = NaN;   // ukjent fart til neste tur, så modellene ikke blir stående på «bilen står» (0.13.12)
   faceOff = false;

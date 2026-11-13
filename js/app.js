@@ -32,7 +32,7 @@ import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 
-export const APP_VERSION = '0.16.0';
+export const APP_VERSION = '0.17.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -172,8 +172,9 @@ const num = v => (v === '' || v === null || v === undefined ? NaN : Number(Strin
 /* Kamerakortet under Innstillinger (0.12.0, før på Hjem) */
 function updateCamCard() {
   const settings = getSettings(), calibrated = !!getCalib();
-  $('#btn-go-camera').classList.toggle('warn', hasPlus() && !!settings.cameraOn && !calibrated);
+  $('#btn-go-camera').classList.toggle('warn', hasPlus() && !!settings.cameraOn && !calibrated && !roadOnly());
   $('#cam-card-text').textContent = !hasPlus() ? (plusState().trialAvailable ? 'Prøv Pluss gratis i 14 dager: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.' : 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.')
+    : roadOnly() ? (settings.cameraOn ? 'Veikameraet er slått på: bilen foran, feltlinjene og fartsskiltene. Trykk for å teste.' : 'Veikameraet er valgt, men ikke slått på. Trykk for å teste og slå det på.')
     : !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
     : calibrated ? (roadWanted() ? 'Kalibrert og slått på, med veikameraet samtidig. Trykk for å teste.' : 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.')
     : 'Ikke kalibrert. Trykk her og kalibrer før turen – det tar 30 sekunder.';
@@ -556,7 +557,10 @@ let noFaceDrive = false;    // «Kjør uten førerkameraet» valgt for turen som
 /* Veikameraet samtidig (0.10.0): bare i iPhone-appen, på telefoner som kan ha begge kameraene på (iPhone XS og nyere) */
 let roadOk = false;
 cam.roadSupported().then(v => { roadOk = v; }).catch(() => {});
-const roadWanted = () => roadOk && getSettings().roadCam !== false;
+/* Bare veikameraet (nettversjonen, 0.17.0): Safari kan bare ha ett kamera på om gangen, så der velger man førerkamera
+   (speil og skulderblikk) eller veikamera (bilen foran, feltlinjene og fartsskiltene) under Kamera */
+const roadOnly = () => cam.webRoadOk() && getSettings().webCam === 'road';
+const roadWanted = () => roadOnly() || (roadOk && getSettings().roadCam !== false);
 
 /* Starter kameraet (og veikameraet når det er valgt) og ansiktsgjenkjenningen hvis de ikke allerede går. */
 /* Gikk brukeren fra siden mens kameraet startet? Da slås det av igjen (0.11.3), ellers sto kamera og GPS på i
@@ -572,9 +576,9 @@ function leftDuringStart(hash) {
 const driverHome = () => { const c = getCalib(); return (c && c.pos) || null; };
 
 async function ensureCamera(videoEl, onStatus = () => {}) {
-  if (cam.state().running && cam.state().road === roadWanted()) { await cam.attachVideo(videoEl); return; }
-  await cam.startCamera(videoEl, { road: roadWanted(), home: driverHome() });
-  await cam.loadModel(onStatus);
+  if (cam.state().running && cam.state().road === roadWanted() && cam.state().roadOnly === roadOnly()) { await cam.attachVideo(videoEl); return; }
+  await cam.startCamera(videoEl, { road: roadWanted(), roadOnly: roadOnly(), home: driverHome() });
+  if (!roadOnly()) await cam.loadModel(onStatus);
   cam.startLoop(8);
 }
 
@@ -607,6 +611,21 @@ async function renderCamera() {
     const d = await getDrive(calibForDrive);
     forDrive.textContent = `Kalibrerer for turen ${d ? date(d.startedAt) : ''}. Sett telefonen i holderen slik den sto under turen. Etterpå vurderes turen på nytt.`;
   }
+  // Førerkamera eller veikamera i nettversjonen (0.17.0): det ene kameraet Safari kan ha på
+  screens.camera.classList.toggle('road-only', roadOnly());
+  $('#cam-mode-row').hidden = !cam.webRoadOk();
+  document.querySelectorAll('input[name=webCam]').forEach(r => {
+    r.checked = r.value === (roadOnly() ? 'road' : 'face');
+    r.onchange = async () => {
+      if (!r.checked) return;
+      const wasOn = cam.state().running;
+      if (wasOn) { cam.stopCamera(); if (camUnsub) camUnsub(); camUnsub = null; }
+      saveSettings({ ...getSettings(), webCam: r.value });
+      toast(r.value === 'road' ? 'Veikameraet brukes. Speil og skulderblikk måles ikke.' : 'Førerkameraet brukes. Bilen foran og feltlinjene måles ikke.', { type: 'ok', ms: 2500 });
+      await renderCamera();
+      if (wasOn) $('#btn-cam-start').click();
+    };
+  });
   const on = $('#cameraOn'); on.checked = !!settings.cameraOn;
   on.onchange = () => { saveSettings({ ...getSettings(), cameraOn: on.checked }); toast(on.checked ? 'Kameraet brukes under kjøring.' : 'Kameraet brukes ikke under kjøring.', { type: 'ok', ms: 2000 }); };
   const roadOn = $('#roadCam');
@@ -655,7 +674,7 @@ async function renderCamera() {
       if (leftDuringStart('#/kamera')) return false;
       listen();
       await showRoad();
-      status.textContent = 'Kameraet er på. Bildene lagres ikke.';
+      status.textContent = roadOnly() ? 'Veikameraet er på. Bildene lagres ikke.' : 'Kameraet er på. Bildene lagres ikke.';
       $('#cam-stage').hidden = false;
       $('#btn-cam-start').hidden = true; $('#btn-cam-stop').hidden = false;
       calibInfo();
@@ -1220,10 +1239,10 @@ function renderPrecheck() {
   renderFocusSuggestions();
   const camCheck = $('#check-camera'), roadCheck = $('#check-road');
   const camWanted = () => !!getSettings().cameraOn && hasPlus();   // kameraene er en del av Pluss (0.11.0)
-  camCheck.hidden = !camWanted();
+  camCheck.hidden = !camWanted() || roadOnly();
   const showRoadCheck = () => {
     roadCheck.hidden = !(camWanted() && roadWanted());
-    if (!roadCheck.hidden && !roadCheck.dataset.state) setCheck(roadCheck, null, 'Starter sammen med førerkameraet');
+    if (!roadCheck.hidden && !roadCheck.dataset.state) setCheck(roadCheck, null, roadOnly() ? 'Starter når du gir tilgang' : 'Starter sammen med førerkameraet');
   };
   roadCheck.dataset.state = '';
   showRoadCheck();
@@ -1233,8 +1252,9 @@ function renderPrecheck() {
   // Uten førerkameraet denne turen (0.13.13): når holderen står dårlig eller kalibreringen ikke blir bra, er det bedre
   // å la blikk og speilbruk være umålt enn å måle feil. Veikameraet går som før. Gjelder bare turen som startes nå.
   const noFaceBtn = $('#btn-no-face');
-  noFaceDrive = false; cam.setFaceOff(false);
-  noFaceBtn.hidden = !camWanted();
+  // Bare veikamera (nettversjonen, 0.17.0): turen er uten førerkameraet, som med knappen under
+  noFaceDrive = roadOnly(); cam.setFaceOff(noFaceDrive);
+  noFaceBtn.hidden = !camWanted() || roadOnly();
   const noFaceText = () => { noFaceBtn.textContent = noFaceDrive ? 'Bruk førerkameraet likevel' : 'Kjør denne turen uten førerkameraet'; };
   noFaceText();
   noFaceBtn.onclick = () => {
@@ -1244,7 +1264,7 @@ function renderPrecheck() {
     if (noFaceDrive) setCheck(camCheck, true, 'Førerkameraet er av for denne turen. Blikk og speilbruk blir ikke vurdert.');
     else setCheck(camCheck, null, 'Førerkameraet er på igjen …');
   };
-  if (camWanted()) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
+  if (camWanted() && !roadOnly()) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
   preCalib.onclick = async () => {
     unlockSpeech();
     await runCalibration();
@@ -1273,8 +1293,8 @@ function renderPrecheck() {
     if (leftDuringStart('#/sjekk')) return;
     if (camWanted()) {
       try {
-        await cam.startCamera($('#pre-video'), { road: roadWanted(), home: driverHome() });
-        await cam.loadModel(t => setCheck(camCheck, null, t));
+        await cam.startCamera(roadOnly() ? $('#pre-road-video') : $('#pre-video'), { road: roadWanted(), roadOnly: roadOnly(), home: driverHome() });
+        if (!roadOnly()) await cam.loadModel(t => setCheck(camCheck, null, t));
         cam.startLoop(8);
         if (camUnsub) camUnsub();
         // Kalibreringssjekk (0.12.0): stemmer kalibreringen med der telefonen og føreren er nå? Hvis ikke blir
@@ -1302,8 +1322,8 @@ function renderPrecheck() {
         } else if (!roadCheck.hidden) setCheck(roadCheck, false, 'Veikameraet startet ikke – bare førerkameraet brukes');
         camUnsub = () => { offPose(); if (offRoad) offRoad(); };
         preCalib.lastChild.textContent = getCalib() ? 'Kalibrer på nytt' : 'Kalibrer nå';
-        preCalib.hidden = false;
-      } catch (err) { setCheck(camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : 'Kameraet startet ikke'); }
+        preCalib.hidden = roadOnly();
+      } catch (err) { setCheck(roadOnly() ? roadCheck : camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : 'Kameraet startet ikke'); }
     }
     if (leftDuringStart('#/sjekk')) return;
     btnPerm.hidden = true;
@@ -1940,7 +1960,8 @@ async function finishRecording() {
   closeCamView();
   // Veikameraet: bildestørrelse, modell og hvor rask telefonen var, lagret med turen
   const cs = cam.state();
-  const camInfo = cs.road ? { mode: 'begge', roadSize: cs.roadSize, roadBottom: cs.roadBottom, model: cs.roadModel, perf: cs.perf } : null;
+  // mode: 'begge' (iPhone-appen) eller 'vei' (bare veikameraet i nettleseren, 0.17.0)
+  const camInfo = cs.road ? { mode: cs.roadOnly ? 'vei' : 'begge', roadSize: cs.roadSize, roadBottom: cs.roadBottom, model: cs.roadModel, perf: cs.perf } : null;
   const drive = await rec.stop();
   if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
   if (camInfo) { await updateDrive(drive.id, { cameraPlan: camInfo }); drive.cameraPlan = camInfo; }
@@ -2639,7 +2660,22 @@ function init() {
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (!screens.home.hidden) renderInstallHint(); });
   registerSW();
   requestPersistentStorage().then(r => { persistState = r; });
+  applyLinkSetup();
   route();
+}
+
+/* Testlenke (0.17.0): …/kjorerapport/?kamera=vei slår på bare veikameraet i nettversjonen, så en tester får teori og
+   veikamera med én lenke. Gjelder én gang per lagring (Safari og Hjem-skjermen har hver sin), så valget kan endres
+   under Kamera etterpå. Parameteren blir stående i adressen, så den blir med hvis siden legges på Hjem-skjermen. */
+function applyLinkSetup() {
+  let k = null;
+  try { k = new URLSearchParams(location.search).get('kamera'); } catch { return; }
+  const mode = k === 'vei' ? 'road' : k === 'forer' ? 'face' : null;
+  if (!mode || !cam.webRoadOk()) return;
+  const cur = getSettings();
+  if (cur.linkSetup === mode) return;
+  saveSettings({ ...cur, cameraOn: true, webCam: mode, linkSetup: mode, ...(mode === 'road' ? { camIntroSeen: true } : {}) });
+  setTimeout(() => toast(mode === 'road' ? 'Veikameraet er slått på. Det starter når ledsageren gir tilgang før turen.' : 'Førerkameraet er slått på. Kalibrer det under Kamera før turen.', { type: 'ok', ms: 5000 }), 900);
 }
 
 function registerSW() {
