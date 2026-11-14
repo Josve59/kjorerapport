@@ -103,7 +103,8 @@ export async function importSharedDrive(sd, { from = '', at = new Date().toISOSt
     ...(old || {}),
     id: sd.id, startedAt: typeof sd.startedAt === 'string' && !isNaN(Date.parse(sd.startedAt)) ? sd.startedAt : new Date().toISOString(),
     endedAt: sd.endedAt || null, status: 'done', imported: false, demo: false,
-    driver: String(driver !== null ? driver : (from || sd.driver || '')).slice(0, 40),   // hos eleven: '' (egne turer) note: typeof sd.note === 'string' ? sd.note.slice(0, 500) : '',
+    driver: String(driver !== null ? driver : (from || sd.driver || '')).slice(0, 40),   // hos eleven: '' (egne turer)
+    note: typeof sd.note === 'string' ? sd.note.slice(0, 500) : '',
     marks: Array.isArray(sd.marks) ? sd.marks.filter(m => m && Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
     focus: Array.isArray(sd.focus) ? sd.focus.filter(x => typeof x === 'string').slice(0, 3) : [], surface: typeof sd.surface === 'string' ? sd.surface.slice(0, 10) : '',
     ...(sd.noFace ? { noFace: true } : {}), result: sd.result, resultKey: 'delt', enrich: sd.enrich && typeof sd.enrich === 'object' ? sd.enrich : null,

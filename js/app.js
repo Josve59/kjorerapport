@@ -30,10 +30,10 @@ import { checkCalibration, facePosition } from './calibcheck.js';
 import { openDevChart } from './devchart.js';
 import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
-import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
+import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.18.1';
+export const APP_VERSION = '0.18.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1133,8 +1133,8 @@ async function renderTeacher(opts = {}) {
   await drawSummary($('#teacher-root'), tok, () => renderTeacher());
 }
 
-/* Elevlisten (læreren, 0.18.0): søk, sortering, «Trenger oppfølging» og arkivet for dem som har fått lappen.
-   Tallene kommer fra analysene som er lagret på turene, så listen er rask også med mange elever. */
+/* Elevlisten (læreren, 0.18.0): søk, sortering og «Trenger oppfølging». Tallene kommer fra analysene som er lagret
+   på turene, så listen er rask også med mange elever. Den som har fått lappen, slettes fra elevsiden (0.18.2). */
 let studentQuery = '';
 const relDay = ts => { const d = Math.floor((new Date(new Date().toDateString()) - new Date(new Date(ts).toDateString())) / 86400000); return d <= 0 ? 'i dag' : d === 1 ? 'i går' : d < 7 ? `for ${d} dager siden` : new Date(ts).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }); };
 async function renderStudentList() {
@@ -1147,16 +1147,11 @@ async function renderStudentList() {
   // Turer som ikke er analysert ennå (nye testelever, nettopp tatt opp): analyseres én gang og lagres
   for (const d of all) if (!d.result && !d.demo && d.status !== 'recording') { try { await analyzeDrive(d); } catch { /* for lite data */ } }
   if (tok !== teacherSeq) return;
-  const s = getSettings(), view = s.studentView || {}, arch = !!view.arch, sort = view.sort || 'need';
-  const ov = studentOverview(all, students(s), s.messages || {}, Date.now());
-  const act = ov.filter(x => !x.archived), done = ov.filter(x => x.archived);
+  const s = getSettings(), sort = (s.studentView || {}).sort || 'need';
+  const act = studentOverview(all, activeStudents(s), s.messages || {}, Date.now());
   const newMsgs = act.reduce((n, x) => n + x.newMsgs, 0);
   top.innerHTML = `<section class="card st-tools">
       <input type="search" id="st-q" class="sheet-input" placeholder="Søk etter elev" value="${esc(studentQuery)}" aria-label="Søk etter elev" autocomplete="off">
-      <div class="segment" role="radiogroup" aria-label="Vis elever">
-        <label><input type="radio" name="starch" value="0" ${arch ? '' : 'checked'}><span>Aktive (${act.length})</span></label>
-        <label><input type="radio" name="starch" value="1" ${arch ? 'checked' : ''}><span>Fått lappen (${done.length})</span></label>
-      </div>
       <label class="field st-sort">Sorter etter<select id="st-sort">${SORTS.map(([id, label]) => `<option value="${id}" ${id === sort ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>
     </section>
     ${newMsgs ? `<p class="notice small">${icon('mail', 16)} ${newMsgs === 1 ? 'Én ny melding' : `${newMsgs} nye meldinger`} fra elever. De står øverst med «Trenger oppfølging».</p>` : ''}
@@ -1165,17 +1160,17 @@ async function renderStudentList() {
       <label class="btn secondary file-btn small-btn">${icon('upload', 18)}Åpne melding<input type="file" id="st-file" accept="application/json,.json"></label>
     </div>`;
   const draw = () => {
-    const list = filterStudents(sortStudents(arch ? done : act, sort), studentQuery);
+    const list = filterStudents(sortStudents(act, sort), studentQuery);
     root.innerHTML = list.length ? `<ul class="st-list card">${list.map(x => `<li><button type="button" class="st-row" data-name="${esc(x.name)}">
         <span class="student-ava" aria-hidden="true">${esc(x.name.slice(0, 1).toUpperCase())}</span>
         <span class="st-main"><strong>${esc(x.name)}${x.test ? ' <span class="tag">test</span>' : ''}</strong>
-          <span class="muted small">${x.archived ? `Fikk lappen ${esc(new Date(x.archived.at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' }))}` : x.last ? `Kjørte ${relDay(x.last)}${x.min30 ? ` · ${fmtHours(x.min30 * 60)} siste 30 dager` : ''}` : 'Ingen turer ennå'}</span>
-          ${!x.archived && x.flags.length ? `<span class="st-flags">${x.flags.filter(f => f.id !== 'none').map(f => `<span class="st-flag ${f.tone}">${esc(f.text)}</span>`).join('')}</span>` : ''}</span>
+          <span class="muted small">${x.last ? `Kjørte ${relDay(x.last)}${x.min30 ? ` · ${fmtHours(x.min30 * 60)} siste 30 dager` : ''}` : 'Ingen turer ennå'}</span>
+          ${x.flags.length ? `<span class="st-flags">${x.flags.filter(f => f.id !== 'none').map(f => `<span class="st-flag ${f.tone}">${esc(f.text)}</span>`).join('')}</span>` : ''}</span>
         ${x.avg !== null ? `<span class="st-score">${scoreBadge(x.avg, 40)}${x.trend ? `<span class="st-trend ${x.trend > 0 ? 'up' : 'down'}">${x.trend > 0 ? '▲' : '▼'} ${Math.abs(x.trend)}</span>` : ''}</span>` : ''}
         ${icon('chev', 18)}</button></li>`).join('')}</ul>
       <p class="muted small center">${list.length} ${list.length === 1 ? 'elev' : 'elever'}${studentQuery ? ` med «${esc(studentQuery)}»` : ''}. Poengene er snittet av de fem siste turene, og pilen er endringen fra de fem før.</p>`
-      : `<div class="empty card"><span class="empty-ico">${icon('users', 40)}</span><strong>${studentQuery ? 'Ingen elever med det navnet' : arch ? 'Ingen elever i arkivet' : 'Ingen elever ennå'}</strong><span class="muted small">${arch ? 'Når en elev har fått lappen, flytter du eleven hit fra elevsiden.' : 'Legg til elevene dine, eller åpne en melding fra en elev.'}</span></div>`;
-    root.insertAdjacentHTML('beforeend', ov.some(x => x.test) ? '<button type="button" class="link center-link" id="btn-test-students-del">Fjern testelevene</button>' : '<button type="button" class="link center-link" id="btn-test-students">Legg inn tre testelever med turer og en melding</button>');
+      : `<div class="empty card"><span class="empty-ico">${icon('users', 40)}</span><strong>${studentQuery ? 'Ingen elever med det navnet' : 'Ingen elever ennå'}</strong><span class="muted small">Legg til elevene dine, eller åpne en melding fra en elev.</span></div>`;
+    root.insertAdjacentHTML('beforeend', act.some(x => x.test) ? '<button type="button" class="link center-link" id="btn-test-students-del">Fjern testelevene</button>' : '<button type="button" class="link center-link" id="btn-test-students">Legg inn tre testelever med turer og en melding</button>');
     root.querySelectorAll('.st-row').forEach(b => b.onclick = () => { location.hash = studentHash(b.dataset.name); });
     const t = $('#btn-test-students'), td = $('#btn-test-students-del');
     if (t) t.onclick = async () => { t.disabled = true; t.textContent = 'Lager turer …'; await addTestStudents(); renderStudentList(); };
@@ -1183,7 +1178,6 @@ async function renderStudentList() {
   };
   draw();
   $('#st-q').oninput = e => { studentQuery = e.target.value; draw(); };
-  top.querySelectorAll('input[name=starch]').forEach(r => r.onchange = () => { saveSettings({ ...getSettings(), studentView: { ...(getSettings().studentView || {}), arch: r.value === '1' } }); renderStudentList(); });
   $('#st-sort').onchange = e => { saveSettings({ ...getSettings(), studentView: { ...(getSettings().studentView || {}), sort: e.target.value } }); renderStudentList(); };
   $('#btn-st-add').onclick = async () => {
     const r = await formDialog({ title: 'Ny elev', ok: 'Legg til', body: `<input class="sheet-input" id="ns-name" maxlength="40" placeholder="Navn" aria-label="Navn" autocomplete="off"><input class="sheet-input" id="ns-mail" type="email" inputmode="email" maxlength="80" placeholder="E-post (valgfritt)" aria-label="E-post" autocomplete="off"><p class="muted small">Har to elever samme fornavn, ta med etternavnet eller en bokstav, for eksempel «Emma H.».</p>`,
@@ -1198,13 +1192,13 @@ async function renderStudentList() {
 function addStudent(name, email = '') {
   const cur = getSettings(), list = students(cur);
   const same = list.find(x => x.name.toLowerCase() === name.toLowerCase());
-  if (same) { toast(same.archived ? `${same.name} ligger i arkivet. Åpne «Fått lappen» for å gjøre eleven aktiv igjen.` : `Det finnes allerede en elev som heter ${same.name}. Ta med etternavnet eller en bokstav.`, { ms: 4000 }); return false; }
+  if (same) { toast(`Det finnes allerede en elev som heter ${same.name}. Ta med etternavnet eller en bokstav.`, { ms: 4000 }); return false; }
   saveSettings({ ...cur, students: [...list.filter(x => x.name !== name), { name, email, addedAt: new Date().toISOString() }], activeStudent: name });
   toast(`${name} er lagt til.`, { type: 'ok', ms: 2000 });
   return true;
 }
 
-/* Elevsiden (læreren, 0.18.0): meldinger, fremgang, lekser, øvingen i perioden, turene og arkivet */
+/* Elevsiden (læreren, 0.18.0): meldinger, fremgang, lekser, øvingen i perioden, turene, og «har fått lappen» nederst */
 async function renderStudent(name, opts = {}) {
   show('teacher');
   // Lærervisningen slås på litt etter oppstart (testbyggene): da tegnes siden på nytt, så adressen beholdes
@@ -1219,16 +1213,16 @@ async function renderStudent(name, opts = {}) {
   $('#teacher .page-actions').hidden = false;
   $('#teacher-top').innerHTML = `
     <section class="card st-head"><span class="student-ava big" aria-hidden="true">${esc(name.slice(0, 1).toUpperCase())}</span>
-      <span class="st-main"><strong>${esc(name)}</strong><span class="muted small">${st.email ? esc(st.email) : 'Ingen e-post lagt inn'}${st.archived ? ` · fikk lappen ${esc(new Date(st.archived.at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }))}` : ''}</span></span></section>
-    ${st.archived ? '' : `<button type="button" class="btn primary" id="btn-st-drive">${icon('play', 20)}Start kjøretime med ${esc(name)}</button>`}
+      <span class="st-main"><strong>${esc(name)}</strong><span class="muted small">${st.email ? esc(st.email) : 'Ingen e-post lagt inn'}</span></span></section>
+    <button type="button" class="btn primary" id="btn-st-drive">${icon('play', 20)}Start kjøretime med ${esc(name)}</button>
     ${threadCardHtml(thread, { title: `Meldinger med ${name}`, mine: 'laerer', all: !!opts.all, empty: `Skriv til ${name}, eller åpne en tur og trykk «Gi tilbakemelding». Leksene følger med neste melding du sender.` })}
     <div id="st-progress"></div>
-    ${st.archived ? '' : `${homeworkCardHtml(homeworkFor(s, name), true)}`}`;
+    ${homeworkCardHtml(homeworkFor(s, name), true)}`;
   wireThread(name, rerender, { driver: name });
   if (unread(thread, 'laerer')) saveThread(name, markRead(threadOf(getSettings(), name), 'laerer'));
   const go = $('#btn-st-drive');
   if (go) go.onclick = () => { saveSettings({ ...getSettings(), activeStudent: name }); requestMotionPermission().catch(() => {}); location.hash = '#/sjekk'; };
-  if (!st.archived) wireHomework(name, rerender);
+  wireHomework(name, rerender);
   const root = $('#teacher-root');
   const rows = await drawSummary(root, tok, () => rerender());
   if (!rows || tok !== teacherSeq) return;
@@ -1239,32 +1233,45 @@ async function renderStudent(name, opts = {}) {
       <span class="goal-bar"><span style="width:${rd.counted ? Math.round(rd.done / rd.counted * 100) : 0}%"></span></span>
       ${rd.next.length ? `<ul class="rd-next">${rd.next.slice(0, 3).map(i => `<li>${icon('chev', 18)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.tip)}</span></span></li>`).join('')}</ul>` : '<p class="muted small">Alt appen måler er på plass.</p>'}
     </section>`;
-  // Turene til eleven og arkivet
+  // Turene til eleven, og avslutningen når opplæringen er ferdig
   const list = rows.slice(0, 12);
   root.insertAdjacentHTML('beforeend', `<h2 class="section-title">Turer</h2>
     ${list.length ? `<ul class="drives log-list card">${list.map(x => `<li><button type="button" class="drive" data-id="${esc(x.d.id)}">
       <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong><span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.d.shared ? 'fra eleven' : 'kjøretime'].join(SEP)}</span></span>
       ${scoreBadge(x.res.overall, 40)}</button></li>`).join('')}</ul>${rows.length > list.length ? `<p class="muted small center">De ${list.length} siste av ${rows.length}. Alle ligger under Turer.</p>` : ''}` : '<p class="muted pad">Ingen turer ennå. Turene eleven sender, og kjøretimene du tar opp, havner her.</p>'}
-    <section class="card st-archive"><h2 class="card-title">${icon('award')}${st.archived ? 'I arkivet' : 'Fått lappen?'}</h2>
-      <p class="muted small">${st.archived ? 'Eleven vises ikke i elevlisten. Turene og meldingene ligger her til du sletter dem.' : 'Flytt eleven til arkivet når førerkortet er i boks. Eleven forsvinner fra lista og fra valgene før kjøretimen, men ingenting slettes.'}</p>
-      <button type="button" class="btn secondary" id="btn-st-archive">${st.archived ? 'Gjør eleven aktiv igjen' : `${esc(name)} har fått lappen`}</button>
-      <button type="button" class="btn danger" id="btn-st-delete">${icon('trash', 20)}Slett eleven og turene</button>
+    <section class="card st-done"><h2 class="card-title">${icon('award')}Ferdig med opplæringen?</h2>
+      <p class="muted small">Når ${esc(name)} har fått lappen eller er ferdig hos deg, slettes alt om eleven fra denne telefonen med en gang: turene, meldingene, leksene, timene og notatene.</p>
+      <button type="button" class="btn secondary" id="btn-st-passed">${icon('award', 20)}${esc(name)} har fått lappen</button>
+      <button type="button" class="btn danger" id="btn-st-delete">${icon('trash', 20)}Slett eleven</button>
     </section>`);
   root.querySelectorAll('.drive').forEach(b => b.onclick = () => { location.hash = '#/rapport/' + b.dataset.id; });
-  $('#btn-st-archive').onclick = () => {
-    const cur = getSettings();
-    saveSettings({ ...cur, students: students(cur).map(x => (x.name === name ? (st.archived ? (({ archived, ...rest }) => rest)(x) : { ...x, archived: { at: new Date().toISOString(), reason: 'lappen' } }) : x)) });
-    if (!st.archived) { vibrate([30, 60, 30]); toast(`Gratulerer til ${name}! Eleven er flyttet til arkivet.`, { type: 'ok', ms: 3000 }); ensureStudent(); location.hash = '#/trafikklaerer'; }
-    else { toast(`${name} er aktiv igjen.`, { type: 'ok', ms: 2000 }); rerender(); }
-  };
-  $('#btn-st-delete').onclick = async () => {
+  // Fått lappen og slett gjør det samme (eierens valg 14.11.2026: ingenting om eleven blir liggende igjen); bare ordene er ulike
+  const finish = async passed => {
     const n = (await listDrives()).filter(d => (d.driver || '') === name).length;
-    if (!(await confirmDialog({ title: `Slette ${name}?`, text: `Eleven, ${n} ${n === 1 ? 'tur' : 'turer'}, meldingene, leksene, opplæringsplanen og teorien slettes fra denne telefonen. Det kan ikke angres. Ta en sikkerhetskopi først hvis du vil ta vare på noe.`, ok: 'Slett', danger: true }))) return;
-    for (const d of await listDrives()) if ((d.driver || '') === name) await deleteDrive(d.id);
-    saveSettings(forgetStudent(getSettings(), name));
-    toast(`${name} er slettet.`, { type: 'ok', ms: 2500 });
+    const waiting = unsent(threadOf(getSettings(), name), 'laerer').length;
+    const what = `Alt om ${name} slettes nå fra denne telefonen: ${n} ${n === 1 ? 'tur' : 'turer'}, meldingene, leksene, timene og notatene. Det kan ikke angres.`;
+    const warn = waiting ? ` Du har ${waiting === 1 ? 'én melding' : `${waiting} meldinger`} som ikke er sendt. Send ${waiting === 1 ? 'den' : 'dem'} først hvis eleven skal få ${waiting === 1 ? 'den' : 'dem'}.` : '';
+    if (!(await confirmDialog({ title: passed ? `Gratulerer til ${name}!` : `Slette ${name}?`, text: what + warn, ok: passed ? 'Slett alt' : 'Slett', danger: true }))) return;
+    await deleteStudent(name);
+    if (passed) vibrate([30, 60, 30]);
+    toast(passed ? `${name} har fått lappen, og alt om eleven er slettet.` : `${name} er slettet.`, { type: 'ok', ms: 3000 });
     location.hash = '#/trafikklaerer';
   };
+  $('#btn-st-passed').onclick = () => finish(true);
+  $('#btn-st-delete').onclick = () => finish(false);
+}
+
+/* Sletter alt om én elev hos læreren: turene (egne kjøretimer og dem eleven har sendt) og alt i innstillingene */
+async function deleteStudent(name) {
+  for (const d of await listDrives()) if ((d.driver || '') === name) await deleteDrive(d.id);
+  saveSettings(forgetStudent(getSettings(), name));
+  ensureStudent();
+}
+/* Elever i arkivet fra 0.18.0–0.18.1, eller fra en sikkerhetskopi: de har fått lappen, så de slettes nå (0.18.2) */
+async function purgeArchivedStudents() {
+  const names = archivedStudents(getSettings());
+  for (const n of names) await deleteStudent(n);
+  return names.length;
 }
 
 async function addTestStudents() {
@@ -2818,7 +2825,9 @@ async function restoreBackup(payload) {
     applyTheme();
     restoredSettings = true;
   }
-  toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}${restoredSettings ? ', og innstillingene' : ''}.`, { type: 'ok' });
+  // En eldre kopi kan ha elever i arkivet (0.18.0–0.18.1): de har fått lappen og slettes igjen
+  const gone = restoredSettings ? await purgeArchivedStudents() : 0;
+  toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}${restoredSettings ? ', og innstillingene' : ''}.${gone ? ` ${gone === 1 ? 'Én elev' : `${gone} elever`} som hadde fått lappen, ble slettet.` : ''}`, { type: 'ok' });
   location.hash = '#/';
 }
 
@@ -3112,6 +3121,12 @@ function init() {
   requestPersistentStorage().then(r => { persistState = r; });
   applyLinkSetup();
   route();
+  // Elever som lå i arkivet (0.18.0–0.18.1) har fått lappen: de slettes nå, slik eieren bestemte 14.11.2026
+  purgeArchivedStudents().then(n => {
+    if (!n) return;
+    toast(`${n === 1 ? 'Én elev' : `${n} elever`} som hadde fått lappen, er slettet fra telefonen.`, { type: 'ok', ms: 3500 });
+    if (location.hash.startsWith('#/trafikklaerer') || location.hash.startsWith('#/elev/')) route();
+  }).catch(() => {});
   // Motorveier for eldre turer (0.18.0): sidene som viser veityper tegnes på nytt når de er hentet
   setTimeout(() => backfillMotorways().then(n => { if (n && ['#/logg', '#/klar', '#/trafikklaerer', '#/fremgang'].includes(location.hash) && !(recorder && recorder.running)) route(); }).catch(() => {}), 4000);
 }

@@ -142,6 +142,16 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.18.2 – a learner who has passed is deleted at once
+
+The owner decided (14 Nov 2026) that nothing about a learner stays on the teacher's phone after the driving licence or the end of the training. The archive from 0.18.0 is gone.
+- At the bottom of the learner's page, «Ferdig med opplæringen?» has two buttons: «<name> har fått lappen» and «Slett eleven». Both delete everything at once after one question: the drives (lessons the teacher recorded and drives the learner sent), messages, homework, lesson dates, notes, the training plan, theory and calibration (`deleteStudent` in `js/app.js`, `forgetStudent` in `js/modes.js`). The question says how many drives go, and warns if the teacher has messages that are not sent yet.
+- Learners who were archived in 0.18.0–0.18.1, or who come back with an older backup, are deleted when the app starts or after the backup is restored (`purgeArchivedStudents`), with a short message saying how many.
+- The learner list no longer has the «Aktive / Fått lappen» switch.
+- Fixed: a drive sent with a message lost the companion's note on the way (`importSharedDrive` in `js/db.js`; the note had ended up inside a comment).
+- The privacy page says what is deleted and when.
+- **Tested:** in the browser at phone width, light and dark: an archived test learner and her 9 drives were deleted at start; «har fått lappen» deleted a test learner, his 4 drives and every setting with his name; the question warns about an unsent message; a received drive keeps its note. All unit tests. Not tested on the phone beyond starting the app.
+
 ## What's new in 0.18.1 – open a message straight from Messages, Mail or Files
 
 In the iPhone app, a message file from the learner or the teacher no longer has to be saved and picked with «Åpne svar fra fil». Tap the file, choose Del (Share) and then Kjørerapport, and it lands in the conversation.

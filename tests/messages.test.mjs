@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildPackage, readPackage, mergeThread, unread, markRead, unsent, refLabel, cleanMessage, packageName, studentOverview, sortStudents, filterStudents, isPackage } from '../js/messages.js';
-import { forgetStudent, activeStudents, students } from '../js/modes.js';
+import { forgetStudent, activeStudents, archivedStudents, students } from '../js/modes.js';
 
 const drive = (id, driver, daysAgo, overall, extra = {}) => ({ id, driver, startedAt: new Date(Date.UTC(2026, 10, 14) - daysAgo * 86400000).toISOString(),
   result: { overall, stats: { duration: 1800, km: 20 }, points: [{ t: 0, lat: 63.4, lon: 10.4 }, { t: 1, lat: 63.401, lon: 10.4 }], events: [] }, ...extra });
@@ -44,28 +44,37 @@ test('hva meldingen gjelder, i vanlige ord', () => {
 test('elevoversikt: 50 elever, søk, sortering og hvem som trenger oppfølging', () => {
   const now = Date.UTC(2026, 10, 14, 12);
   const list = Array.from({ length: 50 }, (_, i) => ({ name: `Elev ${String(i).padStart(2, '0')}`, email: `e${i}@example.com` }));
-  list.push({ name: 'Emma', email: 'emma@example.com' }, { name: 'Jonas' }, { name: 'Sara', archived: { at: '2026-11-01', reason: 'lappen' } });
+  list.push({ name: 'Emma', email: 'emma@example.com' }, { name: 'Jonas' });
   const drives = [drive('e1', 'Emma', 1, 60), drive('e2', 'Emma', 3, 62), drive('j1', 'Jonas', 20, 90), ...list.slice(0, 50).map((s, i) => drive('x' + i, s.name, i % 7, 85))];
   const threads = { Jonas: [{ id: 'q', from: 'elev', at: '2026-11-13T10:00:00Z', text: 'Spørsmål' }] };
   const ov = studentOverview(drives, list, threads, now);
   const emma = ov.find(x => x.name === 'Emma'), jonas = ov.find(x => x.name === 'Jonas');
   assert.equal(emma.avg, 61); assert.ok(emma.flags.some(f => f.id === 'score'));
   assert.equal(jonas.newMsgs, 1); assert.ok(jonas.flags.some(f => f.id === 'idle'), 'ikke kjørt på 20 dager');
-  const sorted = sortStudents(ov.filter(x => !x.archived), 'need');
+  const sorted = sortStudents(ov, 'need');
   assert.equal(sorted[0].name, 'Jonas', 'ny melding først'); assert.equal(sorted[1].name, 'Emma');
   assert.equal(sortStudents(ov, 'name')[0].name, 'Elev 00');
   assert.equal(filterStudents(ov, 'emm').length, 1);
   assert.equal(filterStudents(ov, 'E1@EX').length, 1, 'søk på e-post');
 });
 
-test('elev som har fått lappen: arkiv og sletting (0.18.0)', () => {
-  const s = { students: [{ name: 'Emma' }, { name: 'Sara', archived: { at: '2026-11-01', reason: 'lappen' } }], activeStudent: 'Emma',
-    lessons: { Emma: '2026-11-01', Sara: '2026-10-01' }, homework: { Emma: { focus: [] } }, messages: { Emma: [{ id: 'a' }] }, theory: { Emma: {} } };
-  assert.deepEqual(activeStudents(s).map(x => x.name), ['Emma']);
-  assert.equal(students(s).length, 2);
+test('elev som har fått lappen slettes helt (0.18.2)', () => {
+  const s = { students: [{ name: 'Emma' }, { name: 'Jonas' }], activeStudent: 'Emma', drivers: ['Emma'],
+    lessons: { Emma: '2026-11-01', Jonas: '2026-10-01' }, homework: { Emma: { focus: [] } }, messages: { Emma: [{ id: 'a' }] }, theory: { Emma: {} },
+    teacherNotes: { Emma: 'notat' }, curriculum: { Emma: {} }, calib: { Emma: {} } };
   const out = forgetStudent(s, 'Emma');
-  assert.deepEqual(out.students.map(x => x.name), ['Sara']);
-  assert.ok(!('Emma' in out.lessons) && !('Emma' in out.messages) && !('Emma' in out.homework) && !('Emma' in out.theory));
-  assert.equal(out.lessons.Sara, '2026-10-01');
-  assert.equal(out.activeStudent, '', 'ingen aktiv elev igjen (Sara er arkivert)');
+  assert.deepEqual(out.students.map(x => x.name), ['Jonas']);
+  assert.deepEqual(out.drivers, [], 'heller ikke i den gamle førerlisten');
+  for (const k of ['lessons', 'homework', 'messages', 'theory', 'teacherNotes', 'curriculum', 'calib']) assert.ok(!('Emma' in out[k]), k);
+  assert.equal(out.lessons.Jonas, '2026-10-01', 'de andre elevene er urørt');
+  assert.equal(out.activeStudent, 'Jonas');
+  assert.ok(!JSON.stringify(out).includes('Emma'), 'navnet finnes ingen steder i innstillingene');
+});
+
+test('arkiverte elever fra 0.18.0–0.18.1 finnes og telles ikke som aktive', () => {
+  const s = { students: [{ name: 'Emma' }, { name: 'Sara', archived: { at: '2026-11-01', reason: 'lappen' } }] };
+  assert.deepEqual(activeStudents(s).map(x => x.name), ['Emma']);
+  assert.deepEqual(archivedStudents(s), ['Sara']);
+  assert.equal(students(s).length, 2);
+  assert.deepEqual(archivedStudents({ students: [{ name: 'Emma' }] }), []);
 });

@@ -91,7 +91,7 @@ export function packageName(to, now = new Date()) {
 /* ---------- Elevoversikten (læreren) ---------- */
 const DAY = 86400000;
 /* Én rad per elev: siste tur, øving siste 30 dager, snittpoeng og retning, meldinger, og om eleven trenger oppfølging.
-   drives: lagrede turer med ferdig analyse (d.result), students: [{ name, archived }], threads: { navn: [meldinger] } */
+   drives: lagrede turer med ferdig analyse (d.result), students: [{ name, email }], threads: { navn: [meldinger] } */
 export function studentOverview(drives, students, threads = {}, now = Date.now()) {
   return students.map(st => {
     const own = drives.filter(d => (d.driver || '') === st.name && d.result && d.result.stats && !d.demo && !d.excluded)
@@ -112,7 +112,7 @@ export function studentOverview(drives, students, threads = {}, now = Date.now()
     if (last === null) flags.push({ id: 'none', text: 'Ingen turer ennå', tone: 'muted' });
     // Høyere tall = mer å følge opp (sorteringen «Trenger oppfølging»)
     const need = (newMsgs ? 100 : 0) + (avgNow !== null && avgNow < 70 ? 30 + (70 - avgNow) : 0) + (avgNow !== null && avgBefore !== null ? Math.max(0, avgBefore - avgNow) * 2 : 0) + (idle !== null && idle >= 14 ? 10 + Math.min(20, idle - 14) : 0);
-    return { name: st.name, email: st.email || '', archived: st.archived || null, test: !!st.test, count: own.length, last, idle,
+    return { name: st.name, email: st.email || '', test: !!st.test, count: own.length, last, idle,
       min30: Math.round(recent.reduce((s, d) => s + (d.result.stats.duration || 0), 0) / 60), km30: recent.reduce((s, d) => s + (d.result.stats.km || 0), 0),
       avg: avgNow, trend: avgNow !== null && avgBefore !== null ? avgNow - avgBefore : null, newMsgs, lastMsgAt: lastMsg ? lastMsg.at : null, flags, need };
   });

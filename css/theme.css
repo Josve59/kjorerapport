@@ -441,11 +441,12 @@ dialog.sheet .pick-list .mode-opt > span { flex: 1; }
 .st-trend.up { color: var(--good); } .st-trend.down { color: var(--brake); }
 .st-head { display: flex; align-items: center; gap: 14px; }
 .student-ava.big { width: 56px; height: 56px; font-size: 1.4rem; }
-.st-archive .btn { width: 100%; }
+.st-done .btn { width: 100%; }
+.st-done .btn + .btn { margin-top: 8px; }
 .st-ready .goal-bar { display: block; margin: 6px 0 10px; }
 .center-link { display: block; margin: 8px auto 16px; }
 #teacher > .btn.primary, #teacher-top > .btn.primary { width: 100%; margin: 0 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-@media print { .thread-card, .st-tools, .st-actions, .st-archive, #btn-st-drive, .msg-home, .talk-card .btn, .trip-card { display: none !important; } }
+@media print { .thread-card, .st-tools, .st-actions, .st-done, #btn-st-drive, .msg-home, .talk-card .btn, .trip-card { display: none !important; } }
 .st-tools .st-sort { flex-direction: row; text-align: left; }
 .st-tools .st-sort select { margin: 0; }
 .st-actions .btn { white-space: nowrap; gap: 4px; padding-left: 10px; padding-right: 10px; }

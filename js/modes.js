@@ -38,8 +38,10 @@ export function students(s = {}) {
   return list;
 }
 
-/* Elever som ikke er arkivert (0.18.0): de som har fått lappen eller sluttet, ligger i arkivet og vises ikke i lister */
+/* Elevene i lister og valg. 0.18.0–0.18.1 hadde et arkiv for dem som fikk lappen; fra 0.18.2 slettes de med en gang,
+   så arkiverte elever (fra den tiden, eller fra en sikkerhetskopi) telles ikke og slettes ved oppstart. */
 export const activeStudents = (s = {}) => students(s).filter(x => !x.archived);
+export const archivedStudents = (s = {}) => students(s).filter(x => x.archived).map(x => x.name);
 
 /* Innstillingene uten alt som er lagret om én elev (0.18.0): elevlisten, timer, notater, lekser, opplæringsplan, teori,
    kalibrering og meldinger. Turene slettes for seg. */
