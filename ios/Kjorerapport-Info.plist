@@ -22,5 +22,24 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- 0.18.1: «Åpne i Kjørerapport» for meldinger fra læreren eller eleven, eksporterte turer og sikkerhetskopier (.json).
+	     Alternate: appen er ikke hovedappen for JSON, bare et valg i delearket. Filen kopieres inn (ikke åpnet på stedet). -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Kjørerapport-fil</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.json</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
 </dict>
 </plist>

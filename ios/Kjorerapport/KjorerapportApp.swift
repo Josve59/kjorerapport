@@ -26,6 +26,8 @@ struct KjorerapportApp: App {
             WebAppView(recorder: recorder)
                 .ignoresSafeArea()
                 .background(Color(uiColor: .systemBackground))
+                // «Åpne i Kjørerapport» fra Meldinger, Mail, Filer eller AirDrop (0.18.1): nettappen henter filen
+                .onOpenURL { url in recorder.openFile(url) }
         }
         // Tilbake fra bakgrunnen: sjekk at den lokale serveren fortsatt lytter (iPhone kan ha stengt den)
         .onChange(of: scenePhase) { _, phase in if phase == .active { server?.restart() } }

@@ -16,6 +16,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     private var recording = false     // et opptak pågår
     private var inBackground = false
     private var buffer: [[String: Any]] = []   // målinger mens appen er i bakgrunnen
+    private var pendingFile: (name: String, text: String)?   // fil åpnet i appen, til nettappen henter den (0.18.1)
     // Live Activity (låseskjerm og Dynamic Island) mens opptaket pågår
     private var activityID: String?
     private var recordStart = Date()
@@ -83,6 +84,11 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             return (await plus.redeem(in: webView?.window?.windowScene), nil)
         case "share":
             return (["completed": await share(body)], nil)
+        case "takeFile":
+            // Filen som ble åpnet i appen (0.18.1). Gis bare én gang.
+            guard let f = pendingFile else { return (NSNull(), nil) }
+            pendingFile = nil
+            return (["name": f.name, "text": f.text], nil)
         case "print":
             await printPage()
         case "review":
@@ -360,6 +366,20 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         let list = buffer
         buffer.removeAll()
         send("window.__kjBackfill && window.__kjBackfill(\(json(list)))")
+    }
+
+    // MARK: Filer åpnet i appen (0.18.1)
+
+    /// En fil fra delearket («Åpne i Kjørerapport»): meldinger mellom elev og lærer, eksporterte turer og
+    /// sikkerhetskopier. Teksten holdes til nettappen henter den (takeFile), også når appen startes av filen.
+    func openFile(_ url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), data.count < 300_000_000 else { return }
+        // iPhone legger en kopi i appens Inbox-mappe: den trengs ikke når teksten er lest
+        if url.path.contains("/Inbox/") { try? FileManager.default.removeItem(at: url) }
+        pendingFile = (url.lastPathComponent, String(decoding: data, as: UTF8.self))
+        send("window.__kjFile && window.__kjFile()")
     }
 
     // MARK: Hjelp

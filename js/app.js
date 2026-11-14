@@ -33,7 +33,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.18.0';
+export const APP_VERSION = '0.18.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -980,8 +980,9 @@ async function sendMessages(key) {
 
 /* Åpner en meldingsfil. Læreren: meldingen havner hos eleven den er fra (ny elev legges til), turene blir elevens.
    Eleven: meldinger, turer og lekser fra læreren. Svarer { key, n, drives } eller null hvis avbrutt. */
-async function openMessageFile(file) {
-  const p = readPackage(JSON.parse(await file.text()));
+async function openMessageFile(file) { return openMessageData(JSON.parse(await file.text())); }
+async function openMessageData(payload) {
+  const p = readPackage(payload);
   if (isTeacher()) {
     if (p.from.role !== 'elev') throw new Error('Denne meldingen er fra en trafikklærer. Den åpnes i appen til eleven.');
     let name = p.from.name;
@@ -1039,7 +1040,7 @@ function threadCardHtml(thread, { title, mine, empty, all = false }) {
         </div>
       </div>
       <label class="btn secondary file-btn small-btn">${icon('upload', 18)}${mine === 'laerer' ? 'Åpne melding fra fil' : 'Åpne svar fra fil'}<input type="file" id="msg-file" accept="application/json,.json"></label>
-      <p class="muted small">Meldingen sendes som en fil med Meldinger, AirDrop eller e-post. Mottakeren lagrer filen og åpner den her. Turen sendes med posisjoner og hendelser, men uten bilder.</p>
+      <p class="muted small">Meldingen sendes som en fil med Meldinger, AirDrop eller e-post. ${window.kjNative ? 'Mottakeren trykker på filen, velger Del og så Kjørerapport, så havner den her.' : 'Mottakeren åpner filen i Kjørerapport: i iPhone-appen med Del og Kjørerapport, i nettleseren med knappen over.'} Turen sendes med posisjoner og hendelser, men uten bilder.</p>
     </section>`;
 }
 /* Kobler skrivefeltet, vedlegg, send og åpne fil. key: samtalen, rerender: tegn siden på nytt */
@@ -2688,19 +2689,8 @@ async function renderSettings() {
     if (!file) return;
     try {
       const payload = JSON.parse(await file.text());
-      const list = Array.isArray(payload.drives) ? payload.drives : [payload];
-      let added = 0, skipped = 0;
-      for (const item of list) { const r = await importDrive(item, { keepId: true }); if (r && r.skipped) skipped++; else added++; }
       e.target.value = '';
-      let restoredSettings = false;
-      if (payload.settings && typeof payload.settings === 'object' && await confirmDialog({ title: 'Gjenopprette innstillingene også?', text: 'Førere, mål, følsomhet, terskler og andre valg fra sikkerhetskopien erstatter de du har nå.', ok: 'Ja, gjenopprett', cancel: 'Behold mine' })) {
-        const cur = getSettings();
-        saveSettings({ ...cur, ...payload.settings, lastBackupAt: cur.lastBackupAt });
-        applyTheme();
-        restoredSettings = true;
-      }
-      toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}${restoredSettings ? ', og innstillingene' : ''}.`, { type: 'ok' });
-      location.hash = '#/';
+      await restoreBackup(payload);
     } catch (err) {
       infoDialog({ title: 'Kunne ikke gjenopprette', text: err.message });
       e.target.value = '';
@@ -2814,6 +2804,52 @@ function renderThresholdSettings() {
   });
   $('#th-status').textContent = s.th ? 'Egne terskler er i bruk.' : 'Standard terskler.';
   $('#btn-th-reset').onclick = () => { const cur = getSettings(); delete cur.th; saveSettings(cur); renderThresholdSettings(); toast('Standard terskler er tilbake.', { type: 'ok', ms: 2000 }); };
+}
+
+/* Gjenoppretter en sikkerhetskopi (eller én eksportert tur): turene, og innstillingene hvis brukeren vil */
+async function restoreBackup(payload) {
+  const list = Array.isArray(payload.drives) ? payload.drives : [payload];
+  let added = 0, skipped = 0;
+  for (const item of list) { const r = await importDrive(item, { keepId: true }); if (r && r.skipped) skipped++; else added++; }
+  let restoredSettings = false;
+  if (payload.settings && typeof payload.settings === 'object' && await confirmDialog({ title: 'Gjenopprette innstillingene også?', text: 'Førere, mål, følsomhet, terskler og andre valg fra sikkerhetskopien erstatter de du har nå.', ok: 'Ja, gjenopprett', cancel: 'Behold mine' })) {
+    const cur = getSettings();
+    saveSettings({ ...cur, ...payload.settings, lastBackupAt: cur.lastBackupAt });
+    applyTheme();
+    restoredSettings = true;
+  }
+  toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}${restoredSettings ? ', og innstillingene' : ''}.`, { type: 'ok' });
+  location.hash = '#/';
+}
+
+/* «Åpne i Kjørerapport» i iPhone-appen (0.18.1): en fil fra Meldinger, Mail, Filer eller AirDrop. Meldinger havner i
+   samtalen, en eksportert tur åpnes som rapport, og en sikkerhetskopi gjenopprettes etter et spørsmål. */
+let fileBusy = false;
+async function openIncomingFile() {
+  if (fileBusy || !window.kjNative || !window.kjNative.takeFile) return;
+  if (recorder && recorder.running) { toast('Filen åpnes ikke under en tur. Åpne den igjen når turen er stoppet.', { ms: 4000 }); await window.kjNative.takeFile(); return; }
+  fileBusy = true;
+  try {
+    const f = await window.kjNative.takeFile();
+    if (!f || !f.text) return;
+    let payload;
+    try { payload = JSON.parse(f.text); } catch { throw new Error('Filen er ikke en fil fra Kjørerapport.'); }
+    if (isPackage(payload)) {
+      const r = await openMessageData(payload);
+      if (!r) return;
+      toast(`${r.n ? `${r.n} ${r.n === 1 ? 'ny melding' : 'nye meldinger'}` : 'Ingen nye meldinger'}${r.drives ? `, ${r.drives} ${r.drives === 1 ? 'tur' : 'turer'}` : ''}${r.homework ? ' og lekser' : ''}.`, { type: 'ok', ms: 3000 });
+      const to = isTeacher() ? studentHash(r.key) : '#/trafikklaerer';
+      if (location.hash === to) route(); else location.hash = to;   // allerede der: tegn samtalen på nytt
+    } else if (Array.isArray(payload.drives)) {
+      const n = payload.drives.length;
+      if (await confirmDialog({ title: 'Gjenopprette sikkerhetskopien?', text: `Filen har ${n} ${n === 1 ? 'tur' : 'turer'}${payload.exportedAt ? ` fra ${date(payload.exportedAt)}` : ''}. Turer du har fra før, blir ikke doble.`, ok: 'Gjenopprett' })) await restoreBackup(payload);
+    } else if (payload && (payload.input || payload.loc || payload.sharedDrive)) {
+      const d = await importDrive(payload);
+      toast('Turen er importert.', { type: 'ok', ms: 2000 });
+      location.hash = '#/rapport/' + d.id;
+    } else throw new Error('Filen er ikke en melding, tur eller sikkerhetskopi fra Kjørerapport.');
+  } catch (err) { infoDialog({ title: 'Kunne ikke åpne filen', text: err.message }); }
+  finally { fileBusy = false; }
 }
 
 async function exportDrive(id) {
@@ -3034,7 +3070,11 @@ function init() {
   // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke
   // låse opp Pluss i App Store-utgaven (0.11.4).
   const wantedMode = modeFromLegacy(getSettings());
-  if (wantedMode !== 'app') viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {});
+  const modeReady = wantedMode !== 'app' ? viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
+  // Fil åpnet i iPhone-appen (0.18.1): når appen startes av filen, og når den kommer mens appen er åpen.
+  // Etter visningen, så en melding til læreren havner i lærervisningen.
+  modeReady.then(() => setTimeout(openIncomingFile, 300));
+  window.addEventListener('kjfile', () => modeReady.then(openIncomingFile));
   let plusWas = hasPlus();
   onPlusChange(plus => {
     updatePlusMarks();

@@ -142,6 +142,17 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.18.1 – open a message straight from Messages, Mail or Files
+
+In the iPhone app, a message file from the learner or the teacher no longer has to be saved and picked with «Åpne svar fra fil». Tap the file, choose Del (Share) and then Kjørerapport, and it lands in the conversation.
+- `ios/Kjorerapport-Info.plist` declares JSON files (`public.json`) as a document type with the rank «Alternate», so Kjørerapport is offered in the share sheet but never becomes the default app for JSON. `LSSupportsOpeningDocumentsInPlace` is false: iOS gives the app a copy.
+- `KjorerapportApp.swift` passes the file to `NativeRecorder.openFile`, which reads it, deletes iOS's copy in the app's Inbox folder, and keeps the text until the web app asks for it (`kjNative.takeFile` in `Bridge.js`). The web app asks when it starts and when the event «kjfile» comes, so it works both when the app is open and when the file starts it.
+- `openIncomingFile` in `js/app.js` opens a message in the conversation, a backup after a question («Gjenopprette sikkerhetskopien?»), and an exported drive as a report. During a drive the file is not opened.
+- Files' own «Åpne med» lists only apps that edit files in place, so it shows no apps; Del (Share) is the way, the same as from Messages and Mail. The hint under the conversation says so.
+- The homework buttons the learner sees have their text centred again.
+- **Tested:** in the iPhone simulator (iOS 26): a teacher message in Files → Del → Kjørerapport, both with the app open and with the app closed (cold start); the message and homework showed up, and the Inbox copy was gone. All unit tests. The web version loads without errors.
+- **Not tested:** from Messages or Mail on a real phone (the simulator has no Messages account).
+
 ## What's new in 0.18.0 – motorway time, leaving out a drive, and messages between learner and driving teacher
 
 **Motorway time in the driving log was too low.** The road type came only from the speed limit: over 80 km/h was motorway. Around Trondheim most of the E6 and E39 motorway and motor road (motortrafikkvei) has 80 or 70 km/h, so it counted as country road. A 90 km/h two-lane road counted as motorway.

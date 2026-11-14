@@ -9,9 +9,11 @@
     // Kameraene (CameraHub.swift): bildene hentes fra /cam/user.jpg og /cam/environment.jpg, bilene kommer som «kjcamdets»
     camInfo: () => call('camInfo'), camStart: o => call('camStart', o), camStop: () => call('camStop'), camConfig: o => call('camConfig', o),
     review: () => call('review'),
+    takeFile: () => call('takeFile'),   // fil åpnet i appen fra delearket (0.18.1); appen sier fra med «kjfile»
     beep: (tones, volume) => call('beep', { tones, volume }),   // pip spilt av appen (0.12.2)
     // Kjørerapport Pluss (PlusStore.swift): engangskjøp i App Store; endringer kommer som hendelsen «kjplus»
     plusStatus: () => call('plusStatus'), plusBuy: () => call('plusBuy'), plusTrial: () => call('plusTrial'), plusRestore: () => call('plusRestore'), plusRedeem: () => call('plusRedeem') };
+  window.__kjFile = () => { window.dispatchEvent(new Event('kjfile')); };
   window.__kjPlus = owned => { window.dispatchEvent(new CustomEvent('kjplus', { detail: { owned } })); };
   window.__kjCamDets = r => { window.dispatchEvent(new CustomEvent('kjcamdets', { detail: r })); };
   window.__kjCamLanes = r => { window.dispatchEvent(new CustomEvent('kjcamlanes', { detail: r })); };   // feltlinjer (0.13.0)
