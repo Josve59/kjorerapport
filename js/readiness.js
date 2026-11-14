@@ -56,7 +56,7 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
       progress: Math.min(1, avg / READY.score) * (harsh ? 0.8 : 1), tip: harsh ? 'Se på de kraftige hendelsene i rapportene, og hva som kunne vært gjort tidligere.' : 'Øv på å bremse og gi gass mykere: se langt fram og slipp gassen tidlig.' });
   } else items.push({ id: 'smooth', group: 'Kjøringen', label: 'Jevn og rolig kjøring', ok: null, have: `${recent.length} ${recent.length === 1 ? 'tur' : 'turer'}`, need: `${READY.minDrives} turer`, progress: recent.length / READY.minDrives, tip: '' });
 
-  // 5. Fart: tid over fartsgrensen (krever «Fartsgrense og fotobokser»)
+  // 5. Fart: tid over fartsgrensen (krever «Fartsgrense og veidata»)
   const withSp = recent.filter(x => x.sp);
   if (withSp.length) {
     const kmSp = withSp.reduce((s, x) => s + x.res.stats.km, 0), over = withSp.reduce((s, x) => s + x.sp.secondsOver, 0);
@@ -65,7 +65,7 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
     items.push({ id: 'speed', group: 'Kjøringen', label: 'Holder fartsgrensen', ok: per10 < READY.speedSecPer10km && serious === 0,
       have: `${Math.round(per10)} s over grensen per 10 km${serious ? ` · ${serious} ganger 10 km/t eller mer over` : ''}`, need: `under ${READY.speedSecPer10km} s per 10 km`,
       progress: per10 <= READY.speedSecPer10km ? 1 : READY.speedSecPer10km / per10, tip: 'Følg med på skiltene og fartsmåleren, særlig der grensen går ned.' });
-  } else items.push({ id: 'speed', group: 'Kjøringen', label: 'Holder fartsgrensen', ok: null, have: 'ingen fartsgrenser hentet', need: '', progress: 0, tip: 'Slå på «Fartsgrense og fotobokser» i Innstillinger, så sammenligner appen farten med fartsgrensen.' });
+  } else items.push({ id: 'speed', group: 'Kjøringen', label: 'Holder fartsgrensen', ok: null, have: 'ingen fartsgrenser hentet', need: '', progress: 0, tip: 'Slå på «Fartsgrense og veidata» i Innstillinger, så sammenligner appen farten med fartsgrensen.' });
 
   // 6. Situasjoner: rundkjøringer, feltskifter, kryss med vikeplikt eller stopp
   const rb = sum(x => ((x.road && x.road.roundabouts) || (x.res.maneuvers && x.res.maneuvers.roundabouts) || []).length);

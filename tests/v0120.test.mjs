@@ -240,3 +240,22 @@ test('fartsvarsel: ingen henstand når kameraet har lest skiltet, og ukjent gren
   // Grensen går opp: gjelder med en gang
   assert.equal(h.step({ t: 40, limit: 60, bearing: 0, kmh: 46 }), 60);
 });
+
+test('fartsvarsel: lyden venter når grensen har byttet, eller en høyere grense er foran (0.18.4)', () => {
+  const w = createSpeedWarn({ changeQuiet: 8 });
+  // 60-sone i 10 s uten å være over
+  for (let t = 0; t < 10; t++) w.step({ kmh: 55, limit: 60, t });
+  // Grensen går ned til 50 ved t=10, bilen holder 60 (bremser for sent): kanten kommer, lyden venter 8 s
+  let beepsEarly = 0, levels = 0;
+  for (let t = 10; t < 18; t++) { const r = w.step({ kmh: 60, limit: 50, t }); if (r.beep) beepsEarly++; if (r.level > 0) levels++; }
+  assert.equal(beepsEarly, 0, 'ingen pip de første 8 sekundene etter byttet');
+  assert.ok(levels > 0, 'den røde kanten vises');
+  let beepsLater = 0;
+  for (let t = 18; t < 26; t++) if (w.step({ kmh: 60, limit: 50, t }).beep) beepsLater++;
+  assert.ok(beepsLater > 0, 'pip når farten fortsatt er for høy etterpå');
+  // Høyere grense like foran (quiet): ingen pip, men kanten vises
+  const w2 = createSpeedWarn();
+  let b2 = 0, l2 = 0;
+  for (let t = 0; t < 12; t++) { const r = w2.step({ kmh: 72, limit: 60, t, quiet: true }); if (r.beep) b2++; if (r.level > 0) l2++; }
+  assert.equal(b2, 0); assert.ok(l2 > 0);
+});

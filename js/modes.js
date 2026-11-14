@@ -45,11 +45,11 @@ export const activeStudents = (s = {}) => students(s).filter(x => !x.archived);
 export const archivedStudents = (s = {}) => students(s).filter(x => x.archived).map(x => x.name);
 
 /* Innstillingene uten alt som er lagret om én elev (0.18.0): elevlisten, timer, notater, lekser, opplæringsplan, teori,
-   kalibrering og meldinger. Turene slettes for seg. */
+   kalibrering, meldinger og neste time (0.18.4). Turene slettes for seg. */
 export function forgetStudent(s = {}, name) {
   const drop = obj => { if (!obj || typeof obj !== 'object') return obj; const o = { ...obj }; delete o[name]; return o; };
   const out = { ...s, students: students(s).filter(x => x.name !== name), drivers: (s.drivers || []).filter(n => n !== name) };
-  for (const k of ['lessons', 'teacherNotes', 'homework', 'curriculum', 'theory', 'calib', 'messages']) if (s[k]) out[k] = drop(s[k]);
+  for (const k of ['lessons', 'teacherNotes', 'homework', 'curriculum', 'theory', 'calib', 'messages', 'nextLesson']) if (s[k]) out[k] = drop(s[k]);
   if (out.activeStudent === name) out.activeStudent = (activeStudents(out)[0] || {}).name || '';
   return out;
 }

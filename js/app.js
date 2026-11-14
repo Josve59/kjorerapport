@@ -33,7 +33,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.18.3';
+export const APP_VERSION = '0.18.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1807,18 +1807,32 @@ async function startRecording(replay = null) {
   show('record');
   const settings = getSettings();
   // Lyd ved fotobokser (v0.9.10 / k0.7.5): låses opp nå, i trykket på «Start», ellers spiller ikke iPhone lyden
-  const atkSound = !replay && settings.netLimits !== false && settings.atkSound !== false ? createAtkSounds() : null;
+  // Fotobokser (0.18.4): av som standard (eieren). Vises bare når «Varsel om fotobokser» er på, og lyden bare når
+  // «Lyd ved fotobokser» også er på.
+  const atkOn = !replay && settings.netLimits !== false && settings.atkWarn === true;
+  const atkSound = atkOn && settings.atkSound === true ? createAtkSounds() : null;
   if (atkSound) unlockSound();
   // Fartsvarsel (0.12.0): rød kant (og pip hvis valgt) når farten er for høy
   const speedWarn = settings.speedWarn !== false || settings.speedSound ? createSpeedWarn() : null;
-  const speedBeep = !!settings.speedSound;
+  let speedBeep = !!settings.speedSound;
   const dropGrace = createDropGrace();   // kartet alene senker grensen: varselet venter litt (0.13.11)
   if (speedBeep) unlockSound();
   const recEl = $('#record');
   recEl.style.setProperty('--speed-warn', 0); recEl.classList.remove('speeding');
-  const warnSpeed = (kmh, limit, t) => {
+  // Lyd av og på under kjøring (0.18.4): knappen ved farten. Valget lagres, så det gjelder neste tur også.
+  const soundBtn = $('#rec-sound');
+  const drawSound = () => { soundBtn.setAttribute('aria-pressed', String(!speedBeep)); soundBtn.innerHTML = `${icon(speedBeep ? 'volume' : 'mute', 24)}<span>${speedBeep ? 'Lyd på' : 'Lyd av'}</span>`; soundBtn.setAttribute('aria-label', speedBeep ? 'Lyd ved for høy fart er på. Trykk for å slå av.' : 'Lyd ved for høy fart er av. Trykk for å slå på.'); };
+  soundBtn.hidden = !speedWarn || (!!replay && !(replay.data && replay.data.limits));
+  drawSound();
+  soundBtn.onclick = () => {
+    speedBeep = !speedBeep;
+    if (speedBeep) { unlockSound(); playSound('fart'); }
+    saveSettings({ ...getSettings(), speedSound: speedBeep });
+    vibrate(20); drawSound();
+  };
+  const warnSpeed = (kmh, limit, t, quiet = false) => {
     if (!speedWarn) return;
-    const w = speedWarn.step({ kmh, limit, t });
+    const w = speedWarn.step({ kmh, limit, t, quiet });
     const show = settings.speedWarn !== false ? w.level : 0;
     recEl.style.setProperty('--speed-warn', show.toFixed(2));
     recEl.classList.toggle('speeding', show > 0);
@@ -1870,11 +1884,14 @@ async function startRecording(replay = null) {
           : res.limit !== null ? '' : res.status === 'feil' ? 'Ingen nett' : res.status === 'ukjent' ? 'Ukjent fartsgrense' : 'Henter fartsgrense …';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
         // Varselet regnes mot den gamle grensen en liten stund når kartet alene senker den (feiltreff i kryss, 0.13.11)
-        warnSpeed(st.kmh, dropGrace.step({ t: st.elapsed, limit: lim, bearing: recorder && recorder.lastFix ? recorder.lastFix.bearing : NaN, kmh: st.kmh, cam: !!cl }), st.elapsed);
+        const warnLim = dropGrace.step({ t: st.elapsed, limit: lim, bearing: recorder && recorder.lastFix ? recorder.lastFix.bearing : NaN, kmh: st.kmh, cam: !!cl });
+        // Høyere grense like foran (0.18.4): kartet bytter ofte litt etter skiltet, så lyden venter (kanten vises)
+        const fwd = !cl && st.pos && Number.isFinite(warnLim) ? live.ahead({ ...st.pos, heading: recorder && recorder.lastFix ? recorder.lastFix.bearing : NaN }, Math.max(80, Math.min(200, (st.kmh || 0) / 3.6 * 6))) : null;
+        warnSpeed(st.kmh, warnLim, st.elapsed, Number.isFinite(fwd) && fwd > warnLim);
         // Fotoboks foran eller strekningsmåling (v0.9.7)
         // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
-        // 2 s etter at bilen har passert, og forsvinner så av seg selv.
-        const atk = st.pos ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
+        // 2 s etter at bilen har passert, og forsvinner så av seg selv. Av som standard fra 0.18.4.
+        const atk = st.pos && atkOn ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
         if (atkSound && st.pos) { const snd = atkSound.step(atk, { kmh: st.kmh, limit: liveLimitNow, t: st.elapsed }); if (snd) playSound(snd); }
         const big = atk && ((atk.kind === 'boks' || atk.kind === 'strekning-foran') ? atk.d <= 300 : atk.kind === 'ferdig');
         atkEl.hidden = !atk || big;
@@ -1932,7 +1949,10 @@ async function startRecording(replay = null) {
   hitR.onclick = () => openCamView('environment');
   if (!replay && settings.cameraOn && cam.state().running) {
     await cam.attachVideo(recVideo);
-    recVideo.hidden = noFaceDrive; hitV.hidden = noFaceDrive;
+    // Roligere skjerm (0.18.4): føreren ser ikke seg selv med mindre «Vis føreren under kjøring» er på
+    const faceShown = !noFaceDrive && settings.showFace === true;
+    recVideo.hidden = noFaceDrive; hitV.hidden = !faceShown;
+    recVideo.classList.toggle('quiet', !faceShown);
     cam.setFaceOff(noFaceDrive);
     if (camUnsub) camUnsub();
     let seen = 0, n = 0, face = noFaceDrive ? 'Førerkameraet er av' : 'Kamera: på', lastRoad = null;
@@ -1987,6 +2007,9 @@ async function startRecording(replay = null) {
   }
 }
 
+/* Testbygg (Xcode og TestFlight, 0.18.4): da vises testknappene under kjøring som standard. Nettversjonen og App Store: nei. */
+let devBuild = false;
+if (window.kjNative && window.kjNative.info) window.kjNative.info().then(i => { devBuild = !!(i && i.devTools); }).catch(() => {});
 function renderMarkGrid() {
   const undo = $('#btn-undo-mark');
   undo.hidden = true;
@@ -1996,7 +2019,9 @@ function renderMarkGrid() {
     if (m) { vibrate(20); toast(`Fjernet merket «${MARK_CATS[m.cat].label}» fra ${fmtClock(m.t)}.`, { type: 'ok', ms: 2500 }); }
   };
   const grid = $('#mark-grid');
-  grid.innerHTML = Object.entries(MARK_CATS).map(([k, c]) => `<button type="button" class="mark-btn" data-cat="${k}" aria-label="Merk: ${c.label}">${icon(c.icon, 26)}<span>${c.label}</span><span class="mark-n" aria-hidden="true"></span></button>`).join('');
+  // Testknappene (Feltskifte, Feil grense) bare i testbyggene eller når de er slått på (0.18.4)
+  const testMarks = getSettings().devMarks ?? devBuild;
+  grid.innerHTML = Object.entries(MARK_CATS).filter(([, c]) => !c.neutral || testMarks).map(([k, c]) => `<button type="button" class="mark-btn" data-cat="${k}" aria-label="Merk: ${c.label}">${icon(c.icon, 26)}<span>${c.label}</span><span class="mark-n" aria-hidden="true"></span></button>`).join('');
   grid.querySelectorAll('.mark-btn').forEach(b => b.onclick = () => {
     if (!recorder || !recorder.running) return;
     const m = recorder.mark(b.dataset.cat);
@@ -2523,6 +2548,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       onExclude: isOwn(drive) ? on => excludeDrive(id, on) : null,
       // Meldinger om turen (0.18.0): eleven spør, læreren gir tilbakemelding. Bare egne og delte turer.
       talk: talkFor(drive, r, settings),
+      afterLesson: afterLessonFor(drive) ? { ...afterLessonFor(drive), onOpen: () => afterLesson(drive, r) } : null,   // 0.18.4
       shared: drive.shared || null
     });
     const draw = status => {
@@ -2587,6 +2613,74 @@ function talkFor(drive, r, s) {
   return { messages: key ? threadOf(s, key).filter(m => m.ref && m.ref.driveId === drive.id) : [], mine: me(),
     ask: isTeacher() ? 'Gi tilbakemelding' : 'Spør trafikklæreren', onAsk: preset => askAbout(drive, r, preset) };
 }
+/* Lokal tid som tekst uten tidssone («2026-11-14T18:30:00»): tolkes som lokal tid av Date.parse, og datoen er riktig dag */
+const localIso = (d = new Date()) => { const p = v => String(v).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
+
+/* «Etter timen» (0.18.4): læreren samler kjøretimen i én melding til eleven: en beskjed, opptil tre ting fra turen
+   (merkene læreren satte og de kraftigste hendelsene), lekser og neste time. Alt går i én fil, og perioden «siden
+   forrige time» starter når timen sluttet. Bare på lærerens egne opptak av en elev. */
+const afterLessonFor = drive => (isTeacher() && !drive.shared && !drive.demo && !drive.imported && drive.driver ? { name: drive.driver, sentAt: drive.afterSent || null } : null);
+async function afterLesson(drive, r) {
+  const name = drive.driver || '';
+  if (!name) { toast('Velg hvilken elev timen hører til først (over notatet).', { ms: 3000 }); return; }
+  const marks = markRows(drive.marks || [], r);
+  const markLabel = m => (MARK_CATS[m.cat] || { label: 'Merke' }).label;
+  const cands = [
+    ...marks.filter(m => !(MARK_CATS[m.cat] && MARK_CATS[m.cat].neutral)).map(m => ({ id: 'm' + m.i, label: `${markLabel(m)}${m.note ? ` – ${m.note}` : ''}`, t: m.t, text: m.note || '',
+      ref: { kind: 'merke', t: m.t, ...(Number.isFinite(m.lat) ? { lat: m.lat, lon: m.lon } : {}), label: `merke (${markLabel(m).toLowerCase()})` } })),
+    ...r.events.slice().sort((a, b) => (b.g || 0) - (a.g || 0)).slice(0, 6).map(e => ({ id: 'e' + e.n, label: eventLabel(e), t: e.t, text: '',
+      ref: { kind: 'hendelse', t: e.t, lat: e.lat, lon: e.lon, label: eventLabel(e) } }))
+  ].sort((a, b) => a.t - b.t);
+  const hw = homeworkFor(getSettings(), name) || { focus: [], note: '' };
+  const next = ((getSettings().nextLesson || {})[name]) || '';
+  const res = await formDialog({
+    title: `Etter timen med ${name}`, ok: `Send til ${name}`,
+    body: `<label class="field">Beskjed<textarea id="al-text" class="sheet-input" rows="3" maxlength="1000" placeholder="F.eks. «Fin time! Jevn fart i byen. Neste gang øver vi på motorveien.»"></textarea></label>
+      ${cands.length ? `<h3 class="al-sec">Opptil tre ting fra turen</h3><ul class="al-list">${cands.map(c => `<li class="al-item"><input type="checkbox" id="al-${c.id}" data-id="${c.id}" aria-label="${esc(c.label)}">
+        <label class="al-label" for="al-${c.id}"><strong>${esc(c.label)}</strong><span class="muted small">${mss(c.t)} inn i timen</span></label>
+        <input class="sheet-input al-note" data-for="${c.id}" maxlength="300" placeholder="Kommentar (valgfritt)" value="${esc(c.text)}" hidden></li>`).join('')}</ul>` : '<p class="muted small">Ingen merker eller hendelser på turen.</p>'}
+      <h3 class="al-sec">Lekser</h3>
+      <div class="al-focus">${FOCUS.map(f => `<label><input type="checkbox" class="al-f" value="${esc(f.id)}" ${(hw.focus || []).includes(f.id) ? 'checked' : ''}>${esc(f.label)}</label>`).join('')}</div>
+      <textarea id="al-hw" class="sheet-input" rows="2" maxlength="300" placeholder="Beskjed om leksene (valgfritt)">${esc(hw.note || '')}</textarea>
+      <label class="field">Neste time<input type="date" id="al-next" value="${esc(next)}"></label>`,
+    onOpen: d => {
+      d.querySelectorAll('.al-item input[type=checkbox]').forEach(cb => cb.onchange = () => {
+        if (cb.checked && d.querySelectorAll('.al-item input[type=checkbox]:checked').length > 3) { cb.checked = false; toast('Velg høyst tre ting, så eleven husker dem.', { ms: 2500 }); }
+        d.querySelector(`.al-note[data-for="${cb.dataset.id}"]`).hidden = !cb.checked;
+      });
+      d.querySelectorAll('.al-f').forEach(cb => cb.onchange = () => { if (cb.checked && d.querySelectorAll('.al-f:checked').length > 3) { cb.checked = false; toast('Høyst tre øvingsmål.', { ms: 2000 }); } });
+      setTimeout(() => d.querySelector('#al-text').focus(), 50);
+    },
+    read: d => {
+      const text = d.querySelector('#al-text').value.trim();
+      const picked = [...d.querySelectorAll('.al-item input[type=checkbox]:checked')].map(cb => ({ c: cands.find(x => x.id === cb.dataset.id), note: d.querySelector(`.al-note[data-for="${cb.dataset.id}"]`).value.trim() }));
+      const focus = [...d.querySelectorAll('.al-f:checked')].map(cb => cb.value), hwNote = d.querySelector('#al-hw').value.trim(), nextDate = d.querySelector('#al-next').value;
+      if (!text && !picked.length && !focus.length && !hwNote && !nextDate) { toast('Skriv en beskjed eller velg noe å sende.', { ms: 2500 }); return false; }
+      return { text, picked, focus, hwNote, nextDate };
+    }
+  });
+  if (!res) return;
+  const day = res.nextDate ? new Date(res.nextDate + 'T12:00:00').toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  const base = { driveId: drive.id, startedAt: drive.startedAt };
+  const at = Date.now(), msgs = [];
+  // Beskjeden først, så tingene fra turen i rekkefølge (egne tidsstempler, så samtalen holder rekkefølgen)
+  const general = [res.text, day ? `Neste time: ${day}.` : ''].filter(Boolean).join('\n\n');
+  if (general) msgs.push(cleanMessage({ id: newMsgId(), from: 'laerer', name: myName(), at: new Date(at).toISOString(), text: general, ref: cleanRef({ ...base, kind: 'tur' }) }));
+  res.picked.forEach((p, i) => { if (p.c) msgs.push(cleanMessage({ id: newMsgId(at + i + 1), from: 'laerer', name: myName(), at: new Date(at + i + 1).toISOString(), text: p.note || p.c.label, ref: cleanRef({ ...base, ...p.c.ref }) })); });
+  const cur = getSettings();
+  const patch = {
+    messages: { ...(cur.messages || {}), [name]: [...threadOf(cur, name), ...msgs.filter(Boolean).map(m => ({ ...m, sent: false, read: true }))] },
+    homework: { ...(cur.homework || {}), [name]: { focus: res.focus, note: res.hwNote, from: myName() || 'trafikklæreren', setAt: new Date().toISOString() } },
+    nextLesson: { ...(cur.nextLesson || {}), [name]: res.nextDate || '' },
+    // Ny periode fra da timen sluttet: øvingen eleven gjør etterpå, telles mot neste time
+    lessons: { ...(cur.lessons || {}), [name]: localIso(new Date(drive.endedAt || Date.now())) }, teacherPeriod: 'lesson'
+  };
+  saveSettings({ ...cur, ...patch });
+  const ok = await sendMessages(name);
+  if (ok) await updateDrive(drive.id, { afterSent: new Date().toISOString() });
+  if (location.hash === '#/rapport/' + drive.id) await renderDriveReport(drive.id, { keepScroll: true });
+}
+
 const distM = (a, b) => { const k = Math.PI / 180, x = (b.lon - a.lon) * k * Math.cos((a.lat + b.lat) / 2 * k), y = (b.lat - a.lat) * k; return Math.hypot(x, y) * 6371000; };
 /* Skriv om turen: hele turen, en hendelse, et merke fra ledsageren eller en strekning (to glidere i tid). Meldingen
    knyttes til tid og sted, og sendes med en gang (eleven sender turen med). */
@@ -2628,7 +2722,7 @@ async function askAbout(drive, r, preset = null) {
       const kind = (d.querySelector('input[name=ask]:checked') || {}).value || 'tur';
       let ref = { driveId: drive.id, kind: 'tur', startedAt: drive.startedAt };
       if (kind === 'hendelse') { const e = r.events.find(x => String(x.n) === d.querySelector('#ask-ev').value); if (e) ref = { ...ref, kind, t: e.t, lat: e.lat, lon: e.lon, label: eventLabel(e) }; }
-      if (kind === 'merke') { const m = marks.find(x => String(x.i) === d.querySelector('#ask-mk').value); if (m) ref = { ...ref, kind, t: m.t, ...(Number.isFinite(m.lat) ? { lat: m.lat, lon: m.lon } : {}), label: `merke (${MARK_CATS[m.cat].label.toLowerCase()})` }; }
+      if (kind === 'merke') { const m = marks.find(x => String(x.i) === d.querySelector('#ask-mk').value); if (m) ref = { ...ref, kind, t: m.t, ...(Number.isFinite(m.lat) ? { lat: m.lat, lon: m.lon } : {}), label: `merke (${(MARK_CATS[m.cat] || { label: 'Merke' }).label.toLowerCase()})` }; }
       if (kind === 'strekning') { let a = +d.querySelector('#ask-a').value, b = +d.querySelector('#ask-b').value; if (a > b) [a, b] = [b, a]; const mid = pts[idxAt((a + b) / 2)]; ref = { ...ref, kind, t: a, tTo: b, lat: mid.lat, lon: mid.lon }; }
       return { text, ref: cleanRef(ref) };
     }
@@ -2709,7 +2803,10 @@ async function renderSettings() {
   // Fartsvarsel (0.12.0): synlig kant er på som standard, lyden velges selv. Krever fartsgrensen fra Statens vegvesen.
   { const el = $('#speedWarn'); el.checked = settings.speedWarn !== false; el.onchange = () => saveSettings({ ...getSettings(), speedWarn: el.checked }); }
   { const el = $('#speedSound'); el.checked = !!settings.speedSound; el.onchange = () => { saveSettings({ ...getSettings(), speedSound: el.checked }); if (el.checked) { unlockSound(); playSound('fart'); } }; }
-  { const el = $('#atkSound'); el.checked = settings.atkSound !== false; el.onchange = () => { saveSettings({ ...getSettings(), atkSound: el.checked }); if (el.checked) { unlockSound(); playSound('naer'); } }; }
+  { const el = $('#showFace'); el.checked = settings.showFace === true; el.onchange = () => saveSettings({ ...getSettings(), showFace: el.checked }); }
+  // Fotobokser av som standard (0.18.4): både varselet på skjermen og lyden må slås på
+  { const el = $('#atkWarn'), row = $('#atkSound-row'); el.checked = settings.atkWarn === true; row.hidden = !el.checked; el.onchange = () => { saveSettings({ ...getSettings(), atkWarn: el.checked }); row.hidden = !el.checked; }; }
+  { const el = $('#atkSound'); el.checked = settings.atkSound === true; el.onchange = () => { saveSettings({ ...getSettings(), atkSound: el.checked }); if (el.checked) { unlockSound(); playSound('naer'); } }; }
   $('#btn-test-sound').onclick = () => { unlockSound(); playSound('varsel'); setTimeout(() => playSound('naer'), 900); setTimeout(() => playSound('fart'), 1900); };
   // Kart og by-tilpasset jevn fart er på som standard
   { const el = $('#autoSpeak'); el.checked = !!settings.autoSpeak; el.onchange = () => { saveSettings({ ...getSettings(), autoSpeak: el.checked }); if (el.checked) speak('Rapporten leses opp når turen er ferdig.'); }; }
@@ -2803,6 +2900,7 @@ async function renderSettings() {
   // Demoen spilles av med telefonen «montert» skrått, så akselerometerdata og v3-motoren også testes.
   $('#btn-play-demo').onclick = () => { startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 }); location.hash = '#/opptak'; };
   $('#btn-dev-demo').onclick = () => startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 60 });
+  { const el = $('#devMarks'); el.checked = getSettings().devMarks ?? devBuild; el.onchange = () => saveSettings({ ...getSettings(), devMarks: el.checked }); }
   const thumbs = $('#roadThumbs');
   thumbs.checked = !!getSettings().roadThumbs;
   thumbs.onchange = () => saveSettings({ ...getSettings(), roadThumbs: thumbs.checked });
@@ -2819,6 +2917,23 @@ function renderDriverSettings() {
   $('#goals-title').hidden = false;
   inp.value = s.name || s.activeDriver || '';
   inp.onchange = () => saveSettings({ ...getSettings(), name: inp.value.trim().slice(0, 40) });
+  // Elev eller trafikklærer (0.18.4): et vanlig valg for alle, ikke bare i testbyggene. Bytter visning med en gang.
+  document.querySelectorAll('input[name=role]').forEach(r => {
+    r.checked = (r.value === 'laerer') === isTeacher();
+    r.onchange = async () => {
+      const toTeacher = r.value === 'laerer';
+      if (toTeacher === isTeacher()) return;
+      const ok = await confirmDialog(toTeacher
+        ? { title: 'Bruke appen som trafikklærer?', text: 'Du får en elevliste i stedet for dine egne turer, meldinger med elevene, og kjøretimene du tar opp hører til eleven du velger før timen. Turene som alt ligger i appen, blir liggende. Du kan bytte tilbake her.', ok: 'Ja, trafikklærer' }
+        : { title: 'Bruke appen som elev eller ledsager?', text: 'Elevlisten og meldingene med elevene blir liggende, men vises ikke før du bytter tilbake til trafikklærer.', ok: 'Ja, bytt' });
+      if (!ok) { renderDriverSettings(); return; }
+      const mode = toTeacher ? 'teacher' : 'app';
+      applyViewMode(mode);
+      saveSettings({ ...getSettings(), viewMode: mode, devPlus: '' });
+      toast(toTeacher ? 'Appen er nå for trafikklærer. Legg til elevene under Elever.' : 'Appen er nå for elev og ledsager.', { type: 'ok', ms: 3000 });
+      renderSettings();
+    };
+  });
 }
 
 /* Visning (0.12.0, midlertidig): bytt mellom gratis, Pluss, koblet til trafikkskole og trafikklærer. Bare i
@@ -3155,7 +3270,9 @@ function init() {
   // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke
   // låse opp Pluss i App Store-utgaven (0.11.4).
   const wantedMode = modeFromLegacy(getSettings());
-  const modeReady = wantedMode !== 'app' ? viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
+  // Trafikklærer er et valg for alle (0.18.4); de andre visningene (gratis, Pluss, skole) bare i testbyggene
+  const modeReady = wantedMode === 'teacher' ? Promise.resolve().then(() => { applyViewMode('teacher'); route(); })
+    : wantedMode !== 'app' ? viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
   // Fil åpnet i iPhone-appen (0.18.1): når appen startes av filen, og når den kommer mens appen er åpen.
   // Etter visningen, så en melding til læreren havner i lærervisningen.
   modeReady.then(() => setTimeout(openIncomingFile, 300));

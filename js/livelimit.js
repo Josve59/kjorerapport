@@ -69,7 +69,18 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
   const atkStatus = p => (live ? live.update(p) : null);
   /* Fartsgrensestrekningene nær et punkt (veiens linje, til svingen foran i roadshape.js) */
   const near = (p, d = 0.002) => (!p || !box ? [] : segs.filter(s => p.lat > s.minLat - d && p.lat < s.maxLat + d && p.lon > s.minLon - 2 * d && p.lon < s.maxLon + 2 * d));
-  return { update, atk: atkStatus, near, get limit() { return current; } };
+  /* Fartsgrensen et stykke foran bilen (0.18.4): punktet flyttet m meter fram langs kjøreretningen, bare strekninger
+     langs samme retning. Kartets grense skifter ofte litt etter skiltet, og føreren gir gass ved skiltet: når en høyere
+     grense ligger like foran, venter pipet (skjermen viser fortsatt grensen der bilen er). null når det ikke vites. */
+  const ahead = (p, m = 120) => {
+    const hd = p && Number.isFinite(p.heading) ? p.heading : heading;
+    if (!p || !box || !Number.isFinite(hd) || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return null;
+    const r = hd * Math.PI / 180;
+    const q = { lat: p.lat + Math.cos(r) * m / 111195, lon: p.lon + Math.sin(r) * m / (111195 * Math.cos(p.lat * Math.PI / 180)), heading: hd };
+    const v = matchLimits([q], near(q, 0.003), 25, { parallelOnly: true })[0];
+    return Number.isFinite(v) ? v : null;
+  };
+  return { update, atk: atkStatus, near, ahead, get limit() { return current; } };
 }
 
 /* Felt og feltbredde der bilen er (0.10.3): nytt lite område fra Statens vegvesen når bilen har kjørt 100 m (eller

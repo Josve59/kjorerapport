@@ -62,11 +62,11 @@ test('elevoversikt: 50 elever, søk, sortering og hvem som trenger oppfølging',
 test('elev som har fått lappen slettes helt (0.18.2)', () => {
   const s = { students: [{ name: 'Emma' }, { name: 'Jonas' }], activeStudent: 'Emma', drivers: ['Emma'],
     lessons: { Emma: '2026-11-01', Jonas: '2026-10-01' }, homework: { Emma: { focus: [] } }, messages: { Emma: [{ id: 'a' }] }, theory: { Emma: {} },
-    teacherNotes: { Emma: 'notat' }, curriculum: { Emma: {} }, calib: { Emma: {} } };
+    teacherNotes: { Emma: 'notat' }, curriculum: { Emma: {} }, calib: { Emma: {} }, nextLesson: { Emma: '2026-11-20' } };
   const out = forgetStudent(s, 'Emma');
   assert.deepEqual(out.students.map(x => x.name), ['Jonas']);
   assert.deepEqual(out.drivers, [], 'heller ikke i den gamle førerlisten');
-  for (const k of ['lessons', 'homework', 'messages', 'theory', 'teacherNotes', 'curriculum', 'calib']) assert.ok(!('Emma' in out[k]), k);
+  for (const k of ['lessons', 'homework', 'messages', 'theory', 'teacherNotes', 'curriculum', 'calib', 'nextLesson']) assert.ok(!('Emma' in out[k]), k);
   assert.equal(out.lessons.Jonas, '2026-10-01', 'de andre elevene er urørt');
   assert.equal(out.activeStudent, 'Jonas');
   assert.ok(!JSON.stringify(out).includes('Emma'), 'navnet finnes ingen steder i innstillingene');

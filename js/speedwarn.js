@@ -17,11 +17,17 @@ export const intensity = over => (over > 0 ? 1 - Math.exp(-over / SPEED_WARN.sca
 /* Sekunder mellom pip ved en gitt styrke: 4 s for et svakt varsel, ned mot 0,8 s for et sterkt */
 export const beepInterval = level => SPEED_WARN.beepSlow - (SPEED_WARN.beepSlow - SPEED_WARN.beepFast) * level;
 
-/* step({ kmh, limit, t }) → { level: 0–1, beep: true når et pip skal spilles nå }. t i sekunder. */
-export function createSpeedWarn() {
-  let overSince = null, active = false, lastBeep = -Infinity;
+/* step({ kmh, limit, t, quiet }) → { level: 0–1, beep: true når et pip skal spilles nå }. t i sekunder.
+   Lyden venter (0.18.4, eieren: «når en fartsgrense bytter, vent med lydvarsling»): i changeQuiet sekunder etter at
+   grensen har byttet, og så lenge quiet er sann (f.eks. en høyere grense like foran). Den røde kanten vises som før. */
+export function createSpeedWarn({ changeQuiet = 8 } = {}) {
+  let overSince = null, active = false, lastBeep = -Infinity, lastLimit = null, quietUntil = -Infinity;
   return {
-    step({ kmh, limit, t }) {
+    step({ kmh, limit, t, quiet = false }) {
+      if (Number.isFinite(limit) && limit > 0) {
+        if (Number.isFinite(lastLimit) && limit !== lastLimit) quietUntil = t + changeQuiet;
+        lastLimit = limit;
+      }
       if (!Number.isFinite(kmh) || !Number.isFinite(limit) || limit <= 0) { overSince = null; active = false; return { level: 0, beep: false }; }
       const over = kmh - limit - tolerance(limit);
       if (over > 0) { if (overSince === null) overSince = t; }
@@ -30,11 +36,11 @@ export function createSpeedWarn() {
       if (!active) return { level: 0, beep: false };
       // Like under marginen (innenfor hysteresen) holdes et svakt varsel, så kanten ikke blinker av og på
       const level = Math.max(0.15, intensity(over));
-      const beep = t - lastBeep >= beepInterval(level);
+      const beep = !quiet && t >= quietUntil && t - lastBeep >= beepInterval(level);
       if (beep) lastBeep = t;
       return { level, beep };
     },
-    reset() { overSince = null; active = false; lastBeep = -Infinity; }
+    reset() { overSince = null; active = false; lastBeep = -Infinity; lastLimit = null; quietUntil = -Infinity; }
   };
 }
 

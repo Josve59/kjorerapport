@@ -56,6 +56,7 @@ const P = {
   stop: 'M8 3h8l5 5v8l-5 5H8l-5-5V8zM8 12h8',
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4',
   volume: 'M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11',
+  mute: 'M4 9h4l5-4v14l-5-4H4zM17 9.5l5 5M22 9.5l-5 5',   // lyd av (0.18.4)
   pin: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
   school: 'M3 9l9-5 9 5-9 5zM7 11v5c0 1.5 2.5 3 5 3s5-1.5 5-3v-5M21 9v6',
   // 0.13.4: eget kamera, gjentatt rute og skilt (før brukte kameraet speilikonet og «Feil grense» fartsmåleren)

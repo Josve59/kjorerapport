@@ -54,3 +54,14 @@ test('aktiv fartsgrense: uten nett vises «–», og nytt forsøk først etter 3
   t = 31000; ll.update({ lat: 63.4, lon: 10.4 });
   assert.equal(calls, 2);
 });
+
+test('fartsgrensen foran bilen: 80 like foran når bilen er i 60-sonen (0.18.4)', async () => {
+  const seg = (lon0, lon1, limit) => ({ limit, pts: [{ lat: 63.4, lon: lon0 }, { lat: 63.4, lon: lon1 }] });
+  const ll = createLiveLimit({ fetchBox: async () => [seg(10.3, 10.5, 60), seg(10.5, 10.7, 80)] });
+  ll.update({ lat: 63.4, lon: 10.45 }); await tick();
+  // Østover: 1 grad lengde ved 63,4° ≈ 49,8 km, så 10.498 er ca. 100 m før grensen
+  assert.equal(ll.ahead({ lat: 63.4, lon: 10.498, heading: 90 }, 150), 80, 'høyere grense 150 m foran');
+  assert.equal(ll.ahead({ lat: 63.4, lon: 10.40, heading: 90 }, 150), 60, 'langt fra grensen: samme grense');
+  assert.equal(ll.ahead({ lat: 63.4, lon: 10.498, heading: 270 }, 150), 60, 'vestover går vi fra 80-sonen, ikke inn i den');
+  assert.equal(ll.ahead({ lat: 63.4, lon: 10.45 }, 150), null, 'uten kjøreretning: vet ikke');
+});

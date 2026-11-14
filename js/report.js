@@ -220,6 +220,7 @@ export function renderReport(root, r, ctx = {}) {
       </ul>
     </section>
 
+    ${ctx.afterLesson ? afterLessonCard(ctx.afterLesson) : ''}
     ${talkCard(ctx.talk)}
 
     ${nextPracticeCard(nextPractice(r, { sp, marks, camera: r.camera, sits }))}
@@ -517,6 +518,7 @@ export function renderReport(root, r, ctx = {}) {
   // Ta turen ut av utregningene (0.18.0)
   if (ctx.onExclude) for (const id of ['#btn-exclude', '#btn-include']) { const b = root.querySelector(id); if (b) b.onclick = () => ctx.onExclude(!ctx.excluded); }
   if (ctx.talk) for (const id of ['#btn-talk-ask', '#btn-talk-ask2']) { const b = root.querySelector(id); if (b) b.onclick = () => ctx.talk.onAsk(null); }
+  if (ctx.afterLesson) { const b = root.querySelector('#btn-after-lesson'); if (b) b.onclick = () => ctx.afterLesson.onOpen(); }
   const fetchBtn = root.querySelector('#btn-fetch');
   if (fetchBtn && onFetch) fetchBtn.addEventListener('click', onFetch);
   const shareBtn = document.getElementById('btn-share');
@@ -527,6 +529,16 @@ const markCount = (marks, cats) => marks.filter(m => cats.includes(m.cat)).lengt
 
 /* Samtalen om turen (0.18.0): meldingene mellom elev og lærer som gjelder denne turen, med «vis på kartet» for en
    hendelse eller strekning. Vises bare når det finnes meldinger; ellers er knappen nederst under «Turen». */
+/* «Etter timen» (0.18.4, læreren på en kjøretime): én knapp som samler beskjed, tre ting fra turen, lekser og neste
+   time i én melding til eleven. a: { name, sentAt } */
+function afterLessonCard(a) {
+  return `<section class="card after-lesson">
+      <h2 class="card-title">${icon('school')}Etter timen med ${esc(a.name)}</h2>
+      <p class="muted small">${a.sentAt ? `Oppsummeringen ble sendt ${esc(new Date(a.sentAt).toLocaleString('nb-NO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}. Du kan sende en ny.` : 'En beskjed, opptil tre ting fra turen, lekser og neste time, sendt til eleven i én melding.'}</p>
+      <button type="button" class="btn ${a.sentAt ? 'secondary' : 'primary'}" id="btn-after-lesson">${icon('mail', 20)}${a.sentAt ? 'Send en ny oppsummering' : 'Lag oppsummering til eleven'}</button>
+    </section>`;
+}
+
 function talkCard(talk) {
   if (!talk || !talk.messages.length) return '';
   const who = m => (m.from === talk.mine ? 'Du' : m.name || (m.from === 'laerer' ? 'Trafikklæreren' : 'Eleven'));
@@ -596,7 +608,7 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
       res.state = r.scores.smooth >= 85 ? 'ok' : 'no';
       res.text = `${r.scores.smooth} poeng`;
     } else if (id === 'limits') {
-      if (!sp) res.text = 'Slå på «Fartsgrense og fotobokser» i innstillinger for å måle fartsgrenser';
+      if (!sp) res.text = 'Slå på «Fartsgrense og veidata» i innstillinger for å måle fartsgrenser';
       else { res.state = sp.secondsOver <= 10 ? 'ok' : 'no'; res.text = sp.secondsOver ? `${overTime(sp.secondsOver, true)} over grensen` : 'Aldri over grensen'; }
     } else if (id === 'roundabout') {
       if (!rbs.length) res.text = 'Ingen rundkjøringer på ruten';
@@ -617,7 +629,7 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
       }
     } else if (id === 'junction') {
       const stops = road ? road.stops : [], gw = road ? road.giveway : [];
-      if (!road) res.text = 'Slå på «Fartsgrense og fotobokser» i innstillinger for å finne kryss';
+      if (!road) res.text = 'Slå på «Fartsgrense og veidata» i innstillinger for å finne kryss';
       else if (!stops.length && !gw.length) res.text = 'Ingen stopp- eller vikepliktkryss funnet';
       else {
         const rolled = stops.filter(x => !x.full).length;
@@ -728,7 +740,7 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
       ${gw.length ? `<details class="gw"><summary><span><strong>Vikeplikt:</strong> ${gw.length} ${gw.length === 1 ? 'kryss' : 'kryss'} der dere bremset ned · snitt ${kmh(avgIn)} inn</span></summary>
         <ul class="gw-list">${gw.map(g => `<li><button type="button" class="man-item small" data-lat="${g.lat}" data-lon="${g.lon}"><span>${mss(g.t)}</span><span>${kmh(g.approachKmh)} → ${kmh(g.minKmh)}</span>${icon('chev', 16)}</button></li>`).join('')}</ul>
         <p class="muted small">Om dere måtte vike for trafikk, kan ikke appen vite. Lav fart inn mot krysset gir tid til å se.</p></details>` : ''}
-      ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Fartsgrense og fotobokser</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
+      ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Fartsgrense og veidata</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
     </section>`;
 }
 

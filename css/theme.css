@@ -408,6 +408,20 @@ dialog.sheet .q-head h2 { margin: 0; }
 .msg-home { border-left: 4px solid var(--link); }
 .msg-preview { display: block; margin: 4px 0 2px; overflow-wrap: anywhere; }
 .talk-card { border-left: 4px solid var(--link); }
+/* Etter timen (0.18.4) */
+.after-lesson { border-left: 4px solid var(--good); }
+.after-lesson .btn { width: 100%; margin-top: 4px; }
+.al-list { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 6px; }
+.al-item { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; }
+.al-item input[type=checkbox] { margin-top: 3px; width: 20px; height: 20px; }
+.al-item .al-label { display: flex; flex-direction: column; min-width: 0; }
+.al-item .al-label strong { overflow-wrap: anywhere; }
+.al-item .sheet-input { grid-column: 1 / -1; margin: 2px 0 0; }
+.al-item:has(input[type=checkbox]:checked) { border-color: var(--good); }
+.al-focus { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.al-focus label { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: .9rem; }
+.al-focus label:has(input:checked) { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.al-sec { margin: 12px 0 4px; font-size: 1rem; }
 .talk-card .thread { margin-bottom: 8px; }
 .ev-ask { margin-top: 8px; }
 .ask-range { padding: 2px 0 4px 30px; }
@@ -446,10 +460,16 @@ dialog.sheet .pick-list .mode-opt > span { flex: 1; }
 .st-ready .goal-bar { display: block; margin: 6px 0 10px; }
 .center-link { display: block; margin: 8px auto 16px; }
 #teacher > .btn.primary, #teacher-top > .btn.primary { width: 100%; margin: 0 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-@media print { .thread-card, .st-tools, .st-actions, .st-done, #btn-st-drive, .msg-home, .talk-card .btn, .trip-card { display: none !important; } }
+@media print { .thread-card, .st-tools, .st-actions, .st-done, #btn-st-drive, .msg-home, .talk-card .btn, .trip-card, .after-lesson { display: none !important; } }
 .st-tools .st-sort { flex-direction: row; text-align: left; }
 .st-tools .st-sort select { margin: 0; }
 .st-actions .btn { white-space: nowrap; gap: 4px; padding-left: 10px; padding-right: 10px; }
 .thread-card .file-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
 /* Leksene som eleven ser (0.18.1): teksten midt i knappene */
 .homework-card .chips span.chip { display: inline-flex; align-items: center; }
+/* Lydknappen under kjøring (0.18.4): stor nok til å treffe uten å se lenge, ved siden av farten */
+.rec-sound { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 64px; min-height: 56px; padding: 6px 8px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; font-size: .72rem; font-weight: 700; }
+.rec-sound[aria-pressed="true"] { color: var(--muted); }
+.rec-sound[hidden] { display: none; }
+/* Førerkameraet under kjøring uten bilde (0.18.4): videoen må finnes for gjenkjenningen i nettleseren, men vises ikke */
+.rec-video.quiet { opacity: 0; pointer-events: none; }

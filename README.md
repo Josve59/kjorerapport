@@ -142,6 +142,35 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.18.4 – calmer driving, a teacher choice for everyone, and «Etter timen»
+
+The owner's decisions (14 Nov 2026): teacher mode is a choice in the app, speed camera warnings are off by default, the speeding sound gets a button during the drive, and the sound waits when the limit changes. A school admin who adds the school's teachers, a school search for learners, and prices are ideas for later, not built.
+- **Teacher as a choice in the app:** Settings → «Deg og mål» → «Jeg bruker appen som»: «Elev eller ledsager» or «Trafikklærer», with one question before switching. It works in every build, also the App Store one. Before, it was only in «Visning (midlertidig)» in test builds. The other test views (free, Pluss, school) are still test-build only. For now teacher mode includes Pluss; the price for teachers is not decided.
+- **Speed cameras off by default:** a new switch «Varsel om fotobokser» controls the camera notice and pop-up on the driving screen. «Lyd ved fotobokser» is under it and is also off by default. Users who never touched these get them off. The setting «Fartsgrense og fotobokser» is renamed «Fartsgrense og veidata», because it now only shows the limit and fetches road data.
+- **Sound button while driving:** a speaker button next to the speed turns the speeding sound on and off («Lyd på» / «Lyd av»). The choice is saved, the same as «Lyd når farten er for høy» in Settings.
+- **The speeding sound waits** (`createSpeedWarn` in `js/speedwarn.js`); the red edge works as before:
+  - Eight seconds after the warning limit changes, in either direction.
+  - While a higher limit lies just ahead on the same road (`ahead` in `js/livelimit.js`): the point 80–200 m ahead along the heading, about 6 s at the current speed. The map's limit often changes some way after the sign, and the driver speeds up at the sign. That was the beep the owner heard «when the app is behind».
+- **Calmer driving screen:**
+  - The driver no longer sees their own face in the corner. «Vis føreren under kjøring» turns it on. The camera still works, and the app says so if it cannot see the face.
+  - The test buttons «Feltskifte» and «Feil grense» show only in test builds, or with «Testknapper under kjøring» in the developer part. That leaves six mark buttons.
+- **«Etter timen» for the teacher:** on a lesson the teacher recorded, the report starts with «Etter timen med <navn>». One sheet holds:
+  - a message;
+  - up to three things from the drive (the teacher's marks and the six strongest events), each with an optional comment;
+  - homework (up to three goals and a note);
+  - the next lesson date.
+
+  «Send til <navn>» puts it all in one file with the drive. The period «siden forrige time» then starts when the lesson ended. The card says when a summary was sent. The next lesson date is deleted with the learner.
+- **Tested:**
+  - All 256 unit tests pass. New tests cover the sound waiting after a limit change and with a higher limit ahead, the limit ahead of the car, and the next lesson date being deleted.
+  - In the browser at phone width:
+    - The new switches have the right defaults.
+    - The demo drive shows six mark buttons and the sound button, which switches and is saved.
+    - Switching to teacher shows «Elever».
+    - «Etter timen» on a test lesson made four messages, homework and the next lesson in one file, and refused a fourth item.
+    - No script errors.
+- **Not tested:** the waiting sound on a real road with a real limit change, and the face setting with the camera on the phone.
+
 ## What's new in 0.18.3 – fixes from a critic review of the whole app
 
 Four critic agents went over the app as companion and learner, driving teacher and school, insurer and privacy, and as a pure bug hunt. Everything below was checked in the code before it was fixed.
