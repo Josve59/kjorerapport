@@ -16,7 +16,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     private var recording = false     // et opptak pågår
     private var inBackground = false
     private var buffer: [[String: Any]] = []   // målinger mens appen er i bakgrunnen
-    private var pendingFile: (name: String, text: String)?   // fil åpnet i appen, til nettappen henter den (0.18.1)
+    private var pendingFiles: [(name: String, text: String)] = []   // filer åpnet i appen, til nettappen henter dem (0.18.1; kø fra 0.18.3)
     // Live Activity (låseskjerm og Dynamic Island) mens opptaket pågår
     private var activityID: String?
     private var recordStart = Date()
@@ -85,9 +85,9 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         case "share":
             return (["completed": await share(body)], nil)
         case "takeFile":
-            // Filen som ble åpnet i appen (0.18.1). Gis bare én gang.
-            guard let f = pendingFile else { return (NSNull(), nil) }
-            pendingFile = nil
+            // Den eldste filen som ble åpnet i appen (0.18.1). Hver gis bare én gang; nettappen spør til køen er tom.
+            guard !pendingFiles.isEmpty else { return (NSNull(), nil) }
+            let f = pendingFiles.removeFirst()
             return (["name": f.name, "text": f.text], nil)
         case "print":
             await printPage()
@@ -378,7 +378,9 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         guard let data = try? Data(contentsOf: url), data.count < 300_000_000 else { return }
         // iPhone legger en kopi i appens Inbox-mappe: den trengs ikke når teksten er lest
         if url.path.contains("/Inbox/") { try? FileManager.default.removeItem(at: url) }
-        pendingFile = (url.lastPathComponent, String(decoding: data, as: UTF8.self))
+        // Kø (0.18.3): flere filer rett etter hverandre skal ikke skyve hverandre ut. Høyst ti venter.
+        pendingFiles.append((url.lastPathComponent, String(decoding: data, as: UTF8.self)))
+        if pendingFiles.count > 10 { pendingFiles.removeFirst() }
         send("window.__kjFile && window.__kjFile()")
     }
 

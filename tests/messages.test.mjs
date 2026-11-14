@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPackage, readPackage, mergeThread, unread, markRead, unsent, refLabel, cleanMessage, packageName, studentOverview, sortStudents, filterStudents, isPackage } from '../js/messages.js';
+import { buildPackage, readPackage, mergeThread, unread, markRead, unsent, refLabel, cleanMessage, packageName, studentOverview, sortStudents, filterStudents, isPackage, matchStudent, newPersonId } from '../js/messages.js';
+import { cleanResult } from '../js/db.js';
 import { forgetStudent, activeStudents, archivedStudents, students } from '../js/modes.js';
 
 const drive = (id, driver, daysAgo, overall, extra = {}) => ({ id, driver, startedAt: new Date(Date.UTC(2026, 10, 14) - daysAgo * 86400000).toISOString(),
@@ -77,4 +78,51 @@ test('arkiverte elever fra 0.18.0–0.18.1 finnes og telles ikke som aktive', ()
   assert.deepEqual(archivedStudents(s), ['Sara']);
   assert.equal(students(s).length, 2);
   assert.deepEqual(archivedStudents({ students: [{ name: 'Emma' }] }), []);
+});
+
+test('eleven kjennes igjen på ID eller navn uten store/små bokstaver (0.18.3)', () => {
+  const id = newPersonId();
+  assert.match(id, /^p[a-z0-9]{16}$/);
+  const list = [{ name: 'Emma' }, { name: 'Jonas', ids: ['pabcdefabcdef1234'] }, { name: 'Sara H.' }];
+  assert.equal(matchStudent(list, { name: 'emma' }), 'Emma', 'samme navn, liten forbokstav');
+  assert.equal(matchStudent(list, { name: 'Jonas2', id: 'pabcdefabcdef1234' }), 'Jonas', 'ID-en vinner over navnet');
+  assert.equal(matchStudent(list, { name: 'Sara' }), null, 'et annet navn: læreren velger');
+  assert.equal(matchStudent(list, { name: 'Jonas', id: 'pzzzzzzzzzzzzzzzz' }), null, 'samme navn, men en annen elev (ny ID)');
+  assert.equal(matchStudent(list, { name: 'Jonas' }), 'Jonas', 'eldre versjon uten ID');
+  assert.equal(matchStudent(list, { name: '' }), null);
+});
+
+test('pakken har elevens ID og teori, men bare fra eleven (0.18.3)', () => {
+  const pkg = buildPackage({ from: { role: 'elev', name: 'Emma', id: 'pabcdefabcdef1234' }, messages: [{ id: 'm1', from: 'elev', text: 'Hei', at: '2026-11-14T10:00:00+01:00' }], theory: { taken: 3 } });
+  const p = readPackage(JSON.parse(JSON.stringify(pkg)));
+  assert.equal(p.from.id, 'pabcdefabcdef1234');
+  assert.deepEqual(p.theory, { taken: 3 });
+  assert.equal(p.messages[0].at, '2026-11-14T09:00:00.000Z', 'tiden lagres som UTC, så samtalen sorteres riktig');
+  const bad = readPackage({ ...pkg, from: { role: 'elev', name: 'X', id: '<script>' } });
+  assert.equal(bad.from.id, '', 'ugyldig ID tas ikke med');
+  assert.equal(readPackage({ ...pkg, from: { role: 'laerer', name: 'Kari' } }).theory, null, 'teori fra læreren brukes ikke');
+});
+
+test('«Venter på svar» når siste melding er fra eleven (0.18.3)', () => {
+  const now = Date.UTC(2026, 10, 14, 12);
+  const ov = studentOverview([], [{ name: 'Emma' }, { name: 'Jonas' }], {
+    Emma: [{ id: 'a', from: 'elev', at: '2026-11-13T10:00:00Z', read: true }],
+    Jonas: [{ id: 'b', from: 'elev', at: '2026-11-13T10:00:00Z', read: true }, { id: 'c', from: 'laerer', at: '2026-11-13T11:00:00Z' }] }, now);
+  const emma = ov.find(x => x.name === 'Emma'), jonas = ov.find(x => x.name === 'Jonas');
+  assert.ok(emma.awaiting && emma.flags.some(f => f.id === 'reply'));
+  assert.ok(!jonas.awaiting, 'læreren har svart');
+  assert.ok(emma.need > jonas.need);
+});
+
+test('analyse fra en fil gjøres trygg før den lagres (0.18.3)', () => {
+  const r = cleanResult({ points: [{ t: 0, lat: 63.4, lon: 10.4 }, { t: 1, lat: 63.401, lon: 10.4 }, { t: 'x' }],
+    events: [{ n: '1"><img src=x onerror=alert(1)>', kind: 'brake" onclick="x', t: 5 }, null], overall: 250 });
+  assert.equal(r.points.length, 2, 'ødelagte punkter fjernes');
+  assert.equal(r.events.length, 1);
+  assert.equal(r.events[0].n, 1, 'hendelsesnummeret er et tall');
+  assert.equal(r.events[0].kind, 'brake', 'ukjent type blir brå bremsing');
+  assert.equal(r.overall, 100);
+  assert.deepEqual(Object.keys(r.scores), ['brake', 'accel', 'turn', 'smooth']);
+  assert.equal(cleanResult({ points: [{ t: 0, lat: 1, lon: 1 }] }), null, 'for lite data');
+  assert.equal(cleanResult(null), null);
 });

@@ -27,7 +27,8 @@ export function schoolInfo(s = {}, now = new Date()) {
   if (s.school && s.school.name) return s.school;
   if (!isSchool()) return null;
   const next = new Date(now); next.setDate(next.getDate() + ((4 - next.getDay() + 7) % 7 || 7)); next.setHours(15, 0, 0, 0);   // neste torsdag kl. 15
-  return { name: 'Trondheim Trafikkskole', teacher: 'Kari Nilsen', nextLesson: next.toISOString(), test: true };
+  return { name: 'Eksempel trafikkskole', teacher: 'Kari Nilsen',   // oppdiktet navn (0.18.3; før et navn som kan finnes)
+    nextLesson: next.toISOString(), test: true };
 }
 
 /* Elevene til trafikklæreren: [{ name, email }]. Navn fra eldre førerlister tas med. */

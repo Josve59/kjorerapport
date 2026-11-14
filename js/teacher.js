@@ -112,7 +112,7 @@ export function teacherText(s, { note = '', theory = null } = {}) {
 }
 
 /* Selve siden. */
-export function teacherHtml(s, { note = '', theory = null } = {}) {
+export function teacherHtml(s, { note = '', theory = null, teacher = false } = {}) {
   if (!s.count) return `<section class="card empty"><strong>Ingen turer i perioden</strong><span class="muted small">Velg et lengre tidsrom over, eller kjør en tur.</span></section>${theoryCard(theory)}`;
   const bar = (obj, keys, labels, cls) => {
     const tot = keys.reduce((a, k) => a + obj[k], 0) || 1;
@@ -160,7 +160,7 @@ export function teacherHtml(s, { note = '', theory = null } = {}) {
     </section>
 
     ${mk.length || s.notes.length ? `<section class="card">
-      <h2 class="card-title">${icon('flag')}Fra ledsageren</h2>
+      <h2 class="card-title">${icon('flag')}${teacher ? 'Merker og notater fra turene' : 'Fra ledsageren'}</h2>
       ${mk.length ? `<p>${mk.map(([c, n]) => `${esc(MARK_CATS[c] ? MARK_CATS[c].label : c)} <strong>${n}</strong>`).join(' · ')}</p>` : ''}
       ${s.notes.length ? `<ul class="t-notes">${s.notes.map(n => `<li><span class="muted small">${esc(dateFmt(n.at))}</span> ${esc(n.text)}</li>`).join('')}</ul>` : ''}
     </section>` : ''}
@@ -169,7 +169,7 @@ export function teacherHtml(s, { note = '', theory = null } = {}) {
       <h2 class="card-title">${icon('school')}Opplæringsplanen</h2>
       ${s.plan.filter(st => st.items.some(it => it.done || it.evidence)).map(st => `<h3 class="t-stage">${esc(st.stage)}</h3>
         <ul class="t-plan">${st.items.filter(it => it.done || it.evidence).map(it => `<li class="${it.done ? 'done' : ''}">${it.done ? icon('check', 16) : '<span class="t-dot"></span>'}<span>${esc(it.label)}${it.evidence ? ` <span class="muted small">· ${esc(it.evidence)}</span>` : ''}</span></li>`).join('')}</ul>`).join('') || '<p class="muted">Ingen punkter krysset av eller øvd ennå.</p>'}
-      <p class="muted small">Haken er satt av eleven eller ledsageren. Grå tekst er hva appen har sett på turene i perioden.</p>
+      <p class="muted small">${teacher ? 'Hakene er satt av deg.' : 'Haken er satt av eleven eller ledsageren.'} Grå tekst er hva appen har sett på turene i perioden.</p>
     </section>
 
     ${theoryCard(theory)}

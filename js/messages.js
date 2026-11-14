@@ -28,7 +28,8 @@ export function cleanMessage(m) {
   const text = str(m.text, MAX_TEXT).trim(), ref = cleanRef(m.ref);
   if (!text && !ref) return null;
   return { id: str(m.id, 40) || newMsgId(), from: m.from === 'laerer' ? 'laerer' : 'elev', name: str(m.name, 40),
-    at: typeof m.at === 'string' && !isNaN(Date.parse(m.at)) ? m.at : new Date().toISOString(), text, ...(ref ? { ref } : {}) };
+    // Alltid som UTC-tekst (0.18.3): samtalen sorteres på teksten, og en dato med tidssone ellers ville havnet feil
+    at: typeof m.at === 'string' && !isNaN(Date.parse(m.at)) ? new Date(m.at).toISOString() : new Date().toISOString(), text, ...(ref ? { ref } : {}) };
 }
 
 /* Legger meldinger inn i en samtale uten doble (samme id), eldste først */
@@ -62,11 +63,32 @@ export function shareDrive(d) {
     result: d.result || null, enrich: d.enrich ? { ...d.enrich, error: null } : null, cameraPlan: d.cameraPlan || null };
 }
 
-/* Pakken som sendes. from: { role: 'elev' | 'laerer', name }, to: navnet til mottakeren (eleven, når læreren sender) */
-export function buildPackage({ from, to = '', messages = [], drives = [], homework = null, appVersion = '', now = new Date() }) {
+/* Elevens faste ID (0.18.3): et tilfeldig tegn-sett som lages én gang på elevens telefon og følger hver melding. Læreren
+   kjenner eleven igjen på den, også når navnet er skrevet annerledes («emma», «Emma H.»). Ikke et personnummer. */
+export const newPersonId = (rnd = Math.random) => 'p' + Array.from({ length: 16 }, () => Math.floor(rnd() * 36).toString(36)).join('');
+const cleanId = v => (typeof v === 'string' && /^[a-z0-9]{6,40}$/i.test(v) ? v : '');
+/* Teorien eleven har øvd (0.18.3): sendes med, så læreren ser teori og sikkerhetskontroll. Bare et objekt av rimelig størrelse. */
+const cleanTheory = t => (t && typeof t === 'object' && !Array.isArray(t) && JSON.stringify(t).length < 300000 ? t : null);
+
+/* Pakken som sendes. from: { role: 'elev' | 'laerer', name, id }, to: navnet til mottakeren (eleven, når læreren sender) */
+export function buildPackage({ from, to = '', messages = [], drives = [], homework = null, theory = null, appVersion = '', now = new Date() }) {
+  const id = cleanId(from && from.id), th = cleanTheory(theory);
   return { app: 'Kjørerapport', kind: PKG_KIND, v: PKG_V, appVersion, sentAt: now.toISOString(),
-    from: { role: from && from.role === 'laerer' ? 'laerer' : 'elev', name: str(from && from.name, 40) }, to: str(to, 40),
-    messages: messages.map(cleanMessage).filter(Boolean), drives: drives.filter(d => d && d.result).map(shareDrive), ...(homework ? { homework } : {}) };
+    from: { role: from && from.role === 'laerer' ? 'laerer' : 'elev', name: str(from && from.name, 40), ...(id ? { id } : {}) }, to: str(to, 40),
+    messages: messages.map(cleanMessage).filter(Boolean), drives: drives.filter(d => d && d.result).map(shareDrive), ...(homework ? { homework } : {}), ...(th ? { theory: th } : {}) };
+}
+
+/* Hvilken elev i lærerens liste en melding er fra (0.18.3): først den faste ID-en, så navnet uten hensyn til store og
+   små bokstaver. list: [{ name, ids }]. → navnet slik det står i lista, eller null (læreren må velge). */
+export function matchStudent(list = [], from = {}) {
+  const id = cleanId(from.id);
+  if (id) { const hit = list.find(x => Array.isArray(x.ids) && x.ids.includes(id)); if (hit) return hit.name; }
+  const name = String(from.name || '').trim().toLowerCase();
+  if (!name) return null;
+  const same = list.filter(x => x.name.toLowerCase() === name);
+  // Har eleven med samme navn allerede en annen ID, er det en annen elev med samme navn: læreren må velge
+  if (same.length === 1 && !(id && Array.isArray(same[0].ids) && same[0].ids.length)) return same[0].name;
+  return null;
 }
 
 export const isPackage = p => !!p && typeof p === 'object' && p.kind === PKG_KIND;
@@ -75,11 +97,11 @@ export const isPackage = p => !!p && typeof p === 'object' && p.kind === PKG_KIN
 export function readPackage(p) {
   if (!isPackage(p)) throw new Error('Filen er ikke en melding fra Kjørerapport.');
   if (Number(p.v) > PKG_V) throw new Error('Meldingen er laget med en nyere versjon av appen. Oppdater appen og prøv igjen.');
-  const from = { role: p.from && p.from.role === 'laerer' ? 'laerer' : 'elev', name: str(p.from && p.from.name, 40).trim() };
+  const from = { role: p.from && p.from.role === 'laerer' ? 'laerer' : 'elev', name: str(p.from && p.from.name, 40).trim(), id: cleanId(p.from && p.from.id) };
   const messages = (Array.isArray(p.messages) ? p.messages : []).map(cleanMessage).filter(Boolean).map(m => ({ ...m, from: from.role, name: m.name || from.name }));
   const drives = (Array.isArray(p.drives) ? p.drives : []).filter(d => d && typeof d.id === 'string' && d.result && Array.isArray(d.result.points) && d.result.points.length > 1);
   const hw = p.homework && typeof p.homework === 'object' ? { focus: (Array.isArray(p.homework.focus) ? p.homework.focus : []).filter(f => typeof f === 'string').slice(0, 3), note: str(p.homework.note, 300), setAt: str(p.homework.setAt, 40), from: from.name || 'trafikklæreren' } : null;
-  return { from, to: str(p.to, 40), messages, drives, homework: hw, sentAt: str(p.sentAt, 40) };
+  return { from, to: str(p.to, 40), messages, drives, homework: hw, theory: from.role === 'elev' ? cleanTheory(p.theory) : null, sentAt: str(p.sentAt, 40) };
 }
 
 /* Filnavn uten æøå og mellomrom */
@@ -103,18 +125,21 @@ export function studentOverview(drives, students, threads = {}, now = Date.now()
     const thread = threads[st.name] || [];
     const lastMsg = thread[thread.length - 1] || null;
     const newMsgs = unread(thread, 'laerer');
+    // Ubesvart (0.18.3): siste melding er fra eleven, også etter at læreren har lest den
+    const awaiting = !newMsgs && !!lastMsg && lastMsg.from === 'elev';
     const idle = last === null ? null : Math.floor((now - last) / DAY);
     const flags = [];
     if (newMsgs) flags.push({ id: 'msg', text: `${newMsgs} ${newMsgs === 1 ? 'ny melding' : 'nye meldinger'}`, tone: 'info' });
+    else if (awaiting) flags.push({ id: 'reply', text: 'Venter på svar', tone: 'info' });
     if (avgNow !== null && avgNow < 70) flags.push({ id: 'score', text: `Snitt ${avgNow} poeng`, tone: 'warn' });
     if (avgNow !== null && avgBefore !== null && avgBefore - avgNow >= 5) flags.push({ id: 'down', text: `Ned ${avgBefore - avgNow} poeng`, tone: 'warn' });
     if (idle !== null && idle >= 14) flags.push({ id: 'idle', text: `Ikke kjørt på ${idle} dager`, tone: 'warn' });
     if (last === null) flags.push({ id: 'none', text: 'Ingen turer ennå', tone: 'muted' });
     // Høyere tall = mer å følge opp (sorteringen «Trenger oppfølging»)
-    const need = (newMsgs ? 100 : 0) + (avgNow !== null && avgNow < 70 ? 30 + (70 - avgNow) : 0) + (avgNow !== null && avgBefore !== null ? Math.max(0, avgBefore - avgNow) * 2 : 0) + (idle !== null && idle >= 14 ? 10 + Math.min(20, idle - 14) : 0);
+    const need = (newMsgs ? 100 : awaiting ? 60 : 0) + (avgNow !== null && avgNow < 70 ? 30 + (70 - avgNow) : 0) + (avgNow !== null && avgBefore !== null ? Math.max(0, avgBefore - avgNow) * 2 : 0) + (idle !== null && idle >= 14 ? 10 + Math.min(20, idle - 14) : 0);
     return { name: st.name, email: st.email || '', test: !!st.test, count: own.length, last, idle,
       min30: Math.round(recent.reduce((s, d) => s + (d.result.stats.duration || 0), 0) / 60), km30: recent.reduce((s, d) => s + (d.result.stats.km || 0), 0),
-      avg: avgNow, trend: avgNow !== null && avgBefore !== null ? avgNow - avgBefore : null, newMsgs, lastMsgAt: lastMsg ? lastMsg.at : null, flags, need };
+      avg: avgNow, trend: avgNow !== null && avgBefore !== null ? avgNow - avgBefore : null, newMsgs, awaiting, lastMsgAt: lastMsg ? lastMsg.at : null, flags, need };
   });
 }
 

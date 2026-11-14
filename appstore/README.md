@@ -90,7 +90,7 @@ The current page (`personvern/`) is good. For the iPhone app, change:
 
 Answer «No» / «None» to every question in Apple's age rating questionnaire. That includes:
 - no violence, gambling, profanity or medical content
-- no user-generated content shared with others, no messaging or chat
+- user-generated content and messaging: since 0.18.0 a learner and a driving teacher can send each other messages. They go as a file through iOS's own share sheet (Messages, Mail, AirDrop) to someone the user already knows; the app has no chat service, no server, no user directory and no way to reach strangers. Check Apple's current wording of the «Messaging and Chat» and «User-Generated Content» questions before submitting: if either covers file exchange between known people, answer yes and expect a higher rating. Not settled.
 - no unrestricted web access (the help and privacy pages are the app's own)
 - no advertising
 - no parental controls or age assurance

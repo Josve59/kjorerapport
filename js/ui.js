@@ -157,6 +157,10 @@ function dialogShell() {
   return d;
 }
 
+/* Avbryt er en vanlig knapp (0.18.3): med retur-tasten i et tekstfelt sender skjemaet med den første innsendingsknappen,
+   og det var Avbryt. Nå er OK den eneste, så retur betyr OK. */
+function wireCancel(d) { const c = d.querySelector('.js-cancel'); if (c) c.onclick = () => d.close('cancel'); }
+
 export function confirmDialog({ title, text = '', ok = 'OK', cancel = 'Avbryt', danger = false }) {
   return new Promise(resolve => {
     const d = dialogShell();
@@ -164,12 +168,13 @@ export function confirmDialog({ title, text = '', ok = 'OK', cancel = 'Avbryt', 
       <h2>${esc(title)}</h2>
       ${text ? `<p class="muted">${esc(text)}</p>` : ''}
       <div class="sheet-actions">
-        ${cancel ? `<button value="cancel" class="btn secondary">${esc(cancel)}</button>` : ''}
+        ${cancel ? `<button type="button" value="cancel" class="btn secondary js-cancel">${esc(cancel)}</button>` : ''}
         <button value="ok" class="btn ${danger ? 'danger-fill' : 'primary'}">${esc(ok)}</button>
       </div></form>`;
     const done = () => { d.removeEventListener('close', done); resolve(d.returnValue === 'ok'); };
     d.addEventListener('close', done);
     d.returnValue = '';
+    wireCancel(d);
     openDialog(d);
   });
 }
@@ -186,13 +191,14 @@ export function promptDialog({ title, text = '', placeholder = '', ok = 'Lagre',
       ${text ? `<p class="muted">${esc(text)}</p>` : ''}
       <input class="sheet-input" maxlength="${maxLength}" placeholder="${esc(placeholder)}" value="${esc(value)}" aria-label="${esc(title)}">
       <div class="sheet-actions">
-        <button value="cancel" class="btn secondary" formnovalidate>Avbryt</button>
+        <button type="button" value="cancel" class="btn secondary js-cancel" formnovalidate>Avbryt</button>
         <button value="ok" class="btn primary">${esc(ok)}</button>
       </div></form>`;
     const input = d.querySelector('input');
     const done = () => { d.removeEventListener('close', done); resolve(d.returnValue === 'ok' ? input.value.trim() : null); };
     d.addEventListener('close', done);
     d.returnValue = '';
+    wireCancel(d);
     openDialog(d);
     setTimeout(() => input.focus(), 50);
   });
@@ -208,7 +214,7 @@ export function formDialog({ title, text = '', body = '', ok = 'Lagre', cancel =
       ${text ? `<p class="muted">${esc(text)}</p>` : ''}
       ${body}
       <div class="sheet-actions">
-        <button value="cancel" class="btn secondary" formnovalidate>${esc(cancel)}</button>
+        <button type="button" value="cancel" class="btn secondary js-cancel" formnovalidate>${esc(cancel)}</button>
         <button value="ok" class="btn ${danger ? 'danger-fill' : 'primary'}">${esc(ok)}</button>
       </div></form>`;
     let value = null;
@@ -216,6 +222,7 @@ export function formDialog({ title, text = '', body = '', ok = 'Lagre', cancel =
     const done = () => { d.removeEventListener('close', done); resolve(d.returnValue === 'ok' ? value : null); };
     d.addEventListener('close', done);
     d.returnValue = '';
+    wireCancel(d);
     openDialog(d);
     if (onOpen) onOpen(d);
   });
@@ -229,6 +236,7 @@ export function sheetDialog({ body, ok = 'Lukk', onOpen = null }) {
     const done = () => { d.removeEventListener('close', done); resolve(); };
     d.addEventListener('close', done);
     d.returnValue = '';
+    wireCancel(d);
     openDialog(d);
     if (onOpen) onOpen(d);
   });

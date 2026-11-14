@@ -85,7 +85,8 @@ export function reportLocked(drives, id, plus) {
   return i >= FREE_REPORTS;
 }
 
-/* Hvilken Pluss-funksjon en skjerm hører til, eller null */
+/* Hvilken Pluss-funksjon en skjerm hører til, eller null. «Til trafikklæreren» er ikke sperret (0.18.3): samtalen med
+   læreren er gratis, så eleven alltid kan lese svaret. Bare oppsummeringen av øvingen på den siden hører til Pluss. */
 export function gateFor(hash) {
-  return { '#/kamera': 'camera', '#/opplaering': 'plan', '#/faresteder': 'plan', '#/trafikklaerer': 'teacher', '#/klar': 'ready' }[hash] || null;
+  return { '#/kamera': 'camera', '#/opplaering': 'plan', '#/faresteder': 'plan', '#/klar': 'ready' }[hash] || null;
 }

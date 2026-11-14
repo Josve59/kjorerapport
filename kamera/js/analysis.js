@@ -585,7 +585,7 @@ function makeTips(c, s) {
 }
 
 export function rating(score) {
-  if (score >= 90) return 'Rolig og trygg kjøring';
+  if (score >= 90) return 'Rolig og jevn kjøring';   // «jevn», ikke «trygg» (0.18.3): poengene måler jevnheten, ikke om reglene følges
   if (score >= 75) return 'Bra, med noen ting å jobbe med';
   if (score >= 55) return 'Ujevn kjøring';
   return 'Mye brå kjøring';

@@ -5,6 +5,10 @@ import Network
 /// Fast port, så nettappens lagring (IndexedDB) hører til samme opprinnelse hver gang appen åpnes.
 nonisolated final class WebServer: @unchecked Sendable {
     static let port: UInt16 = 51789
+    /// Nøkkel for kamerabildene (0.18.3), ny hver gang appen starter. Serveren lytter bare på 127.0.0.1, men andre apper
+    /// på telefonen kan også nå 127.0.0.1: uten nøkkelen kunne de hente bildet fra førerkameraet mens et opptak går.
+    /// Nettappen får nøkkelen som window.__kjCamKey (WebAppView).
+    static let camKey: String = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     nonisolated(unsafe) static var shared: WebServer?   // settes når appen starter
     private let root: URL
     private let queue = DispatchQueue(label: "kjorerapport.webserver")
@@ -107,7 +111,9 @@ nonisolated final class WebServer: @unchecked Sendable {
     private func cameraFrame(_ connection: NWConnection, path: String, query: [String: String], head: Bool) {
         let name = path.dropFirst("/cam/".count).replacingOccurrences(of: ".jpg", with: "")
         var header: String, body = Data()
-        if let facing = CameraHub.Facing(rawValue: name),
+        if query["k"] != Self.camKey {
+            header = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n"
+        } else if let facing = CameraHub.Facing(rawValue: name),
            let f = CameraHub.shared.jpeg(facing, maxSide: Int(query["max"] ?? "") ?? 0, quality: Double(query["q"] ?? "") ?? 0.8, after: Int(query["after"] ?? "") ?? -1,
                                          gamma: Double(query["g"] ?? "") ?? 1) {
             body = f.data

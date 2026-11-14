@@ -52,7 +52,7 @@ export const GUIDES = [
     lead: 'Turene ligger bare på denne telefonen.',
     when: c => c.unbacked >= 3,
     steps: [
-      ['Ta kopi', 'under Innstillinger › Data. Lagre filen i Filer, iCloud Drive eller send den til deg selv.'],
+      ['Ta kopi', 'under Innstillinger › Sikkerhetskopi. Lagre filen i Filer, iCloud Drive eller send den til deg selv.'],
       ['Ny telefon?', 'Velg «Gjenopprett» og filen, så kommer turene og innstillingene tilbake.']
     ]
   },

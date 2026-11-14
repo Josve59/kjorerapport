@@ -17,6 +17,8 @@ struct WebAppView: UIViewRepresentable {
         if let url = Bundle.main.url(forResource: "Bridge", withExtension: "js"), let source = try? String(contentsOf: url, encoding: .utf8) {
             content.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
+        // Nøkkelen til kamerabildene fra den lokale serveren (0.18.3, se WebServer.camKey)
+        content.addUserScript(WKUserScript(source: "window.__kjCamKey = '\(WebServer.camKey)';", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         content.addScriptMessageHandler(recorder, contentWorld: .page, name: "kj")
         #if DEBUG
         // Testbygg: nettappens console.log/warn/error og feil i Xcode-loggen

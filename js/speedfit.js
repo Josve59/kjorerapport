@@ -103,6 +103,11 @@ export function crestSpeed(input, { axes = 'standard', surface = '', t0 = 0, mar
   return { n, crests };
 }
 
+/* Hvor mye én periode over grensen teller etter hvor lenge den varer. Opp til 16 s som da vektene ble satt (0.13.13);
+   fra 0.18.3 teller lengre perioder videre (1 for hvert 30. sekund, høyst 8, ved drøye 3 minutter). Før telte 10 minutter
+   over grensen like lite som 16 sekunder. */
+export const durFactor = sec => (sec <= 16 ? clamp(sec / 8, 0.5, 2) : Math.min(8, 2 + (sec - 16) / 30));
+
 /* Fartsdelen av poengene. speeding: fra analyzeSpeeding ({ episodes: [{ tFrom, tTo, over }] }) eller null uten
    fartsgrenser. crest: fra crestSpeed eller null. km: turens lengde. Trekk per 10 km, med gulv på 5 km som de andre
    delpoengene. → null når ingen av delene er målt, ellers { score, limitPen, crestPen, over (antall perioder),
@@ -115,7 +120,7 @@ export function speedScore({ speeding = null, crest = null, km = 0 } = {}) {
     let p = 0;
     for (const e of speeding.episodes || []) {
       const over = Number.isFinite(e.over) ? e.over : e.maxKmh - e.limit;
-      p += (over >= 20 ? 13 : over >= 10 ? 8 : 4) * clamp((e.tTo - e.tFrom) / 8, 0.5, 2);
+      p += (over >= 20 ? 13 : over >= 10 ? 8 : 4) * durFactor(e.tTo - e.tFrom);
     }
     limitPen = Math.round(p * k * 10) / 10;
   }

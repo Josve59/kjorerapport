@@ -38,16 +38,21 @@ export const LIGHT_LABEL = { day: 'Dagslys', twilight: 'Skumring', dark: 'Mørke
 
 /* r: analyseresultat (points med t relativt til start), recStartMs: når opptaket startet (ms),
    limits: fartsgrense per punkt eller null. motor: motorvei per punkt (1/2/0) eller null (0.18.0). */
+export const STILL_MAX = 300;   // sekunder stans som teller i loggen
 export function driveLog(r, recStartMs, limits = null, motor = null) {
   const sec = { by: 0, land: 0, motor: 0 }, km = { by: 0, land: 0, motor: 0 };
   const light = { day: 0, twilight: 0, dark: 0 }, lightKm = { day: 0, twilight: 0, dark: 0 };
   const pts = r.points;
   const t0 = r.t0 || 0;
-  let fromLimits = 0;
+  let fromLimits = 0, still = 0;
   for (let i = 1; i < pts.length; i++) {
     const dt = pts[i].t - pts[i - 1].t;
     if (!(dt > 0)) continue;
     const dist = haversine(pts[i - 1], pts[i]) / 1000;
+    // Stillestående (0.18.3): kø og rødt lys er kjøring, men en parkert bil med opptaket på er ikke øving. De første
+    // 5 minuttene av en stans teller, resten ikke (før telte 30 min på en parkeringsplass som 30 min øving).
+    still = pts[i].kmh < 3 && pts[i - 1].kmh < 3 ? still + dt : 0;
+    if (still > STILL_MAX) continue;
     // Hull i GPS-en (0.18.0): i tunneler mister telefonen posisjonen, og før forsvant den tiden fra loggen. Hull på
     // opptil 5 min telles når farten mellom punktene er mulig (5–130 km/t); ellers sto bilen, eller GPS-en hoppet.
     if (dt >= 10 && !(dt <= 300 && dist / (dt / 3600) >= 5 && dist / (dt / 3600) <= 130)) continue;

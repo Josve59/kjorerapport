@@ -23,7 +23,7 @@ test('skjermene som hører til Pluss', () => {
   assert.equal(gateFor('#/kamera'), 'camera');
   assert.equal(gateFor('#/opplaering'), 'plan');
   assert.equal(gateFor('#/faresteder'), 'plan');
-  assert.equal(gateFor('#/trafikklaerer'), 'teacher');
+  assert.equal(gateFor('#/trafikklaerer'), null, 'samtalen med læreren er gratis (0.18.3)');
   assert.equal(gateFor('#/klar'), 'ready');
   assert.equal(gateFor('#/'), null);
   assert.equal(gateFor('#/rapport/x'), null);

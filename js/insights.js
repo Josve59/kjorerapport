@@ -120,10 +120,11 @@ export const CURRICULUM = [
     { id: 'kryss', label: 'Kryss og vikeplikt', auto: 'junction' },
     { id: 'fart', label: 'Fartstilpasning og fartsgrenser', auto: 'limits' },
     { id: 'mork', label: 'Kjøring i mørke', auto: 'dark' },
-    { id: 'trinn3', label: 'Veiledningstime på trinn 3' }
+    { id: 'trinn3', label: 'Veiledningstime på trinn 3' },
+    // Sikkerhetskurs på øvingsbane hører til slutten av trinn 3 (Statens vegvesen); lå under trinn 4 før 0.18.3
+    { id: 'bane', label: 'Sikkerhetskurs på øvingsbane' }
   ] },
   { stage: 'Trinn 4 – Avsluttende opplæring', items: [
-    { id: 'bane', label: 'Sikkerhetskurs på bane' },
     { id: 'veg', label: 'Sikkerhetskurs på veg' },
     { id: 'selv', label: 'Selvstendig kjøring og planlegging av tur' },
     { id: 'prove', label: 'Førerprøven bestått' }

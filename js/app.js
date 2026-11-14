@@ -31,9 +31,9 @@ import { openDevChart } from './devchart.js';
 import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
-import { TEACHER_THREAD, buildPackage, readPackage, isPackage, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
+import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.18.2';
+export const APP_VERSION = '0.18.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -177,6 +177,10 @@ async function analyzeDrive(drive) {
    f.eks. når kalibreringen var feil eller noen andre kjørte. Den ligger likevel i turlista og kan tas med igjen. */
 const isOwn = d => !d.demo && !d.imported;
 const isReal = d => isOwn(d) && !d.excluded;
+// Kjøreloggen (0.18.3): en tur som er tatt ut fordi målingene ble feil, ble likevel kjørt. Tid og km teller da fortsatt;
+// bare når noen andre kjørte, er turen ute av loggen også.
+const OTHER_DRIVER = 'Noen andre kjørte';
+const inLog = d => isOwn(d) && !(d.excluded && d.excluded.reason === OTHER_DRIVER);
 const EXCLUDE_REASONS = ['Kalibreringen eller holderen var feil', 'Målingene ble feil', 'Noen andre kjørte', 'Annen grunn'];
 const num = v => (v === '' || v === null || v === undefined ? NaN : Number(String(v).replace(',', '.')));
 
@@ -395,14 +399,16 @@ async function renderHome() {
     const allRows = sugRows;
     const spots = hotspots(allRows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems(x) })));
     const plan = planProgress(allRows);
-    const rd = readiness(allRows, { plan: planState().mine, theory: theoryForReady() });
-    more.innerHTML = `<button type="button" class="card t-cta" id="btn-go-teacher"><span class="card-title">${icon('school')}Til trafikklæreren</span><span class="muted small">Det som er øvd siden forrige kjøretime, klart til å vise fram eller dele</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
+    // Læreren: teorien telles bare når eleven har sendt den (0.18.3)
+    const rd = readiness(allRows, { plan: planState().mine, theory: isTeacher() && !(settings.theory || {})[settings.activeStudent] ? null : theoryForReady() });
+    const tStud = isTeacher() ? settings.activeStudent : '';
+    more.innerHTML = `<button type="button" class="card t-cta" id="btn-go-teacher"><span class="card-title">${icon('school')}${tStud ? esc(tStud) : 'Til trafikklæreren'}</span><span class="muted small">${tStud ? 'Fremgang, meldinger, lekser og turene til eleven' : 'Det som er øvd siden forrige kjøretime, klart til å vise fram eller dele'}</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
       ${spots.length ? `<button type="button" class="card mini-card" id="btn-go-spots"><span class="card-title">${icon('pin')}Faresteder</span><strong>${spots.length}</strong><span class="muted small">${spots.length === 1 ? 'sted' : 'steder'} med flere hendelser</span></button>` : ''}
       <button type="button" class="card mini-card" id="btn-go-plan"${spots.length ? '' : ' style="grid-column: 1 / -1"'}><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
     more.hidden = false;
     if (spots.length) $('#btn-go-spots').onclick = () => { location.hash = '#/faresteder'; };
     $('#btn-go-plan').onclick = () => { location.hash = '#/opplaering'; };
-    $('#btn-go-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
+    $('#btn-go-teacher').onclick = () => { location.hash = tStud ? studentHash(tStud) : '#/trafikklaerer'; };
     // «Hva må du øve mer på?» (0.12.0, før «Klar for oppkjøring?»): eget kort på Hjem, gratis å se, skjermen hører til Pluss
     const rc = $('#ready-card');
     rc.innerHTML = `<button type="button" class="card t-cta ready-cta lv-${rd.level}" id="btn-go-ready"><span class="card-title">${icon('flag')}${esc(practiceTitle())}${hasPlus() ? '' : `<span class="lock-tag">${icon('lock', 14)}Pluss</span>`}</span>${rd.next[0] ? `<span class="ready-next">${esc(rd.next[0].label)}</span>` : ''}<span class="ready-mini"><strong>${rd.done} av ${rd.counted}</strong> <span class="muted small">på plass før oppkjøringen</span></span><span class="goal-bar"><span style="width:${rd.counted ? Math.round(rd.done / rd.counted * 100) : 0}%"></span></span><span class="last-cta">Se alt ${icon('chev', 18)}</span></button>`;
@@ -570,7 +576,8 @@ async function renderPlus(feature = null) {
 /* Tre små ting som viser Pluss rundt i appen: låsene på fanene, raden i Innstillinger og kamerakortet på Hjem */
 function updatePlusMarks() {
   const plus = hasPlus();
-  document.querySelectorAll('#tabbar a[data-tab="plan"], #tabbar a[data-tab="teacher"]').forEach(a => a.classList.toggle('locked', !plus));
+  // «Trafikklærer» har ingen lås (0.18.3): samtalen med læreren er gratis
+  document.querySelectorAll('#tabbar a[data-tab="plan"]').forEach(a => a.classList.toggle('locked', !plus));
 }
 
 /* ---------- Guider (0.10.1) ---------- */
@@ -813,7 +820,7 @@ async function renderLog() {
   const settings = getSettings();
   const filter = isTeacher() ? (settings.activeStudent || '') : '';
   const all = await listDrives(), plus = hasPlus();
-  const drives = all.filter(d => isReal(d) && (!filter || d.driver === filter));
+  const drives = all.filter(d => inLog(d) && (!filter || d.driver === filter));
   const excludedDrives = all.filter(d => isOwn(d) && d.excluded && (!filter || d.driver === filter));   // 0.18.0
   const lockedIds = new Set(drives.filter(d => reportLocked(all, d.id, plus)).map(d => d.id));   // rapporter som krever Pluss
   const rows = [];
@@ -834,7 +841,7 @@ async function renderLog() {
   for (const x of rows) { const w = weeks.find(w => w.key === key(weekStart(Date.parse(x.d.startedAt)))); if (w) w.sec += x.log.total.sec; }
   const maxW = Math.max(...weeks.map(w => w.sec), 1);
   // Faresteder (0.12.1, før under Opplæring): steder der det har skjedd noe flere ganger hører til turene
-  const spots = hotspots(rows.map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems({ ...x, marks: markRows(x.d.marks || [], x.res) }) })));
+  const spots = hotspots(rows.filter(x => isReal(x.d)).map(x => ({ id: x.d.id, points: x.res.points, items: hotspotItems({ ...x, marks: markRows(x.d.marks || [], x.res) }) })));   // ikke turer med feil målinger
   const spotsCard = `<button type="button" class="card t-cta spots-cta" id="btn-log-spots"><span class="card-title">${icon('pin')}Faresteder${hasPlus() ? '' : `<span class="lock-tag">${icon('lock', 14)}Pluss</span>`}</span>
       <span class="muted small">${spots.length ? `${spots.length} ${spots.length === 1 ? 'sted' : 'steder'} der det har skjedd noe flere ganger` : 'Steder der det skjer noe flere ganger, vist på kartet'}</span><span class="last-cta">Se på kartet ${icon('chev', 18)}</span></button>`;
   const wkFmt = new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short' });
@@ -859,9 +866,9 @@ async function renderLog() {
       <p class="muted small">Minutter per uke. Under: ukenummer og mandagens dato.</p></section>
     ${spotsCard}
     <details class="card how-calc"><summary>Slik regnes det</summary>
-      <p class="muted small"><strong>Motorvei</strong> er motorvei og motortrafikkvei slik Statens vegvesen har registrert dem, uansett fartsgrense. <strong>By</strong> er fartsgrense 50 eller lavere, resten er landevei. Uten nett anslås veitypen ut fra fartsgrensen og farten. <strong>Mørke</strong> er når sola står mer enn 6° under horisonten, skumring mellom 0 og 6°. <strong>Føre</strong> velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></details>
+      <p class="muted small">Turer som er tatt ut av utregningene, teller med i tid og km her, fordi de ble kjørt. Unntaket er når noen andre kjørte. <strong>Motorvei</strong> er motorvei og motortrafikkvei slik Statens vegvesen har registrert dem, uansett fartsgrense. <strong>By</strong> er fartsgrense 50 eller lavere, resten er landevei. Uten nett anslås veitypen ut fra fartsgrensen og farten. <strong>Mørke</strong> er når sola står mer enn 6° under horisonten, skumring mellom 0 og 6°. <strong>Føre</strong> velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></details>
     <h2 class="section-title">Alle turer</h2>
-    <ul class="drives log-list card">${rows.map(x => `<li><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${x.d.id}">
+    <ul class="drives log-list card">${rows.filter(x => isReal(x.d)).map(x => `<li><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${esc(x.d.id)}">
       <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
       <span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.log.light.dark > 60 ? `${fmtHours(x.log.light.dark)} mørke` : ''].filter(Boolean).join(SEP)}</span>
 </span>
@@ -968,8 +975,13 @@ async function sendMessages(key) {
   if (!pending.length) return false;
   const ids = new Set(pending.map(m => m.ref && m.ref.driveId).filter(Boolean));
   const drives = ids.size ? (await listDrives()).filter(d => ids.has(d.id) && d.result && !d.shared) : [];
+  // Tomme lekser sendes også: da fjernes de hos eleven (0.18.3)
   const homework = isTeacher() ? homeworkFor(s, key) : null;
-  const pkg = buildPackage({ from: { role: me(), name: myName() || (isTeacher() ? 'Trafikklæreren' : 'Eleven') }, to: isTeacher() ? key : '', messages: pending, drives, homework, appVersion: APP_VERSION });
+  // Eleven sender sin faste ID og teorien sin med (0.18.3), så læreren kjenner eleven igjen og ser teorien
+  let myId = '';
+  if (!isTeacher()) { myId = s.myId || newPersonId(); if (!s.myId) saveSettings({ ...getSettings(), myId }); }
+  const theory = isTeacher() ? null : ((s.theory || {})[personKey(s)] || null);
+  const pkg = buildPackage({ from: { role: me(), name: myName() || (isTeacher() ? 'Trafikklæreren' : 'Eleven'), id: myId }, to: isTeacher() ? key : '', messages: pending, drives, homework, theory, appVersion: APP_VERSION });
   const ok = await shareFile(toJSON(pkg), packageName(isTeacher() ? key : myName() || 'til-laereren'));
   if (!ok) { toast('Meldingen er lagret, men ikke sendt. Trykk «Send nå» når du vil sende den.', { ms: 3500 }); return false; }
   const done = new Set(pending.map(m => m.id));
@@ -985,31 +997,49 @@ async function openMessageData(payload) {
   const p = readPackage(payload);
   if (isTeacher()) {
     if (p.from.role !== 'elev') throw new Error('Denne meldingen er fra en trafikklærer. Den åpnes i appen til eleven.');
-    let name = p.from.name;
-    if (!name || !students(getSettings()).some(x => x.name === name)) {
-      const n = await promptDialog({ title: 'Hvilken elev er meldingen fra?', text: name ? `«${name}» er ikke i elevlisten. Legg til som ny elev, eller skriv navnet slik det står i listen.` : 'Meldingen har ikke noe navn. Skriv navnet til eleven.', value: name, ok: 'Bruk navnet', maxLength: 40 });
-      if (!n) return null;
-      name = n.trim().slice(0, 40);
-      if (!students(getSettings()).some(x => x.name === name)) addStudent(name, '');
+    // Eleven kjennes igjen på den faste ID-en eller navnet (0.18.3); ellers velger læreren fra lista eller legger til
+    let name = matchStudent(students(getSettings()), p.from);
+    if (!name) {
+      const list = activeStudents(getSettings()).slice().sort((a, b) => a.name.localeCompare(b.name, 'nb'));
+      const guess = p.from.name ? list.find(x => x.name.toLowerCase().startsWith(p.from.name.toLowerCase().split(' ')[0])) : null;
+      const r = await formDialog({ title: 'Hvilken elev er meldingen fra?', ok: 'Åpne meldingen',
+        text: p.from.name ? `Meldingen er fra «${p.from.name}». Velg eleven, eller legg til en ny.` : 'Meldingen har ikke noe navn. Velg eleven, eller legg til en ny.',
+        body: `<label class="field">Elev<select id="mf-who"><option value="">Ny elev</option>${list.map(x => `<option value="${esc(x.name)}" ${guess && guess.name === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+          <input class="sheet-input" id="mf-name" maxlength="40" value="${esc(p.from.name)}" placeholder="Navn på ny elev" aria-label="Navn på ny elev" autocomplete="off" ${guess ? 'hidden' : ''}>`,
+        onOpen: d => { const sel = d.querySelector('#mf-who'), inp = d.querySelector('#mf-name'); sel.onchange = () => { inp.hidden = !!sel.value; }; },
+        read: d => { const v = d.querySelector('#mf-who').value || d.querySelector('#mf-name').value.trim().slice(0, 40); if (!v) { toast('Velg eleven eller skriv et navn.', { ms: 2000 }); return false; } return v; } });
+      if (!r) return null;
+      const same = students(getSettings()).find(x => x.name.toLowerCase() === r.toLowerCase());
+      name = same ? same.name : r;
+      if (!same) addStudent(name, '');
     }
+    // Husk ID-en, så neste melding fra eleven havner rett uten spørsmål
+    if (p.from.id) { const cur = getSettings(); saveSettings({ ...cur, students: students(cur).map(x => (x.name === name ? { ...x, ids: [...new Set([...(x.ids || []), p.from.id])].slice(-3) } : x)) }); }
     for (const sd of p.drives) await importSharedDrive(sd, { from: name });
-    saveThread(name, mergeThread(threadOf(getSettings(), name), p.messages));
-    return { key: name, n: p.messages.length, drives: p.drives.length };
+    const cur = getSettings(), had = new Set(threadOf(cur, name).map(m => m.id));
+    saveSettings({ ...cur, messages: { ...(cur.messages || {}), [name]: mergeThread(threadOf(cur, name), p.messages) },
+      ...(p.theory ? { theory: { ...(cur.theory || {}), [name]: p.theory } } : {}) });   // teorien eleven har øvd (0.18.3)
+    return { key: name, n: p.messages.filter(m => !had.has(m.id)).length, drives: p.drives.length };   // bare de nye (0.18.3)
   }
   if (p.from.role !== 'laerer') throw new Error('Denne meldingen er fra en elev. Den åpnes i appen til trafikklæreren.');
   for (const sd of p.drives) await importSharedDrive(sd, { from: p.from.name, driver: '' });
-  const cur = getSettings(), patch = { messages: { ...(cur.messages || {}), [TEACHER_THREAD]: mergeThread(threadOf(cur, TEACHER_THREAD), p.messages) } };
-  if (p.homework) patch.homework = { ...(cur.homework || {}), [cur.name || cur.activeDriver || '']: { ...p.homework, received: true } };
+  const cur = getSettings(), had = new Set(threadOf(cur, TEACHER_THREAD).map(m => m.id)), patch = { messages: { ...(cur.messages || {}), [TEACHER_THREAD]: mergeThread(threadOf(cur, TEACHER_THREAD), p.messages) } };
+  if (p.homework) {
+    // Læreren har fjernet alle øvingsmål og beskjeden: leksene forsvinner, i stedet for et tomt kort (0.18.3)
+    const empty = !p.homework.focus.length && !p.homework.note.trim(), hwKey = cur.name || cur.activeDriver || '';
+    patch.homework = { ...(cur.homework || {}) };
+    if (empty) delete patch.homework[hwKey]; else patch.homework[hwKey] = { ...p.homework, received: true };
+  }
   if (p.from.name) patch.teacherName = p.from.name;
   saveSettings({ ...cur, ...patch });
-  return { key: TEACHER_THREAD, n: p.messages.length, drives: p.drives.length, homework: !!p.homework };
+  return { key: TEACHER_THREAD, n: p.messages.filter(m => !had.has(m.id)).length, drives: p.drives.length, homework: !!p.homework };
 }
 async function onMessageFile(input, after) {
   const file = input.files && input.files[0];
   if (!file) return;
   try {
     const r = await openMessageFile(file);
-    if (r) toast(`${r.n ? `${r.n} ${r.n === 1 ? 'melding' : 'meldinger'}` : 'Ingen nye meldinger'}${r.drives ? `, ${r.drives} ${r.drives === 1 ? 'tur' : 'turer'}` : ''}${r.homework ? ' og lekser' : ''} er hentet.`, { type: 'ok', ms: 3000 });
+    if (r) toast(`${r.n ? `${r.n} ${r.n === 1 ? 'ny melding' : 'nye meldinger'}` : 'Ingen nye meldinger'}${r.drives ? `, ${r.drives} ${r.drives === 1 ? 'tur' : 'turer'}` : ''}${r.homework ? ' og lekser' : ''} er hentet.`, { type: 'ok', ms: 3000 });
     if (r && after) after(r);
   } catch (err) { infoDialog({ title: 'Kunne ikke åpne meldingen', text: err.message }); }
   input.value = '';
@@ -1051,7 +1081,7 @@ function wireThread(key, rerender, { driver = null } = {}) {
   $('#btn-msg-attach').onclick = async () => {
     const all = (await listDrives()).filter(d => d.result && !d.demo && (driver === null || (d.driver || '') === driver)).slice(0, 20);
     if (!all.length) { infoDialog({ title: 'Ingen turer å legge ved', text: 'Når det er kjørt en tur, kan du legge den ved her.' }); return; }
-    const id = await formDialog({ title: 'Legg ved en tur', text: 'Vil du spørre om én hendelse eller en strekning? Åpne turen og trykk «Spør trafikklæreren» i rapporten.', ok: 'Legg ved',
+    const id = await formDialog({ title: 'Legg ved en tur', text: isTeacher() ? 'Vil du kommentere én hendelse eller en strekning? Åpne turen og trykk «Gi tilbakemelding» i rapporten.' : 'Vil du spørre om én hendelse eller en strekning? Åpne turen og trykk «Spør trafikklæreren» i rapporten.', ok: 'Legg ved',
       body: `<fieldset class="choice-list pick-list">${all.map((d, i) => `<label class="mode-opt"><input type="radio" name="att" value="${esc(d.id)}" ${i === 0 ? 'checked' : ''}><span><strong>${esc(shortDay(d.startedAt))}</strong><span class="muted small">${km(d.result.stats.km)} · ${d.result.overall} poeng${d.note ? ' · ' + esc(d.note.slice(0, 40)) : ''}</span></span></label>`).join('')}</fieldset>`,
       read: dlg => (dlg.querySelector('input[name=att]:checked') || {}).value || false });
     const d = id && all.find(x => x.id === id);
@@ -1082,7 +1112,7 @@ function periodHtml(mode, lesson) {
         <label><input type="radio" name="tperiod" value="30" ${mode === '30' ? 'checked' : ''}><span>30 dager</span></label>
         <label><input type="radio" name="tperiod" value="all" ${mode === 'all' ? 'checked' : ''}><span>Alt</span></label>
       </div>
-      <label class="field">Forrige kjøretime<span class="date-wrap${lesson ? ' has-value' : ''}" id="t-lesson-wrap"><input type="date" id="t-lesson" value="${esc(lesson)}"><span class="date-ph" aria-hidden="true">Velg dato</span></span></label>
+      <label class="field">Forrige kjøretime<span class="date-wrap${lesson ? ' has-value' : ''}" id="t-lesson-wrap"><input type="date" id="t-lesson" value="${esc(lesson.slice(0, 10))}"><span class="date-ph" aria-hidden="true">Velg dato</span></span></label>
     </section>`;
 }
 /* Oppsummeringen av øvingen i perioden, med utskrift, deling og «Timen er ferdig». Svarer radene (turene). */
@@ -1094,21 +1124,24 @@ async function drawSummary(el, tok, rerender) {
   el.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
   const rows = await gatherRows(scopeDriver(s));
   if (tok !== teacherSeq) return null;
-  // Fra starten av dagen for forrige time (lokal tid)
-  const from = mode === 'lesson' ? new Date(lesson + 'T00:00:00').getTime() : mode === '30' ? Date.now() - 30 * 86400000 : null;
+  // Fra da timen var ferdig («Timen er ferdig» lagrer klokkeslettet, 0.18.3), ellers fra starten av dagen for timen.
+  // Før telte selve timen med i «øvingen siden forrige time».
+  const from = mode === 'lesson' ? (lesson.length > 10 ? Date.parse(lesson) : new Date(lesson + 'T00:00:00').getTime()) : mode === '30' ? Date.now() - 30 * 86400000 : null;
   const sum = teacherSummary(rows, { from, driver, plan: planState().mine });
   const theory = teacherTheory(theoryProgress());   // teori og sikkerhetskontroll (0.15.0), null før eleven har øvd
-  el.innerHTML = `<h2 class="section-title">${isTeacher() ? 'Øvingen' : 'Det du har øvd'}</h2>${periodHtml(mode, lesson)}${teacherHtml(sum, { theory })}
-    <button type="button" class="btn secondary t-done" id="btn-teacher-done">Timen er ferdig – ny periode fra i dag</button>`;
+  el.innerHTML = `<h2 class="section-title">${isTeacher() ? 'Øvingen' : 'Det du har øvd'}</h2>${periodHtml(mode, lesson)}${teacherHtml(sum, { theory, teacher: isTeacher() })}
+    <button type="button" class="btn secondary t-done" id="btn-teacher-done">Timen er ferdig – ny periode fra nå</button>`;
   el.querySelectorAll('input[name=tperiod]').forEach(r => r.onchange = () => { saveSettings({ ...getSettings(), teacherPeriod: r.value }); rerender(); });
   $('#t-lesson').onchange = e => { const cur = getSettings(); saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: e.target.value }, teacherPeriod: e.target.value ? 'lesson' : '30' }); rerender(); };
   $('#btn-teacher-print').onclick = () => window.print();
   $('#btn-teacher-share').onclick = () => shareText(teacherText(sum, { theory }));
   $('#btn-teacher-done').onclick = () => {
-    const d = new Date(), iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    // Lokal dato og klokkeslett (0.18.3), så turen som nettopp er kjørt i timen ikke teller med i neste periode
+    const d = new Date(), pad = v => String(v).padStart(2, '0');
+    const iso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     const cur = getSettings();
     saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: iso }, teacherPeriod: 'lesson' });
-    toast('Ny periode fra i dag. Neste oppsummering viser øvingen fram til neste time.', { type: 'ok' });
+    toast('Ny periode fra nå. Neste oppsummering viser øvingen fram til neste time.', { type: 'ok' });
     rerender();
   };
   return rows;
@@ -1130,6 +1163,15 @@ async function renderTeacher(opts = {}) {
       empty: 'Spør om noe, eller legg ved en tur du vil ha tilbakemelding på. Svaret fra læreren kommer som en fil du åpner her.' })}`;
   wireThread(TEACHER_THREAD, o => renderTeacher(o), { driver: null });
   if (unread(thread, 'elev')) saveThread(TEACHER_THREAD, markRead(threadOf(getSettings(), TEACHER_THREAD), 'elev'));   // lest når den er vist
+  // Samtalen er gratis (0.18.3); oppsummeringen av øvingen hører til Pluss
+  if (!hasPlus()) {
+    $('#teacher .page-actions').hidden = true;
+    $('#teacher-root').innerHTML = `<section class="card plus-locked"><span class="plus-ico">${icon('school', 24)}</span>
+      <h2>Oppsummering til timen</h2><p class="muted">Med Pluss får du det du har øvd siden forrige kjøretime samlet her, klart til å vise fram eller dele.</p>
+      <button type="button" class="btn primary" id="btn-teacher-plus">Se Pluss</button></section>`;
+    $('#btn-teacher-plus').onclick = () => { location.hash = '#/pluss'; };
+    return;
+  }
   await drawSummary($('#teacher-root'), tok, () => renderTeacher());
 }
 
@@ -1168,9 +1210,11 @@ async function renderStudentList() {
           ${x.flags.length ? `<span class="st-flags">${x.flags.filter(f => f.id !== 'none').map(f => `<span class="st-flag ${f.tone}">${esc(f.text)}</span>`).join('')}</span>` : ''}</span>
         ${x.avg !== null ? `<span class="st-score">${scoreBadge(x.avg, 40)}${x.trend ? `<span class="st-trend ${x.trend > 0 ? 'up' : 'down'}">${x.trend > 0 ? '▲' : '▼'} ${Math.abs(x.trend)}</span>` : ''}</span>` : ''}
         ${icon('chev', 18)}</button></li>`).join('')}</ul>
-      <p class="muted small center">${list.length} ${list.length === 1 ? 'elev' : 'elever'}${studentQuery ? ` med «${esc(studentQuery)}»` : ''}. Poengene er snittet av de fem siste turene, og pilen er endringen fra de fem før.</p>`
+      <p class="muted small center">${list.length} ${list.length === 1 ? 'elev' : 'elever'}${studentQuery ? ` med «${esc(studentQuery)}»` : ''}. Poengene er snittet av de fem siste turene, og pilen er endringen fra turene før dem (opptil fem).</p>`
       : `<div class="empty card"><span class="empty-ico">${icon('users', 40)}</span><strong>${studentQuery ? 'Ingen elever med det navnet' : 'Ingen elever ennå'}</strong><span class="muted small">Legg til elevene dine, eller åpne en melding fra en elev.</span></div>`;
-    root.insertAdjacentHTML('beforeend', act.some(x => x.test) ? '<button type="button" class="link center-link" id="btn-test-students-del">Fjern testelevene</button>' : '<button type="button" class="link center-link" id="btn-test-students">Legg inn tre testelever med turer og en melding</button>');
+    // Testelevene (0.18.3): bare når lista er tom eller har testelever, så en lærer med ekte elever ikke får dem ved et uhell
+    root.insertAdjacentHTML('beforeend', act.some(x => x.test) ? '<button type="button" class="link center-link" id="btn-test-students-del">Fjern testelevene</button>'
+      : act.length ? '' : '<button type="button" class="link center-link" id="btn-test-students">Legg inn tre testelever med turer og en melding</button>');
     root.querySelectorAll('.st-row').forEach(b => b.onclick = () => { location.hash = studentHash(b.dataset.name); });
     const t = $('#btn-test-students'), td = $('#btn-test-students-del');
     if (t) t.onclick = async () => { t.disabled = true; t.textContent = 'Lager turer …'; await addTestStudents(); renderStudentList(); };
@@ -1226,12 +1270,15 @@ async function renderStudent(name, opts = {}) {
   const root = $('#teacher-root');
   const rows = await drawSummary(root, tok, () => rerender());
   if (!rows || tok !== teacherSeq) return;
-  // Fremgang: det samme som eleven ser under «Hva må du øve mer på?»
-  const rd = readiness(rows, { plan: planState().mine, theory: theoryForReady() });
+  // Fremgang: det samme som eleven ser under «Hva må du øve mer på?». Teorien bare når eleven har sendt den (0.18.3);
+  // ellers telte lærerens egne tomme teoritall, og eleven kunne aldri bli «klar»
+  const theirTheory = !!(getSettings().theory || {})[name];
+  const rd = readiness(rows, { plan: planState().mine, theory: theirTheory ? theoryForReady() : null });
   $('#st-progress').innerHTML = `<section class="card st-ready lv-${rd.level}"><h2 class="card-title">${icon('flag')}Fremgang</h2>
       <p class="plan-prog"><strong>${rd.done}</strong> av ${rd.counted} punkter på plass før oppkjøringen</p>
       <span class="goal-bar"><span style="width:${rd.counted ? Math.round(rd.done / rd.counted * 100) : 0}%"></span></span>
       ${rd.next.length ? `<ul class="rd-next">${rd.next.slice(0, 3).map(i => `<li>${icon('chev', 18)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.tip)}</span></span></li>`).join('')}</ul>` : '<p class="muted small">Alt appen måler er på plass.</p>'}
+      ${theirTheory ? '' : `<p class="muted small">Teorien til ${esc(name)} er ikke sendt ennå. Den følger med neste melding fra appen (versjon 0.18.3 eller nyere), og telles da med her.</p>`}
     </section>`;
   // Turene til eleven, og avslutningen når opplæringen er ferdig
   const list = rows.slice(0, 12);
@@ -1275,6 +1322,9 @@ async function purgeArchivedStudents() {
 }
 
 async function addTestStudents() {
+  // En ekte elev med samme navn som en testelev skal aldri overskrives (0.18.3)
+  const clash = students(getSettings()).find(x => !x.test && TEST_STUDENTS.some(t => t.name.toLowerCase() === x.name.toLowerCase()));
+  if (clash) { toast(`Du har en elev som heter ${clash.name}, så testelevene legges ikke inn.`, { ms: 3500 }); return; }
   await createTestDrives();
   const cur = getSettings(), list = students(cur).filter(x => !TEST_STUDENTS.some(t => t.name === x.name));
   // En melding fra Emma om den nyeste turen hennes (0.18.0), så samtalen og «Trenger oppfølging» kan prøves
@@ -2289,6 +2339,7 @@ async function finishRecording() {
   if (getSettings().autoSpeak) speakNext = drive.id;
   location.hash = '#/rapport/' + drive.id;
   askForReview(drive);
+  setTimeout(openIncomingFile, 2500);   // en fil som kom under turen (0.18.3)
 }
 
 /* Vurdering i App Store (iPhone-appen, 0.10.1): etter 5., 15. og 40. ekte tur, bare når turen gikk greit
@@ -2496,11 +2547,12 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
         });
         enrich.attemptedAt = new Date().toISOString(); enrich.error = null;
         drive.enrich = enrich;
-        await putDrive(drive);
+        // Bare veidataene lagres (0.18.3): et notat, et merke eller «ta ut» skrevet mens de ble hentet, skal ikke overskrives
+        await updateDrive(id, { enrich });
         if (location.hash === '#/rapport/' + id) await renderDriveReport(id, { keepScroll: true });
       } catch (err) {
         drive.enrich = { ...(drive.enrich || {}), attemptedAt: new Date().toISOString(), error: err.message };
-        await putDrive(drive);
+        await updateDrive(id, { enrich: drive.enrich });
         enriching = false;
         if (location.hash !== '#/rapport/' + id) return;   // brukeren har gått videre
         const yy = window.scrollY;
@@ -2522,7 +2574,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
   } catch (err) {
     if (stale()) return;
     root.innerHTML = `<section class="card"><h2>Ikke nok data</h2><p>${esc(err.message)}</p>
-      <p class="muted">Turen startet ${esc(date(drive.startedAt))}. Rådataene er lagret, så du kan slette turen eller beholde den.</p>
+      <p class="muted">Turen startet ${esc(date(drive.startedAt))}. ${drive.shared ? 'Den kom i en melding uten rådata, så den kan ikke regnes på nytt her. Be om å få den sendt igjen, eller slett den.' : 'Rådataene er lagret, så du kan slette turen eller beholde den.'}</p>
       <button type="button" class="btn danger" id="btn-del-drive">Slett denne turen</button></section>`;
     $('#btn-del-drive').onclick = async () => { if (await confirmDialog({ title: 'Slette turen?', ok: 'Slett', danger: true })) { await deleteDrive(id); toast('Turen er slettet.', { type: 'ok' }); location.hash = '#/'; } };
   }
@@ -2553,7 +2605,7 @@ async function askAbout(drive, r, preset = null) {
       <fieldset class="choice-list"><legend class="muted small">Gjelder</legend>
         ${opt('tur', 'Hele turen')}
         ${r.events.length ? opt('hendelse', 'En hendelse') + `<select id="ask-ev" class="sheet-input" aria-label="Hendelse">${r.events.map(e => `<option value="${e.n}" ${preset && preset.n === e.n ? 'selected' : ''}>${e.n}. ${esc(eventLabel(e))} · ${mss(e.t)}</option>`).join('')}</select>` : ''}
-        ${marks.length ? opt('merke', 'Et merke fra ledsageren') + `<select id="ask-mk" class="sheet-input" aria-label="Merke">${marks.map(m => `<option value="${m.i}">${m.letter}. ${esc(MARK_CATS[m.cat].label)} · ${mss(m.t)}${m.note ? ' · ' + esc(m.note.slice(0, 30)) : ''}</option>`).join('')}</select>` : ''}
+        ${marks.length ? opt('merke', isTeacher() ? 'Et merke' : 'Et merke fra ledsageren') + `<select id="ask-mk" class="sheet-input" aria-label="Merke">${marks.map(m => `<option value="${m.i}">${m.letter}. ${esc((MARK_CATS[m.cat] || { label: 'Merke' }).label)} · ${mss(m.t)}${m.note ? ' · ' + esc(m.note.slice(0, 30)) : ''}</option>`).join('')}</select>` : ''}
         ${opt('strekning', 'En strekning')}
         <div class="ask-range"><label class="field">Fra<input type="range" id="ask-a" min="${t0}" max="${t1}" step="5" value="${a0}"></label>
           <label class="field">Til<input type="range" id="ask-b" min="${t0}" max="${t1}" step="5" value="${b0}"></label>
@@ -2595,14 +2647,14 @@ async function excludeDrive(id, on) {
   if (on) {
     const reason = await formDialog({
       title: 'Ta turen ut av utregningene?',
-      text: 'Poeng, kjørelogg, fremgang, merker og det trafikklæreren ser regnes da uten denne turen. Turen blir liggende, og du kan ta den med igjen.',
+      text: 'Poengene, fremgangen og faresteder regnes da uten denne turen. Tid og km står fortsatt i kjøreloggen, unntatt når noen andre kjørte. Har du alt sendt turen til læreren, ser læreren den som før. Turen blir liggende, og du kan ta den med igjen.',
       ok: 'Ta ut', body: `<fieldset class="choice-list"><legend class="muted small">Hvorfor?</legend>${EXCLUDE_REASONS.map((r, i) => `<label class="mode-opt"><input type="radio" name="exr" value="${i}" ${i === 0 ? 'checked' : ''}><span>${esc(r)}</span></label>`).join('')}</fieldset>`,
       read: dlg => EXCLUDE_REASONS[Number((dlg.querySelector('input[name=exr]:checked') || { value: 0 }).value)]
     });
     if (reason === null) return;
-    d.excluded = { at: new Date().toISOString(), reason };
-  } else delete d.excluded;
-  await putDrive(d);
+    // Bare dette feltet lagres (0.18.3): turen kan ha endret seg mens spørsmålet var åpent
+    await updateDrive(id, { excluded: { at: new Date().toISOString(), reason } });
+  } else await updateDrive(id, { excluded: null });
   toast(on ? 'Turen er tatt ut av utregningene.' : 'Turen er med i utregningene igjen.', { type: 'ok', ms: 2500 });
   if (location.hash === '#/rapport/' + id) await renderDriveReport(id, { keepScroll: true });
 }
@@ -2682,7 +2734,7 @@ async function renderSettings() {
   { const el = $('#perKm'); el.checked = settings.perKm !== false; el.onchange = () => { saveSettings({ ...getSettings(), perKm: el.checked }); toast('Lagret. Turene analyseres på nytt.', { type: 'ok', ms: 2000 }); }; }
   const sel = $('#export-select');
   const drives = await listDrives();
-  sel.innerHTML = drives.length ? drives.map(d => `<option value="${d.id}">${esc(date(d.startedAt))}${d.demo ? ' (demo)' : ''}${d.note ? ' – ' + esc(d.note.slice(0, 30)) : ''}</option>`).join('') : '<option value="">Ingen turer</option>';
+  sel.innerHTML = drives.length ? drives.map(d => `<option value="${esc(d.id)}">${esc(date(d.startedAt))}${d.demo ? ' (demo)' : ''}${d.note ? ' – ' + esc(d.note.slice(0, 30)) : ''}</option>`).join('') : '<option value="">Ingen turer</option>';
   $('#btn-export').disabled = !drives.length;
   $('#btn-export').onclick = () => exportDrive(sel.value);
   $('#persist-status').textContent = window.kjNative ? 'Turene lagres i appen på denne telefonen. De slettes bare hvis du sletter dem selv eller fjerner appen. Ta kopi før du bytter telefon.'
@@ -2712,6 +2764,7 @@ async function renderSettings() {
       if (isPackage(payload)) { await onMessageFile(e.target, r => { location.hash = isTeacher() ? studentHash(r.key) : '#/trafikklaerer'; }); return; }
       const d = await importDrive(payload);
       e.target.value = '';
+      if (!d || !d.id) throw new Error('Filen har ingen tur som kan åpnes.');
       location.hash = '#/rapport/' + d.id;
     } catch (err) {
       infoDialog({ title: 'Kunne ikke importere', text: err.message });
@@ -2719,11 +2772,22 @@ async function renderSettings() {
     }
   };
   $('#btn-reanalyze').onclick = async () => {
-    for (const d of drives) { d.result = null; await putDrive(d); }
+    // Turer fra en melding (shared) har ingen rådata og kan ikke regnes på nytt: analysen deres beholdes (0.18.3)
+    for (const d of drives) if (!d.shared) await updateDrive(d.id, { result: null });
     toast('Alle turer analyseres på nytt når de åpnes.', { type: 'ok' });
   };
   $('#btn-delete-all').onclick = async () => {
     if (await confirmDialog({ title: 'Slette alle turer?', text: 'Alle turer og rådata slettes fra telefonen. Ta en sikkerhetskopi først hvis du vil beholde dem.', ok: 'Slett alt', danger: true })) { await deleteAll(); toast('Alle turer er slettet.', { type: 'ok' }); location.hash = '#/'; }
+  };
+  // Slett alt (0.18.3): «Slett alle turer» lot navn, elever, meldinger, teori, kalibrering og kartbitene ligge igjen
+  $('#btn-wipe-all').onclick = async () => {
+    if (!(await confirmDialog({ title: 'Slette alt i appen?', text: 'Alle turer, navn, elever, meldinger, lekser, teori, kalibrering, innstillinger og lagret kart slettes fra telefonen. Appen blir som ny. Det kan ikke angres.', ok: 'Slett alt', danger: true }))) return;
+    if (recorder && recorder.running) { toast('Stopp turen først.', { ms: 2500 }); return; }
+    await deleteAll();
+    try { for (const k of Object.keys(localStorage)) if (k.startsWith('kjorerapport.')) localStorage.removeItem(k); } catch { /* lagringen er stengt */ }
+    try { await caches.delete('kjorerapport-kart'); } catch { /* ingen cache */ }
+    location.hash = '#/';
+    location.reload();
   };
   // Utvikleralternativ: trykk 7 ganger på versjonsnummeret. I iPhone-appen bare i Xcode og TestFlight
   // (Apple tillater ikke skjulte funksjoner i App Store-utgaven).
@@ -2816,8 +2880,11 @@ function renderThresholdSettings() {
 /* Gjenoppretter en sikkerhetskopi (eller én eksportert tur): turene, og innstillingene hvis brukeren vil */
 async function restoreBackup(payload) {
   const list = Array.isArray(payload.drives) ? payload.drives : [payload];
-  let added = 0, skipped = 0;
-  for (const item of list) { const r = await importDrive(item, { keepId: true }); if (r && r.skipped) skipped++; else added++; }
+  let added = 0, skipped = 0, bad = 0;
+  // Én ødelagt tur (f.eks. stoppet før GPS-en fant posisjonen) skal ikke stoppe resten av kopien (0.18.3)
+  for (const item of list) {
+    try { const r = await importDrive(item, { keepId: true }); if (r && r.skipped) skipped++; else if (r) added++; else bad++; } catch { bad++; }
+  }
   let restoredSettings = false;
   if (payload.settings && typeof payload.settings === 'object' && await confirmDialog({ title: 'Gjenopprette innstillingene også?', text: 'Førere, mål, følsomhet, terskler og andre valg fra sikkerhetskopien erstatter de du har nå.', ok: 'Ja, gjenopprett', cancel: 'Behold mine' })) {
     const cur = getSettings();
@@ -2827,7 +2894,7 @@ async function restoreBackup(payload) {
   }
   // En eldre kopi kan ha elever i arkivet (0.18.0–0.18.1): de har fått lappen og slettes igjen
   const gone = restoredSettings ? await purgeArchivedStudents() : 0;
-  toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}${restoredSettings ? ', og innstillingene' : ''}.${gone ? ` ${gone === 1 ? 'Én elev' : `${gone} elever`} som hadde fått lappen, ble slettet.` : ''}`, { type: 'ok' });
+  toast(`${added} ${added === 1 ? 'tur' : 'turer'} gjenopprettet${skipped ? `, ${skipped} fantes fra før` : ''}${bad ? `, ${bad} uten nok data ble hoppet over` : ''}${restoredSettings ? ', og innstillingene' : ''}.${gone ? ` ${gone === 1 ? 'Én elev' : `${gone} elever`} som hadde fått lappen, ble slettet.` : ''}`, { type: 'ok', ms: 4000 });
   location.hash = '#/';
 }
 
@@ -2836,11 +2903,14 @@ async function restoreBackup(payload) {
 let fileBusy = false;
 async function openIncomingFile() {
   if (fileBusy || !window.kjNative || !window.kjNative.takeFile) return;
-  if (recorder && recorder.running) { toast('Filen åpnes ikke under en tur. Åpne den igjen når turen er stoppet.', { ms: 4000 }); await window.kjNative.takeFile(); return; }
+  // Under en tur venter filen i køen og åpnes når turen er stoppet (0.18.3; før ble den kastet)
+  if (recorder && recorder.running) { toast('Filen åpnes når turen er stoppet.', { ms: 3000 }); return; }
   fileBusy = true;
+  let took = false;
   try {
     const f = await window.kjNative.takeFile();
     if (!f || !f.text) return;
+    took = true;
     let payload;
     try { payload = JSON.parse(f.text); } catch { throw new Error('Filen er ikke en fil fra Kjørerapport.'); }
     if (isPackage(payload)) {
@@ -2853,12 +2923,18 @@ async function openIncomingFile() {
       const n = payload.drives.length;
       if (await confirmDialog({ title: 'Gjenopprette sikkerhetskopien?', text: `Filen har ${n} ${n === 1 ? 'tur' : 'turer'}${payload.exportedAt ? ` fra ${date(payload.exportedAt)}` : ''}. Turer du har fra før, blir ikke doble.`, ok: 'Gjenopprett' })) await restoreBackup(payload);
     } else if (payload && (payload.input || payload.loc || payload.sharedDrive)) {
-      const d = await importDrive(payload);
-      toast('Turen er importert.', { type: 'ok', ms: 2000 });
+      // Samme fil åpnet to ganger blir ikke to turer (0.18.3)
+      const d = await importDrive(payload, { keepId: true });
+      if (!d || !d.id) throw new Error('Filen har ingen tur som kan åpnes.');
+      toast(d.skipped ? 'Turen fantes fra før.' : 'Turen er importert.', { type: 'ok', ms: 2000 });
       location.hash = '#/rapport/' + d.id;
     } else throw new Error('Filen er ikke en melding, tur eller sikkerhetskopi fra Kjørerapport.');
   } catch (err) { infoDialog({ title: 'Kunne ikke åpne filen', text: err.message }); }
-  finally { fileBusy = false; }
+  finally {
+    fileBusy = false;
+    // Flere filer på rad (0.18.3): iPhone-appen holder dem i kø, så neste hentes når denne er ferdig
+    if (took) setTimeout(openIncomingFile, 600);
+  }
 }
 
 async function exportDrive(id) {
@@ -3128,7 +3204,9 @@ function init() {
     if (location.hash.startsWith('#/trafikklaerer') || location.hash.startsWith('#/elev/')) route();
   }).catch(() => {});
   // Motorveier for eldre turer (0.18.0): sidene som viser veityper tegnes på nytt når de er hentet
-  setTimeout(() => backfillMotorways().then(n => { if (n && ['#/logg', '#/klar', '#/trafikklaerer', '#/fremgang'].includes(location.hash) && !(recorder && recorder.running)) route(); }).catch(() => {}), 4000);
+  // Ikke mens noe skrives: da ville meldingen i skrivefeltet forsvinne (0.18.3)
+  const typing = () => { const t = document.getElementById('msg-text'); return !!t && (document.activeElement === t || !!t.value.trim()); };
+  setTimeout(() => backfillMotorways().then(n => { if (n && ['#/logg', '#/klar', '#/trafikklaerer', '#/fremgang'].includes(location.hash) && !(recorder && recorder.running) && !typing()) route(); }).catch(() => {}), 4000);
 }
 
 /* Testlenke (0.17.0): …/kjorerapport/?kamera=vei slår på bare veikameraet i nettversjonen, så en tester får teori og

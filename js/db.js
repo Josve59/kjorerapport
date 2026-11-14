@@ -93,26 +93,46 @@ export async function updateDrive(id, patch) {
   return d;
 }
 
+/* Analysen i en tur fra en fil (0.18.3): den er laget på en annen telefon og kan være ødelagt eller endret. Tall må være
+   tall og lister må være lister, så rapporten verken krasjer eller viser tekst fra filen som HTML. Null hvis den er ubrukelig. */
+const finOr = (v, d = 0) => (Number.isFinite(v) ? v : d);
+export function cleanResult(r) {
+  if (!r || typeof r !== 'object' || !Array.isArray(r.points) || r.points.length < 2) return null;
+  const points = r.points.filter(p => p && Number.isFinite(p.t) && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  if (points.length < 2) return null;
+  const arr = v => (Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : []);
+  const scores = r.scores && typeof r.scores === 'object' ? r.scores : {};
+  return { ...r, points,
+    events: arr(r.events).map((e, i) => ({ ...e, n: Number.isFinite(e.n) ? e.n : i + 1, t: finOr(e.t), kind: typeof e.kind === 'string' && /^[a-z_]{1,20}$/.test(e.kind) ? e.kind : 'brake' })),
+    overall: Math.round(Math.min(100, Math.max(0, finOr(r.overall)))), overallBase: Math.round(Math.min(100, Math.max(0, finOr(r.overallBase, finOr(r.overall))))),
+    scores: Object.fromEntries(['brake', 'accel', 'turn', 'smooth'].map(k => [k, Math.round(Math.min(100, Math.max(0, finOr(scores[k], 100))))])),
+    stats: r.stats && typeof r.stats === 'object' ? r.stats : { km: 0, duration: 0 }, counts: r.counts && typeof r.counts === 'object' ? r.counts : {} };
+}
+
 /* Tur fra en melding (0.18.0): eleven sender analysen og veidataene, ikke rådataene. Hos læreren hører den til eleven
    (driver) og regnes med som en ekte tur (shared). Finnes turen fra før, oppdateres den. */
 export async function importSharedDrive(sd, { from = '', at = new Date().toISOString(), driver = null } = {}) {
-  if (!sd || typeof sd.id !== 'string' || !sd.result || !Array.isArray(sd.result.points)) return null;
+  if (!sd || typeof sd.id !== 'string' || !/^[\w.:-]{1,80}$/.test(sd.id) || !sd.result || !Array.isArray(sd.result.points)) return null;
   const old = await getDrive(sd.id);
   if (old && !old.shared) return old;   // en egen tur med rådata overskrives aldri
+  const result = cleanResult(sd.result);
+  if (!result) return null;
   const drive = {
     ...(old || {}),
     id: sd.id, startedAt: typeof sd.startedAt === 'string' && !isNaN(Date.parse(sd.startedAt)) ? sd.startedAt : new Date().toISOString(),
     endedAt: sd.endedAt || null, status: 'done', imported: false, demo: false,
-    driver: String(driver !== null ? driver : (from || sd.driver || '')).slice(0, 40),   // hos eleven: '' (egne turer)
+    // Sendt på nytt (0.18.3): en tur mottakeren har flyttet til en annen elev, blir der
+    driver: old ? (old.driver || '') : String(driver !== null ? driver : (from || sd.driver || '')).slice(0, 40),   // hos eleven: '' (egne turer)
     note: typeof sd.note === 'string' ? sd.note.slice(0, 500) : '',
     marks: Array.isArray(sd.marks) ? sd.marks.filter(m => m && Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
     focus: Array.isArray(sd.focus) ? sd.focus.filter(x => typeof x === 'string').slice(0, 3) : [], surface: typeof sd.surface === 'string' ? sd.surface.slice(0, 10) : '',
-    ...(sd.noFace ? { noFace: true } : {}), result: sd.result, resultKey: 'delt', enrich: sd.enrich && typeof sd.enrich === 'object' ? sd.enrich : null,
+    ...(sd.noFace ? { noFace: true } : {}), result, resultKey: 'delt', enrich: sd.enrich && typeof sd.enrich === 'object' ? sd.enrich : null,
     cameraPlan: sd.cameraPlan && typeof sd.cameraPlan === 'object' ? sd.cameraPlan : null,
     shared: { from: String(from || '').slice(0, 40), at }, counts: { loc: sd.result.points.length }, appVersion: 3
   };
+  // Holdt utenfor hos avsenderen, eller av mottakeren selv (0.18.3: mottakerens valg blir stående når turen kommer på nytt)
   if (sd.excluded && typeof sd.excluded === 'object') drive.excluded = { at: String(sd.excluded.at || ''), reason: String(sd.excluded.reason || '').slice(0, 80) };
-  else delete drive.excluded;
+  else if (!(old && old.excluded)) delete drive.excluded;
   await putDrive(drive);
   return drive;
 }

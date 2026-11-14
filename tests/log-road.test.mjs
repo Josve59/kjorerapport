@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sunAltitude, lightClass, roadClass, driveLog, sumLogs } from '../js/log.js';
+import { sunAltitude, lightClass, roadClass, driveLog, sumLogs, STILL_MAX } from '../js/log.js';
 import { evaluateRoad, parsePoint, matchMotorway } from '../js/enrich.js';
 import { analyze, makeDemo } from '../js/analysis.js';
 
@@ -61,6 +61,18 @@ test('tunnel: et GPS-hull med mulig fart telles i loggen (0.18.0)', () => {
   // Bilen står 4 min uten GPS og flytter seg 50 m (parkeringshus): telles ikke
   const park = [{ t: 0, lat: 63.3, lon: 10.4, kmh: 0 }, { t: 240, lat: 63.3 + 50 / 111320, lon: 10.4, kmh: 5 }];
   assert.equal(driveLog({ points: park, t0: 0 }, Date.UTC(2026, 10, 14, 12)).total.sec, 0);
+});
+
+test('parkert med opptaket på teller ikke som øving, kø gjør (0.18.3)', () => {
+  // 60 s i 50 km/t, så 30 min stille, så 60 s i 50 km/t
+  const pts = []; let lat = 63.3, t = 0;
+  const go = (n, kmh) => { for (let i = 0; i < n; i++) { lat += kmh / 3.6 / 111320; pts.push({ t: t++, lat, lon: 10.4, kmh }); } };
+  go(60, 50); go(1800, 0); go(60, 50);
+  const log = driveLog({ points: pts, t0: 0 }, Date.UTC(2026, 10, 14, 12), pts.map(() => 50));
+  near(log.total.sec, 60 + STILL_MAX + 60, 3, 'bare de første 5 minuttene av stansen');
+  // En kø på 2 min teller helt
+  pts.length = 0; t = 0; go(60, 50); go(120, 1); go(60, 50);
+  near(driveLog({ points: pts, t0: 0 }, Date.UTC(2026, 10, 14, 12), pts.map(() => 50)).total.sec, 239, 2, 'køen er med');
 });
 
 test('kjørelogg for demoturen om natta og om dagen', () => {

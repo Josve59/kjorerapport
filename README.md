@@ -142,6 +142,66 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.18.3 – fixes from a critic review of the whole app
+
+Four critic agents went over the app as companion and learner, driving teacher and school, insurer and privacy, and as a pure bug hunt. Everything below was checked in the code before it was fixed.
+- **Data that could be lost:**
+  - «Analyser alle turer på nytt» erased the analysis of drives received in a message (they have no raw data). Those drives are now skipped.
+  - One drive without GPS points stopped a whole backup restore, settings included. Each drive is now tried on its own, and the toast says how many were skipped.
+  - A note, a mark comment or «ta ut» written while road data was being fetched was overwritten. Only the road data is saved now (`updateDrive`).
+  - A drive sent again no longer undoes the receiver's choices: a drive moved to another learner stays there, and «holdt utenfor» stays.
+  - A message file that arrived during a drive was thrown away. It now waits and opens when the drive stops. Several files in a row are queued in the iPhone app (`NativeRecorder.pendingFiles`).
+  - The background road-type update no longer redraws the page while a message is being typed.
+- **Files from others are checked:** the analysis in a received drive is cleaned before it is stored (`cleanResult` in `js/db.js`). Numbers must be numbers and event types must be known, so a damaged or edited file cannot crash the report or put HTML into it.
+- **The teacher finds the right learner:**
+  - Each learner's phone makes a random ID once and sends it with every message. The teacher's app matches on it, then on the name without caring about capital letters (`matchStudent`). Before, «emma» against «Emma» put the message where nobody could see it.
+  - When the app can't tell, the teacher picks the learner from a list or adds a new one, and the ID is remembered.
+  - The learner's theory progress is sent with the message, so the teacher's «Fremgang» counts theory and the safety check. Without it, those points are left out instead of counting as 0, which made a learner look never ready.
+  - «Venter på svar» stays on a learner until the teacher answers, not only until the message is read.
+  - The test learners are never put over real learners with the same name, and the link only shows on an empty list.
+  - «Timen er ferdig» saves the time, not just the day, so the lesson itself no longer counts as practice since the lesson.
+  - Teacher wording: Home shows the chosen learner's card, the plan says «Hakene er satt av deg», and marks are «Merker og notater fra turene».
+- **The conversation with the teacher is free.** A learner without Pluss could ask but not read the answer. «Til trafikklæreren» is no longer locked; only the practice summary on that page is Pluss.
+- **Report and score:**
+  - The headline is worked out from the driving part. Too much speed is named («…, men for høy fart»).
+  - «Rolig og trygg kjøring» is now «Rolig og jevn kjøring», because the score measures smoothness, not whether the rules are followed.
+  - Before, ten minutes over the limit counted like 16 seconds. A long period over the limit now counts more, up to 8 times at about 3 minutes (`durFactor` in `js/speedfit.js`).
+  - The «Fartsgrenser» card no longer shows a second score that did not count. «Slik måles det» explains the real «Fart» part.
+  - «Speil og skulderblikk» and «Feltskifte» as daily goals use the driver camera. They are not «Nådd» when nothing was measured.
+  - A received drive no longer shows the teacher's sensitivity.
+- **Driving log:**
+  - A drive taken out because the measurements went wrong still counts with its time and km. Only «Noen andre kjørte» takes it out of the log. Hotspots and the drive list still leave it out.
+  - Standstill longer than 5 minutes no longer counts as practice (`STILL_MAX` in `js/log.js`). A parked car with the recording on used to count fully, while queues still count.
+- **Privacy:**
+  - «Slett alt i appen» deletes drives, names, learners, messages, theory, calibration, settings and the saved map tiles. «Slett alle turer» kept all of that.
+  - Camera frames from the iPhone app's local server need a key made at each launch (`WebServer.camKey`, given to the page as `window.__kjCamKey`). Other apps on the phone could otherwise fetch the driver camera picture during a drive.
+  - The privacy page is updated:
+    - the small road-data query during driving (about 130 × 130 m),
+    - other road users in the road camera,
+    - «Testbilder» in the hidden developer part,
+    - what each delete button removes,
+    - the learner ID and the theory in messages.
+  - The location permission text mentions Statens vegvesen and Kartverket.
+- **Smaller fixes:**
+  - Return in a name field means OK, not Cancel (Cancel is `type="button"`).
+  - Message times are stored as UTC, so the conversation sorts right.
+  - «N nye meldinger» counts only new ones.
+  - An empty homework list from the teacher removes the homework instead of showing an empty card.
+  - A received drive that fails to analyse no longer claims «Rådataene er lagret».
+  - The track safety course moved from stage 4 to stage 3 («Sikkerhetskurs på øvingsbane»), as Statens vegvesen has it.
+  - Wrong setting names in tips («Veidata», «Innstillinger › Data») and the intro and school pages: the app does beep before speed cameras and at high speed.
+  - The test school has an invented name.
+  - The App Store notes say the age-rating answers about messaging must be checked.
+- **Tested:**
+  - All 254 unit tests pass. New tests cover learner matching, the package ID and theory, «Venter på svar», `cleanResult`, the headline, mirror goals, the speed duration and the standstill limit.
+  - In the browser at phone width:
+    - a teacher message from «emma» went straight to Emma with her theory;
+    - an unknown learner was added with Return;
+    - the conversation opened without Pluss, with the summary locked;
+    - «Slett alt i appen» is in place;
+    - no script errors.
+- **Not tested:** the camera key and the file queue on the phone (built, not driven), and «Slett alt i appen» was not pressed.
+
 ## What's new in 0.18.2 – a learner who has passed is deleted at once
 
 The owner decided (14 Nov 2026) that nothing about a learner stays on the teacher's phone after the driving licence or the end of the training. The archive from 0.18.0 is gone.

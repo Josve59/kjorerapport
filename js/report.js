@@ -78,6 +78,14 @@ export function laneTruth(laneChanges, marks) {
   return { marked: felt.length, found: hits.filter(Boolean).length, extra: hits.filter(h => !h).length, hits, missed: felt.filter((_, i) => !used.has(i)) };
 }
 
+/* Overskriften (0.18.3): ordene fra rating() beskriver hvor jevnt det kjøres, så de regnes av kjøredelen. Trekker farten
+   mye, sies det også: før kunne en tur med ti minutter langt over grensen hete «Rolig og trygg kjøring». */
+export function headline(r) {
+  const base = Number.isFinite(r.overallBase) ? r.overallBase : r.overall, words = rating(base);
+  if (!r.speed || !Number.isFinite(r.speed.score) || r.speed.score >= 85) return words;
+  return `${words}, ${base >= 75 ? 'men' : 'og'} ${r.speed.score >= 65 ? 'litt for høy fart' : 'for høy fart'}`;
+}
+
 /* Ledsagerens merker med fart og tid relativt til rapporten. */
 export function markRows(marks, r) {
   return (marks || []).map((m, i) => {
@@ -95,7 +103,7 @@ export function eventsPer10km(r) {
 export function buildSummary(r, ctx = {}) {
   const lines = [];
   lines.push(`Kjørerapport${ctx.subtitle ? ' – ' + ctx.subtitle : ''}${ctx.driver && !(ctx.subtitle || '').includes(ctx.driver) ? ' – ' + ctx.driver : ''}`);
-  lines.push(`Poeng: ${r.overall} – ${rating(r.overall)}`);
+  lines.push(`Poeng: ${r.overall} – ${headline(r)}`);
   lines.push(`Distanse ${km(r.stats.km)} · Tid ${duration(r.stats.duration)} · Snittfart ${kmh(r.stats.avgKmh)} · Toppfart ${kmh(r.stats.maxKmh)}`);
   lines.push(`Bremsing ${r.scores.brake} · Akselerasjon ${r.scores.accel} · Svinger ${r.scores.turn} · Jevn fart ${r.scores.smooth}${r.speed ? ` · Fart ${r.speed.score}` : ''}`);
   const names = ctx.enrich && ctx.enrich.names ? ctx.enrich.names : { events: {}, marks: {} };
@@ -188,7 +196,7 @@ export function renderReport(root, r, ctx = {}) {
     <section class="hero card">
       ${scoreRing(r.overall)}
       <div class="hero-text">
-        <p class="rating">${esc(rating(r.overall))}</p>
+        <p class="rating">${esc(headline(r))}</p>
         ${prevScore !== null && r.overall !== prevScore ? `<p class="delta-pill ${r.overall > prevScore ? 'up' : r.overall < prevScore ? 'down' : ''}">${r.overall > prevScore ? '▲ ' + (r.overall - prevScore) : r.overall < prevScore ? '▼ ' + (prevScore - r.overall) : '='} fra forrige tur (${n0(prevScore)})</p>` : ''}
         ${qualitySev >= 2 ? `<p class="hero-warn">${icon('warn', 18)}<span>${esc(quality.find(q => q.sev >= 2).text)}</span></p>` : ''}
       </div>
@@ -311,7 +319,6 @@ export function renderReport(root, r, ctx = {}) {
     ${sp ? `<section class="card" id="limits-section">
       <h2 class="card-title">${icon('speed')}Fartsgrenser</h2>
       <p class="muted small">Fra Statens vegvesen (NVDB). Teller når farten er minst 4 km/t over grensen i minst 3 sekunder. Tiden over grensen teller med i «Fart» i poengene.</p>
-      <div class="bars">${scoreBar('limits', sp.score, null)}</div>
       <dl class="stats limits-stats">
         <div><dt>Over grensen</dt><dd>${n0(sp.secondsOver)} s</dd></div>
         <div><dt>Mest over</dt><dd>${sp.maxOver >= 4 ? '+' + n0(sp.maxOver) + ' km/t' : '–'}</dd></div>
@@ -372,8 +379,8 @@ export function renderReport(root, r, ctx = {}) {
           <p><strong>Feltskifter</strong> finnes i GPS-sporet (sideforflytning på 2,5–5 m) og bekreftes med gyroskopet. Under 45 km/t og der veien svinger ujevnt telles de ikke, så noen kan mangle.</p>
           ${r.perKm ? `<p><strong>Poengene er justert for distanse:</strong> trekk regnes per 10 km${r.kmFactor > 1.01 ? ', og turer under 5 km regnes som 5 km' : ''}.</p>` : ''}
           <p>Hendelser som ligger mindre enn to sekunder fra hverandre slås sammen til én. Poengsummen trekker mest for kraftige hendelser. Kjøredelen vekter bremsing 30 %, svinger 25 %, jevn fart 25 % og akselerasjon 20 %. Når fartsgrensene er hentet, teller kjøringen 60 % og farten 40 % av totalen.</p>
-          ${sp ? `<p><strong>Fartsgrenser</strong> hentes fra Statens vegvesen etter turen. Hvert GPS-punkt kobles til nærmeste fartsgrensestrekning innen 25 m, så i kryss og ved avkjøringer kan grensen bomme et sekund eller to. Poeng: 100 minus 1,5 per sekund over grensen, minus 10 per episode med 10 km/t eller mer over.</p>` : ''}
-          <p>Følsomhet: ${esc(ctx.sensitivityLabel || 'Normal')}.</p>
+          ${sp ? `<p><strong>Fartsgrenser</strong> hentes fra Statens vegvesen etter turen. Hvert GPS-punkt kobles til nærmeste fartsgrensestrekning innen 25 m, så i kryss og ved avkjøringer kan grensen bomme et sekund eller to. «Fart» i poengene: hver periode over grensen trekker 4 poeng (under 10 km/t over), 8 (10–19 km/t over) eller 13 (20 km/t eller mer over). Det gjelder en periode på 8 sekunder: kortere trekker mindre (ned til halvparten), lengre trekker mer (opptil åtte ganger, etter drøye 3 minutter). For høy fart over en bakketopp trekker 4 eller 8. Trekket regnes per 10 km, og turer under 5 km regnes som 5 km.</p>` : ''}
+          <p>Følsomhet: ${ctx.shared ? 'som på telefonen turen kom fra' : esc(ctx.sensitivityLabel || 'Normal')}.</p>
         </div>
       </details>
     </section>
@@ -384,7 +391,7 @@ export function renderReport(root, r, ctx = {}) {
       ${ctx.talk ? `<button type="button" class="btn secondary" id="btn-talk-ask2">${icon('mail', 20)}${esc(ctx.talk.ask)}</button>
       <p class="muted small">${ctx.talk.mine === 'laerer' ? 'Skriv om hele turen, en hendelse eller en strekning. Eleven får det som en melding og ser det her i rapporten.' : 'Spør om hele turen, en hendelse eller en strekning. Læreren får turen med meldingen.'}</p>` : ''}
       ${ctx.onExclude ? `<button type="button" class="btn secondary" id="btn-exclude">${icon(ctx.excluded ? 'check' : 'close', 20)}${ctx.excluded ? 'Regn med turen igjen' : 'Ta turen ut av utregningene'}</button>
-      <p class="muted small">${ctx.excluded ? 'Turen er holdt utenfor poeng, kjørelogg, fremgang og det trafikklæreren ser.' : 'Gikk noe galt, for eksempel med kalibreringen, eller kjørte noen andre? Da regner poeng, kjørelogg, fremgang og det trafikklæreren ser uten denne turen. Turen blir liggende og kan tas med igjen.'}</p>` : ''}
+      <p class="muted small">${ctx.excluded ? 'Turen er holdt utenfor poengene, fremgangen og faresteder. Tid og km står fortsatt i kjøreloggen, unntatt når noen andre kjørte.' : 'Gikk noe galt, for eksempel med kalibreringen, eller kjørte noen andre? Da regner poeng, kjørelogg, fremgang og det trafikklæreren ser uten denne turen. Turen blir liggende og kan tas med igjen.'}</p>` : ''}
       ${onDelete ? `<button type="button" class="btn danger" id="btn-delete-drive">${icon('trash', 20)}Slett denne turen</button>` : ''}
     </section>` : ''}
     ${feedbackHref ? `<a class="btn secondary feedback-btn" href="${esc(feedbackHref)}">${icon('mail', 20)}Stemte rapporten? Si fra</a>` : ''}
@@ -574,6 +581,7 @@ function nextPracticeCard(items) {
 export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], log = null }) {
   const out = [];
   const man = r.maneuvers || { laneChanges: [], roundabouts: [] };
+  const cam = r.camera && r.camera.calibrated && Array.isArray(r.camera.lane) ? r.camera : null;   // førerkameraet (0.18.3)
   const rbs = road && road.roundabouts && (road.roundabouts.length || road.fromNvdb) ? road.roundabouts : man.roundabouts;
   for (const id of focus || []) {
     const def = FOCUS.find(f => f.id === id);
@@ -602,8 +610,10 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
       if (!lc.length) res.text = 'Ingen feltskifter funnet';
       else {
         const flagged = lc.filter(l => marks.some(m => ['speil', 'skulder', 'blink'].includes(m.cat) && m.t >= l.tFrom - 10 && m.t <= l.tTo + 10));
-        res.state = flagged.length ? 'no' : 'ok';
-        res.text = `${lc.length} ${lc.length === 1 ? 'feltskifte' : 'feltskifter'}${flagged.length ? `, ledsageren merket ${flagged.length}` : ', ingen merknader fra ledsager'}`;
+        // Førerkameraet teller også (0.18.3): et feltskifte uten speilblikk er ikke «nådd» bare fordi ingen trykket
+        const missed = cam ? cam.lane.filter(l => l.mirror === false).length : 0;
+        res.state = flagged.length || missed ? 'no' : 'ok';
+        res.text = `${lc.length} ${lc.length === 1 ? 'feltskifte' : 'feltskifter'}${flagged.length ? `, ledsageren merket ${flagged.length}` : missed ? `, kameraet så ikke speilblikk før ${missed}` : cam ? ', speilblikk sett' : ', ingen merknader fra ledsager'}`;
       }
     } else if (id === 'junction') {
       const stops = road ? road.stops : [], gw = road ? road.giveway : [];
@@ -616,9 +626,14 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
         res.text = [stops.length ? `${stops.length} stoppskilt${rolled ? `, ${rolled} uten helt stopp` : ', helt stopp ved alle'}` : '', gw.length ? `${gw.length} vikepliktkryss${fast ? `, ${fast} med høy fart inn` : ''}` : ''].filter(Boolean).join(' · ');
       }
     } else if (id === 'mirror') {
+      // Uten merker og uten førerkamera er ingenting målt (0.18.3): da står målet uten dom, ikke som «Nådd»
       const n = markCount(marks, ['speil', 'skulder']);
-      res.state = n ? 'no' : 'ok';
-      res.text = n ? `Ledsageren merket speil eller skulder ${n === 1 ? 'én gang' : n + ' ganger'}` : 'Ingen merknader fra ledsager';
+      const missed = cam ? cam.lane.filter(l => l.mirror === false).length : 0, seen = cam ? cam.lane.filter(l => l.mirror).length : 0;
+      res.state = n || missed ? 'no' : seen ? 'ok' : 'na';
+      res.text = n ? `Ledsageren merket speil eller skulder ${n === 1 ? 'én gang' : n + ' ganger'}`
+        : missed ? `Kameraet så ikke speilblikk før ${missed === 1 ? 'ett feltskifte' : missed + ' feltskifter'}`
+        : seen ? `Speilblikk sett før ${seen === 1 ? 'ett feltskifte' : seen + ' feltskifter'}`
+        : 'Ingen merknader fra ledsager. Med førerkameraet ser appen speilblikkene selv.';
     } else if (id === 'dark') {
       const min = log ? Math.round(log.light.dark / 60) : 0;
       res.state = min >= 15 ? 'ok' : min > 0 ? 'no' : 'na';
@@ -914,7 +929,7 @@ function setupReplay(root, r, map) {
 /* Kort tekst for opplesning etter turen. */
 export function spokenSummary(r, { focusResults = [], marks = [], sp = null } = {}) {
   const parts = [];
-  parts.push(`Turen er ferdig. ${r.overall} poeng. ${rating(r.overall)}.`);
+  parts.push(`Turen er ferdig. ${r.overall} poeng. ${headline(r)}.`);
   parts.push(`${km(r.stats.km)} på ${duration(r.stats.duration)}.`);
   parts.push(r.events.length ? `${r.events.length === 1 ? 'Én hendelse' : r.events.length + ' hendelser'}.` : 'Ingen brå hendelser.');
   const good = ['brake', 'accel', 'turn', 'smooth'].filter(k => r.scores[k] >= 90).map(k => CATS[k].toLowerCase());

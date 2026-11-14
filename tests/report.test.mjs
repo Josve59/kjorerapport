@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { analyze, makeDemo } from '../js/analysis.js';
-import { buildSummary, eventsPer10km, eventLabel } from '../js/report.js';
+import { buildSummary, eventsPer10km, eventLabel, headline, evaluateFocus } from '../js/report.js';
 
 const r = analyze(makeDemo());
 
@@ -47,4 +47,22 @@ test('fasit for feltskifter: ledsagerens merker kobles til funne feltskifter', a
   assert.equal(f.missed[0].t, 200);
   assert.equal(laneTruth(lc, [{ t: 110, cat: 'annet' }]), null, 'uten fasitmerker ingen sammenligning');
   assert.equal(laneTruth(lc, [{ t: 110, cat: 'felt' }, { t: 111.5, cat: 'felt' }]).marked, 1, 'dobbelttrykk teller én gang');
+});
+
+test('overskriften regnes av kjøringen og sier fra om for høy fart (0.18.3)', () => {
+  assert.equal(headline({ overall: 90, overallBase: 100, speed: { score: 74 } }), 'Rolig og jevn kjøring, men litt for høy fart');
+  assert.equal(headline({ overall: 60, overallBase: 100, speed: { score: 0 } }), 'Rolig og jevn kjøring, men for høy fart');
+  assert.equal(headline({ overall: 72, overallBase: 60, speed: { score: 95 } }), 'Ujevn kjøring', 'god fart, ujevn kjøring');
+  assert.equal(headline({ overall: 50, overallBase: 50, speed: { score: 50 } }), 'Mye brå kjøring, og for høy fart');
+  assert.equal(headline({ overall: 95 }), 'Rolig og jevn kjøring', 'uten fartsdel: som før, men «jevn» i stedet for «trygg»');
+});
+
+test('speil og skulderblikk er ikke «nådd» når ingenting er målt (0.18.3)', () => {
+  const base = { ...r, maneuvers: { laneChanges: [], roundabouts: [] } };
+  const none = evaluateFocus(['mirror'], { r: base })[0];
+  assert.equal(none.state, 'na');
+  const cam = evaluateFocus(['mirror'], { r: { ...base, camera: { calibrated: true, lane: [{ t: 10, mirror: false }, { t: 50, mirror: true }] } } })[0];
+  assert.equal(cam.state, 'no', 'kameraet så et feltskifte uten speilblikk');
+  const ok = evaluateFocus(['mirror'], { r: { ...base, camera: { calibrated: true, lane: [{ t: 50, mirror: true }] } } })[0];
+  assert.equal(ok.state, 'ok');
 });

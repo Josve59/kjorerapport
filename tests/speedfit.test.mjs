@@ -1,7 +1,7 @@
 /* js/speedfit.js: fart etter forholdene (0.13.13) – bakketopper fra rotasjonssensoren og fartsdelen av poengene */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { crestSpeed, speedScore, totalScore, stopSpeed, crestSight } from '../js/speedfit.js';
+import { crestSpeed, speedScore, totalScore, stopSpeed, crestSight, durFactor } from '../js/speedfit.js';
 
 /* En oppdiktet tur: telefonen står rett opp (tyngden langs −y), kjøreretningen er −z. Bilen kjører v m/s og går
    over en topp med radius R etter 60 s. Først litt gass og brems, så appen finner kjøreretningen. */
@@ -71,4 +71,13 @@ test('fartsdelen: trekk for tid over grensen og for bakketopper, per 10 km', () 
   assert.deepEqual([s.over, s.crests], [4, 3]);
   // Bare bakketopper (fartsgrensene ikke hentet): den delen teller alene
   assert.equal(speedScore({ crest: { crests: [] }, km: 10 }).over, null);
+});
+
+test('lange perioder over grensen trekker mer enn korte (0.18.3)', () => {
+  assert.equal(durFactor(8), 1); assert.equal(durFactor(16), 2); assert.equal(durFactor(2), 0.5);
+  assert.ok(durFactor(60) > durFactor(16), 'ett minutt teller mer enn 16 s');
+  assert.equal(durFactor(600), 8, 'tak ved drøye 3 minutter');
+  const short = speedScore({ speeding: { episodes: [{ tFrom: 0, tTo: 16, over: 15 }] }, km: 10 }).score;
+  const long = speedScore({ speeding: { episodes: [{ tFrom: 0, tTo: 600, over: 15 }] }, km: 10 }).score;
+  assert.ok(long < short - 30, `10 min over grensen (${long}) skal trekke mye mer enn 16 s (${short})`);
 });

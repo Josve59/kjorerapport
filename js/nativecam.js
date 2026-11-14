@@ -61,7 +61,8 @@ export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
     const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const limit = ctl ? setTimeout(() => ctl.abort(), 2500) : null;
     try {
-      const r = await fetch(`/cam/${facing}.jpg?after=${seq}&q=${quality}${max ? '&max=' + max : ''}${gamma < 0.99 ? '&g=' + gamma : ''}`, { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
+      // k: nøkkelen fra iPhone-appen (0.18.3), så bare appen selv kan hente bildene
+      const r = await fetch(`/cam/${facing}.jpg?after=${seq}&q=${quality}${max ? '&max=' + max : ''}${gamma < 0.99 ? '&g=' + gamma : ''}&k=${encodeURIComponent(window.__kjCamKey || '')}`, { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
       if (r.status === 200) {
         const age = Number(r.headers.get('X-Age')) || 0;
         const s = Number(r.headers.get('X-Seq'));
