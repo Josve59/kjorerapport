@@ -200,7 +200,8 @@ Four critic agents went over the app as companion and learner, driving teacher a
     - the conversation opened without Pluss, with the summary locked;
     - «Slett alt i appen» is in place;
     - no script errors.
-- **Not tested:** the camera key and the file queue on the phone (built, not driven), and «Slett alt i appen» was not pressed.
+- **On the phone:** the camera key was checked with a test script started from the Mac. With the key, a camera picture came back (200). Without the key, or with a wrong one, the server refused (403).
+- **Not tested:** the file queue on the phone, a real drive with 0.18.3, and pressing «Slett alt i appen».
 
 ## What's new in 0.18.2 – a learner who has passed is deleted at once
 
