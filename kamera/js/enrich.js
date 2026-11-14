@@ -21,6 +21,9 @@ const SIGNAL = { type: 89 };      // signalanlegg (lyskryss), strekning
 // metreringsretningen, så «Med metreringsretning» betyr samme vei som linjen (sjekket mot E6/E14 ved Trondheim).
 const ATK_POINT = { type: 162 };
 const ATK_SECTION = { type: 823 };
+// 0.18.0: motorveg (595), egenskap Motorvegtype 5378: «Motorveg» eller «Motortrafikkveg». Rundt Trondheim har det
+// meste av E6 og E39 80 eller 70 km/t, så fartsgrensen alene ga for lite motorvei i kjøreloggen.
+const MOTORWAY = { type: 595 };
 const KARTVERKET = 'https://ws.geonorge.no/adresser/v1/punktsok';
 const CLIENT = 'Kjorerapport PWA (github.com/Josve59/kjorerapport)';
 const MATCH_M = 25;            // maks avstand fra GPS-punkt til fartsgrensestrekning
@@ -289,6 +292,49 @@ export async function fetchSpeedLimitSegments(points, onProgress = () => {}, sig
     onProgress(done / boxes.length);
   });
   return segments;
+}
+
+/* Motorvei og motortrafikkvei langs ruten (0.18.0): [{ limit: 1 (motorveg) | 2 (motortrafikkveg), pts }].
+   «limit» er bare et tall matchLimits kan bruke, ikke en fartsgrense. */
+export async function fetchMotorwaySegments(points, signal) {
+  const boxes = routeBoxes(points);
+  const segments = [], seen = new Set();
+  await pool(boxes, 4, async b => {
+    const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
+    let url = `${NVDB_BASE}/${MOTORWAY.type}?kartutsnitt=${box}&srid=4326&inkluder=egenskaper,geometri&segmentering=true&antall=500`;
+    for (let page = 0; page < 5 && url; page++) {
+      const data = await nvdbPage(url, signal);
+      for (const o of data.objekter || []) {
+        const key = `${o.id}:${String(o.geometri && o.geometri.wkt || '').slice(0, 80)}`;   // samme strekning fra to utsnitt
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const kind = ((o.egenskaper || []).find(x => x.id === 5378) || {}).verdi;
+        // MULTILINESTRING har ett løp per kjøreretning: hver del blir en egen strekning
+        for (const m of String(o.geometri && o.geometri.wkt || '').matchAll(/\(([^()]+)\)/g)) {
+          const pts = parseLines(`(${m[1]})`);
+          if (pts.length > 1) segments.push({ limit: kind === 'Motortrafikkveg' ? 2 : 1, pts });
+        }
+      }
+      const md = data.metadata || {};
+      url = md.returnert && md.returnert >= (md.sidestørrelse || 500) && md.neste && md.neste.href ? md.neste.href : null;
+    }
+  });
+  return segments;
+}
+
+/* Motorvei per GPS-punkt: 1 motorvei, 2 motortrafikkvei, 0 annen vei. Bare strekninger langs kjøreretningen, så en
+   bro over eller en vei under motorveien ikke teller. Korte hull og hopp glattes som for fartsgrensene. */
+export function matchMotorway(points, segments) {
+  // Står bilen i kø, finnes ingen kjøreretning: da brukes den siste, ellers ble kø-tiden ikke motorvei (kritikken 0.18.0)
+  let lastH = null;
+  const withH = points.map((p, i) => {
+    let h = Number.isFinite(p.heading) && !(p.kmh < 3) ? p.heading : null;
+    if (h === null) { const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)]; if (a !== b && metres(a, b) > 5) h = bearing(a, b); }
+    if (h === null) h = lastH; else lastH = h;
+    return h === null ? p : { ...p, heading: h };
+  });
+  const raw = matchLimits(withH, segments, MATCH_M, { parallelOnly: true }).map(v => (Number.isFinite(v) ? v : 0));
+  return stabilizeLimits(points, smoothBlips(fillGaps(raw.map(v => (v ? v : NaN)), 5)).map(v => (Number.isFinite(v) ? v : 0)), 8);
 }
 
 /* Gatenavn for en liste punkter. Returnerer [navn|null]. Maks ett kall per punkt; feil gir null. */
@@ -599,6 +645,14 @@ export function evaluateRoad(points, road, events = [], limits = null) {
 /* Henter det som er slått på og mangler, og returnerer et enrich-objekt som lagres på turen. */
 export const ROAD_V = 3;
 export const LIMITS_V = 2;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet
+export const MOTOR_V = 1;    // 0.18.0: motorvei og motortrafikkvei fra NVDB
+/* Bare motorveiene, for eldre turer som mangler dem (kjøreloggen henter dem i bakgrunnen) */
+export async function enrichMotorway(r, existing, signal) {
+  const enrich = { version: 1, ...(existing || {}) };
+  enrich.motor = matchMotorway(r.points, await fetchMotorwaySegments(r.points, signal));
+  enrich.motorV = MOTOR_V;
+  return enrich;
+}
 export async function enrichDrive(r, marks, wants, existing, onProgress = () => {}) {
   const enrich = { version: 1, ...(existing || {}) };
   if (wants.limits && (!enrich.limits || enrich.limitsV !== LIMITS_V)) {
@@ -614,6 +668,11 @@ export async function enrichDrive(r, marks, wants, existing, onProgress = () => 
     onProgress('Henter skilt og rundkjøringer fra Statens vegvesen …');
     enrich.road = await fetchRoadData(r.points);
     enrich.roadFetchedAt = new Date().toISOString();
+  }
+  if (wants.limits && (!Array.isArray(enrich.motor) || enrich.motorV !== MOTOR_V)) {
+    onProgress('Henter motorveier fra Statens vegvesen …');
+    enrich.motor = matchMotorway(r.points, await fetchMotorwaySegments(r.points));
+    enrich.motorV = MOTOR_V;
   }
   if (wants.names && !enrich.names) {
     onProgress('Henter stedsnavn fra Kartverket …');

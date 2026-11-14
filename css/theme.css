@@ -190,7 +190,8 @@ body.has-tabbar .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-transparency: reduce) { .tabbar { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 @media print { .tabbar { display: none !important; } body.has-tabbar #app { padding-bottom: 0; } }
 /* Fanenes egne skjermer har ingen tilbakeknapp (tittelen står likevel midt på) */
-#log .btn-back, #plan .btn-back, #teacher .btn-back { visibility: hidden; }
+#log .btn-back, #plan .btn-back, #teacher .btn-back:not(#teacher-back) { visibility: hidden; }
+#teacher-back[hidden] { display: none; }   /* elevsiden har tilbake til elevlisten (0.18.0) */
 /* Forsiden: turlisten, kjøreloggen og snarveiene ligger nå i fanene */
 #home > #log-card, #home > #more-cards, #home > #drive-section { display: none !important; }
 .plan-spots { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; text-align: left; }
@@ -375,3 +376,77 @@ dialog.sheet .q-head h2 { margin: 0; }
 #camera:not(.road-only) .road-only-text { display: none !important; }
 #camera.road-only .cam-road { margin-top: 0; }
 #cam-mode-row .segment { margin: 6px 0 10px; }
+
+/* Tur holdt utenfor utregningene (0.18.0) */
+.excluded-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--link) 12%, var(--surface)); color: var(--ink); font-size: .92rem; }
+.excluded-note svg { flex: none; margin-top: 2px; color: var(--link); }
+.trip-card .btn { width: 100%; }
+.trip-card .btn + p { margin-top: 6px; }
+.choice-list { border: 0; margin: 4px 0 0; padding: 0; min-width: 0; }
+.choice-list legend { padding: 0; margin-bottom: 2px; }
+
+/* Meldinger mellom elev og lærer (0.18.0): egne meldinger til høyre, den andres til venstre */
+.thread { list-style: none; margin: 8px 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.msg { max-width: 88%; display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: 16px; background: var(--surface-2); align-self: flex-start; overflow-wrap: anywhere; }
+.msg.mine { align-self: flex-end; background: color-mix(in srgb, var(--link) 14%, var(--surface)); border-bottom-right-radius: 6px; }
+.msg.theirs { border-bottom-left-radius: 6px; }
+.msg.new { box-shadow: inset 0 0 0 2px var(--link); }
+.msg-meta { font-size: .78rem; color: var(--muted); }
+.msg-text { white-space: pre-wrap; }
+.msg-ref { display: flex; align-items: center; gap: 6px; margin-top: 4px; padding: 6px 8px; min-height: 40px; border: 0; border-radius: 10px; background: var(--surface); color: var(--link); font: inherit; font-size: .88rem; font-weight: 700; text-align: left; cursor: pointer; }
+.msg-ref span { flex: 1; min-width: 0; }
+.msg-where { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: .88rem; text-align: left; }
+.thread-more { display: block; margin: 0 auto; }
+.composer textarea { width: 100%; box-sizing: border-box; min-height: 64px; font: inherit; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); resize: vertical; }
+.composer-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
+.composer-row .btn { margin: 0; }
+.composer-row .btn.primary { min-width: 96px; }
+.msg-attach { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 0; font-size: .9rem; color: var(--link); }
+.msg-attach[hidden] { display: none; }
+.thread-card .file-btn { margin-top: 12px; }
+.thread-card > .notice { margin: 0 0 10px; }
+.msg-home { border-left: 4px solid var(--link); }
+.msg-preview { display: block; margin: 4px 0 2px; overflow-wrap: anywhere; }
+.talk-card { border-left: 4px solid var(--link); }
+.talk-card .thread { margin-bottom: 8px; }
+.ev-ask { margin-top: 8px; }
+.ask-range { padding: 2px 0 4px 30px; }
+.ask-range .field { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.ask-range input[type=range] { width: 100%; accent-color: var(--link); min-height: 32px; }
+dialog.sheet .choice-list select.sheet-input { margin: 0 0 6px 30px; width: calc(100% - 30px); min-height: 44px; }
+dialog.sheet .field textarea.sheet-input { min-height: 84px; resize: vertical; }
+dialog.sheet .pick-list { max-height: 50vh; overflow-y: auto; }
+dialog.sheet .pick-list .mode-opt > span { flex: 1; }
+
+/* Elevlisten for læreren (0.18.0): søk, sortering og en rad per elev */
+.st-tools .sheet-input { margin: 0 0 10px; }
+.st-tools .segment { margin-bottom: 8px; }
+.st-sort { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 700; }
+.st-sort select { flex: 1; min-height: 44px; font: inherit; padding: 0 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); }
+.st-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 12px; }
+.st-actions .btn { margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.st-list { list-style: none; padding: 4px; margin: 0 0 8px; }
+.st-list li + li { border-top: 1px solid var(--line); }
+.st-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 12px; }
+.st-row:active { background: var(--surface-2); }
+.st-row > svg:last-child { flex: none; color: var(--muted); }
+.st-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.st-main strong { overflow-wrap: anywhere; }
+.st-flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.st-flag { font-size: .75rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.st-flag.info { background: color-mix(in srgb, var(--link) 16%, transparent); color: var(--link); }
+.st-flag.warn { background: color-mix(in srgb, var(--turn) 16%, transparent); color: var(--turn); }
+.st-score { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: none; }
+.st-trend { font-size: .72rem; font-weight: 800; }
+.st-trend.up { color: var(--good); } .st-trend.down { color: var(--brake); }
+.st-head { display: flex; align-items: center; gap: 14px; }
+.student-ava.big { width: 56px; height: 56px; font-size: 1.4rem; }
+.st-archive .btn { width: 100%; }
+.st-ready .goal-bar { display: block; margin: 6px 0 10px; }
+.center-link { display: block; margin: 8px auto 16px; }
+#teacher > .btn.primary, #teacher-top > .btn.primary { width: 100%; margin: 0 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+@media print { .thread-card, .st-tools, .st-actions, .st-archive, #btn-st-drive, .msg-home, .talk-card .btn, .trip-card { display: none !important; } }
+.st-tools .st-sort { flex-direction: row; text-align: left; }
+.st-tools .st-sort select { margin: 0; }
+.st-actions .btn { white-space: nowrap; gap: 4px; padding-left: 10px; padding-right: 10px; }
+.thread-card .file-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }

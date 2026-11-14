@@ -6,6 +6,7 @@ import { icon, MARK_CATS, FOCUS, isRemark } from './ui.js';
 import { closeMirrorText } from './camera.js';
 import { driveLog, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import { buildSituations, situationSummary, SOURCE_LABEL, LEVEL_ORDER } from './situations.js';
+import { refLabel } from './messages.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
 const LABEL = {
@@ -137,7 +138,8 @@ export function renderReport(root, r, ctx = {}) {
   const names = enrich && enrich.names ? enrich.names : { events: {}, marks: {} };
   const sp = speedingFor(r, enrich);
   const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events, enrich.limits), fromNvdb: true } : null;
-  const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null) : null;
+  const motorArr = enrich && Array.isArray(enrich.motor) && enrich.motor.length === r.points.length ? enrich.motor : null;   // 0.18.0
+  const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null, motorArr) : null;
   const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
   const sits = buildSituations(r, { camera: r.camera, marks, sp, nvdb: road, road: r.road || null });
   const sitSum = situationSummary(sits);
@@ -179,6 +181,7 @@ export function renderReport(root, r, ctx = {}) {
   root.innerHTML = `
     <header class="report-head">
       ${eyebrow ? `<p class="eyebrow">${esc(eyebrow)}</p>` : ''}
+      ${ctx.excluded ? `<p class="excluded-note">${icon('info', 18)}<span><strong>Holdt utenfor utregningene</strong>${ctx.excluded.reason ? ` · ${esc(ctx.excluded.reason)}` : ''}. Poengene under gjelder bare denne turen. ${ctx.onExclude ? '<button type="button" class="link" id="btn-include">Ta med igjen</button>' : ''}</span></p>` : ''}
       ${enrichStatus ? `<p class="enrich-status ${enrichStatus.error ? 'error' : ''}" id="enrich-status" aria-live="polite">${esc(enrichStatus.text)}${enrichStatus.error && onFetch ? ' <button type="button" class="link" id="btn-fetch">Prøv igjen</button>' : ''}</p>`
         : (enrich && enrich.error && canFetch && onFetch ? `<p class="enrich-status error">Forrige henting feilet: ${esc(enrich.error)} <button type="button" class="link" id="btn-fetch">Prøv igjen</button></p>` : '')}
     </header>
@@ -208,6 +211,8 @@ export function renderReport(root, r, ctx = {}) {
         ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket: ${Object.entries(marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {})).map(([c, n]) => `${MARK_CATS[c].label.toLowerCase()} ${n}`).join(', ')}.</span></li>` : ''}
       </ul>
     </section>
+
+    ${talkCard(ctx.talk)}
 
     ${nextPracticeCard(nextPractice(r, { sp, marks, camera: r.camera, sits }))}
 
@@ -366,7 +371,7 @@ export function renderReport(root, r, ctx = {}) {
             : (r.engine === 'v3' ? 'v3 var valgt, men akselerometerdata manglet eller passet dårlig med GPS (løs holder?), så GPS-fart ble brukt.' : 'v1 – bremsing og gass fra GPS-fart.')}</p>
           <p><strong>Feltskifter</strong> finnes i GPS-sporet (sideforflytning på 2,5–5 m) og bekreftes med gyroskopet. Under 45 km/t og der veien svinger ujevnt telles de ikke, så noen kan mangle.</p>
           ${r.perKm ? `<p><strong>Poengene er justert for distanse:</strong> trekk regnes per 10 km${r.kmFactor > 1.01 ? ', og turer under 5 km regnes som 5 km' : ''}.</p>` : ''}
-          <p>Hendelser som ligger mindre enn to sekunder fra hverandre slås sammen til én. Poengsummen trekker mest for kraftige hendelser, og samlet poengsum vekter bremsing 30 %, svinger 25 %, jevn fart 25 % og akselerasjon 20 %.</p>
+          <p>Hendelser som ligger mindre enn to sekunder fra hverandre slås sammen til én. Poengsummen trekker mest for kraftige hendelser. Kjøredelen vekter bremsing 30 %, svinger 25 %, jevn fart 25 % og akselerasjon 20 %. Når fartsgrensene er hentet, teller kjøringen 60 % og farten 40 % av totalen.</p>
           ${sp ? `<p><strong>Fartsgrenser</strong> hentes fra Statens vegvesen etter turen. Hvert GPS-punkt kobles til nærmeste fartsgrensestrekning innen 25 m, så i kryss og ved avkjøringer kan grensen bomme et sekund eller to. Poeng: 100 minus 1,5 per sekund over grensen, minus 10 per episode med 10 km/t eller mer over.</p>` : ''}
           <p>Følsomhet: ${esc(ctx.sensitivityLabel || 'Normal')}.</p>
         </div>
@@ -374,7 +379,14 @@ export function renderReport(root, r, ctx = {}) {
     </section>
     </details>
 
-    ${onDelete ? `<button type="button" class="btn danger" id="btn-delete-drive">${icon('trash', 20)}Slett denne turen</button>` : ''}
+    ${ctx.onExclude || onDelete || ctx.talk ? `<section class="card trip-card">
+      <h2 class="card-title">${icon('list')}Turen</h2>
+      ${ctx.talk ? `<button type="button" class="btn secondary" id="btn-talk-ask2">${icon('mail', 20)}${esc(ctx.talk.ask)}</button>
+      <p class="muted small">${ctx.talk.mine === 'laerer' ? 'Skriv om hele turen, en hendelse eller en strekning. Eleven får det som en melding og ser det her i rapporten.' : 'Spør om hele turen, en hendelse eller en strekning. Læreren får turen med meldingen.'}</p>` : ''}
+      ${ctx.onExclude ? `<button type="button" class="btn secondary" id="btn-exclude">${icon(ctx.excluded ? 'check' : 'close', 20)}${ctx.excluded ? 'Regn med turen igjen' : 'Ta turen ut av utregningene'}</button>
+      <p class="muted small">${ctx.excluded ? 'Turen er holdt utenfor poeng, kjørelogg, fremgang og det trafikklæreren ser.' : 'Gikk noe galt, for eksempel med kalibreringen, eller kjørte noen andre? Da regner poeng, kjørelogg, fremgang og det trafikklæreren ser uten denne turen. Turen blir liggende og kan tas med igjen.'}</p>` : ''}
+      ${onDelete ? `<button type="button" class="btn danger" id="btn-delete-drive">${icon('trash', 20)}Slett denne turen</button>` : ''}
+    </section>` : ''}
     ${feedbackHref ? `<a class="btn secondary feedback-btn" href="${esc(feedbackHref)}">${icon('mail', 20)}Stemte rapporten? Si fra</a>` : ''}
     <footer class="report-foot">Målingene er veiledende og erstatter ikke ledsager eller trafikklærer. <a href="./personvern/" target="_blank" rel="noopener">Personvern</a></footer>
   `;
@@ -399,6 +411,11 @@ export function renderReport(root, r, ctx = {}) {
       const e = r.events.find(x => String(x.n) === String(n));
       panel.innerHTML = eventDetail(r, e, { marks, names, sp });
       panel.querySelector('.btn-show-map').addEventListener('click', () => showOnMap(n));
+      // Spør læreren om akkurat denne hendelsen (0.18.0)
+      if (ctx.talk && e) {
+        panel.insertAdjacentHTML('beforeend', `<button type="button" class="btn secondary small-btn ev-ask">${icon('mail', 18)}${ctx.talk.mine === 'laerer' ? 'Gi tilbakemelding på denne' : 'Spør trafikklæreren om denne'}</button>`);
+        panel.querySelector('.ev-ask').addEventListener('click', () => ctx.talk.onAsk({ kind: 'hendelse', n: e.n }));
+      }
     }
     panel.hidden = !willOpen;
     btn.setAttribute('aria-expanded', String(willOpen));
@@ -490,6 +507,9 @@ export function renderReport(root, r, ctx = {}) {
   }));
   countUp(root.querySelector('.score-ring .score-num'), r.overall);
   if (onDelete) root.querySelector('#btn-delete-drive').addEventListener('click', onDelete);
+  // Ta turen ut av utregningene (0.18.0)
+  if (ctx.onExclude) for (const id of ['#btn-exclude', '#btn-include']) { const b = root.querySelector(id); if (b) b.onclick = () => ctx.onExclude(!ctx.excluded); }
+  if (ctx.talk) for (const id of ['#btn-talk-ask', '#btn-talk-ask2']) { const b = root.querySelector(id); if (b) b.onclick = () => ctx.talk.onAsk(null); }
   const fetchBtn = root.querySelector('#btn-fetch');
   if (fetchBtn && onFetch) fetchBtn.addEventListener('click', onFetch);
   const shareBtn = document.getElementById('btn-share');
@@ -497,6 +517,22 @@ export function renderReport(root, r, ctx = {}) {
 }
 
 const markCount = (marks, cats) => marks.filter(m => cats.includes(m.cat)).length;
+
+/* Samtalen om turen (0.18.0): meldingene mellom elev og lærer som gjelder denne turen, med «vis på kartet» for en
+   hendelse eller strekning. Vises bare når det finnes meldinger; ellers er knappen nederst under «Turen». */
+function talkCard(talk) {
+  if (!talk || !talk.messages.length) return '';
+  const who = m => (m.from === talk.mine ? 'Du' : m.name || (m.from === 'laerer' ? 'Trafikklæreren' : 'Eleven'));
+  return `<section class="card talk-card" id="talk-section">
+      <h2 class="card-title">${icon('mail')}Samtalen om turen</h2>
+      <ol class="thread">${talk.messages.map(m => `<li class="msg ${m.from === talk.mine ? 'mine' : 'theirs'}" data-mid="${esc(m.id)}">
+        <span class="msg-meta">${esc(who(m))} · ${esc(new Date(m.at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }))}${m.from === talk.mine && !m.sent ? ' · <strong>ikke sendt</strong>' : ''}</span>
+        ${m.text ? `<span class="msg-text">${esc(m.text)}</span>` : ''}
+        ${m.ref && m.ref.kind !== 'tur' ? (Number.isFinite(m.ref.lat) && Number.isFinite(m.ref.lon) ? `<button type="button" class="link man-item msg-where" data-lat="${m.ref.lat}" data-lon="${m.ref.lon}">${icon('pin', 16)}${esc(refLabel(m.ref).replace(/^Turen[^:]*: /, ''))}, vis på kartet</button>` : `<span class="muted small">${esc(refLabel(m.ref).replace(/^Turen[^:]*: /, ''))}</span>`) : ''}
+      </li>`).join('')}</ol>
+      <button type="button" class="btn secondary small-btn" id="btn-talk-ask">${icon('mail', 18)}${esc(talk.ask)}</button>
+    </section>`;
+}
 
 /* Neste øvingstur (v0.9.12): høyst to konkrete ting å øve på, valgt fra denne turen, med hvordan og hvor.
    Rekkefølge etter hvor mye det trekker: fartsgrenser, speilblikk, alvorlige situasjoner og svakeste kategori. */
@@ -552,7 +588,7 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
       res.state = r.scores.smooth >= 85 ? 'ok' : 'no';
       res.text = `${r.scores.smooth} poeng`;
     } else if (id === 'limits') {
-      if (!sp) res.text = 'Slå på Veidata i innstillinger for å måle fartsgrenser';
+      if (!sp) res.text = 'Slå på «Fartsgrense og fotobokser» i innstillinger for å måle fartsgrenser';
       else { res.state = sp.secondsOver <= 10 ? 'ok' : 'no'; res.text = sp.secondsOver ? `${overTime(sp.secondsOver, true)} over grensen` : 'Aldri over grensen'; }
     } else if (id === 'roundabout') {
       if (!rbs.length) res.text = 'Ingen rundkjøringer på ruten';
@@ -571,7 +607,7 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
       }
     } else if (id === 'junction') {
       const stops = road ? road.stops : [], gw = road ? road.giveway : [];
-      if (!road) res.text = 'Slå på Veidata i innstillinger for å finne kryss';
+      if (!road) res.text = 'Slå på «Fartsgrense og fotobokser» i innstillinger for å finne kryss';
       else if (!stops.length && !gw.length) res.text = 'Ingen stopp- eller vikepliktkryss funnet';
       else {
         const rolled = stops.filter(x => !x.full).length;
@@ -677,7 +713,7 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
       ${gw.length ? `<details class="gw"><summary><span><strong>Vikeplikt:</strong> ${gw.length} ${gw.length === 1 ? 'kryss' : 'kryss'} der dere bremset ned · snitt ${kmh(avgIn)} inn</span></summary>
         <ul class="gw-list">${gw.map(g => `<li><button type="button" class="man-item small" data-lat="${g.lat}" data-lon="${g.lon}"><span>${mss(g.t)}</span><span>${kmh(g.approachKmh)} → ${kmh(g.minKmh)}</span>${icon('chev', 16)}</button></li>`).join('')}</ul>
         <p class="muted small">Om dere måtte vike for trafikk, kan ikke appen vite. Lav fart inn mot krysset gir tid til å se.</p></details>` : ''}
-      ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Veidata</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
+      ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Fartsgrense og fotobokser</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
     </section>`;
 }
 

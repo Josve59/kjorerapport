@@ -142,6 +142,46 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.18.0 – motorway time, leaving out a drive, and messages between learner and driving teacher
+
+**Motorway time in the driving log was too low.** The road type came only from the speed limit: over 80 km/h was motorway. Around Trondheim most of the E6 and E39 motorway and motor road (motortrafikkvei) has 80 or 70 km/h, so it counted as country road. A 90 km/h two-lane road counted as motorway.
+- `js/enrich.js` now fetches NVDB object type 595 (Motorveg, with Motorvegtype «Motorveg» or «Motortrafikkveg») along the route. `matchMotorway` keeps only stretches along the driving direction, so a bridge over or a road under does not count. Standing in a queue keeps the last direction, so queue time counts as motorway.
+- `js/log.js`: motorway or motor road from NVDB is always «motor», whatever the limit. When the NVDB answer is known and says «not motorway», a 90 km/h road is country road. Without the data (offline, or not fetched yet) the old rule is used.
+- Older drives get the motorway data in the background, one drive at a time, a few seconds after the app starts (`backfillMotorways` in `js/app.js`), also drives whose reports are locked without Pluss. A report that is opened fetches it too.
+- Tunnels: a gap in the GPS of up to 5 minutes is now counted in the log when the speed between the points is possible (5–130 km/h). Before, every gap of 10 s or more was dropped, so tunnel time disappeared.
+- Checked against NVDB around Trondheim: on one E6 stretch south of the city the old rule gave 434 s motorway and 406 s country road; the new rule gives 839 s motorway.
+
+**Leave a drive out of all calculations.** In the report, under the new card «Turen»: «Ta turen ut av utregningene», with a reason (calibration or holder was wrong, the measurements went wrong, someone else drove, other).
+- The drive then counts nowhere: scores, the driving log, progress, badges, «Hva må du øve mer på?», hotspots, the training plan and what the driving teacher sees (`isReal` in `js/app.js` now also checks `excluded`).
+- The drive stays in the list with the tag «holdt utenfor», and in Turer under «Holdt utenfor utregningene». The report says so at the top, with «Ta med igjen».
+- The choice (and «se bort fra førerkameraet», which was missing before) now goes into the backup.
+
+**Messages between learner and driving teacher.** There is no server, so a message is sent as a file through the share sheet (Messages, AirDrop or e-mail). The receiver saves the file and opens it in the app («Åpne svar fra fil» / «Åpne melding», or Import under Innstillinger). `js/messages.js` holds the format and is tested in Node.
+- A message can be about a whole drive, an event, a mark from the supervisor, or a stretch (two sliders in time, with the distance shown). It is tied to time and place in the drive, not the event number, because the numbers change with the sensitivity.
+- The learner asks from the report («Spør trafikklæreren», also inside each event) or from the «Til trafikklæreren» page. The drive goes with the message: the analysis (positions every second, events, scores) and the road data, but no sensor raw data and no images. A 10-minute drive is a few hundred kB.
+- The teacher answers from the drive's report («Gi tilbakemelding») or from the student's page. The homework goes with the next message, or with «Send leksene til eleven».
+- The learner sees the teacher's answers on Hjem («Ny melding fra …»), on the «Til trafikklæreren» page, and in the report of the drive the answer is about, with «vis på kartet» for an event or stretch.
+- A drive received from the learner counts as the learner's drive on the teacher's phone (`shared`, `importSharedDrive` in `js/db.js`). An own drive with raw data is never overwritten by a received copy.
+
+**The teacher's pages, made for 50+ students.**
+- «Elever» is now a list: search (name or e-mail), «Aktive» or «Fått lappen», and sorting by «Trenger oppfølging», «Sist aktiv», «Nyeste melding» or «Navn». Each row shows the last drive, minutes in the last 30 days, the average of the last five drives with the change from the five before, and flags: new messages, average under 70, score going down, no drive for 14 days. The numbers come from the saved analyses, so the list is quick (55 students tested).
+- Each student has a page: «Start kjøretime», the conversation, progress (the same points as «Hva må du øve mer på?»), homework, the practice in the period (since last lesson, 30 days or all), the student's drives, and «… har fått lappen», which moves the student to the archive. Nothing is deleted until «Slett eleven og turene».
+- The same name twice is refused (the name is the key to drives, lessons and messages); add a surname or a letter.
+- Hjem shows only the chosen student and «Alle N elever» when there are more than five.
+- The teacher's name (Innstillinger → Deg) is shown on messages and homework.
+
+**The learner's «Til trafikklæreren» page is simpler:** homework and the conversation at the top, then what has been practised. The old question field is gone; questions are messages now.
+
+**Fixes from the critic agent** (a new agent definition, `.claude/agents/app-kritiker.md`, that reviews the app as a parent, learner, driving teacher, school owner, insurance company and privacy reviewer):
+- The teacher summary said the scores do not measure the traffic rules; the speed counts since 0.13.13, so it now says the speed limits are included, and shows «Fart» among the part scores.
+- «Grå tekst er hva appen har sett på alle turene» now says «på turene i perioden», which is what it shows.
+- The report's «Slik måles det» explains that driving counts 60 % and speed 40 % when the limits are fetched.
+- «Slå på Veidata» in the report and «Innstillinger → Kart og nettjenester» on the privacy page named settings that do not exist; they now say «Fartsgrense og fotobokser» and where to find it.
+- The privacy page describes the messages and the road camera in the web version.
+
+- **Tested:** all unit tests (new: motorway matching, queue, tunnel gap, message package both ways, student overview with 55 students, archive and delete). In the browser at phone width, light and dark: the student list with 3 and 55 students, search, archive, the student page, the teacher writing to Emma and giving feedback on event 3, the learner opening both files (messages, drive and homework arrived, the answer showed in the report and on Hjem), leaving a drive out and the «Holdt utenfor» list. NVDB motorway data checked against the real API around Trondheim.
+- **Not tested:** on a real phone, sending a real file through Messages or AirDrop and opening it from Files in the iPhone app, and a real drive on the E6.
+
 ## What's new in 0.17.1 – the test link also works from the home screen
 
 Checked in Safari on the iPhone simulator: when the page is added to the home screen, iOS uses the manifest's `start_url` (`…/kjorerapport/`), not the address in Safari. The home-screen app has its own storage, so with the test link it started without the road camera.

@@ -38,6 +38,19 @@ export function students(s = {}) {
   return list;
 }
 
+/* Elever som ikke er arkivert (0.18.0): de som har fått lappen eller sluttet, ligger i arkivet og vises ikke i lister */
+export const activeStudents = (s = {}) => students(s).filter(x => !x.archived);
+
+/* Innstillingene uten alt som er lagret om én elev (0.18.0): elevlisten, timer, notater, lekser, opplæringsplan, teori,
+   kalibrering og meldinger. Turene slettes for seg. */
+export function forgetStudent(s = {}, name) {
+  const drop = obj => { if (!obj || typeof obj !== 'object') return obj; const o = { ...obj }; delete o[name]; return o; };
+  const out = { ...s, students: students(s).filter(x => x.name !== name), drivers: (s.drivers || []).filter(n => n !== name) };
+  for (const k of ['lessons', 'teacherNotes', 'homework', 'curriculum', 'theory', 'calib', 'messages']) if (s[k]) out[k] = drop(s[k]);
+  if (out.activeStudent === name) out.activeStudent = (activeStudents(out)[0] || {}).name || '';
+  return out;
+}
+
 /* Hvem appen viser data for: trafikklæreren ser én elev om gangen, eleven ser alle sine egne turer (null = alle) */
 export const scopeDriver = (s = {}) => (isTeacher() ? (s.activeStudent || '') : null);
 /* Nøkkelen for det som lagres per person (opplæringsplan, kjøretimer, kalibrering). Eleven beholder sin gamle nøkkel. */

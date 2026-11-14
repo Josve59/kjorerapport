@@ -174,23 +174,14 @@
   <!-- Kjørelogg -->
   <section id="teacher" class="screen" hidden>
     <header class="appbar">
+      <button type="button" class="btn-back icon-btn" id="teacher-back" aria-label="Til elevlisten" data-icon="back" hidden></button>
       <span class="brand"><img src="./icons/icon.svg" alt="" width="30" height="30">Kjørerapport</span>
       <button type="button" class="icon-btn btn-gear" aria-label="Innstillinger" data-icon="gear"></button>
     </header>
-    <div class="page-head"><h1 class="page-title" id="teacher-title">Til trafikklæreren</h1><span class="page-actions"><button type="button" class="icon-btn" id="btn-teacher-print" aria-label="Skriv ut eller lagre som PDF" data-icon="print"></button><button type="button" class="icon-btn" id="btn-teacher-share" aria-label="Del som tekst" data-icon="share"></button></span></div>
+    <div class="page-head"><h1 class="page-title" id="teacher-title">Til trafikklæreren</h1><span class="page-actions"><button type="button" class="icon-btn" id="btn-teacher-print" aria-label="Skriv ut eller lagre som PDF" data-icon="print"></button><button type="button" class="icon-btn" id="btn-teacher-share" aria-label="Del oppsummeringen som tekst" data-icon="share"></button></span></div>
+    <!-- 0.18.0: alt under tegnes av app.js (meldinger, elevlisten, elevsiden og oppsummeringen) -->
     <div id="teacher-top"></div>
-    <section class="card t-controls">
-      <p class="muted small" id="t-lead">Vis trafikklæreren hva som er øvd siden forrige kjøretime, eller del det som en melding.</p>
-      <div class="segment" role="radiogroup" aria-label="Tidsrom">
-        <label><input type="radio" name="tperiod" value="lesson"><span>Forrige time</span></label>
-        <label><input type="radio" name="tperiod" value="30"><span>30 dager</span></label>
-        <label><input type="radio" name="tperiod" value="all"><span>Alt</span></label>
-      </div>
-      <label class="field">Forrige kjøretime<span class="date-wrap" id="t-lesson-wrap"><input type="date" id="t-lesson"><span class="date-ph" aria-hidden="true">Velg dato</span></span></label>
-      <label class="field">Spørsmål til trafikklæreren<textarea id="t-note" rows="2" placeholder="F.eks. «Hvordan øver vi best på rundkjøringer med to felt?»"></textarea></label>
-    </section>
     <div id="teacher-root"></div>
-    <button type="button" class="btn secondary t-done" id="btn-teacher-done">Timen er ferdig – ny periode fra i dag</button>
   </section>
 
   <section id="log" class="screen" hidden>
@@ -347,7 +338,7 @@
 
     <h2 class="group-title"><span data-icon="user"></span>Deg og mål</h2>
     <section class="card">
-      <label class="field" id="name-field">Navnet ditt<input id="my-name" maxlength="40" placeholder="Valgfritt" autocomplete="given-name"><span class="muted small">Brukes i hilsenen på Hjem.</span></label>
+      <label class="field" id="name-field">Navnet ditt<input id="my-name" maxlength="40" placeholder="Valgfritt" autocomplete="given-name"><span class="muted small" id="name-help">Brukes i hilsenen på Hjem.</span></label>
       <p class="muted small" id="students-note" hidden>Elevene legger du til under fanen Elever.</p>
       <h3 class="mt" id="goals-title">Mål</h3>
       <p class="muted small">Valgfritt. Sammenlignes med snittet av de tre siste turene. Tomt felt betyr ingen mål.</p>
@@ -486,7 +477,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.17.1</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.18.0</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

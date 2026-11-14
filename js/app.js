@@ -1,12 +1,12 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, SENSITIVITY, TH } from './analysis.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
-import { listDrives, getDrive, putDrive, updateDrive, importDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
+import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
 import { renderReport, closeMapOverlay, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel } from './report.js';
-import { enrichDrive, evaluateRoad, ROAD_V, LIMITS_V } from './enrich.js';
+import { enrichDrive, enrichMotorway, evaluateRoad, ROAD_V, LIMITS_V, MOTOR_V } from './enrich.js';
 import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } from './insights.js';
-import { esc, km, n0, n1, date, duration } from './format.js';
-import { icon, toast, confirmDialog, infoDialog, promptDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
+import { esc, km, n0, n1, date, duration, mss } from './format.js';
+import { icon, toast, confirmDialog, infoDialog, promptDialog, formDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import { teacherSummary, teacherText, teacherHtml } from './teacher.js';
 import * as cam from './facecam.js';
@@ -30,9 +30,10 @@ import { checkCalibration, facePosition } from './calibcheck.js';
 import { openDevChart } from './devchart.js';
 import { gameState, unlockedBy, BADGES } from './game.js';
 import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js';
-import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
+import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
+import { TEACHER_THREAD, buildPackage, readPackage, isPackage, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.17.1';
+export const APP_VERSION = '0.18.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -135,6 +136,12 @@ function finalizeScore(drive, r) {
 }
 
 async function analyzeDrive(drive) {
+  // Tur fra en melding (0.18.0): har ingen rådata, så analysen eleven sendte brukes slik den er
+  if (drive.shared) {
+    if (!drive.result || !drive.result.stats) throw new Error('Turen mangler data.');
+    if (finalizeScore(drive, drive.result)) await putDrive(drive);
+    return drive.result;
+  }
   const opts = analysisOptions();
   // Føre (0.12.0): på glatt føre er grensene for brå bremsing, gass og sving lavere
   const sf = surfaceFactor(drive.surface);
@@ -166,7 +173,11 @@ async function analyzeDrive(drive) {
   return result;
 }
 
-const isReal = d => !d.demo && !d.imported;
+/* Egne opptak (ikke demo eller importert). isReal: de som regnes med; en tur kan tas ut av utregningene (0.18.0),
+   f.eks. når kalibreringen var feil eller noen andre kjørte. Den ligger likevel i turlista og kan tas med igjen. */
+const isOwn = d => !d.demo && !d.imported;
+const isReal = d => isOwn(d) && !d.excluded;
+const EXCLUDE_REASONS = ['Kalibreringen eller holderen var feil', 'Målingene ble feil', 'Noen andre kjørte', 'Annen grunn'];
 const num = v => (v === '' || v === null || v === undefined ? NaN : Number(String(v).replace(',', '.')));
 
 /* Kamerakortet under Innstillinger (0.12.0, før på Hjem) */
@@ -200,12 +211,15 @@ async function renderHome() {
   for (const d of allDrives) if (d.status === 'recording') { d.status = 'done'; d.interrupted = true; await putDrive(d); }
 
   // Elever (0.12.0): bare trafikklæreren bytter mellom elever. Eleven ser alle sine egne turer.
-  const studs = isTeacher() ? students(settings) : [];
+  const studs = isTeacher() ? activeStudents(settings) : [];
   const filter = isTeacher() ? (settings.activeStudent || '') : '';
   const chips = $('#driver-chips');
   if (isTeacher()) {
-    chips.innerHTML = studs.map(x => `<button type="button" class="chip ${x.name === filter ? 'on' : ''}" data-d="${esc(x.name)}" aria-pressed="${x.name === filter}">${esc(x.name)}</button>`).join('')
-      + `<button type="button" class="chip add" id="btn-chip-add">${icon('plus', 16)}Elev</button>`;
+    // Med mange elever (0.18.0): bare den valgte og «Alle elever», ellers ble Hjem en vegg av knapper
+    const few = studs.length <= 5;
+    chips.innerHTML = (few ? studs.map(x => `<button type="button" class="chip ${x.name === filter ? 'on' : ''}" data-d="${esc(x.name)}" aria-pressed="${x.name === filter}">${esc(x.name)}</button>`).join('')
+      : filter ? `<button type="button" class="chip on" data-d="${esc(filter)}" aria-pressed="true">${esc(filter)}</button>` : '')
+      + `<button type="button" class="chip add" id="btn-chip-add">${few ? `${icon('plus', 16)}Elev` : `${icon('users', 16)}Alle ${studs.length} elever`}</button>`;
     chips.hidden = false;
     chips.querySelectorAll('.chip[data-d]').forEach(c => c.onclick = () => { saveSettings({ ...getSettings(), activeStudent: c.dataset.d }); renderHome(); });
     $('#btn-chip-add').onclick = () => { location.hash = '#/trafikklaerer'; };
@@ -233,7 +247,7 @@ async function renderHome() {
   for (const { d, res } of rows) {
     const g = groupLabel(d.startedAt);
     if (g !== lastGroup) { html += `<li class="group-head">${esc(g)}</li>`; lastGroup = g; }
-    const tags = [d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : ''].filter(Boolean);
+    const tags = [d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : '', d.excluded ? 'holdt utenfor' : ''].filter(Boolean);
     const meta = res ? [km(res.stats.km), duration(res.stats.duration)] : ['For lite data'];
     html += `<li>
       <button type="button" class="drive" data-id="${d.id}">
@@ -343,23 +357,29 @@ async function renderHome() {
     gc.hidden = false;
     gc.querySelector('button').onclick = () => { location.hash = '#/fremgang'; };
   } else gc.hidden = true;
-  // Lekser fra læreren (skolevisningen)
+  // Lekser og nye meldinger fra læreren (0.18.0: også lekser som kom i en melding), og nye meldinger fra elever
   const hh = $('#homework-home');
-  const hw = isSchool() ? homeworkFor(settings) : null;
-  hh.innerHTML = hw ? homeworkCardHtml(hw, false) : '';
-  hh.hidden = !hw;
+  const hw = receivedHomework(settings);
+  const fresh = isTeacher() ? Object.entries(settings.messages || {}).filter(([k]) => studs.some(x => x.name === k)).reduce((n, [, t]) => n + unread(t, 'laerer'), 0) : unread(threadOf(settings, TEACHER_THREAD), 'elev');
+  const lastNew = !isTeacher() && fresh ? threadOf(settings, TEACHER_THREAD).filter(m => m.from === 'laerer' && !m.read).pop() : null;
+  hh.innerHTML = (fresh ? `<button type="button" class="card t-cta msg-home" id="btn-msg-home"><span class="card-title">${icon('mail')}${isTeacher() ? `${fresh === 1 ? 'Ny melding' : `${fresh} nye meldinger`} fra elever` : `Ny melding fra ${esc(settings.teacherName || 'trafikklæreren')}`}</span>
+      ${lastNew && lastNew.text ? `<span class="msg-preview">${esc(lastNew.text.length > 140 ? lastNew.text.slice(0, 140) + ' …' : lastNew.text)}</span>` : ''}<span class="last-cta">Les ${icon('chev', 18)}</span></button>` : '')
+    + (hw ? homeworkCardHtml(hw, false) : '');
+  hh.hidden = !hw && !fresh;
+  const mh = $('#btn-msg-home');
+  if (mh) mh.onclick = () => { location.hash = '#/trafikklaerer'; };
   const sug = suggestFocus(sugRows);
   const sl = $('#suggest-line');
   if (sug.length) { sl.textContent = `Forslag i dag: ${sug.map(x => (FOCUS.find(f => f.id === x.id) || {}).label).join(', ').toLowerCase()}`; sl.hidden = false; } else sl.hidden = true;
 
   // Påminnelse om sikkerhetskopi
   const bb = $('#backup-banner');
-  const realCount = allDrives.filter(isReal).length;
+  const realCount = allDrives.filter(isOwn).length;
   // Hjelp for nye brukere forsvinner når de har kommet i gang (0.11.5): demoturen ligger da under Innstillinger
   $('#btn-demo').hidden = realCount >= 3;
   $('#start-sub').hidden = realCount >= 3;
   const lastB = settings.lastBackupAt ? Date.parse(settings.lastBackupAt) : 0;
-  const newSince = allDrives.filter(d => isReal(d) && Date.parse(d.startedAt) > lastB).length;
+  const newSince = allDrives.filter(d => isOwn(d) && Date.parse(d.startedAt) > lastB).length;
   const snoozed = settings.backupSnoozeUntil && Date.parse(settings.backupSnoozeUntil) > Date.now();
   if (realCount >= 2 && newSince >= 2 && Date.now() - lastB > 7 * 86400000 && !snoozed) {
     bb.innerHTML = `<span>${icon('shield', 20)}<span>${newSince} turer er ikke sikkerhetskopiert.</span></span><span class="banner-actions"><button type="button" class="link" id="btn-bb-later">Senere</button><button type="button" class="btn small-btn secondary" id="btn-bb-now">Ta kopi</button></span>`;
@@ -441,9 +461,38 @@ function renderTheoryHome() {
 
 function logFor(d, res) {
   const limits = d.enrich && Array.isArray(d.enrich.limits) && d.enrich.limits.length === res.points.length ? d.enrich.limits.map(v => (v === null ? NaN : v)) : null;
-  const log = driveLog(res, Date.parse(d.startedAt), limits);
+  const motor = d.enrich && Array.isArray(d.enrich.motor) && d.enrich.motor.length === res.points.length ? d.enrich.motor : null;   // 0.18.0
+  const log = driveLog(res, Date.parse(d.startedAt), limits, motor);
   log.surface = surfaceSplit(d.surface, log.total.sec);   // føre (0.12.0)
   return log;
+}
+/* Motorveier for eldre turer (0.18.0): hentes i bakgrunnen, én tur om gangen, når appen er på nett og «Veidata» er på.
+   Før ble motorvei bare regnet ut fra fartsgrensen (over 80), og E6 med 80 km/t ble landevei. */
+let motorFill = null;
+function backfillMotorways() {
+  if (motorFill) return motorFill;
+  if (!navigator.onLine || getSettings().netLimits === false) return Promise.resolve(0);
+  motorFill = (async () => {
+    let n = 0;
+    for (const d of await listDrives()) {
+      if (d.demo || String(d.id).startsWith('test-') || (d.enrich && d.enrich.motorV === MOTOR_V)) continue;
+      if (d.enrich && d.enrich.motorTriedAt && Date.now() - Date.parse(d.enrich.motorTriedAt) < 6 * 3600000) continue;   // ikke mas ved feil
+      if (recorder && recorder.running) break;   // ikke mens det kjøres
+      let res;
+      try { res = await analyzeDrive(d); } catch { continue; }
+      try {
+        const en = await enrichMotorway(res, ((await getDrive(d.id)) || {}).enrich);
+        await updateDrive(d.id, { enrich: en });
+        n++;
+      } catch {
+        const cur = await getDrive(d.id);
+        if (cur) await updateDrive(d.id, { enrich: { ...(cur.enrich || {}), motorTriedAt: new Date().toISOString() } });
+        if (!navigator.onLine) break;
+      }
+    }
+    return n;
+  })().finally(() => { motorFill = null; });
+  return motorFill;
 }
 function fmtHours(sec) {
   const m = Math.round(sec / 60);
@@ -765,6 +814,7 @@ async function renderLog() {
   const filter = isTeacher() ? (settings.activeStudent || '') : '';
   const all = await listDrives(), plus = hasPlus();
   const drives = all.filter(d => isReal(d) && (!filter || d.driver === filter));
+  const excludedDrives = all.filter(d => isOwn(d) && d.excluded && (!filter || d.driver === filter));   // 0.18.0
   const lockedIds = new Set(drives.filter(d => reportLocked(all, d.id, plus)).map(d => d.id));   // rapporter som krever Pluss
   const rows = [];
   for (const d of drives) { try { const res = await analyzeDrive(d); rows.push({ d, res, log: logFor(d, res) }); } catch { /* for lite data */ } }
@@ -809,13 +859,17 @@ async function renderLog() {
       <p class="muted small">Minutter per uke. Under: ukenummer og mandagens dato.</p></section>
     ${spotsCard}
     <details class="card how-calc"><summary>Slik regnes det</summary>
-      <p class="muted small"><strong>Veitype</strong> ut fra fartsgrensen (Statens vegvesen), ellers anslått ut fra farten. <strong>Mørke</strong> er når sola står mer enn 6° under horisonten, skumring mellom 0 og 6°. <strong>Føre</strong> velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></details>
+      <p class="muted small"><strong>Motorvei</strong> er motorvei og motortrafikkvei slik Statens vegvesen har registrert dem, uansett fartsgrense. <strong>By</strong> er fartsgrense 50 eller lavere, resten er landevei. Uten nett anslås veitypen ut fra fartsgrensen og farten. <strong>Mørke</strong> er når sola står mer enn 6° under horisonten, skumring mellom 0 og 6°. <strong>Føre</strong> velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></details>
     <h2 class="section-title">Alle turer</h2>
     <ul class="drives log-list card">${rows.map(x => `<li><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${x.d.id}">
       <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
       <span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.log.light.dark > 60 ? `${fmtHours(x.log.light.dark)} mørke` : ''].filter(Boolean).join(SEP)}</span>
 </span>
       ${scoreBadge(x.res.overall, 40)}</button></li>`).join('')}</ul>
+    ${excludedDrives.length ? `<h2 class="section-title">Holdt utenfor utregningene</h2>
+    <ul class="drives log-list card">${excludedDrives.map(d => `<li><button type="button" class="drive" data-id="${d.id}">
+      <span class="drive-main"><strong>${esc(shortDay(d.startedAt))}</strong><span class="muted small">${esc((d.excluded && d.excluded.reason) || 'Tatt ut')}</span></span>${icon('chev', 18)}</button></li>`).join('')}</ul>
+    <p class="muted small pad">Åpne turen og trykk «Regn med turen igjen» for å ta den med.</p>` : ''}
     <button type="button" class="btn secondary" id="btn-log-csv2">${icon('download', 20)}Eksporter loggen (regneark)</button>`;
   root.querySelectorAll('.drive').forEach(b => b.onclick = () => { location.hash = '#/rapport/' + b.dataset.id; });
   const csv = () => exportLogCsv(rows, filter);
@@ -888,78 +942,347 @@ async function renderSpots() {
 
 /* ---------- Til trafikklæreren (v0.9.13) ---------- */
 let teacherSeq = 0;
-/* Trafikklæreren har alltid en elev valgt når det finnes elever (0.12.0) */
+/* Trafikklæreren har alltid en elev valgt når det finnes aktive elever (0.12.0; arkiverte teller ikke fra 0.18.0) */
 function ensureStudent() {
   if (!isTeacher()) return;
-  const s = getSettings(), list = students(s);
+  const s = getSettings(), list = activeStudents(s);
   if (list.length && !list.some(x => x.name === s.activeStudent)) saveSettings({ ...s, activeStudent: list[0].name });
 }
-async function renderTeacher() {
-  show('teacher');
-  const tok = ++teacherSeq;   // en eldre tegning (f.eks. før visningen ble byttet) skal ikke skrive over denne
-  ensureStudent();
-  const root = $('#teacher-root');
+
+/* ---------- Meldinger mellom elev og lærer (0.18.0, messages.js) ----------
+   Samtalene ligger i innstillingene: messages[elevnavn] hos læreren, messages.laerer hos eleven. En melding sendes som en
+   fil via delearket, og mottakeren åpner filen i appen. */
+const me = () => (isTeacher() ? 'laerer' : 'elev');
+const myName = () => { const s = getSettings(); return String(s.name || s.activeDriver || '').trim(); };
+const threadOf = (s, key) => ((s.messages || {})[key]) || [];
+function saveThread(key, thread) { const cur = getSettings(); saveSettings({ ...cur, messages: { ...(cur.messages || {}), [key]: thread } }); }
+const studentHash = name => '#/elev/' + encodeURIComponent(name);
+/* Leksene eleven har fått i en melding fra læreren (skolevisningen har sine egne) */
+const receivedHomework = s => { const h = isTeacher() ? null : homeworkFor(s); return h && (h.received || isSchool()) ? h : null; };
+let pendingFocus = null;   // meldingen rapporten skal vise fram når den åpnes fra samtalen
+
+/* Sender det som ikke er sendt i samtalen key, som en fil med delearket. Turene meldingene gjelder følger med hvis de er
+   tatt opp på denne telefonen (læreren sender ikke elevens egne turer tilbake). Læreren sender også leksene. */
+async function sendMessages(key) {
+  const s = getSettings(), pending = unsent(threadOf(s, key), me());
+  if (!pending.length) return false;
+  const ids = new Set(pending.map(m => m.ref && m.ref.driveId).filter(Boolean));
+  const drives = ids.size ? (await listDrives()).filter(d => ids.has(d.id) && d.result && !d.shared) : [];
+  const homework = isTeacher() ? homeworkFor(s, key) : null;
+  const pkg = buildPackage({ from: { role: me(), name: myName() || (isTeacher() ? 'Trafikklæreren' : 'Eleven') }, to: isTeacher() ? key : '', messages: pending, drives, homework, appVersion: APP_VERSION });
+  const ok = await shareFile(toJSON(pkg), packageName(isTeacher() ? key : myName() || 'til-laereren'));
+  if (!ok) { toast('Meldingen er lagret, men ikke sendt. Trykk «Send nå» når du vil sende den.', { ms: 3500 }); return false; }
+  const done = new Set(pending.map(m => m.id));
+  saveThread(key, threadOf(getSettings(), key).map(m => (done.has(m.id) ? { ...m, sent: true } : m)));
+  toast(isTeacher() ? `Sendt. ${key} åpner filen i Kjørerapport.` : 'Sendt. Læreren åpner filen i Kjørerapport.', { type: 'ok', ms: 3000 });
+  return true;
+}
+
+/* Åpner en meldingsfil. Læreren: meldingen havner hos eleven den er fra (ny elev legges til), turene blir elevens.
+   Eleven: meldinger, turer og lekser fra læreren. Svarer { key, n, drives } eller null hvis avbrutt. */
+async function openMessageFile(file) {
+  const p = readPackage(JSON.parse(await file.text()));
+  if (isTeacher()) {
+    if (p.from.role !== 'elev') throw new Error('Denne meldingen er fra en trafikklærer. Den åpnes i appen til eleven.');
+    let name = p.from.name;
+    if (!name || !students(getSettings()).some(x => x.name === name)) {
+      const n = await promptDialog({ title: 'Hvilken elev er meldingen fra?', text: name ? `«${name}» er ikke i elevlisten. Legg til som ny elev, eller skriv navnet slik det står i listen.` : 'Meldingen har ikke noe navn. Skriv navnet til eleven.', value: name, ok: 'Bruk navnet', maxLength: 40 });
+      if (!n) return null;
+      name = n.trim().slice(0, 40);
+      if (!students(getSettings()).some(x => x.name === name)) addStudent(name, '');
+    }
+    for (const sd of p.drives) await importSharedDrive(sd, { from: name });
+    saveThread(name, mergeThread(threadOf(getSettings(), name), p.messages));
+    return { key: name, n: p.messages.length, drives: p.drives.length };
+  }
+  if (p.from.role !== 'laerer') throw new Error('Denne meldingen er fra en elev. Den åpnes i appen til trafikklæreren.');
+  for (const sd of p.drives) await importSharedDrive(sd, { from: p.from.name, driver: '' });
+  const cur = getSettings(), patch = { messages: { ...(cur.messages || {}), [TEACHER_THREAD]: mergeThread(threadOf(cur, TEACHER_THREAD), p.messages) } };
+  if (p.homework) patch.homework = { ...(cur.homework || {}), [cur.name || cur.activeDriver || '']: { ...p.homework, received: true } };
+  if (p.from.name) patch.teacherName = p.from.name;
+  saveSettings({ ...cur, ...patch });
+  return { key: TEACHER_THREAD, n: p.messages.length, drives: p.drives.length, homework: !!p.homework };
+}
+async function onMessageFile(input, after) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    const r = await openMessageFile(file);
+    if (r) toast(`${r.n ? `${r.n} ${r.n === 1 ? 'melding' : 'meldinger'}` : 'Ingen nye meldinger'}${r.drives ? `, ${r.drives} ${r.drives === 1 ? 'tur' : 'turer'}` : ''}${r.homework ? ' og lekser' : ''} er hentet.`, { type: 'ok', ms: 3000 });
+    if (r && after) after(r);
+  } catch (err) { infoDialog({ title: 'Kunne ikke åpne meldingen', text: err.message }); }
+  input.value = '';
+}
+
+const msgWho = (m, mine) => (m.from === mine ? 'Du' : m.name || (m.from === 'laerer' ? 'Trafikklæreren' : 'Eleven'));
+function bubbleHtml(m, mine) {
+  return `<li class="msg ${m.from === mine ? 'mine' : 'theirs'}${!m.read && m.from !== mine ? ' new' : ''}">
+      <span class="msg-meta">${esc(msgWho(m, mine))} · ${esc(shortDay(m.at))}${m.from === mine && !m.sent ? ' · <strong>ikke sendt</strong>' : ''}${!m.read && m.from !== mine ? ' · <strong>ny</strong>' : ''}</span>
+      ${m.text ? `<span class="msg-text">${esc(m.text)}</span>` : ''}
+      ${m.ref ? `<button type="button" class="msg-ref" data-drive="${esc(m.ref.driveId)}" data-mid="${esc(m.id)}">${icon('map', 16)}<span>${esc(refLabel(m.ref))}</span>${icon('chev', 16)}</button>` : ''}
+    </li>`;
+}
+/* Samtalen med skrivefelt. who: 'laereren' (eleven skriver) eller elevens navn (læreren skriver) */
+function threadCardHtml(thread, { title, mine, empty, all = false }) {
+  const max = 6, shown = all ? thread : thread.slice(-max), waiting = unsent(thread, mine).length;
+  return `<section class="card thread-card" id="thread-card">
+      <h2 class="card-title">${icon('mail')}${esc(title)}</h2>
+      ${!all && thread.length > max ? `<button type="button" class="link thread-more" id="btn-thread-all">Vis ${thread.length - max} eldre</button>` : ''}
+      ${thread.length ? `<ol class="thread">${shown.map(m => bubbleHtml(m, mine)).join('')}</ol>` : `<p class="muted small">${esc(empty)}</p>`}
+      ${waiting ? `<p class="notice small">${waiting === 1 ? 'Én melding' : `${waiting} meldinger`} er ikke sendt. <button type="button" class="link" id="btn-msg-resend">Send nå</button></p>` : ''}
+      <div class="composer">
+        <textarea id="msg-text" rows="2" maxlength="1000" placeholder="Skriv en melding …" aria-label="Melding"></textarea>
+        <p class="msg-attach" id="msg-attach" hidden></p>
+        <div class="composer-row">
+          <button type="button" class="btn secondary small-btn" id="btn-msg-attach">${icon('map', 18)}<span>Legg ved en tur</span></button>
+          <button type="button" class="btn primary small-btn" id="btn-msg-send">Send</button>
+        </div>
+      </div>
+      <label class="btn secondary file-btn small-btn">${icon('upload', 18)}${mine === 'laerer' ? 'Åpne melding fra fil' : 'Åpne svar fra fil'}<input type="file" id="msg-file" accept="application/json,.json"></label>
+      <p class="muted small">Meldingen sendes som en fil med Meldinger, AirDrop eller e-post. Mottakeren lagrer filen og åpner den her. Turen sendes med posisjoner og hendelser, men uten bilder.</p>
+    </section>`;
+}
+/* Kobler skrivefeltet, vedlegg, send og åpne fil. key: samtalen, rerender: tegn siden på nytt */
+function wireThread(key, rerender, { driver = null } = {}) {
+  let ref = null;
+  const att = $('#msg-attach');
+  const showRef = () => { att.hidden = !ref; att.innerHTML = ref ? `${icon('map', 16)}<span>${esc(refLabel(ref))}</span> <button type="button" class="link" id="btn-msg-unattach">Fjern</button>` : ''; const u = $('#btn-msg-unattach'); if (u) u.onclick = () => { ref = null; showRef(); }; };
+  $('#btn-msg-attach').onclick = async () => {
+    const all = (await listDrives()).filter(d => d.result && !d.demo && (driver === null || (d.driver || '') === driver)).slice(0, 20);
+    if (!all.length) { infoDialog({ title: 'Ingen turer å legge ved', text: 'Når det er kjørt en tur, kan du legge den ved her.' }); return; }
+    const id = await formDialog({ title: 'Legg ved en tur', text: 'Vil du spørre om én hendelse eller en strekning? Åpne turen og trykk «Spør trafikklæreren» i rapporten.', ok: 'Legg ved',
+      body: `<fieldset class="choice-list pick-list">${all.map((d, i) => `<label class="mode-opt"><input type="radio" name="att" value="${esc(d.id)}" ${i === 0 ? 'checked' : ''}><span><strong>${esc(shortDay(d.startedAt))}</strong><span class="muted small">${km(d.result.stats.km)} · ${d.result.overall} poeng${d.note ? ' · ' + esc(d.note.slice(0, 40)) : ''}</span></span></label>`).join('')}</fieldset>`,
+      read: dlg => (dlg.querySelector('input[name=att]:checked') || {}).value || false });
+    const d = id && all.find(x => x.id === id);
+    if (d) { ref = cleanRef({ driveId: d.id, kind: 'tur', startedAt: d.startedAt }); showRef(); }
+  };
+  $('#btn-msg-send').onclick = async () => {
+    const ta = $('#msg-text'), text = ta.value.trim();
+    if (!text && !ref) { toast('Skriv en melding først.', { ms: 2000 }); ta.focus(); return; }
+    const msg = cleanMessage({ id: newMsgId(), from: me(), name: myName(), at: new Date().toISOString(), text, ref });
+    saveThread(key, [...threadOf(getSettings(), key), { ...msg, sent: false, read: true }]);
+    ta.value = ''; ref = null; showRef();
+    await sendMessages(key);
+    rerender();
+  };
+  const rs = $('#btn-msg-resend');
+  if (rs) rs.onclick = async () => { await sendMessages(key); rerender(); };
+  const more = $('#btn-thread-all');
+  if (more) more.onclick = () => rerender({ all: true });
+  $('#msg-file').onchange = e => onMessageFile(e.target, () => rerender());
+  document.querySelectorAll('#thread-card .msg-ref').forEach(b => b.onclick = () => { pendingFocus = b.dataset.mid; location.hash = '#/rapport/' + b.dataset.drive; });
+}
+
+/* Perioden for oppsummeringen: siden forrige time, 30 dager eller alt */
+function periodHtml(mode, lesson) {
+  return `<section class="card t-controls">
+      <div class="segment" role="radiogroup" aria-label="Tidsrom">
+        <label><input type="radio" name="tperiod" value="lesson" ${mode === 'lesson' ? 'checked' : ''}><span>Forrige time</span></label>
+        <label><input type="radio" name="tperiod" value="30" ${mode === '30' ? 'checked' : ''}><span>30 dager</span></label>
+        <label><input type="radio" name="tperiod" value="all" ${mode === 'all' ? 'checked' : ''}><span>Alt</span></label>
+      </div>
+      <label class="field">Forrige kjøretime<span class="date-wrap${lesson ? ' has-value' : ''}" id="t-lesson-wrap"><input type="date" id="t-lesson" value="${esc(lesson)}"><span class="date-ph" aria-hidden="true">Velg dato</span></span></label>
+    </section>`;
+}
+/* Oppsummeringen av øvingen i perioden, med utskrift, deling og «Timen er ferdig». Svarer radene (turene). */
+async function drawSummary(el, tok, rerender) {
   const s = getSettings(), key = personKey(s), driver = isTeacher() ? (s.activeStudent || '') : '';
-  // Fanen er ulik i hver utgave (0.12.0): eleven viser fram, skoleeleven ser skolen og leksene, læreren har elevene
-  $('#teacher-title').textContent = isTeacher() ? 'Elever' : 'Til trafikklæreren';
-  $('#t-lead').textContent = isTeacher() ? (driver ? `Det ${driver} har øvd siden forrige time.` : 'Velg en elev over.') : isSchool() ? 'Skolen ser dette automatisk. Du kan også vise det fram eller dele det.' : 'Vis trafikklæreren hva som er øvd siden forrige kjøretime, eller del det som en melding.';
-  $('#teacher-top').innerHTML = isTeacher() ? teacherStudentsHtml(s) : isSchool() ? schoolCardHtml(s) : '';
-  if (isTeacher()) wireTeacherStudents();
-  $('.t-controls').hidden = isTeacher() && !driver;
-  $('#btn-teacher-done').hidden = isTeacher() && !driver;
   const lesson = (s.lessons || {})[key] || '';
   let mode = s.teacherPeriod || (lesson ? 'lesson' : '30');
   if (mode === 'lesson' && !lesson) mode = '30';
-  document.querySelectorAll('input[name=tperiod]').forEach(r => {
-    r.checked = r.value === mode;
-    r.onchange = () => { saveSettings({ ...getSettings(), teacherPeriod: r.value }); renderTeacher(); };
-  });
-  const dateIn = $('#t-lesson'), noteIn = $('#t-note');
-  dateIn.value = lesson;
-  $('#t-lesson-wrap').classList.toggle('has-value', !!lesson);   // tomt datofelt viser «Velg dato» (iPhone viser ellers et blankt felt)
-  dateIn.onchange = () => {
-    const cur = getSettings();
-    saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: dateIn.value }, teacherPeriod: dateIn.value ? 'lesson' : '30' });
-    renderTeacher();
-  };
-  const note = (s.teacherNotes || {})[key] || '';
-  if (document.activeElement !== noteIn) noteIn.value = note;
-  let noteTimer = null;
-  noteIn.oninput = () => { clearTimeout(noteTimer); noteTimer = setTimeout(() => { const cur = getSettings(); saveSettings({ ...cur, teacherNotes: { ...(cur.teacherNotes || {}), [key]: noteIn.value.trim() } }); }, 500); };
-  noteIn.onchange = () => { const cur = getSettings(); saveSettings({ ...cur, teacherNotes: { ...(cur.teacherNotes || {}), [key]: noteIn.value.trim() } }); renderTeacher(); };
-  root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
-  document.querySelector('#teacher .page-actions').hidden = isTeacher() && !driver;
-  if (isTeacher() && !driver) { root.innerHTML = ''; return; }
+  el.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
   const rows = await gatherRows(scopeDriver(s));
-  if (tok !== teacherSeq) return;
+  if (tok !== teacherSeq) return null;
   // Fra starten av dagen for forrige time (lokal tid)
   const from = mode === 'lesson' ? new Date(lesson + 'T00:00:00').getTime() : mode === '30' ? Date.now() - 30 * 86400000 : null;
   const sum = teacherSummary(rows, { from, driver, plan: planState().mine });
   const theory = teacherTheory(theoryProgress());   // teori og sikkerhetskontroll (0.15.0), null før eleven har øvd
-  root.innerHTML = teacherHtml(sum, { note: noteIn.value.trim(), theory });
+  el.innerHTML = `<h2 class="section-title">${isTeacher() ? 'Øvingen' : 'Det du har øvd'}</h2>${periodHtml(mode, lesson)}${teacherHtml(sum, { theory })}
+    <button type="button" class="btn secondary t-done" id="btn-teacher-done">Timen er ferdig – ny periode fra i dag</button>`;
+  el.querySelectorAll('input[name=tperiod]').forEach(r => r.onchange = () => { saveSettings({ ...getSettings(), teacherPeriod: r.value }); rerender(); });
+  $('#t-lesson').onchange = e => { const cur = getSettings(); saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: e.target.value }, teacherPeriod: e.target.value ? 'lesson' : '30' }); rerender(); };
   $('#btn-teacher-print').onclick = () => window.print();
-  $('#btn-teacher-share').onclick = () => shareText(teacherText(sum, { note: noteIn.value.trim(), theory }));
+  $('#btn-teacher-share').onclick = () => shareText(teacherText(sum, { theory }));
   $('#btn-teacher-done').onclick = () => {
     const d = new Date(), iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const cur = getSettings();
-    saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: iso }, teacherPeriod: 'lesson', teacherNotes: { ...(cur.teacherNotes || {}), [key]: '' } });
-    noteIn.value = '';
+    saveSettings({ ...cur, lessons: { ...(cur.lessons || {}), [key]: iso }, teacherPeriod: 'lesson' });
     toast('Ny periode fra i dag. Neste oppsummering viser øvingen fram til neste time.', { type: 'ok' });
-    renderTeacher();
+    rerender();
+  };
+  return rows;
+}
+
+/* «Til trafikklæreren» (eleven) og «Elever» (læreren). Eleven: samtalen med læreren øverst, så det som er øvd. */
+async function renderTeacher(opts = {}) {
+  show('teacher');
+  ensureStudent();
+  $('#teacher-back').hidden = true;
+  if (isTeacher()) return renderStudentList();
+  const tok = ++teacherSeq;   // en eldre tegning (f.eks. før visningen ble byttet) skal ikke skrive over denne
+  const s = getSettings(), thread = threadOf(s, TEACHER_THREAD);
+  const teacher = s.teacherName || (schoolInfo(s) || {}).teacher || '';
+  $('#teacher-title').textContent = 'Til trafikklæreren';
+  $('#teacher .page-actions').hidden = false;
+  $('#teacher-top').innerHTML = `${isSchool() ? schoolCardHtml(s) : homeworkCardHtml(receivedHomework(s), false)}
+    ${threadCardHtml(thread, { title: teacher ? `Meldinger med ${teacher}` : 'Meldinger med trafikklæreren', mine: 'elev', all: !!opts.all,
+      empty: 'Spør om noe, eller legg ved en tur du vil ha tilbakemelding på. Svaret fra læreren kommer som en fil du åpner her.' })}`;
+  wireThread(TEACHER_THREAD, o => renderTeacher(o), { driver: null });
+  if (unread(thread, 'elev')) saveThread(TEACHER_THREAD, markRead(threadOf(getSettings(), TEACHER_THREAD), 'elev'));   // lest når den er vist
+  await drawSummary($('#teacher-root'), tok, () => renderTeacher());
+}
+
+/* Elevlisten (læreren, 0.18.0): søk, sortering, «Trenger oppfølging» og arkivet for dem som har fått lappen.
+   Tallene kommer fra analysene som er lagret på turene, så listen er rask også med mange elever. */
+let studentQuery = '';
+const relDay = ts => { const d = Math.floor((new Date(new Date().toDateString()) - new Date(new Date(ts).toDateString())) / 86400000); return d <= 0 ? 'i dag' : d === 1 ? 'i går' : d < 7 ? `for ${d} dager siden` : new Date(ts).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }); };
+async function renderStudentList() {
+  const tok = ++teacherSeq;
+  $('#teacher-title').textContent = 'Elever';
+  $('#teacher .page-actions').hidden = true;
+  const top = $('#teacher-top'), root = $('#teacher-root');
+  root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
+  const all = await listDrives();
+  // Turer som ikke er analysert ennå (nye testelever, nettopp tatt opp): analyseres én gang og lagres
+  for (const d of all) if (!d.result && !d.demo && d.status !== 'recording') { try { await analyzeDrive(d); } catch { /* for lite data */ } }
+  if (tok !== teacherSeq) return;
+  const s = getSettings(), view = s.studentView || {}, arch = !!view.arch, sort = view.sort || 'need';
+  const ov = studentOverview(all, students(s), s.messages || {}, Date.now());
+  const act = ov.filter(x => !x.archived), done = ov.filter(x => x.archived);
+  const newMsgs = act.reduce((n, x) => n + x.newMsgs, 0);
+  top.innerHTML = `<section class="card st-tools">
+      <input type="search" id="st-q" class="sheet-input" placeholder="Søk etter elev" value="${esc(studentQuery)}" aria-label="Søk etter elev" autocomplete="off">
+      <div class="segment" role="radiogroup" aria-label="Vis elever">
+        <label><input type="radio" name="starch" value="0" ${arch ? '' : 'checked'}><span>Aktive (${act.length})</span></label>
+        <label><input type="radio" name="starch" value="1" ${arch ? 'checked' : ''}><span>Fått lappen (${done.length})</span></label>
+      </div>
+      <label class="field st-sort">Sorter etter<select id="st-sort">${SORTS.map(([id, label]) => `<option value="${id}" ${id === sort ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>
+    </section>
+    ${newMsgs ? `<p class="notice small">${icon('mail', 16)} ${newMsgs === 1 ? 'Én ny melding' : `${newMsgs} nye meldinger`} fra elever. De står øverst med «Trenger oppfølging».</p>` : ''}
+    <div class="st-actions">
+      <button type="button" class="btn primary small-btn" id="btn-st-add">${icon('plus', 18)}Legg til elev</button>
+      <label class="btn secondary file-btn small-btn">${icon('upload', 18)}Åpne melding<input type="file" id="st-file" accept="application/json,.json"></label>
+    </div>`;
+  const draw = () => {
+    const list = filterStudents(sortStudents(arch ? done : act, sort), studentQuery);
+    root.innerHTML = list.length ? `<ul class="st-list card">${list.map(x => `<li><button type="button" class="st-row" data-name="${esc(x.name)}">
+        <span class="student-ava" aria-hidden="true">${esc(x.name.slice(0, 1).toUpperCase())}</span>
+        <span class="st-main"><strong>${esc(x.name)}${x.test ? ' <span class="tag">test</span>' : ''}</strong>
+          <span class="muted small">${x.archived ? `Fikk lappen ${esc(new Date(x.archived.at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' }))}` : x.last ? `Kjørte ${relDay(x.last)}${x.min30 ? ` · ${fmtHours(x.min30 * 60)} siste 30 dager` : ''}` : 'Ingen turer ennå'}</span>
+          ${!x.archived && x.flags.length ? `<span class="st-flags">${x.flags.filter(f => f.id !== 'none').map(f => `<span class="st-flag ${f.tone}">${esc(f.text)}</span>`).join('')}</span>` : ''}</span>
+        ${x.avg !== null ? `<span class="st-score">${scoreBadge(x.avg, 40)}${x.trend ? `<span class="st-trend ${x.trend > 0 ? 'up' : 'down'}">${x.trend > 0 ? '▲' : '▼'} ${Math.abs(x.trend)}</span>` : ''}</span>` : ''}
+        ${icon('chev', 18)}</button></li>`).join('')}</ul>
+      <p class="muted small center">${list.length} ${list.length === 1 ? 'elev' : 'elever'}${studentQuery ? ` med «${esc(studentQuery)}»` : ''}. Poengene er snittet av de fem siste turene, og pilen er endringen fra de fem før.</p>`
+      : `<div class="empty card"><span class="empty-ico">${icon('users', 40)}</span><strong>${studentQuery ? 'Ingen elever med det navnet' : arch ? 'Ingen elever i arkivet' : 'Ingen elever ennå'}</strong><span class="muted small">${arch ? 'Når en elev har fått lappen, flytter du eleven hit fra elevsiden.' : 'Legg til elevene dine, eller åpne en melding fra en elev.'}</span></div>`;
+    root.insertAdjacentHTML('beforeend', ov.some(x => x.test) ? '<button type="button" class="link center-link" id="btn-test-students-del">Fjern testelevene</button>' : '<button type="button" class="link center-link" id="btn-test-students">Legg inn tre testelever med turer og en melding</button>');
+    root.querySelectorAll('.st-row').forEach(b => b.onclick = () => { location.hash = studentHash(b.dataset.name); });
+    const t = $('#btn-test-students'), td = $('#btn-test-students-del');
+    if (t) t.onclick = async () => { t.disabled = true; t.textContent = 'Lager turer …'; await addTestStudents(); renderStudentList(); };
+    if (td) td.onclick = async () => { await removeTestStudents(); renderStudentList(); };
+  };
+  draw();
+  $('#st-q').oninput = e => { studentQuery = e.target.value; draw(); };
+  top.querySelectorAll('input[name=starch]').forEach(r => r.onchange = () => { saveSettings({ ...getSettings(), studentView: { ...(getSettings().studentView || {}), arch: r.value === '1' } }); renderStudentList(); });
+  $('#st-sort').onchange = e => { saveSettings({ ...getSettings(), studentView: { ...(getSettings().studentView || {}), sort: e.target.value } }); renderStudentList(); };
+  $('#btn-st-add').onclick = async () => {
+    const r = await formDialog({ title: 'Ny elev', ok: 'Legg til', body: `<input class="sheet-input" id="ns-name" maxlength="40" placeholder="Navn" aria-label="Navn" autocomplete="off"><input class="sheet-input" id="ns-mail" type="email" inputmode="email" maxlength="80" placeholder="E-post (valgfritt)" aria-label="E-post" autocomplete="off"><p class="muted small">Har to elever samme fornavn, ta med etternavnet eller en bokstav, for eksempel «Emma H.».</p>`,
+      onOpen: d => setTimeout(() => d.querySelector('#ns-name').focus(), 50),
+      read: d => { const name = d.querySelector('#ns-name').value.trim().slice(0, 40); if (!name) { toast('Skriv navnet til eleven.', { ms: 2000 }); return false; } return { name, email: d.querySelector('#ns-mail').value.trim().slice(0, 80) }; } });
+    if (r && addStudent(r.name, r.email)) location.hash = studentHash(r.name);
+  };
+  $('#st-file').onchange = e => onMessageFile(e.target, r => { location.hash = studentHash(r.key); });
+}
+
+/* Ny elev. Samme navn to ganger går ikke: navnet er nøkkelen til turene, timene og meldingene. */
+function addStudent(name, email = '') {
+  const cur = getSettings(), list = students(cur);
+  const same = list.find(x => x.name.toLowerCase() === name.toLowerCase());
+  if (same) { toast(same.archived ? `${same.name} ligger i arkivet. Åpne «Fått lappen» for å gjøre eleven aktiv igjen.` : `Det finnes allerede en elev som heter ${same.name}. Ta med etternavnet eller en bokstav.`, { ms: 4000 }); return false; }
+  saveSettings({ ...cur, students: [...list.filter(x => x.name !== name), { name, email, addedAt: new Date().toISOString() }], activeStudent: name });
+  toast(`${name} er lagt til.`, { type: 'ok', ms: 2000 });
+  return true;
+}
+
+/* Elevsiden (læreren, 0.18.0): meldinger, fremgang, lekser, øvingen i perioden, turene og arkivet */
+async function renderStudent(name, opts = {}) {
+  show('teacher');
+  // Lærervisningen slås på litt etter oppstart (testbyggene): da tegnes siden på nytt, så adressen beholdes
+  if (!isTeacher()) { renderTeacher(); return; }
+  const s0 = getSettings(), st = students(s0).find(x => x.name === name);
+  if (!st) { location.replace('#/trafikklaerer'); return; }
+  if (s0.activeStudent !== name) saveSettings({ ...s0, activeStudent: name });
+  const tok = ++teacherSeq;
+  const s = getSettings(), thread = threadOf(s, name), rerender = o => { if (location.hash === studentHash(name)) renderStudent(name, o); };
+  $('#teacher-back').hidden = false;
+  $('#teacher-title').textContent = name;
+  $('#teacher .page-actions').hidden = false;
+  $('#teacher-top').innerHTML = `
+    <section class="card st-head"><span class="student-ava big" aria-hidden="true">${esc(name.slice(0, 1).toUpperCase())}</span>
+      <span class="st-main"><strong>${esc(name)}</strong><span class="muted small">${st.email ? esc(st.email) : 'Ingen e-post lagt inn'}${st.archived ? ` · fikk lappen ${esc(new Date(st.archived.at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }))}` : ''}</span></span></section>
+    ${st.archived ? '' : `<button type="button" class="btn primary" id="btn-st-drive">${icon('play', 20)}Start kjøretime med ${esc(name)}</button>`}
+    ${threadCardHtml(thread, { title: `Meldinger med ${name}`, mine: 'laerer', all: !!opts.all, empty: `Skriv til ${name}, eller åpne en tur og trykk «Gi tilbakemelding». Leksene følger med neste melding du sender.` })}
+    <div id="st-progress"></div>
+    ${st.archived ? '' : `${homeworkCardHtml(homeworkFor(s, name), true)}`}`;
+  wireThread(name, rerender, { driver: name });
+  if (unread(thread, 'laerer')) saveThread(name, markRead(threadOf(getSettings(), name), 'laerer'));
+  const go = $('#btn-st-drive');
+  if (go) go.onclick = () => { saveSettings({ ...getSettings(), activeStudent: name }); requestMotionPermission().catch(() => {}); location.hash = '#/sjekk'; };
+  if (!st.archived) wireHomework(name, rerender);
+  const root = $('#teacher-root');
+  const rows = await drawSummary(root, tok, () => rerender());
+  if (!rows || tok !== teacherSeq) return;
+  // Fremgang: det samme som eleven ser under «Hva må du øve mer på?»
+  const rd = readiness(rows, { plan: planState().mine, theory: theoryForReady() });
+  $('#st-progress').innerHTML = `<section class="card st-ready lv-${rd.level}"><h2 class="card-title">${icon('flag')}Fremgang</h2>
+      <p class="plan-prog"><strong>${rd.done}</strong> av ${rd.counted} punkter på plass før oppkjøringen</p>
+      <span class="goal-bar"><span style="width:${rd.counted ? Math.round(rd.done / rd.counted * 100) : 0}%"></span></span>
+      ${rd.next.length ? `<ul class="rd-next">${rd.next.slice(0, 3).map(i => `<li>${icon('chev', 18)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.tip)}</span></span></li>`).join('')}</ul>` : '<p class="muted small">Alt appen måler er på plass.</p>'}
+    </section>`;
+  // Turene til eleven og arkivet
+  const list = rows.slice(0, 12);
+  root.insertAdjacentHTML('beforeend', `<h2 class="section-title">Turer</h2>
+    ${list.length ? `<ul class="drives log-list card">${list.map(x => `<li><button type="button" class="drive" data-id="${esc(x.d.id)}">
+      <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong><span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.d.shared ? 'fra eleven' : 'kjøretime'].join(SEP)}</span></span>
+      ${scoreBadge(x.res.overall, 40)}</button></li>`).join('')}</ul>${rows.length > list.length ? `<p class="muted small center">De ${list.length} siste av ${rows.length}. Alle ligger under Turer.</p>` : ''}` : '<p class="muted pad">Ingen turer ennå. Turene eleven sender, og kjøretimene du tar opp, havner her.</p>'}
+    <section class="card st-archive"><h2 class="card-title">${icon('award')}${st.archived ? 'I arkivet' : 'Fått lappen?'}</h2>
+      <p class="muted small">${st.archived ? 'Eleven vises ikke i elevlisten. Turene og meldingene ligger her til du sletter dem.' : 'Flytt eleven til arkivet når førerkortet er i boks. Eleven forsvinner fra lista og fra valgene før kjøretimen, men ingenting slettes.'}</p>
+      <button type="button" class="btn secondary" id="btn-st-archive">${st.archived ? 'Gjør eleven aktiv igjen' : `${esc(name)} har fått lappen`}</button>
+      <button type="button" class="btn danger" id="btn-st-delete">${icon('trash', 20)}Slett eleven og turene</button>
+    </section>`);
+  root.querySelectorAll('.drive').forEach(b => b.onclick = () => { location.hash = '#/rapport/' + b.dataset.id; });
+  $('#btn-st-archive').onclick = () => {
+    const cur = getSettings();
+    saveSettings({ ...cur, students: students(cur).map(x => (x.name === name ? (st.archived ? (({ archived, ...rest }) => rest)(x) : { ...x, archived: { at: new Date().toISOString(), reason: 'lappen' } }) : x)) });
+    if (!st.archived) { vibrate([30, 60, 30]); toast(`Gratulerer til ${name}! Eleven er flyttet til arkivet.`, { type: 'ok', ms: 3000 }); ensureStudent(); location.hash = '#/trafikklaerer'; }
+    else { toast(`${name} er aktiv igjen.`, { type: 'ok', ms: 2000 }); rerender(); }
+  };
+  $('#btn-st-delete').onclick = async () => {
+    const n = (await listDrives()).filter(d => (d.driver || '') === name).length;
+    if (!(await confirmDialog({ title: `Slette ${name}?`, text: `Eleven, ${n} ${n === 1 ? 'tur' : 'turer'}, meldingene, leksene, opplæringsplanen og teorien slettes fra denne telefonen. Det kan ikke angres. Ta en sikkerhetskopi først hvis du vil ta vare på noe.`, ok: 'Slett', danger: true }))) return;
+    for (const d of await listDrives()) if ((d.driver || '') === name) await deleteDrive(d.id);
+    saveSettings(forgetStudent(getSettings(), name));
+    toast(`${name} er slettet.`, { type: 'ok', ms: 2500 });
+    location.hash = '#/trafikklaerer';
   };
 }
 
 async function addTestStudents() {
   await createTestDrives();
   const cur = getSettings(), list = students(cur).filter(x => !TEST_STUDENTS.some(t => t.name === x.name));
+  // En melding fra Emma om den nyeste turen hennes (0.18.0), så samtalen og «Trenger oppfølging» kan prøves
+  const emma = await getDrive('test-emma-6');
+  const msgs = emma ? [{ id: 'test-m1', from: 'elev', name: 'Emma', at: new Date(Date.now() - 3 * 3600000).toISOString(), text: 'Hei! Jeg synes jeg bremset litt brått inn mot rundkjøringene på denne turen. Hva bør jeg gjøre annerledes?',
+    ref: cleanRef({ driveId: emma.id, kind: 'tur', startedAt: emma.startedAt }), read: false, sent: true }] : [];
   saveSettings({ ...cur, students: [...list, ...TEST_STUDENTS.map(t => ({ name: t.name, email: t.email, test: true }))], activeStudent: cur.activeStudent || TEST_STUDENTS[0].name,
-    homework: { ...(cur.homework || {}), Emma: { focus: ['roundabout', 'brake'], note: 'Kjør rundkjøringene ved Moholt et par ganger, og brems tidlig før rødt lys.', from: 'trafikklæreren', setAt: new Date().toISOString() } } });
+    homework: { ...(cur.homework || {}), Emma: { focus: ['roundabout', 'brake'], note: 'Kjør rundkjøringene ved Moholt et par ganger, og brems tidlig før rødt lys.', from: 'trafikklæreren', setAt: new Date().toISOString() } },
+    messages: { ...(cur.messages || {}), ...(msgs.length ? { Emma: msgs } : {}) } });
   toast('Tre testelever med turer er lagt inn.', { type: 'ok', ms: 2500 });
 }
 async function removeTestStudents() {
   await removeTestDrives();
-  const cur = getSettings(), list = students(cur).filter(x => !x.test);
-  saveSettings({ ...cur, students: list, drivers: (cur.drivers || []).filter(n => !TEST_STUDENTS.some(t => t.name === n)), activeStudent: list[0] ? list[0].name : '' });
+  let cur = getSettings();
+  for (const t of students(cur).filter(x => x.test)) cur = forgetStudent(cur, t.name);   // også meldinger, lekser og timer
+  saveSettings({ ...cur, activeStudent: (activeStudents(cur)[0] || {}).name || '' });
   toast('Testelevene er fjernet.', { type: 'ok', ms: 2000 });
 }
 /* ---------- Fremgang (0.12.0) ---------- */
@@ -1051,40 +1374,26 @@ function homeworkCardHtml(hw, edit) {
       <div class="chips wrap">${FOCUS.filter(f => sel.has(f.id)).map(f => `<span class="chip on">${esc(f.label)}</span>`).join('')}</div>
       ${hw.note ? `<p>${esc(hw.note)}</p>` : ''}<p class="muted small">Fra ${esc(hw.from || 'trafikklæreren')}. Velges som dagens øvingsmål når du starter en tur.</p></section>`;
   return `<section class="card homework-card"><h2 class="card-title">${icon('book')}Lekser til neste time</h2>
-      <p class="muted small">Velg opptil tre. Eleven ser dem på Hjem og får dem som øvingsmål før turen.</p>
+      <p class="muted small">Velg opptil tre. Leksene følger med neste melding til eleven. Eleven ser dem på Hjem og får dem som øvingsmål før turen.</p>
       <div class="chips wrap" id="hw-chips">${FOCUS.map(f => `<button type="button" class="chip ${sel.has(f.id) ? 'on' : ''}" data-f="${f.id}" aria-pressed="${sel.has(f.id)}">${esc(f.label)}</button>`).join('')}</div>
       <label class="field">Beskjed til eleven<textarea id="hw-note" rows="2" placeholder="F.eks. «Kjør gjerne rundkjøringene ved Moholt flere ganger.»">${esc(hw && hw.note || '')}</textarea></label>
+      <button type="button" class="btn secondary small-btn" id="btn-hw-send">${icon('mail', 18)}Send leksene til eleven</button>
     </section>`;
 }
-/* Trafikklæreren: elevlisten, legg til elev og leksene til eleven som er valgt */
-function teacherStudentsHtml(s) {
-  const list = students(s), cur = s.activeStudent || '';
-  return `<section class="card students-card">
-      <h2 class="card-title">${icon('users')}Elevene dine</h2>
-      ${list.length ? `<ul class="student-list">${list.map(x => `<li><button type="button" class="student ${x.name === cur ? 'on' : ''}" data-d="${esc(x.name)}"><span class="student-ava" aria-hidden="true">${esc(x.name.slice(0, 1).toUpperCase())}</span><span><strong>${esc(x.name)}</strong><span class="muted small">${x.email ? esc(x.email) : 'Ingen Apple-ID lagt inn'}</span></span>${x.name === cur ? `<span class="tag">Valgt</span>` : ''}</button></li>`).join('')}</ul>`
-        : '<p class="muted">Ingen elever ennå. Legg til en elev med navn og e-posten til Apple-ID-en deres.</p>'}
-      <div class="add-student"><input id="new-student" type="text" maxlength="40" placeholder="Navn" aria-label="Navn på ny elev"><input id="new-student-mail" type="email" inputmode="email" autocomplete="off" placeholder="E-post (Apple-ID)" aria-label="E-post til elevens Apple-ID"><button type="button" class="btn secondary" id="btn-add-student">${icon('plus', 18)}Legg til</button></div>
-      <p class="muted small">Med e-posten deles elevens turer automatisk med deg når delingen er klar. Fram til da kan du ta opp kjøretimer på eleven her, og legge inn testelever for å prøve.</p>
-      ${list.some(x => x.test) ? '<button type="button" class="link" id="btn-test-students-del">Fjern testelevene</button>' : '<button type="button" class="link" id="btn-test-students">Legg inn tre testelever med turer</button>'}
-    </section>${cur ? homeworkCardHtml(homeworkFor(s, cur), true) : ''}`;
-}
-function wireTeacherStudents() {
-  document.querySelectorAll('#teacher-top .student').forEach(b => b.onclick = () => { saveSettings({ ...getSettings(), activeStudent: b.dataset.d }); renderTeacher(); });
-  $('#btn-add-student').onclick = () => {
-    const name = $('#new-student').value.trim().slice(0, 40), email = $('#new-student-mail').value.trim().slice(0, 80);
-    if (!name) { toast('Skriv navnet til eleven.', { ms: 2000 }); return; }
-    const cur = getSettings(), list = students(cur).filter(x => x.name !== name);
-    saveSettings({ ...cur, students: [...list, { name, email }], activeStudent: name });
-    toast(`${name} er lagt til.`, { type: 'ok', ms: 2000 });
-    renderTeacher();
-  };
-  const t = $('#btn-test-students'), td = $('#btn-test-students-del');
-  if (t) t.onclick = async () => { t.disabled = true; t.textContent = 'Lager turer …'; await addTestStudents(); renderTeacher(); };
-  if (td) td.onclick = async () => { await removeTestStudents(); renderTeacher(); };
+/* Leksene til eleven (læreren skriver dem på elevsiden). De sendes med neste melding, eller med «Send leksene». */
+function wireHomework(name, rerender) {
   const chips = $('#hw-chips');
   if (!chips) return;
-  const name = getSettings().activeStudent;
-  const save = patch => { const cur = getSettings(), hw = { focus: [], note: '', ...(homeworkFor(cur, name) || {}), ...patch, from: 'trafikklæreren', setAt: new Date().toISOString() }; saveSettings({ ...cur, homework: { ...(cur.homework || {}), [name]: hw } }); };
+  const send = $('#btn-hw-send');
+  if (send) send.onclick = async () => {
+    const hw = homeworkFor(getSettings(), name);
+    if (!hw || !((hw.focus || []).length || hw.note)) { toast('Velg minst ett øvingsmål eller skriv en beskjed først.', { ms: 2500 }); return; }
+    const msg = cleanMessage({ id: newMsgId(), from: 'laerer', name: myName(), at: new Date().toISOString(), text: `Nye lekser: ${FOCUS.filter(f => (hw.focus || []).includes(f.id)).map(f => f.label.toLowerCase()).join(', ') || 'se beskjeden'}.${hw.note ? ' ' + hw.note : ''}` });
+    saveThread(name, [...threadOf(getSettings(), name), { ...msg, sent: false, read: true }]);
+    await sendMessages(name);
+    rerender();
+  };
+  const save = patch => { const cur = getSettings(), hw = { focus: [], note: '', ...(homeworkFor(cur, name) || {}), ...patch, from: myName() || 'trafikklæreren', setAt: new Date().toISOString() }; saveSettings({ ...cur, homework: { ...(cur.homework || {}), [name]: hw } }); };
   chips.querySelectorAll('.chip').forEach(c => c.onclick = () => {
     const sel = new Set((homeworkFor(getSettings(), name) || {}).focus || []);
     if (sel.has(c.dataset.f)) sel.delete(c.dataset.f);
@@ -1234,7 +1543,7 @@ function renderPrecheck() {
   renderDriverPicker();
   renderSurfacePicker();
   // Lekser fra læreren (0.12.0) blir dagens øvingsmål, én gang per nye lekse
-  { const st = getSettings(), hw = (isSchool() || isTeacher()) ? homeworkFor(st) : null;
+  { const st = getSettings(), hw = isTeacher() ? homeworkFor(st) : receivedHomework(st);
     if (hw && hw.focus && hw.focus.length && st.hwApplied !== hw.setAt) { saveSettings({ ...st, focus: hw.focus.slice(0, 3), hwApplied: hw.setAt }); toast('Leksene fra læreren er valgt som dagens øvingsmål.', { type: 'ok', ms: 2500 }); } }
   renderFocusChips();
   renderFocusSuggestions();
@@ -1414,12 +1723,12 @@ function renderDriverPicker() {
   const wrap = $('.driver-pick'), sel = $('#driver-select');
   wrap.hidden = !isTeacher();
   if (!isTeacher()) return;
-  const list = students(s);
+  const list = activeStudents(s).slice().sort((a, b) => a.name.localeCompare(b.name, 'nb'));
   sel.innerHTML = `<option value="">Velg elev</option>${list.map(x => `<option value="${esc(x.name)}" ${x.name === s.activeStudent ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}<option value="__new">Ny elev …</option>`;
   sel.onchange = async () => {
     if (sel.value === '__new') {
       const name = ((await promptDialog({ title: 'Ny elev', placeholder: 'Navn', ok: 'Legg til', maxLength: 40 })) || '').trim().slice(0, 40);
-      if (name) { const cur = getSettings(); saveSettings({ ...cur, students: [...students(cur).filter(x => x.name !== name), { name, email: '' }], activeStudent: name }); }
+      if (name) addStudent(name, '');
       renderDriverPicker();
       renderFocusSuggestions();
       return;
@@ -1978,7 +2287,7 @@ async function finishRecording() {
    (minst 70 poeng). Apple bestemmer selv om spørsmålet vises. Vent til rapporten har vært oppe en stund. */
 async function askForReview(drive) {
   if (!window.kjNative || !window.kjNative.review || drive.demo) return;
-  const n = (await listDrives()).filter(isReal).length;
+  const n = (await listDrives()).filter(isOwn).length;
   if (![5, 15, 40].includes(n)) return;
   setTimeout(async () => {
     const d = await getDrive(drive.id);
@@ -2088,7 +2397,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     for (let i = idx + 1; i < drives.length; i++) if (drives[i].result && isReal(drives[i]) && (drives[i].driver || '') === (drive.driver || '')) { prev = drives[i].result; break; }
   }
   const sens = currentSensitivity();
-  const tags = [drive.demo ? 'demotur' : '', drive.imported ? 'importert' : ''].filter(Boolean);
+  const tags = [drive.demo ? 'demotur' : '', drive.imported ? 'importert' : '', drive.shared ? (isTeacher() ? 'sendt av eleven' : 'fra trafikklæreren') : ''].filter(Boolean);
   const routeRows = [];
   try {
     const r = await analyzeDrive(drive);
@@ -2105,14 +2414,15 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       routeRows.sort((a, b) => a.ts - b.ts);
     }
     const wants = { limits: settings.netLimits !== false, names: settings.netNames !== false };   // på som standard
-    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits && drive.enrich.limitsV === LIMITS_V)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === ROAD_V)) || (wants.names && !(drive.enrich && drive.enrich.names));   // road v2: gangfelt, fartsdempere, lyskryss, skilt
+    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits && drive.enrich.limitsV === LIMITS_V)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === ROAD_V)) || (wants.names && !(drive.enrich && drive.enrich.names))   // road v2: gangfelt, fartsdempere, lyskryss, skilt
+      || (wants.limits && !(drive.enrich && drive.enrich.motorV === MOTOR_V));   // motorveier (0.18.0)
     // Nytt på denne turen (0.12.0): merker, nivå og rekorder øverst i rapporten
     const unlock = await unlockHtml(drive);
     if (stale()) return;
     const drawBase = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
       noFace: !!drive.noFace, hasHead: !!(drive.counts && drive.counts.head > 20),
-      onNoFace: async off => {
+      onNoFace: drive.shared ? null : async off => {
         const d = await getDrive(id);
         if (!d) return;
         if (off) d.noFace = true; else delete d.noFace;
@@ -2125,14 +2435,14 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       eyebrow: [isTeacher() && drive.driver ? drive.driver : '', ...tags].filter(Boolean).join(' · '),
       realMap: settings.netMap !== false,
       customThresholds: !!(settings.th),
-      driver: drive.driver || '', drivers: isTeacher() ? students(settings).map(x => x.name) : [],   // bare trafikklæreren flytter turer mellom elever (0.12.0)
+      driver: drive.driver || '', drivers: isTeacher() ? activeStudents(settings).map(x => x.name) : [],   // bare trafikklæreren flytter turer mellom elever (0.12.0)
       onDriverChange: async name => { await updateDrive(id, { driver: name }); renderDriveReport(id, { keepScroll: true }); },
       startedAt: drive.startedAt, focus: drive.focus || [],
       sameRoute: routeRows,
       onSpeak: text => { if (!speak(text)) toast('Telefonen støtter ikke opplesning.', { type: 'error' }); },
       hasCalib: !!getCalib(),
       cameraPlan: drive.cameraPlan || null,
-      onCalibrate: async useSaved => {
+      onCalibrate: drive.shared ? null : async useSaved => {
         if (useSaved && getCalib()) { await applyCalibToDrive(id, getCalib()); renderDriveReport(id, { keepScroll: true }); }
         else { calibForDrive = id; location.hash = '#/kamera'; }
       },
@@ -2148,7 +2458,13 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       onMarkNote: async (i, text) => { const d = await getDrive(id); if (d && d.marks && d.marks[i]) { d.marks[i].note = text; await putDrive(d); } },
       onNoteChange: async text => { await updateDrive(id, { note: text }); },
       onShare: shareText,
-      onDelete: async () => { if (await confirmDialog({ title: 'Slette turen?', text: 'Turen og rådataene slettes fra telefonen. Dette kan ikke angres.', ok: 'Slett', danger: true })) { await deleteDrive(id); toast('Turen er slettet.', { type: 'ok' }); location.hash = '#/'; } }
+      onDelete: async () => { if (await confirmDialog({ title: 'Slette turen?', text: 'Turen og rådataene slettes fra telefonen. Dette kan ikke angres. Vil du bare at den ikke skal telle, kan du ta den ut av utregningene i stedet.', ok: 'Slett', danger: true })) { await deleteDrive(id); toast('Turen er slettet.', { type: 'ok' }); location.hash = '#/'; } },
+      // Ta turen ut av utregningene (0.18.0): bare egne opptak (demo og importerte er utenfor fra før)
+      excluded: drive.excluded || null,
+      onExclude: isOwn(drive) ? on => excludeDrive(id, on) : null,
+      // Meldinger om turen (0.18.0): eleven spør, læreren gir tilbakemelding. Bare egne og delte turer.
+      talk: talkFor(drive, r, settings),
+      shared: drive.shared || null
     });
     const draw = status => {
       drawBase(status);
@@ -2191,6 +2507,8 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     };
     draw(null);
     if (keepScroll) window.scrollTo(0, y);
+    // Åpnet fra en melding i samtalen (0.18.0): vis meldingen
+    if (pendingFocus) { const el = root.querySelector(`.talk-card [data-mid="${CSS.escape(pendingFocus)}"]`); pendingFocus = null; if (el) setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350); }
     if (speakNext === id) { speakNext = null; const b = document.getElementById('btn-speak'); if (b) setTimeout(() => b.click(), 600); }
     if (missing && navigator.onLine) runEnrich(false);
   } catch (err) {
@@ -2200,6 +2518,85 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       <button type="button" class="btn danger" id="btn-del-drive">Slett denne turen</button></section>`;
     $('#btn-del-drive').onclick = async () => { if (await confirmDialog({ title: 'Slette turen?', ok: 'Slett', danger: true })) { await deleteDrive(id); toast('Turen er slettet.', { type: 'ok' }); location.hash = '#/'; } };
   }
+}
+
+/* Meldingene om en tur, og «Spør trafikklæreren» / «Gi tilbakemelding» i rapporten (0.18.0) */
+function talkFor(drive, r, s) {
+  if (drive.demo || drive.imported || !r || !r.points || r.points.length < 2) return null;
+  const key = isTeacher() ? (drive.driver || '') : TEACHER_THREAD;
+  return { messages: key ? threadOf(s, key).filter(m => m.ref && m.ref.driveId === drive.id) : [], mine: me(),
+    ask: isTeacher() ? 'Gi tilbakemelding' : 'Spør trafikklæreren', onAsk: preset => askAbout(drive, r, preset) };
+}
+const distM = (a, b) => { const k = Math.PI / 180, x = (b.lon - a.lon) * k * Math.cos((a.lat + b.lat) / 2 * k), y = (b.lat - a.lat) * k; return Math.hypot(x, y) * 6371000; };
+/* Skriv om turen: hele turen, en hendelse, et merke fra ledsageren eller en strekning (to glidere i tid). Meldingen
+   knyttes til tid og sted, og sendes med en gang (eleven sender turen med). */
+async function askAbout(drive, r, preset = null) {
+  const key = isTeacher() ? (drive.driver || '') : TEACHER_THREAD;
+  if (!key) { toast('Velg hvilken elev turen hører til først (over notatet).', { ms: 3000 }); return; }
+  const marks = markRows(drive.marks || [], r), pts = r.points, t0 = Math.ceil(pts[0].t), t1 = Math.floor(pts[pts.length - 1].t);
+  const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + distM(pts[i - 1], pts[i]));
+  const idxAt = t => { let b = 0; for (let i = 0; i < pts.length; i++) if (Math.abs(pts[i].t - t) < Math.abs(pts[b].t - t)) b = i; return b; };
+  const kind0 = (preset && preset.kind) || 'tur';
+  const opt = (v, label) => `<label class="mode-opt"><input type="radio" name="ask" value="${v}" ${v === kind0 ? 'checked' : ''}><span>${label}</span></label>`;
+  const a0 = Math.round(t0 + (t1 - t0) * 0.25), b0 = Math.round(t0 + (t1 - t0) * 0.5);
+  const res = await formDialog({
+    title: isTeacher() ? `Tilbakemelding til ${key}` : 'Spør trafikklæreren', ok: 'Send',
+    body: `<label class="field">Melding<textarea id="ask-text" class="sheet-input" rows="3" maxlength="1000" placeholder="${isTeacher() ? 'F.eks. «Fin fart inn her. Se etter syklister før du svinger.»' : 'F.eks. «Hva burde jeg gjort annerledes her?»'}"></textarea></label>
+      <fieldset class="choice-list"><legend class="muted small">Gjelder</legend>
+        ${opt('tur', 'Hele turen')}
+        ${r.events.length ? opt('hendelse', 'En hendelse') + `<select id="ask-ev" class="sheet-input" aria-label="Hendelse">${r.events.map(e => `<option value="${e.n}" ${preset && preset.n === e.n ? 'selected' : ''}>${e.n}. ${esc(eventLabel(e))} · ${mss(e.t)}</option>`).join('')}</select>` : ''}
+        ${marks.length ? opt('merke', 'Et merke fra ledsageren') + `<select id="ask-mk" class="sheet-input" aria-label="Merke">${marks.map(m => `<option value="${m.i}">${m.letter}. ${esc(MARK_CATS[m.cat].label)} · ${mss(m.t)}${m.note ? ' · ' + esc(m.note.slice(0, 30)) : ''}</option>`).join('')}</select>` : ''}
+        ${opt('strekning', 'En strekning')}
+        <div class="ask-range"><label class="field">Fra<input type="range" id="ask-a" min="${t0}" max="${t1}" step="5" value="${a0}"></label>
+          <label class="field">Til<input type="range" id="ask-b" min="${t0}" max="${t1}" step="5" value="${b0}"></label>
+          <p class="muted small" id="ask-range-txt" aria-live="polite"></p></div>
+      </fieldset>
+      <p class="muted small">${isTeacher() ? `${esc(key)} får meldingen som en fil, og ser den i rapporten for turen.` : 'Læreren får turen med meldingen: posisjoner, hendelser og poeng, men ingen bilder.'}</p>`,
+    onOpen: d => {
+      const pick = v => { const x = d.querySelector(`input[name=ask][value=${v}]`); if (x) x.checked = true; };
+      const ev = d.querySelector('#ask-ev'), mk = d.querySelector('#ask-mk'), A = d.querySelector('#ask-a'), B = d.querySelector('#ask-b'), txt = d.querySelector('#ask-range-txt');
+      if (ev) ev.onchange = () => pick('hendelse');
+      if (mk) mk.onchange = () => pick('merke');
+      const upd = () => { const a = Math.min(+A.value, +B.value), b = Math.max(+A.value, +B.value); txt.textContent = `${mss(a)}–${mss(b)} inn i turen · ${km((cum[idxAt(b)] - cum[idxAt(a)]) / 1000)}`; };
+      A.oninput = B.oninput = () => { pick('strekning'); upd(); };
+      upd();
+      setTimeout(() => d.querySelector('#ask-text').focus(), 50);
+    },
+    read: d => {
+      const text = d.querySelector('#ask-text').value.trim();
+      if (!text) { toast(isTeacher() ? 'Skriv tilbakemeldingen først.' : 'Skriv hva du lurer på først.', { ms: 2000 }); return false; }
+      const kind = (d.querySelector('input[name=ask]:checked') || {}).value || 'tur';
+      let ref = { driveId: drive.id, kind: 'tur', startedAt: drive.startedAt };
+      if (kind === 'hendelse') { const e = r.events.find(x => String(x.n) === d.querySelector('#ask-ev').value); if (e) ref = { ...ref, kind, t: e.t, lat: e.lat, lon: e.lon, label: eventLabel(e) }; }
+      if (kind === 'merke') { const m = marks.find(x => String(x.i) === d.querySelector('#ask-mk').value); if (m) ref = { ...ref, kind, t: m.t, ...(Number.isFinite(m.lat) ? { lat: m.lat, lon: m.lon } : {}), label: `merke (${MARK_CATS[m.cat].label.toLowerCase()})` }; }
+      if (kind === 'strekning') { let a = +d.querySelector('#ask-a').value, b = +d.querySelector('#ask-b').value; if (a > b) [a, b] = [b, a]; const mid = pts[idxAt((a + b) / 2)]; ref = { ...ref, kind, t: a, tTo: b, lat: mid.lat, lon: mid.lon }; }
+      return { text, ref: cleanRef(ref) };
+    }
+  });
+  if (!res) return;
+  const msg = cleanMessage({ id: newMsgId(), from: me(), name: myName(), at: new Date().toISOString(), text: res.text, ref: res.ref });
+  saveThread(key, [...threadOf(getSettings(), key), { ...msg, sent: false, read: true }]);
+  await sendMessages(key);
+  if (location.hash === '#/rapport/' + drive.id) await renderDriveReport(drive.id, { keepScroll: true });
+}
+
+/* Ta en tur ut av (on = true) eller inn i utregningene igjen (0.18.0). Grunnen vises i rapporten og i turlista. */
+async function excludeDrive(id, on) {
+  const d = await getDrive(id);
+  if (!d) return;
+  if (on) {
+    const reason = await formDialog({
+      title: 'Ta turen ut av utregningene?',
+      text: 'Poeng, kjørelogg, fremgang, merker og det trafikklæreren ser regnes da uten denne turen. Turen blir liggende, og du kan ta den med igjen.',
+      ok: 'Ta ut', body: `<fieldset class="choice-list"><legend class="muted small">Hvorfor?</legend>${EXCLUDE_REASONS.map((r, i) => `<label class="mode-opt"><input type="radio" name="exr" value="${i}" ${i === 0 ? 'checked' : ''}><span>${esc(r)}</span></label>`).join('')}</fieldset>`,
+      read: dlg => EXCLUDE_REASONS[Number((dlg.querySelector('input[name=exr]:checked') || { value: 0 }).value)]
+    });
+    if (reason === null) return;
+    d.excluded = { at: new Date().toISOString(), reason };
+  } else delete d.excluded;
+  await putDrive(d);
+  toast(on ? 'Turen er tatt ut av utregningene.' : 'Turen er med i utregningene igjen.', { type: 'ok', ms: 2500 });
+  if (location.hash === '#/rapport/' + id) await renderDriveReport(id, { keepScroll: true });
 }
 
 async function renderDemoReport() {
@@ -2314,6 +2711,8 @@ async function renderSettings() {
     if (!file) return;
     try {
       const payload = JSON.parse(await file.text());
+      // En melding (0.18.0) åpnes som melding, så den havner i samtalen
+      if (isPackage(payload)) { await onMessageFile(e.target, r => { location.hash = isTeacher() ? studentHash(r.key) : '#/trafikklaerer'; }); return; }
       const d = await importDrive(payload);
       e.target.value = '';
       location.hash = '#/rapport/' + d.id;
@@ -2352,7 +2751,9 @@ async function renderSettings() {
 function renderDriverSettings() {
   const s = getSettings();
   const inp = $('#my-name');
-  $('#name-field').hidden = isTeacher();
+  // Læreren har også et navn (0.18.0): det står på meldingene eleven får
+  $('#name-field').hidden = false;
+  $('#name-help').textContent = isTeacher() ? 'Står på meldingene og leksene elevene får.' : 'Brukes i hilsenen på Hjem og på meldingene til trafikklæreren.';
   $('#students-note').hidden = !isTeacher();
   $('#goals-title').hidden = false;
   inp.value = s.name || s.activeDriver || '';
@@ -2514,7 +2915,8 @@ function updateTabbar(h) {
   bar.hidden = hide;
   document.body.classList.toggle('has-tabbar', !hide);
   if (TAB_ROOTS[h]) lastTab = h;
-  const active = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') ? 'plan' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips' })[h] || TAB_ROOTS[lastTab];
+  if (h.startsWith('#/elev/')) lastTab = '#/trafikklaerer';   // en rapport åpnet fra elevsiden hører til Elever (0.18.0)
+  const active = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') ? 'plan' : null) || (h.startsWith('#/elev/') ? 'teacher' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -2553,6 +2955,9 @@ function goBack() {
   if (/^#\/teori\//.test(h)) { location.hash = '#/teori'; return; }
   if (h === '#/sikkerhetskontroll/ov') { location.hash = '#/sikkerhetskontroll'; return; }
   if (h === '#/teori' || h === '#/sikkerhetskontroll') { location.hash = theoryFrom || '#/'; return; }
+  if (h.startsWith('#/elev/')) { location.hash = '#/trafikklaerer'; return; }   // elevsiden → elevlisten (0.18.0)
+  // En rapport åpnet fra elevsiden går tilbake dit
+  if (h.startsWith('#/rapport/') && reportFrom && reportFrom.startsWith('#/elev/')) { location.hash = reportFrom; return; }
   location.hash = h === '#/faresteder' ? '#/logg' : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
 }
 
@@ -2567,12 +2972,13 @@ function releaseOverlays() {
   if (calibAbort) calibAbort();
 }
 
-let guidesFrom = null, prevHash = null, theoryFrom = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
+let guidesFrom = null, prevHash = null, theoryFrom = null, reportFrom = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
 function route() {
   const h = location.hash || '#/';
   if (h === '#/pluss' && prevHash !== h) guidesFrom = prevHash;
   const inTheory = x => !!x && (x.startsWith('#/teori') || x.startsWith('#/sikkerhetskontroll'));
   if (inTheory(h) && !inTheory(prevHash)) theoryFrom = prevHash || '#/';
+  if (h.startsWith('#/rapport/') && !(prevHash || '').startsWith('#/rapport/')) reportFrom = prevHash || '#/';
   if (!inTheory(h)) stopTheory();   // klokka på prøven og opplesingen stopper når du går ut
   if (h !== prevHash) window.scrollTo(0, 0);   // ny side (også rapport til rapport) begynner øverst
   prevHash = h;
@@ -2607,6 +3013,7 @@ function route() {
   else if (h === '#/guider') renderGuides();
   else if (h === '#/teori' || h.startsWith('#/teori/') || h === '#/sikkerhetskontroll' || h === '#/sikkerhetskontroll/ov') renderTheoryRoute(h);
   else if (h.startsWith('#/rapport/')) renderDriveReport(h.slice('#/rapport/'.length));
+  else if (h.startsWith('#/elev/')) { let n = ''; try { n = decodeURIComponent(h.slice('#/elev/'.length)); } catch { /* ugyldig */ } renderStudent(n); }   // elevsiden (0.18.0)
   else location.hash = '#/';
 }
 
@@ -2665,6 +3072,8 @@ function init() {
   requestPersistentStorage().then(r => { persistState = r; });
   applyLinkSetup();
   route();
+  // Motorveier for eldre turer (0.18.0): sidene som viser veityper tegnes på nytt når de er hentet
+  setTimeout(() => backfillMotorways().then(n => { if (n && ['#/logg', '#/klar', '#/trafikklaerer', '#/fremgang'].includes(location.hash) && !(recorder && recorder.running)) route(); }).catch(() => {}), 4000);
 }
 
 /* Testlenke (0.17.0): …/kjorerapport/?kamera=vei slår på bare veikameraet i nettversjonen, så en tester får teori og

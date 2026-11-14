@@ -198,6 +198,29 @@ export function promptDialog({ title, text = '', placeholder = '', ok = 'Lagre',
   });
 }
 
+/* Ark med egne felt (0.18.0): body er HTML appen selv har laget (tekst fra brukeren må være escapet). read(d) henter
+   svaret når «ok» trykkes; svarer den false, blir arket stående (f.eks. tomt felt). Svarer null ved Avbryt. */
+export function formDialog({ title, text = '', body = '', ok = 'Lagre', cancel = 'Avbryt', danger = false, read = () => true, onOpen = null }) {
+  return new Promise(resolve => {
+    const d = dialogShell();
+    d.innerHTML = `<form method="dialog" class="sheet-body">
+      <h2>${esc(title)}</h2>
+      ${text ? `<p class="muted">${esc(text)}</p>` : ''}
+      ${body}
+      <div class="sheet-actions">
+        <button value="cancel" class="btn secondary" formnovalidate>${esc(cancel)}</button>
+        <button value="ok" class="btn ${danger ? 'danger-fill' : 'primary'}">${esc(ok)}</button>
+      </div></form>`;
+    let value = null;
+    d.querySelector('button[value=ok]').addEventListener('click', e => { value = read(d); if (value === false) e.preventDefault(); });
+    const done = () => { d.removeEventListener('close', done); resolve(d.returnValue === 'ok' ? value : null); };
+    d.addEventListener('close', done);
+    d.returnValue = '';
+    openDialog(d);
+    if (onOpen) onOpen(d);
+  });
+}
+
 /* Ark med innhold appen selv har laget (aldri tekst fra brukeren). onOpen(d) kobler til egne knapper. */
 export function sheetDialog({ body, ok = 'Lukk', onOpen = null }) {
   return new Promise(resolve => {

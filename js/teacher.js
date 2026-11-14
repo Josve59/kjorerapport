@@ -8,6 +8,8 @@ import { CATS } from './analysis.js';
 import { MARK_CATS, FOCUS, icon } from './ui.js';
 import { esc, km, overTime } from './format.js';
 
+const CAT_LABEL = { ...CATS, speed: 'Fart' };
+
 export function fmtHours(sec) {
   const m = Math.round(sec / 60);
   if (m < 60) return `${m} min`;
@@ -25,6 +27,8 @@ export function teacherSummary(rows, { from = null, to = Infinity, driver = '', 
   const chrono = sel.slice().reverse();
   const half = Math.ceil(chrono.length / 2);
   const cats = Object.fromEntries(['brake', 'accel', 'turn', 'smooth'].map(k => [k, avg(sel, x => x.res.scores[k])]));
+  const withSpeed = sel.filter(x => x.res.speed && Number.isFinite(x.res.speed.score));
+  cats.speed = withSpeed.length ? avg(withSpeed, x => x.res.speed.score) : null;
   const withSp = sel.filter(x => x.sp);
   const spKm = withSp.reduce((s, x) => s + x.res.stats.km, 0), spSec = withSp.reduce((s, x) => s + x.sp.secondsOver, 0);
   // Speilblikk før feltskifter (førerkameraet, testappen): true = sett, false = ikke sett, null = kameraet så ikke føreren
@@ -39,7 +43,7 @@ export function teacherSummary(rows, { from = null, to = Infinity, driver = '', 
   }
   const ev = curriculumEvidence(sel);
   const work = suggestFocus(sel, now).map(s => ({ id: s.id, label: (FOCUS.find(f => f.id === s.id) || { label: s.id }).label, reason: s.reason }));
-  const good = Object.entries(cats).filter(([, v]) => v !== null && v >= 90).map(([k]) => CATS[k]);
+  const good = Object.entries(cats).filter(([, v]) => v !== null && v >= 90).map(([k]) => CAT_LABEL[k]);
   return {
     driver, from, to: Number.isFinite(to) ? to : now.getTime(), count: sel.length,
     first: chrono.length ? chrono[0].d.startedAt : null, last: chrono.length ? chrono[chrono.length - 1].d.startedAt : null,
@@ -93,7 +97,7 @@ export function teacherText(s, { note = '', theory = null } = {}) {
   L.push(`${s.count} ${s.count === 1 ? 'tur' : 'turer'}, ${fmtHours(s.time)}, ${km(s.km)}. By ${fmtHours(s.road.by)}, landevei ${fmtHours(s.road.land)}, motorvei ${fmtHours(s.road.motor)}. Mørke ${fmtHours(s.light.dark)}.`);
   const m = s.maneuvers;
   L.push(`Manøvrer: ${m.roundabouts} rundkjøringer, ${m.laneChanges} feltskifter${m.junctions ? `, ${m.junctions} kryss med vikeplikt eller stopp` : ''}.`);
-  L.push(`Snittpoeng ${s.score.avg}${trendWord(s.score) ? ` (${trendWord(s.score).toLowerCase()})` : ''}. Bremsing ${s.score.cats.brake}, akselerasjon ${s.score.cats.accel}, svinger ${s.score.cats.turn}, jevn fart ${s.score.cats.smooth}.`);
+  L.push(`Snittpoeng ${s.score.avg}${trendWord(s.score) ? ` (${trendWord(s.score).toLowerCase()})` : ''}. Bremsing ${s.score.cats.brake}, akselerasjon ${s.score.cats.accel}, svinger ${s.score.cats.turn}, jevn fart ${s.score.cats.smooth}${s.score.cats.speed !== null && s.score.cats.speed !== undefined ? `, fart ${s.score.cats.speed}` : ''}.`);
   if (s.speeding) L.push(`Fartsgrenser: ${overTime(s.speeding.sec, true)} over grensen på ${km(s.speeding.km)}.`);
   if (s.mirrors) L.push(`Speilblikk før feltskifte: sett ved ${s.mirrors.seen} av ${s.mirrors.lanes} (førerkamera).`);
   if (s.work.length) { L.push('Bør jobbes med:'); for (const w of s.work) L.push(`– ${w.label}: ${w.reason}`); }
@@ -116,7 +120,7 @@ export function teacherHtml(s, { note = '', theory = null } = {}) {
       <ul class="legend">${keys.map(k => `<li><span class="dot mix-dot ${cls}-${k}"></span>${labels[k]}: ${fmtHours(obj[k])}</li>`).join('')}</ul>`;
   };
   const m = s.maneuvers, tw = trendWord(s.score);
-  const catRow = k => `<li><span>${CATS[k]}</span><span class="t-bar"><span style="width:${s.score.cats[k]}%"></span></span><strong>${s.score.cats[k]}</strong></li>`;
+  const catRow = k => `<li><span>${CAT_LABEL[k]}</span><span class="t-bar"><span style="width:${s.score.cats[k]}%"></span></span><strong>${s.score.cats[k]}</strong></li>`;
   const mk = Object.entries(s.marks).sort((a, b) => b[1] - a[1]);
   return `
     <section class="card t-head">
@@ -149,10 +153,10 @@ export function teacherHtml(s, { note = '', theory = null } = {}) {
     <section class="card">
       <h2 class="card-title">${icon('chart')}Hvordan det går</h2>
       <p><strong>Snitt ${s.score.avg} av 100</strong>${tw ? ` · ${esc(tw)}` : ''}</p>
-      <ul class="t-cats">${['brake', 'accel', 'turn', 'smooth'].map(catRow).join('')}</ul>
+      <ul class="t-cats">${['brake', 'accel', 'turn', 'smooth', ...(s.score.cats.speed !== null && s.score.cats.speed !== undefined ? ['speed'] : [])].map(catRow).join('')}</ul>
       ${s.speeding ? `<p>Fartsgrenser: ${overTime(s.speeding.sec)} over grensen på ${km(s.speeding.km)}${s.speeding.per10 < 5 ? ', det er lite' : ''}.</p>` : ''}
       ${s.mirrors ? `<p>Speilblikk før feltskifte: sett ved ${s.mirrors.seen} av ${s.mirrors.lanes} (førerkamera).</p>` : ''}
-      <p class="muted small">Poengene måler hvor rolig og jevnt det kjøres (brå bremsing, gass og svinger), ikke om trafikkreglene følges.</p>
+      <p class="muted small">Poengene måler hvor rolig og jevnt det kjøres (brå bremsing, gass og svinger) og farten mot fartsgrensene. De sier ikke om vikeplikt og andre trafikkregler følges.</p>
     </section>
 
     ${mk.length || s.notes.length ? `<section class="card">
@@ -165,7 +169,7 @@ export function teacherHtml(s, { note = '', theory = null } = {}) {
       <h2 class="card-title">${icon('school')}Opplæringsplanen</h2>
       ${s.plan.filter(st => st.items.some(it => it.done || it.evidence)).map(st => `<h3 class="t-stage">${esc(st.stage)}</h3>
         <ul class="t-plan">${st.items.filter(it => it.done || it.evidence).map(it => `<li class="${it.done ? 'done' : ''}">${it.done ? icon('check', 16) : '<span class="t-dot"></span>'}<span>${esc(it.label)}${it.evidence ? ` <span class="muted small">· ${esc(it.evidence)}</span>` : ''}</span></li>`).join('')}</ul>`).join('') || '<p class="muted">Ingen punkter krysset av eller øvd ennå.</p>'}
-      <p class="muted small">Haken er satt av eleven eller ledsageren. Grå tekst er hva appen har sett på alle turene.</p>
+      <p class="muted small">Haken er satt av eleven eller ledsageren. Grå tekst er hva appen har sett på turene i perioden.</p>
     </section>
 
     ${theoryCard(theory)}

@@ -23,18 +23,22 @@ export function lightClass(alt) {
   return 'day';
 }
 
-export function roadClass(limit, maxNearbyKmh) {
-  if (Number.isFinite(limit)) return limit <= 50 ? 'by' : limit <= 80 ? 'land' : 'motor';
+/* motor (0.18.0): 1/2 = motorvei/motortrafikkvei etter Statens vegvesen, 0 = ikke, undefined = ukjent (ikke hentet).
+   Når det er kjent, avgjør det motorvei: E6 rundt Trondheim har mye 80 km/t, og vanlig vei kan ha 90. */
+export function roadClass(limit, maxNearbyKmh, motor) {
+  if (motor === 1 || motor === 2) return 'motor';
+  const known = motor === 0;
+  if (Number.isFinite(limit)) return limit <= 50 ? 'by' : limit <= 80 || known ? 'land' : 'motor';
   if (!Number.isFinite(maxNearbyKmh)) return 'by';
-  return maxNearbyKmh <= 55 ? 'by' : maxNearbyKmh <= 85 ? 'land' : 'motor';
+  return maxNearbyKmh <= 55 ? 'by' : maxNearbyKmh <= 85 || known ? 'land' : 'motor';
 }
 
 export const ROAD_LABEL = { by: 'By og tettsted', land: 'Landevei', motor: 'Motorvei og motortrafikkvei' };
 export const LIGHT_LABEL = { day: 'Dagslys', twilight: 'Skumring', dark: 'Mørke' };
 
 /* r: analyseresultat (points med t relativt til start), recStartMs: når opptaket startet (ms),
-   limits: fartsgrense per punkt eller null. */
-export function driveLog(r, recStartMs, limits = null) {
+   limits: fartsgrense per punkt eller null. motor: motorvei per punkt (1/2/0) eller null (0.18.0). */
+export function driveLog(r, recStartMs, limits = null, motor = null) {
   const sec = { by: 0, land: 0, motor: 0 }, km = { by: 0, land: 0, motor: 0 };
   const light = { day: 0, twilight: 0, dark: 0 }, lightKm = { day: 0, twilight: 0, dark: 0 };
   const pts = r.points;
@@ -42,20 +46,23 @@ export function driveLog(r, recStartMs, limits = null) {
   let fromLimits = 0;
   for (let i = 1; i < pts.length; i++) {
     const dt = pts[i].t - pts[i - 1].t;
-    if (!(dt > 0 && dt < 10)) continue;
+    if (!(dt > 0)) continue;
     const dist = haversine(pts[i - 1], pts[i]) / 1000;
+    // Hull i GPS-en (0.18.0): i tunneler mister telefonen posisjonen, og før forsvant den tiden fra loggen. Hull på
+    // opptil 5 min telles når farten mellom punktene er mulig (5–130 km/t); ellers sto bilen, eller GPS-en hoppet.
+    if (dt >= 10 && !(dt <= 300 && dist / (dt / 3600) >= 5 && dist / (dt / 3600) <= 130)) continue;
     let mx = 0;
     for (let k = i; k >= 0 && pts[i].t - pts[k].t <= 30; k--) mx = Math.max(mx, pts[k].kmh);
     for (let k = i; k < pts.length && pts[k].t - pts[i].t <= 30; k++) mx = Math.max(mx, pts[k].kmh);
     const lim = limits && Number.isFinite(limits[i]) ? limits[i] : NaN;
     if (Number.isFinite(lim)) fromLimits++;
-    const rc = roadClass(lim, mx);
+    const rc = roadClass(lim, mx, motor ? motor[i] : undefined);
     sec[rc] += dt; km[rc] += dist;
     const when = new Date(recStartMs + (t0 + pts[i].t) * 1000);
     const lc = lightClass(sunAltitude(when, pts[i].lat, pts[i].lon));
     light[lc] += dt; lightKm[lc] += dist;
   }
-  return { sec, km, light, lightKm, total: { sec: sec.by + sec.land + sec.motor, km: km.by + km.land + km.motor }, roadSource: fromLimits > pts.length / 2 ? 'nvdb' : 'fart' };
+  return { sec, km, light, lightKm, total: { sec: sec.by + sec.land + sec.motor, km: km.by + km.land + km.motor }, roadSource: motor ? 'motorvei' : fromLimits > pts.length / 2 ? 'nvdb' : 'fart' };
 }
 
 export function sumLogs(logs) {
