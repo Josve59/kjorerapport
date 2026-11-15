@@ -29,6 +29,10 @@
     .dp-table th, .dp-table td { text-align: left; vertical-align: top; padding: 8px 4px; border-top: 1px solid var(--line); }
     .dp-table th { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; border-top: 0; }
     .dp-src li { margin-bottom: 6px; overflow-wrap: anywhere; }
+    .dp-icons { display: flex; gap: 16px; margin: 0 0 12px; }
+    .dp-icons figure { margin: 0; text-align: center; font-size: .8rem; color: var(--muted); }
+    .dp-icons img { display: block; margin-bottom: 4px; }
+    .dp-round { border-radius: 22.37%; }
     .dp-road { height: 22px; border-radius: 6px; margin: 4px 0 10px; background: repeating-linear-gradient(90deg, var(--lane) 0 26px, transparent 26px 46px) center / 100% 5px no-repeat, var(--asphalt); }
   </style>
 </head>
@@ -133,7 +137,17 @@
     <p class="muted small" style="margin:6px 0 0">Alle trykkflater er minst 44 px høye. Under kjøring er knappene større.</p>
   </section>
 
-  <h2 class="section-title">7. Skjermene</h2>
+  <h2 class="section-title">7. App-ikonet</h2>
+  <section class="card">
+    <div class="dp-icons">
+      <figure><img src="../icons/icon.svg" alt="App-ikonet: blått skilt med hvit kantlinje og en vei med gul midtlinje" width="120" height="120"><figcaption>Vanlig</figcaption></figure>
+      <figure><img src="ikon-iphone-mork.svg" alt="Samme ikon i mørke farger" width="120" height="120" class="dp-round"><figcaption>Mørk hjemskjerm</figcaption></figure>
+    </div>
+    <p>Ikonet er skiltkortet fra appen: veiblått med hvit kantlinje innenfor kanten, og en vei mot horisonten med gul midtlinje. Det er laget av rene, flate former uten skygger og glans, fordi iPhonen legger på lys og skygge selv.</p>
+    <p class="muted small" style="margin:0">Filer: <code>designprofil/ikon-iphone.svg</code> og <code>ikon-iphone-mork.svg</code> (hel flate, iPhonen runder hjørnene), <code>icons/icon.svg</code> (med runde hjørner, for nettet og appen). Den mørke versjonen bruker nattblå bakgrunn og lyseblå linjer.</p>
+  </section>
+
+  <h2 class="section-title">8. Skjermene</h2>
   <section class="card">
     <table class="dp-table">
       <thead><tr><th>Skjerm</th><th>Skiltkort</th><th>Så kommer</th></tr></thead>
@@ -147,7 +161,7 @@
     </table>
   </section>
 
-  <h2 class="section-title">8. Kilder</h2>
+  <h2 class="section-title">9. Kilder</h2>
   <section class="card">
     <ul class="dp-src small">
       <li>Apple Human Interface Guidelines: Color, Branding, Layout, Typography og Dark Mode (developer.apple.com/design/human-interface-guidelines).</li>

@@ -143,6 +143,18 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.19.1 – a new app icon in the profile
+
+The owner chose proposal A of four («Skiltet») on 15 Nov 2026.
+- **The icon** is the sign card from the app: road-sign blue with a white line just inside the edge, and a road towards the horizon with a yellow centre line. It uses flat shapes with no shadows or gloss, because the iPhone adds its own light and shadow.
+- **The dark icon**, for a dark Home Screen, has a night-blue background with light-blue lines. The yellow centre line stays.
+- **Files:**
+  - The iPhone icons are 1024 px with no alpha channel, as the App Store requires (`ios/Kjorerapport/Assets.xcassets/AppIcon.appiconset`).
+  - The web icons are `icons/` (rounded `icon.svg`, 192, 512, `apple-touch-icon`), plus a maskable icon whose content sits inside the 80 % safe circle. The camera test app (`kamera/icons/`) has the same files.
+  - The full-bleed sources are `designprofil/ikon-iphone.svg` and `ikon-iphone-mork.svg`.
+- **The iPhone accent colour** (`AccentColor`) is now the profile's blue, `#0B4CB4`, and `#8DB8FF` in dark mode. Before, it was the old link blue.
+- The design profile page has a new section on the icon.
+
 ## What's new in 0.19.0 – visual profile 2.0 «Skilt og vei» and a clearer order on every screen
 
 The owner asked for a stronger visual identity («the app is very grey»), a clear hierarchy («not all info can sit at the same level») and a shorter trip list. The whole profile, with colours, contrast figures, type scale, four hierarchy levels and ten design rules, is in `designprofil/index.html`. It uses the app's own stylesheets, so it always shows the real colours in light and dark mode. It is not copied into the iPhone app.
