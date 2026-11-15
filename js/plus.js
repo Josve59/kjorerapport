@@ -88,5 +88,6 @@ export function reportLocked(drives, id, plus) {
 /* Hvilken Pluss-funksjon en skjerm hører til, eller null. «Til trafikklæreren» er ikke sperret (0.18.3): samtalen med
    læreren er gratis, så eleven alltid kan lese svaret. Bare oppsummeringen av øvingen på den siden hører til Pluss. */
 export function gateFor(hash) {
-  return { '#/kamera': 'camera', '#/opplaering': 'plan', '#/faresteder': 'plan', '#/klar': 'ready' }[hash] || null;
+  // Opplæring er gratis (0.20.0): teori og sikkerhetskontroll står der. Bare underfanen «Læreplan» hører til Pluss.
+  return { '#/kamera': 'camera', '#/opplaering/laereplan': 'plan', '#/faresteder': 'plan', '#/klar': 'ready' }[hash] || null;
 }

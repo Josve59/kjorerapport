@@ -8,11 +8,14 @@ import { esc } from './format.js';
 import { THEMES, QUESTIONS } from './theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from './safety-check.js';
 import { figure } from './trafficsvg.js';
-import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS } from './theory-signs.js';
+import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS, SIGN_PICK_QUESTIONS } from './theory-signs.js';
 import { EXAM, LEARNED, READY_RULE, READY_TEXT, HARD_SHARE, level, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
-  optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief } from './theory.js';
+  optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief, practiceDays } from './theory.js';
 
-const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS).map(q => [q.id, q]));
+const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS, SIGN_PICK_QUESTIONS).map(q => [q.id, q]));
+const SIGN_POOL = SIGN_QUESTIONS.concat(SIGN_PICK_QUESTIONS);   // skiltprøven: hva betyr skiltet, og hvilket skilt er det (0.20.0)
+/* Teorien ligger i Opplæring-fanen (0.20.0), som egen underfane */
+export const THEORY_HOME = '#/opplaering/teori';
 const theme = id => THEMES.find(t => t.id === id) || { title: '', icon: 'quiz' };
 const LETTERS = 'ABCD';
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -31,7 +34,7 @@ export const examInProgress = () => { const e = loadExam(); return e && !e.done 
 /* Status til trafikklærersiden (teacher.js) */
 export const teacherTheory = p => theoryBrief(p, { questions: QUESTIONS, signQuestions: SIGN_QUESTIONS, tasks: SAFETY });
 /* Hvor tilbakeknappen fører fra en øverunde: skiltøving tilbake til skiltene */
-export const practiceBack = () => (practice && practice.back) || '#/teori';
+export const practiceBack = () => (practice && practice.back) || THEORY_HOME;
 
 /* Kort sammendrag til Hjem og Opplæring */
 export function theorySummary(p) {
@@ -56,46 +59,56 @@ export function theoryMiniCards(p, ids) {
 const readLine = q => `${q.q} ${q.a.map((a, i) => `${LETTERS[i]}: ${a}.`).join(' ')}`;
 const speakBtn = id => `<button type="button" class="icon-btn q-speak" id="${id}" aria-label="Les opp">${icon('volume', 22)}</button>`;
 
-/* ---------- Oversikt ---------- */
+/* ---------- Oversikt (underfanen «Teori og sikkerhet» i Opplæring) ----------
+   0.20.0: hierarki som resten av appen. Skiltkortet er teoriprøven med dagsmålet, så fire store snarveier med bilder
+   (rask øving, skiltprøven, sikkerhetskontrollen, feilene), så det turene tyder på, så temaene. */
+const dayLine = d => d.today >= d.goal ? `${icon('check', 18)}<span>Dagens mål er nådd: ${d.today} svar i dag</span>`
+  : `${icon('target', 18)}<span>I dag: ${d.today} av ${d.goal} spørsmål</span>`;
 export async function renderTheoryHub(root, ctx) {
   stopTheory();
   const p = ctx.progress();
   const sum = theorySummary(p);
   const st = themeStats(QUESTIONS, p, THEMES);
   const exams = p.exams.slice(-10);
-  const ongoing = sum.exam;
+  const ongoing = sum.exam, day = practiceDays(p);
   const head = { start: 'Øv deg til teoriprøven', ovelse: 'Øv videre', nesten: 'Nesten klar', klar: 'Klar for teoriprøven' }[sum.ready.level];
+  const signsOk = signsLearned(p), wrongN = sum.wrong;
+  const tile = (id, fig, title, sub, pct, disabled = false) => `<button type="button" class="th-tile" id="${id}" ${disabled ? 'disabled' : ''}>
+      <span class="th-tile-fig" aria-hidden="true">${fig}</span><strong>${title}</strong><span class="muted small">${sub}</span>
+      ${pct === null ? '' : `<span class="th-bar"><span style="width:${pct}%"></span></span>`}</button>`;
   root.innerHTML = `
-    <section class="card th-hero lv-${sum.ready.level}">
+    <section class="sign-card th-sign lv-${sum.ready.level}">
       <p class="eyebrow">Teoriprøven klasse B</p>
-      <h2>${esc(head)}</h2>
-      ${exams.length ? `<div class="th-dots" aria-label="De siste prøvene">${exams.map(e => `<span class="th-dot ${e.correct >= EXAM.solid ? 'ok' : e.passed ? 'mid' : 'no'}" title="${e.correct} av ${e.total}">${e.correct}</span>`).join('')}</div>
-        <p class="muted small">Minst ${EXAM.solid} riktige på ${sum.ready.solid} av de ${Math.min(exams.length, READY_RULE.last)} siste prøvene. Grensen på den ekte prøven er ${EXAM.pass}, men her sikter du mot ${EXAM.solid} for å ha margin.</p>` : ''}
-      <p>${esc(READY_TEXT[sum.ready.level])}</p>
-      <p class="muted small">${ongoing ? `${Object.keys(ongoing.answers).length} av ${ongoing.ids.length} oppgaver besvart` : `${EXAM.n} oppgaver · ${EXAM.minutes} minutter · ${EXAM.pass} riktige for å bestå`}</p>
+      <h2 class="th-sign-head">${esc(head)}</h2>
+      <p class="th-day">${dayLine(day)}${day.streak > 1 ? `<span class="th-streak">${icon('flame', 18)}${day.streak} dager på rad</span>` : ''}</p>
+      <span class="goal-bar th-day-bar"><span style="width:${Math.min(100, day.today / day.goal * 100)}%"></span></span>
+      ${exams.length ? `<div class="th-dots" aria-label="De siste prøvene">${exams.map(e => `<span class="th-dot ${e.correct >= EXAM.solid ? 'ok' : e.passed ? 'mid' : 'no'}" title="${e.correct} av ${e.total}">${e.correct}</span>`).join('')}</div>` : ''}
+      <p class="th-ready">${esc(READY_TEXT[sum.ready.level])}</p>
       <button type="button" class="btn primary" id="th-exam">${icon('clock', 20)}${ongoing ? 'Fortsett prøven' : 'Ta en prøve'}</button>
+      <p class="th-exam-meta">${ongoing ? `${Object.keys(ongoing.answers).length} av ${ongoing.ids.length} oppgaver besvart` : `${EXAM.n} oppgaver · ${EXAM.minutes} minutter · ${EXAM.pass} riktige for å bestå`}</p>
     </section>
-    <div class="btn-row">
-      <button type="button" class="btn secondary" id="th-wrong" ${sum.wrong ? '' : 'disabled'}>${icon('repeat', 20)}Øv på feilene${sum.wrong ? ` (${sum.wrong})` : ''}</button>
-      <button type="button" class="btn secondary" id="th-mix">${icon('quiz', 20)}Blandet øving</button>
+    <h2 class="group-title">Øv nå</h2>
+    <div class="th-tiles">
+      ${tile('th-mix', figure('scene:rundkjoring'), 'Rask øving', '10 blandede spørsmål', null)}
+      ${tile('th-to-signs', `<span class="th-mini-signs">${['sign:202', 'sign:362:80', 'sign:146'].map(figure).join('')}</span>`, 'Skiltprøven', `${signsOk} av ${SIGNS.length} skilt lært`, Math.round(signsOk / SIGNS.length * 100))}
+      ${tile('th-to-safety', figure('lamp:abs'), 'Sikkerhets&shy;kontrollen', `${sum.safety.known} av ${sum.safety.total} oppgaver kan du`, sum.safety.total ? Math.round(sum.safety.known / sum.safety.total * 100) : 0)}
+      ${tile('th-wrong', `<span class="th-tile-ico">${icon('repeat', 30)}</span>`, 'Øv på feilene', wrongN ? `${wrongN} spørsmål å rette opp` : 'Ingen feil å øve på nå', null, !wrongN)}
     </div>
     <section class="card th-drive" id="th-drive" hidden></section>
     <h2 class="group-title">Temaene på prøven</h2>
     <section class="card th-themes"><ul class="th-list">${THEMES.map(t => {
       const s = st[t.id], pct = s.total ? Math.round(s.learned / s.total * 100) : 0;
       return `<li><button type="button" class="th-theme" data-theme="${t.id}">
-        <span class="th-ico">${icon(t.icon, 22)}</span>
+        <span class="th-ico th-ico-${t.id}">${icon(t.icon, 22)}</span>
         <span class="th-tt"><strong>${esc(t.title)}</strong><span class="muted small">${esc(t.blurb)}</span>
           <span class="th-bar"><span style="width:${pct}%"></span></span><span class="muted small">${s.learned} av ${s.total} lært${s.seen ? ` · ${Math.round(s.right / Math.max(1, s.answers) * 100)} % riktige svar` : ''}</span></span>
         ${icon('chev', 18)}</button></li>`;
     }).join('')}</ul></section>
-    <button type="button" class="card t-cta th-signs-cta" id="th-to-signs"><span class="card-title">${icon('sign')}Skiltprøven</span><span class="muted small">${signsLearned(p)} av ${SIGNS.length} skilt lært. Se alle skiltene og hva de betyr, og øv til du kjenner dem igjen.</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
-    <button type="button" class="card t-cta th-safety-cta" id="th-to-safety"><span class="card-title">${icon('wrench')}Sikkerhetskontrollen på oppkjøringen</span><span class="muted small">${sum.safety.known} av ${sum.safety.total} oppgaver kan du. Øv ved bilen på det sensor kan spørre om.</span><span class="last-cta">Åpne ${icon('chev', 18)}</span></button>
-    <p class="muted small th-note">Prøven her er laget litt vanskeligere enn den ekte: minst ${Math.round(HARD_SHARE * 10)} av 10 oppgaver er vanskelige, og du bør ha ${EXAM.solid} riktige, ikke ${EXAM.pass}, før du regner deg som klar. Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad. Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
+    <p class="muted small th-note">Prøven her er laget litt vanskeligere enn den ekte: minst ${Math.round(HARD_SHARE * 10)} av 10 oppgaver er vanskelige, og du bør ha ${EXAM.solid} riktige, ikke ${EXAM.pass}, før du regner deg som klar. ${exams.length ? `Prikkene viser de siste prøvene: grønn er ${EXAM.solid} eller mer. ` : ''}Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad. Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
     ${Object.keys(p.q).length || p.exams.length ? '<button type="button" class="link th-reset" id="th-reset">Begynn på nytt</button>' : ''}`;
   root.querySelector('#th-exam').onclick = () => { if (!examInProgress()) startExam(ctx); ctx.go('#/teori/prove'); };
   root.querySelector('#th-wrong').onclick = () => startPractice(ctx, { title: 'Feilene dine', wrongOnly: true, n: 15 });
-  root.querySelector('#th-mix').onclick = () => startPractice(ctx, { title: 'Blandet øving', n: 10 });
+  root.querySelector('#th-mix').onclick = () => startPractice(ctx, { title: 'Rask øving', n: 10 });
   root.querySelector('#th-to-safety').onclick = () => ctx.go('#/sikkerhetskontroll');
   root.querySelector('#th-to-signs').onclick = () => ctx.go('#/teori/skilt');
   root.querySelectorAll('.th-theme').forEach(b => b.onclick = () => startPractice(ctx, { title: theme(b.dataset.theme).title, theme: b.dataset.theme, n: 10 }));
@@ -103,7 +116,7 @@ export async function renderTheoryHub(root, ctx) {
   if (reset) reset.onclick = async () => {
     if (!await confirmDialog({ title: 'Begynne på nytt?', text: 'Svarene og prøvene dine slettes, så alle spørsmål blir nye igjen. Sikkerhetskontrollen beholdes.', ok: 'Begynn på nytt', danger: true })) return;
     const cur = ctx.progress();
-    ctx.save({ ...cur, q: {}, exams: [] }); saveExam(null);
+    ctx.save({ ...cur, q: {}, exams: [], days: {} }); saveExam(null);
     renderTheoryHub(root, ctx);
   };
   // Fra turene: det turene tyder på at eleven bør lese seg opp på (fylles inn når turene er lest)
@@ -121,15 +134,15 @@ export async function renderTheoryHub(root, ctx) {
 }
 
 /* ---------- Øving med svar og forklaring etter hvert spørsmål ---------- */
-function startPractice(ctx, { title, n = 10, pool = 'teori', back = '#/teori', ...filter }) {
-  const items = pickPractice(pool === 'skilt' ? SIGN_QUESTIONS : QUESTIONS, ctx.progress(), { n, ...filter });
+function startPractice(ctx, { title, n = 10, pool = 'teori', back = THEORY_HOME, ...filter }) {
+  const items = pickPractice(pool === 'skilt' ? SIGN_POOL : QUESTIONS, ctx.progress(), { n, ...filter });
   if (!items.length) { toast('Ingen spørsmål å øve på her akkurat nå.', { type: 'ok' }); return; }
   practice = { title, back, filter: { n, pool, back, ...filter }, items: items.map(q => q.id), orders: Object.fromEntries(items.map(q => [q.id, optionOrder(q)])), i: 0, chosen: null, results: [] };
   ctx.go('#/teori/ov');
 }
 
 export function renderPractice(root, ctx) {
-  if (!practice) { ctx.go('#/teori'); return; }
+  if (!practice) { ctx.go(THEORY_HOME); return; }
   stopSpeaking();
   const P = practice;
   if (P.i >= P.items.length) return renderPracticeDone(root, ctx);
@@ -142,25 +155,33 @@ export function renderPractice(root, ctx) {
       <p class="eyebrow">${esc(q.eyebrow || t.title)}${level(q) >= 3 ? ' <span class="q-hard">Vanskelig</span>' : ''}</p>
       ${q.img ? `<div class="q-fig">${figure(q.img)}</div>` : ''}
       <div class="q-head"><h2 class="q-text">${esc(q.q)}</h2>${speakBtn('q-read')}</div>
-      <div class="q-opts" role="group" aria-label="Svaralternativer">${P.orders[q.id].map((oi, k) => {
+      <div class="q-opts ${q.pick ? 'q-pick' : ''}" role="group" aria-label="Svaralternativer">${P.orders[q.id].map((oi, k) => {
         const cls = !answered ? '' : oi === 0 ? 'right' : oi === P.chosen ? 'wrong' : 'dim';
-        return `<button type="button" class="q-opt ${cls}" data-oi="${oi}" ${answered ? 'disabled' : ''}><span class="q-letter">${LETTERS[k]}</span><span>${esc(q.a[oi])}</span>${answered && oi === 0 ? icon('check', 20, 'q-mark') : answered && oi === P.chosen ? icon('close', 20, 'q-mark') : ''}</button>`;
+        const mark = answered && oi === 0 ? icon('check', 20, 'q-mark') : answered && oi === P.chosen ? icon('close', 20, 'q-mark') : '';
+        // Bildesvar (0.20.0): skiltet er svaret. Etter svaret står navnet under, så du lærer også de andre skiltene.
+        if (q.pick) return `<button type="button" class="q-opt q-opt-pic ${cls}" data-oi="${oi}" ${answered ? 'disabled' : ''} aria-label="Skilt ${LETTERS[k]}${answered ? `: ${esc(q.a[oi])}` : ''}"><span class="q-letter">${LETTERS[k]}</span><span class="q-pic">${figure(q.imgs[oi])}</span>${answered ? `<span class="q-pic-name">${esc(q.a[oi])}</span>` : ''}${mark}</button>`;
+        return `<button type="button" class="q-opt ${cls}" data-oi="${oi}" ${answered ? 'disabled' : ''}><span class="q-letter">${LETTERS[k]}</span><span>${esc(q.a[oi])}</span>${mark}</button>`;
       }).join('')}</div>
     </section>
     ${answered ? `<section class="card q-why ${right ? 'ok' : 'no'}" aria-live="polite">
       <p class="q-verdict">${right ? `${icon('check', 20)}Riktig` : `${icon('close', 20)}Ikke riktig`}</p>
+      ${q.wimg ? `<div class="q-fig q-wfig">${figure(q.wimg)}</div>` : ''}
       <p>${esc(q.why)}</p>
       <p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
     </section>
     <div class="q-dock"><button type="button" class="btn primary" id="q-next">${P.i + 1 < P.items.length ? 'Neste spørsmål' : 'Se hvordan det gikk'}${icon('chev', 20)}</button></div>` : ''}`;
   root.querySelector('#q-close').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
-  root.querySelector('#q-read').onclick = () => speak(answered ? `${q.q} Riktig svar: ${q.a[0]}. ${q.why}` : readLine({ ...q, a: P.orders[q.id].map(i => q.a[i]) }));
+  root.querySelector('#q-read').onclick = () => speak(answered ? `${q.q} Riktig svar: ${q.a[0]}. ${q.why}` : q.pick ? q.q : readLine({ ...q, a: P.orders[q.id].map(i => q.a[i]) }));
   root.querySelectorAll('.q-opt').forEach(b => b.onclick = () => {
     if (P.chosen !== null) return;
     P.chosen = +b.dataset.oi;
     P.results.push(P.chosen === 0);
+    const before = practiceDays(ctx.progress()).today;
     ctx.save(answer(ctx.progress(), q.id, P.chosen));
     ctx.vibrate(P.chosen === 0 ? 15 : [30, 40, 30]);
+    // Dagsmålet nådd akkurat nå: litt feiring, som i andre øvingsapper (0.20.0)
+    const d = practiceDays(ctx.progress());
+    if (before < d.goal && d.today >= d.goal) { toast(`Dagens mål er nådd: ${d.goal} spørsmål!`, { type: 'ok' }); if (ctx.celebrate) setTimeout(ctx.celebrate, 300); }
     renderPractice(root, ctx);
     const w = root.querySelector('.q-why'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
@@ -169,16 +190,20 @@ export function renderPractice(root, ctx) {
 }
 
 function renderPracticeDone(root, ctx) {
-  const P = practice, ok = P.results.filter(Boolean).length;
+  const P = practice, ok = P.results.filter(Boolean).length, day = practiceDays(ctx.progress());
+  const sumFig = q => (q.sign ? `<span class="q-sum-sign">${figure(q.pick ? q.imgs[0] : q.img)}</span>` : '');
   root.innerHTML = `
-    <section class="card th-hero ${ok === P.items.length ? 'lv-klar' : ok >= P.items.length * 0.85 ? 'lv-nesten' : 'lv-ovelse'}">
+    <section class="sign-card th-sign ${ok === P.items.length ? 'lv-klar' : ok >= P.items.length * 0.85 ? 'lv-nesten' : 'lv-ovelse'}">
       <p class="eyebrow">${esc(P.title)}</p>
-      <h2>${ok} av ${P.items.length} riktige</h2>
+      <h2 class="th-sign-head">${ok} av ${P.items.length} riktige</h2>
       <p>${ok === P.items.length ? 'Alt riktig. Bra jobbet!' : 'Spørsmålene du svarte feil på, kommer igjen neste gang du øver.'}</p>
+      <p class="th-day">${dayLine(day)}${day.streak > 1 ? `<span class="th-streak">${icon('flame', 18)}${day.streak} dager på rad</span>` : ''}</p>
+      <span class="goal-bar th-day-bar"><span style="width:${Math.min(100, day.today / day.goal * 100)}%"></span></span>
     </section>
-    <section class="card"><ul class="q-sum">${P.items.map((id, i) => `<li class="${P.results[i] ? 'ok' : 'no'}">${icon(P.results[i] ? 'check' : 'close', 18)}${byId.get(id).sign ? `<span class="q-sum-sign">${figure(byId.get(id).img)}</span>` : ''}<span>${esc(byId.get(id).label || byId.get(id).q)}</span></li>`).join('')}</ul></section>
+    <section class="card"><ul class="q-sum">${P.items.map((id, i) => `<li class="${P.results[i] ? 'ok' : 'no'}">${icon(P.results[i] ? 'check' : 'close', 18)}${sumFig(byId.get(id))}<span>${esc(byId.get(id).label || byId.get(id).q)}</span></li>`).join('')}</ul></section>
     <button type="button" class="btn primary" id="q-again">${icon('repeat', 20)}Øv videre</button>
     <button type="button" class="btn secondary" id="q-hub">Til oversikten</button>`;
+  if (ok === P.items.length && P.items.length >= 5 && ctx.celebrate) setTimeout(ctx.celebrate, 300);
   root.querySelector('#q-again').onclick = () => startPractice(ctx, { title: P.title, ...P.filter });
   root.querySelector('#q-hub').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
 }
@@ -191,9 +216,9 @@ const SIGN_STATE_TEXT = { ny: 'Ikke øvd ennå', feil: 'Feil sist', ov: 'Under �
 export function renderSignHub(root, ctx) {
   stopTheory();
   const p = ctx.progress();
-  const learned = signsLearned(p), wrong = SIGN_QUESTIONS.filter(q => isWrong(p.q[q.id])).length;
+  const learned = signsLearned(p), wrong = SIGN_POOL.filter(q => isWrong(p.q[q.id])).length;
   root.innerHTML = `
-    <section class="card th-hero ${learned === SIGNS.length ? 'lv-klar' : learned ? 'lv-nesten' : 'lv-start'}">
+    <section class="sign-card th-sign ${learned === SIGNS.length ? 'lv-klar' : learned ? 'lv-nesten' : 'lv-start'}">
       <p class="eyebrow">Skiltprøven</p>
       <h2>Kjenn igjen skiltene</h2>
       <span class="th-bar"><span style="width:${learned / SIGNS.length * 100}%"></span></span>
@@ -212,12 +237,12 @@ export function renderSignHub(root, ctx) {
       </section>`;
     }).join('')}
     <p class="muted small th-note">Navnene og betydningen er hentet fra skiltforskriften. Tegningene er forenklet, så de ekte skiltene kan se litt annerledes ut.</p>`;
-  const go = (title, extra = {}) => startPractice(ctx, { title, pool: 'skilt', back: '#/teori/skilt', n: 10, ...extra });
+  const go = (title, extra = {}) => startPractice(ctx, { title, pool: 'skilt', back: '#/teori/skilt', n: 10, ...extra });   // halvparten «hva betyr», halvparten «hvilket skilt»
   root.querySelector('#sg-go').onclick = () => go('Skiltprøven');
   const w = root.querySelector('#sg-wrong'); if (w) w.onclick = () => go('Skiltene du bommet på', { wrongOnly: true, n: 15 });
   root.querySelectorAll('.sg-group-go').forEach(b => b.onclick = () => {
     const g = SIGN_GROUPS.find(x => x.id === b.dataset.group);
-    go(g.title, { ids: SIGN_QUESTIONS.filter(q => SIGNS.find(s => s.id === q.sign).g === g.id).map(q => q.id) });
+    go(g.title, { ids: SIGN_POOL.filter(q => SIGNS.find(s => s.id === q.sign).g === g.id).map(q => q.id) });
   });
   root.querySelectorAll('.sg-tile').forEach(b => b.onclick = () => {
     const s = SIGNS.find(x => x.id === b.dataset.sign), st = signState(ctx.progress().q['sk' + s.id]);
@@ -241,7 +266,7 @@ function startExam(ctx) {
 
 export function renderExam(root, ctx) {
   const E = examInProgress();
-  if (!E) { ctx.go(lastResult ? '#/teori/resultat' : '#/teori'); return; }
+  if (!E) { ctx.go(lastResult ? '#/teori/resultat' : THEORY_HOME); return; }
   stopSpeaking();
   const left = () => Math.max(0, EXAM.minutes * 60 - (Date.now() - E.startedAt) / 1000);
   const id = E.ids[E.i], q = byId.get(id), done = Object.keys(E.answers).length;
@@ -288,7 +313,7 @@ export function renderExam(root, ctx) {
   const last = root.querySelector('#q-last'); if (last) last.onclick = askDeliver;
   root.querySelector('#q-quit').onclick = async () => {
     if (!await confirmDialog({ title: 'Avbryte prøven?', text: 'Svarene på denne prøven blir ikke lagret.', ok: 'Avbryt prøven', cancel: 'Fortsett', danger: true })) return;
-    saveExam(null); stopTheory(); ctx.go('#/teori');
+    saveExam(null); stopTheory(); ctx.go(THEORY_HOME);
   };
   // Klokka: tida går også når appen er lukket, som på den ekte prøven. Når den er ute, leveres prøven.
   if (examTimer) clearInterval(examTimer);
@@ -318,10 +343,10 @@ function deliver(ctx) {
 
 export function renderExamResult(root, ctx) {
   const R = lastResult;
-  if (!R) { ctx.go('#/teori'); return; }
+  if (!R) { ctx.go(THEORY_HOME); return; }
   const wrong = R.wrong.map(id => byId.get(id));
   root.innerHTML = `
-    <section class="card th-hero ${R.correct >= EXAM.solid ? 'lv-klar' : R.passed ? 'lv-nesten' : 'lv-ovelse'}">
+    <section class="sign-card th-sign ${R.correct >= EXAM.solid ? 'lv-klar' : R.passed ? 'lv-nesten' : 'lv-ovelse'}">
       <p class="eyebrow">Prøve · ${mmss(Math.min(R.sec, EXAM.minutes * 60))} brukt</p>
       <h2>${R.correct >= EXAM.solid ? 'Bestått med margin' : R.passed ? 'Bestått, uten margin' : 'Ikke bestått'}</h2>
       <p class="th-score"><strong>${R.correct}</strong> av ${R.total} riktige <span class="muted">· ${EXAM.pass} kreves på den ekte prøven</span></p>
@@ -342,13 +367,13 @@ export function renderExamResult(root, ctx) {
         ${q.img ? `<div class="q-fig small">${figure(q.img)}</div>` : ''}
         <p class="r-ans no">${icon('close', 18)}${a === undefined ? 'Ikke besvart' : esc(q.a[a])}</p>
         <p class="r-ans ok">${icon('check', 18)}${esc(q.a[0])}</p>
-        <p>${esc(q.why)}</p><p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p></details>`;
+        ${q.wimg ? `<div class="q-fig q-wfig small">${figure(q.wimg)}</div>` : ''}<p>${esc(q.why)}</p><p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p></details>`;
     }).join('')}` : ''}
     <button type="button" class="btn secondary" id="r-hub">Til oversikten</button>`;
   const w = root.querySelector('#r-wrong');
   if (w) w.onclick = () => startPractice(ctx, { title: 'Feilene fra prøven', ids: R.wrong, n: R.wrong.length });
   root.querySelector('#r-new').onclick = () => { startExam(ctx); ctx.go('#/teori/prove'); };
-  root.querySelector('#r-hub').onclick = () => ctx.go('#/teori');
+  root.querySelector('#r-hub').onclick = () => ctx.go(THEORY_HOME);
 }
 
 /* ---------- Sikkerhetskontrollen ---------- */
@@ -358,7 +383,7 @@ export function renderSafetyHub(root, ctx) {
   const list = safetyFor(SAFETY, p.car), stats = safetyStats(SAFETY, p, p.car);
   const known = id => !!(p.safety[id] && p.safety[id].known);
   root.innerHTML = `
-    <section class="card th-hero ${stats.known === stats.total ? 'lv-klar' : stats.known ? 'lv-nesten' : 'lv-start'}">
+    <section class="sign-card th-sign ${stats.known === stats.total ? 'lv-klar' : stats.known ? 'lv-nesten' : 'lv-start'}">
       <p class="eyebrow">Oppkjøringen</p>
       <h2>Sensor tar en stikkprøve</h2>
       <p>Før kjøringen får du noen tilfeldige oppgaver om bilen. Du skal vise hvordan du kontrollerer noe, og kunne forklare hva en feil kan skyldes og føre til. Du kan også bli bedt om å bruke førerstøttesystemene i bilen.</p>
@@ -407,7 +432,7 @@ export function renderSafetyDrill(root, ctx) {
   if (D.i >= D.items.length) {
     const ok = D.results.filter(Boolean).length;
     root.innerHTML = `
-      <section class="card th-hero ${ok === D.items.length ? 'lv-klar' : 'lv-nesten'}"><p class="eyebrow">Sikkerhetskontrollen</p><h2>${ok} av ${D.items.length} kunne du</h2>
+      <section class="sign-card th-sign ${ok === D.items.length ? 'lv-klar' : 'lv-nesten'}"><p class="eyebrow">Sikkerhetskontrollen</p><h2>${ok} av ${D.items.length} kunne du</h2>
         <p>${ok === D.items.length ? 'Godt forberedt på disse.' : 'De du ikke kunne, kommer først neste gang.'}</p></section>
       <section class="card"><ul class="q-sum">${D.items.map((id, i) => `<li class="${D.results[i] ? 'ok' : 'no'}">${icon(D.results[i] ? 'check' : 'close', 18)}<span>${esc(all.get(id).task)}</span></li>`).join('')}</ul></section>
       <button type="button" class="btn primary" id="d-again">${icon('repeat', 20)}Fem nye oppgaver</button>

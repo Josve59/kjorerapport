@@ -19,7 +19,7 @@ export const SIGNS = [
   // Fareskilt, § 4
   S('100', 'fare', 'Farlig sving', 'Varsler om en farlig sving. Pilen viser hvilken vei svingen går. Tilpass farten før svingen, ikke i den.'),
   S('102', 'fare', 'Farlige svinger', 'Varsler om flere farlige svinger etter hverandre. Den første svingen går den veien symbolet viser.'),
-  S('104', 'fare', 'Bratt bakke', 'Varsler om bratt bakke. Tallet viser stigningen eller fallet i prosent.'),
+  S('104', 'fare', 'Bratt bakke', 'Varsler om bratt bakke. Hvor bratt den er, kan stå på et underskilt (stigningsgrad i prosent).'),
   S('106', 'fare', 'Smalere veg', 'Varsler om at vegen blir smalere. Vær klar til å slippe fram møtende.'),
   S('108', 'fare', 'Ujevn veg', 'Varsler om ujevn veg, for eksempel humper, telehiv eller hull.'),
   S('109', 'fare', 'Fartshump', 'Varsler om fartshump eller annen fartsdemper i vegen.'),
@@ -92,4 +92,16 @@ export const SIGN_QUESTIONS = SIGNS.map(s => {
   const group = SIGN_GROUPS.find(g => g.id === s.g);
   return { id: 'sk' + s.id, t: 'skilt', sign: s.id, eyebrow: group.title, label: s.name, q: 'Hva betyr dette skiltet?',
     a: [s.name, ...wrong], why: s.meaning, ref: `Skiltforskriften, skilt ${s.id === '306' ? '306.0' : s.id}`, img: s.img };
+});
+
+/* Bildesvar (0.20.0): «Hvilket skilt er …?» med fire skilt å velge mellom. Øves sammen med skiltprøven, men teller
+   ikke med i «lært» der (lært betyr at du kjenner igjen hva et skilt betyr). imgs følger rekkefølgen i a. */
+export const SIGN_PICK_QUESTIONS = SIGNS.map(s => {
+  const rand = rng(+s.id * 104729);
+  const same = shuffle(SIGNS.filter(x => x.g === s.g && x.id !== s.id), rand);
+  const near = shuffle(SIGNS.filter(x => (NEAR[s.g] || []).includes(x.g)), rand);
+  const opts = [s, ...same.concat(near).slice(0, 3)];
+  const group = SIGN_GROUPS.find(g => g.id === s.g);
+  return { id: 'sp' + s.id, t: 'skilt', sign: s.id, pick: true, eyebrow: group.title, label: s.name, q: `Hvilket skilt er «${s.name}»?`,
+    a: opts.map(x => x.name), imgs: opts.map(x => x.img), why: s.meaning, ref: `Skiltforskriften, skilt ${s.id === '306' ? '306.0' : s.id}` };
 });

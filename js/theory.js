@@ -27,7 +27,7 @@ export const LEARNED = 3;
 /* Klar for teoriprøven: bestått minst 3 av de 5 siste prøvene, og den siste */
 export const READY_RULE = { last: 5, passed: 3 };
 
-export const emptyProgress = () => ({ q: {}, exams: [], safety: {}, car: '' });
+export const emptyProgress = () => ({ q: {}, exams: [], safety: {}, car: '', days: {} });
 
 /* Fremgang fra innstillingene, alltid med alle felt */
 export function normProgress(p) {
@@ -36,7 +36,8 @@ export function normProgress(p) {
     q: o.q && typeof o.q === 'object' ? o.q : {},
     exams: Array.isArray(o.exams) ? o.exams : [],
     safety: o.safety && typeof o.safety === 'object' ? o.safety : {},
-    car: typeof o.car === 'string' ? o.car : ''
+    car: typeof o.car === 'string' ? o.car : '',
+    days: o.days && typeof o.days === 'object' && !Array.isArray(o.days) ? o.days : {}
   };
 }
 
@@ -67,7 +68,27 @@ export function answer(p, id, chosen, now = Date.now()) {
   const right = chosen === 0;
   const e = { n: prev.n + 1, ok: prev.ok + (right ? 1 : 0), run: right ? prev.run + 1 : 0, last: now, ...(right ? {} : { miss: now }) };
   if (right && prev.miss) e.miss = prev.miss;
-  return { ...p, q: { ...p.q, [id]: e } };
+  return { ...p, q: { ...p.q, [id]: e }, days: bumpDay(p.days, now) };
+}
+
+/* Dagsmål og dager på rad (0.20.0): antall svar per dag (lokal dato), bare de siste 60 dagene lagres.
+   Som i andre øvingsapper gjør et lite mål for dagen det lettere å øve litt hver dag. */
+export const DAILY_GOAL = 10;
+export const dayKey = (t = Date.now()) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function bumpDay(days, now) {
+  const k = dayKey(now), out = { ...(days || {}), [k]: ((days || {})[k] || 0) + 1 };
+  const keys = Object.keys(out).sort();
+  while (keys.length > 60) delete out[keys.shift()];
+  return out;
+}
+/* { today: svar i dag, goal, streak: dager på rad med minst ett svar, til og med i dag eller i går } */
+export function practiceDays(p, now = Date.now()) {
+  const days = (p && p.days) || {}, today = days[dayKey(now)] || 0;
+  const d = new Date(now); d.setHours(12, 0, 0, 0);
+  if (!today) d.setDate(d.getDate() - 1);
+  let streak = 0;
+  while (days[dayKey(d.getTime())]) { streak++; d.setDate(d.getDate() - 1); }
+  return { today, goal: DAILY_GOAL, streak };
 }
 
 export const isLearned = e => !!e && e.run >= LEARNED;

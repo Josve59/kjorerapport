@@ -194,3 +194,76 @@ test('prøven er litt vanskeligere enn den ekte: vanskelige oppgaver i hvert tem
   for (const c of [40, 41, 42]) p = addExam(p, res(c), { at: 100 + c });
   assert.equal(theoryReady(p).level, 'klar');
 });
+
+/* ---------- 0.20.0: flere tegninger, bildesvar og dagsmål ---------- */
+import { practiceDays, dayKey, DAILY_GOAL } from '../js/theory.js';
+import { SIGN_PICK_QUESTIONS } from '../js/theory-signs.js';
+
+test('0.20.0: alle tegninger til spørsmål, forklaringer og sikkerhetskontroll finnes', () => {
+  const all = QUESTIONS.concat(SIGN_QUESTIONS);
+  for (const q of all) {
+    if (q.img) assert.ok(figure(q.img).startsWith('<svg'), `${q.id}: ${q.img}`);
+    if (q.wimg) assert.ok(figure(q.wimg).startsWith('<svg'), `${q.id}: ${q.wimg}`);
+  }
+  for (const t of SAFETY) if (t.img) assert.ok(figure(t.img).startsWith('<svg'), `${t.id}: ${t.img}`);
+  // Mange flere spørsmål har noe å se på nå, i alle temaer
+  const withFig = QUESTIONS.filter(q => q.img || q.wimg);
+  assert.ok(withFig.length >= 120, `${withFig.length} spørsmål med tegning`);
+  for (const t of THEMES) assert.ok(QUESTIONS.some(q => q.t === t.id && (q.img || q.wimg)), `${t.id} har ingen tegninger`);
+  assert.ok(SAFETY.filter(t => t.img).length >= 20, 'sikkerhetskontrollen har tegninger');
+  // Nye nøkler er med i lista, og hver tegning har en beskrivelse for skjermleser
+  for (const k of ['view:bakketopp', 'pict:politi-opp', 'cap:olje', 'diagram:stopp', 'diagram:sekund-80-2', 'scene:utrykning', 'lamp:esc', 'line:sperreomrade']) {
+    assert.ok(FIGURE_KEYS.includes(k), k);
+    assert.match(figure(k), /aria-label="[^"]{8,}"/, k);
+  }
+  // Lampen kan vises uten navn når spørsmålet er hva symbolet betyr
+  assert.match(figure('lamp:fjernlys:anon'), /aria-label="Symbol i instrumentpanelet"/);
+  assert.doesNotMatch(figure('lamp:fjernlys:anon'), /fjernlys/i);
+  // To sekunder i 80 km/t: rundt 45 meter, som svaret og forklaringen
+  assert.match(figure('diagram:sekund-80-2'), /rundt 45 meter/);
+  assert.match(figure('diagram:sekund-80-1'), /rundt 22 meter/);
+});
+
+test('0.20.0: spørsmålsbildet røper ikke svaret i skjermleserteksten', () => {
+  for (const q of QUESTIONS.filter(x => x.img)) {
+    const label = (figure(q.img).match(/aria-label="([^"]*)"/) || [])[1] || '';
+    const right = q.a[0].toLowerCase().replace(/[.,]/g, '');
+    if (right.length >= 12) assert.ok(!label.toLowerCase().includes(right), `${q.id}: bildeteksten inneholder svaret`);
+  }
+});
+
+test('0.20.0: bildesvar i skiltprøven: fire ulike skilt med tegning, riktig skilt først', () => {
+  assert.equal(SIGN_PICK_QUESTIONS.length, SIGNS.length);
+  const ids = new Set(SIGN_QUESTIONS.map(q => q.id));
+  for (const q of SIGN_PICK_QUESTIONS) {
+    assert.ok(!ids.has(q.id)); ids.add(q.id);
+    assert.ok(q.pick && q.q.endsWith('?'));
+    assert.equal(q.a.length, 4); assert.equal(q.imgs.length, 4);
+    assert.equal(new Set(q.imgs).size, 4, `${q.id}: like bilder`);
+    assert.equal(new Set(q.a).size, 4, `${q.id}: like navn`);
+    assert.equal(q.imgs[0], SIGNS.find(s => s.id === q.sign).img, `${q.id}: riktig skilt først`);
+    for (const k of q.imgs) assert.ok(figure(k).startsWith('<svg'), k);
+    assert.ok(q.q.includes(q.label));
+  }
+});
+
+test('0.20.0: dagsmål og dager på rad', () => {
+  const day = 86400000, t0 = new Date(2026, 10, 16, 15, 0).getTime();
+  let p = emptyProgress();
+  assert.deepEqual(practiceDays(p, t0), { today: 0, goal: DAILY_GOAL, streak: 0 });
+  for (let i = 0; i < 3; i++) p = answer(p, 'f0' + (i + 1), 0, t0 - 2 * day);   // i forgårs
+  p = answer(p, 'f04', 1, t0 - day);                                                // i går
+  assert.equal(practiceDays(p, t0).today, 0);
+  assert.equal(practiceDays(p, t0).streak, 2, 'i går og i forgårs, i dag ikke øvd ennå');
+  for (let i = 0; i < DAILY_GOAL; i++) p = answer(p, 'f05', 0, t0 + i);
+  assert.equal(practiceDays(p, t0).today, DAILY_GOAL);
+  assert.equal(practiceDays(p, t0).streak, 3);
+  assert.equal(practiceDays(p, t0 + 2 * day).streak, 0, 'et hull bryter rekken');
+  // Bare de siste 60 dagene lagres, og normProgress tar vare på dagene
+  let q = emptyProgress();
+  for (let i = 0; i < 70; i++) q = answer(q, 'f01', 0, t0 + i * day);
+  assert.equal(Object.keys(q.days).length, 60);
+  assert.ok(q.days[dayKey(t0 + 69 * day)]);
+  assert.deepEqual(normProgress(q).days, q.days);
+  assert.deepEqual(normProgress({}).days, {});
+});

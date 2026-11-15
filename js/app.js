@@ -21,7 +21,7 @@ import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit, overlayCamSigns } from './signs.js';
 import { createLaneEase } from './laneease.js';
 import { crestSpeed, speedScore, totalScore } from './speedfit.js';
-import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory } from './theoryui.js';
+import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory, THEORY_HOME } from './theoryui.js';
 import { normProgress, tagsFromDrives } from './theory.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
@@ -33,7 +33,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.19.1';
+export const APP_VERSION = '0.20.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -407,7 +407,7 @@ async function renderHome() {
       <button type="button" class="card mini-card" id="btn-go-plan"${spots.length ? '' : ' style="grid-column: 1 / -1"'}><span class="card-title">${icon('school')}Opplæring</span><strong>${plan.done} av ${plan.total}</strong><span class="muted small">punkter krysset av</span></button>`;
     more.hidden = false;
     if (spots.length) $('#btn-go-spots').onclick = () => { location.hash = '#/faresteder'; };
-    $('#btn-go-plan').onclick = () => { location.hash = '#/opplaering'; };
+    $('#btn-go-plan').onclick = () => { location.hash = '#/opplaering/laereplan'; };
     $('#btn-go-teacher').onclick = () => { location.hash = tStud ? studentHash(tStud) : '#/trafikklaerer'; };
     // «Hva må du øve mer på?» (0.12.0, før «Klar for oppkjøring?»): eget kort på Hjem, gratis å se, skjermen hører til Pluss
     const rc = $('#ready-card');
@@ -438,21 +438,21 @@ async function theoryDriveTags() {
   }
   return tagsFromDrives(sig);
 }
-const theoryCtx = { progress: theoryProgress, save: saveTheory, driveTags: theoryDriveTags, go: h => { location.hash = h; }, vibrate };
+const theoryCtx = { progress: theoryProgress, save: saveTheory, driveTags: theoryDriveTags, go: h => { location.hash = h; }, vibrate, celebrate: () => celebrate() };
 function renderTheoryRoute(h) {
+  if (h === '#/teori') { location.replace(THEORY_HOME); return; }   // oversikten ligger i Opplæring (0.20.0)
   show('theory');
   const head = $('#theory-head'), title = $('#theory-title'), root = $('#theory-root');
-  const titles = { '#/teori': 'Teori', '#/teori/resultat': 'Resultat', '#/teori/skilt': 'Skilt', '#/sikkerhetskontroll': 'Sikkerhetskontroll' };
+  const titles = { '#/teori/resultat': 'Resultat', '#/teori/skilt': 'Skiltprøven', '#/sikkerhetskontroll': 'Sikkerhetskontroll' };
   head.hidden = !titles[h];
   title.textContent = titles[h] || '';
-  if (h === '#/teori') renderTheoryHub(root, theoryCtx);
-  else if (h === '#/teori/ov') renderPractice(root, theoryCtx);
+  if (h === '#/teori/ov') renderPractice(root, theoryCtx);
   else if (h === '#/teori/prove') renderExam(root, theoryCtx);
   else if (h === '#/teori/resultat') renderExamResult(root, theoryCtx);
   else if (h === '#/teori/skilt') renderSignHub(root, theoryCtx);
   else if (h === '#/sikkerhetskontroll') renderSafetyHub(root, theoryCtx);
   else if (h === '#/sikkerhetskontroll/ov') renderSafetyDrill(root, theoryCtx);
-  else location.hash = '#/teori';
+  else location.hash = THEORY_HOME;
 }
 /* Kortene på Hjem: synlige for alle, også uten turer, siden teorien kommer før øvelseskjøringen */
 function renderTheoryHome() {
@@ -461,7 +461,7 @@ function renderTheoryHome() {
   const p = theoryProgress(), t = theorySummary(p);
   el.innerHTML = theoryMiniCards(p, ['btn-go-theory', 'btn-go-safety']);
   el.hidden = false;
-  $('#btn-go-theory').onclick = () => { location.hash = t.exam ? '#/teori/prove' : '#/teori'; };
+  $('#btn-go-theory').onclick = () => { location.hash = t.exam ? '#/teori/prove' : THEORY_HOME; };
   $('#btn-go-safety').onclick = () => { location.hash = '#/sikkerhetskontroll'; };
 }
 
@@ -576,8 +576,10 @@ async function renderPlus(feature = null) {
 /* Tre små ting som viser Pluss rundt i appen: låsene på fanene, raden i Innstillinger og kamerakortet på Hjem */
 function updatePlusMarks() {
   const plus = hasPlus();
-  // «Trafikklærer» har ingen lås (0.18.3): samtalen med læreren er gratis
-  document.querySelectorAll('#tabbar a[data-tab="plan"]').forEach(a => a.classList.toggle('locked', !plus));
+  // «Trafikklærer» har ingen lås (0.18.3): samtalen med læreren er gratis. Opplæring har heller ingen lås (0.20.0):
+  // teori og sikkerhetskontroll er gratis, bare underfanen «Læreplan» hører til Pluss.
+  document.querySelectorAll('#tabbar a[data-tab="plan"]').forEach(a => a.classList.remove('locked'));
+  return plus;
 }
 
 /* ---------- Guider (0.10.1) ---------- */
@@ -1529,19 +1531,31 @@ function planProgress() {
   const done = Object.values(mine).filter(v => v && v.done).length;
   return { done, total };
 }
-async function renderPlan() {
+/* Opplæring (0.20.0): to underfaner. «Teori og sikkerhet» er gratis og står først for eleven, fordi teoriøvingen og
+   sikkerhetskontrollen er det mange laster ned appen for, og før var de gjemt. «Læreplan» hører til Pluss.
+   Læreren lander på læreplanen til eleven. Valget ligger i adressen, så tilbake og fanelinjen husker det. */
+let planSeq = 0;
+async function renderPlan(h = '#/opplaering') {
   show('plan');
-  const root = $('#plan-root');
+  const tok = ++planSeq;
+  const sub = h === '#/opplaering/laereplan' ? 'plan' : h === '#/opplaering/teori' ? 'teori' : (isTeacher() ? 'plan' : 'teori');
+  const top = $('#plan-root');
+  top.innerHTML = `<div class="segment plan-seg" role="radiogroup" aria-label="Velg del av opplæringen">
+      <label><input type="radio" name="plan-sub" value="teori" ${sub === 'teori' ? 'checked' : ''}><span>${icon('quiz', 18)}Teori og sikkerhet</span></label>
+      <label><input type="radio" name="plan-sub" value="plan" ${sub === 'plan' ? 'checked' : ''}><span>${icon('school', 18)}Læreplan${hasPlus() ? '' : icon('lock', 14, 'plan-lock')}</span></label></div>
+    <div id="plan-sub"></div>`;
+  top.querySelectorAll('input[name=plan-sub]').forEach(r => r.onchange = () => { location.replace(r.value === 'plan' ? '#/opplaering/laereplan' : THEORY_HOME); });
+  const root = $('#plan-sub');
+  if (sub === 'teori') { await renderTheoryHub(root, theoryCtx); return; }
   const s = getSettings();
   const driver = isTeacher() ? (s.activeStudent || '') : '';
   const rows = await gatherRows(scopeDriver(s));
+  if (tok !== planSeq) return;
   const ev = curriculumEvidence(rows);
   const { key, mine } = planState();
   const prog = planProgress();
   const dfmt = iso => new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
-  // Fremdriften i læreplanen øverst som skiltkort (0.19.0), så teori og sikkerhetskontroll, så punktene
-  const thP = theoryProgress();
-  // Faresteder er flyttet til Turer (0.12.1): Opplæring er bare læreplanen
+  // Fremdriften i læreplanen øverst som skiltkort (0.19.0), så punktene. Teori og sikkerhet har egen underfane (0.20.0).
   root.innerHTML = `
     <section class="card plan-head sign-card">
       <p class="eyebrow">${driver ? esc(driver) : esc(s.name || 'Din opplæring')}</p>
@@ -1549,9 +1563,6 @@ async function renderPlan() {
       <span class="goal-bar"><span style="width:${(prog.done / prog.total * 100).toFixed(0)}%"></span></span>
       <p class="muted small">Etter læreplanen for klasse B. Trafikkskolen avgjør hva som er gjennomført.</p>
     </section>
-    <div class="mini-grid">
-      ${theoryMiniCards(thP, ['plan-theory', 'plan-safety'])}
-    </div>
     ${CURRICULUM.map(st => `<h2 class="group-title">${esc(st.stage)}</h2><section class="card"><ul class="plan-list">${st.items.map(it => {
       const e = it.auto ? ev[it.auto] : null;
       const st2 = mine[it.id] || {};
@@ -1560,8 +1571,6 @@ async function renderPlan() {
         ${it.help ? `<span class="muted small">${esc(it.help)}</span>` : ''}
         ${it.auto ? `<span class="plan-ev ${e && e.good ? 'good' : ''}">${e ? esc(e.text) : 'Ikke øvd på turene ennå'}</span>` : ''}</span></label></li>`;
     }).join('')}</ul></section>`).join('')}`;
-  $('#plan-theory').onclick = () => { location.hash = '#/teori'; };
-  $('#plan-safety').onclick = () => { location.hash = '#/sikkerhetskontroll'; };
   root.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => {
     const cur = getSettings();
     const allC = { ...(cur.curriculum || {}) };
@@ -1570,7 +1579,8 @@ async function renderPlan() {
     allC[key] = m;
     saveSettings({ ...cur, curriculum: allC });
     if (cb.checked) vibrate(20);
-    renderPlan();
+    const y = window.scrollY;
+    renderPlan('#/opplaering/laereplan').then(() => window.scrollTo(0, y));
   });
 }
 
@@ -3173,7 +3183,8 @@ function updateTabbar(h) {
   document.body.classList.toggle('has-tabbar', !hide);
   if (TAB_ROOTS[h]) lastTab = h;
   if (h.startsWith('#/elev/')) lastTab = '#/trafikklaerer';   // en rapport åpnet fra elevsiden hører til Elever (0.18.0)
-  const active = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') ? 'plan' : null) || (h.startsWith('#/elev/') ? 'teacher' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips' })[h] || TAB_ROOTS[lastTab];
+  if (h.startsWith('#/opplaering/')) lastTab = h;   // underfanene i Opplæring (0.20.0)
+  const active = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') || h.startsWith('#/opplaering/') ? 'plan' : null) || (h.startsWith('#/elev/') ? 'teacher' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -3209,9 +3220,9 @@ function goBack() {
   const h = location.hash;
   // Teori og sikkerhetskontroll (0.14.0): fra øving og prøve til oversikten, fra oversikten dit du kom fra
   if (h === '#/teori/ov') { location.hash = practiceBack(); return; }
-  if (/^#\/teori\//.test(h)) { location.hash = '#/teori'; return; }
+  if (/^#\/teori\//.test(h)) { location.hash = THEORY_HOME; return; }
   if (h === '#/sikkerhetskontroll/ov') { location.hash = '#/sikkerhetskontroll'; return; }
-  if (h === '#/teori' || h === '#/sikkerhetskontroll') { location.hash = theoryFrom || '#/'; return; }
+  if (h === '#/teori' || h === '#/sikkerhetskontroll') { location.hash = THEORY_HOME; return; }   // teorien ligger i Opplæring (0.20.0)
   if (h.startsWith('#/elev/')) { location.hash = '#/trafikklaerer'; return; }   // elevsiden → elevlisten (0.18.0)
   // En rapport åpnet fra elevsiden går tilbake dit
   if (h.startsWith('#/rapport/') && reportFrom && reportFrom.startsWith('#/elev/')) { location.hash = reportFrom; return; }
@@ -3265,7 +3276,7 @@ function route() {
   else if (h === '#/klar') renderReady();
   else if (h === '#/fremgang') renderProgress();
   else if (h === '#/faresteder') renderSpots();
-  else if (h === '#/opplaering') renderPlan();
+  else if (h === '#/opplaering' || h === '#/opplaering/teori' || h === '#/opplaering/laereplan') renderPlan(h);
   else if (h === '#/kamera') renderCamera();
   else if (h === '#/guider') renderGuides();
   else if (h === '#/teori' || h.startsWith('#/teori/') || h === '#/sikkerhetskontroll' || h === '#/sikkerhetskontroll/ov') renderTheoryRoute(h);

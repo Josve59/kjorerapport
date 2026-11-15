@@ -26,7 +26,11 @@ export const CAR_TYPES = [
 
 const T = (id, area, car, task, how, fault) => ({ id, area, car, task, how, fault });
 /* Tegning av varsellampen (trafficsvg.js) for oppgavene der den hører til (0.16.0) */
-const LAMP_FOR = { 'lys-naer': 'lamp:naerlys', 'lys-fjern': 'lamp:fjernlys', 'brems-abs': 'lamp:abs', 'vaeske-olje': 'lamp:olje', 'varsel-brems': 'lamp:brems', 'varsel-lading': 'lamp:lading', 'varsel-dekk': 'lamp:dekk', 'styr-servo': 'lamp:styring' };
+const LAMP_FOR = { 'lys-naer': 'lamp:naerlys', 'lys-fjern': 'lamp:fjernlys', 'brems-abs': 'lamp:abs', 'varsel-brems': 'lamp:brems', 'varsel-lading': 'lamp:lading', 'varsel-dekk': 'lamp:dekk', 'styr-servo': 'lamp:styring',
+  // 0.20.0: flere tegninger. Væskene viser symbolet på lokket i stedet for lampen, fordi oppgaven er å finne og sjekke væsken.
+  'lys-blink': 'lamp:blink', 'lys-bak': 'lamp:takebak', 'vaeske-olje': 'cap:olje', 'vaeske-kjole': 'cap:kjole', 'brems-vaeske': 'cap:brems', 'vaeske-spyler': 'cap:spyler',
+  'dekk-monster': 'diagram:monster', 'dekk-type': 'pict:vinterdekk', 'varsel-farger': 'pict:dash', 'varsel-start': 'pict:dash', 'sikt-speil': 'diagram:blindsone',
+  'sikt-belte': 'lamp:belte', 'utstyr-trekant': 'diagram:trekant', 'stotte-esc': 'lamp:esc' };
 
 const LIST = [
   /* ---------- Lys ---------- */
@@ -63,7 +67,7 @@ const LIST = [
     ['Kutt, sprekker og buler på siden av dekket.', 'Ujevn slitasje, for eksempel mer slitt på innsiden eller ytterkanten.', 'Spiker eller skruer i slitebanen.'],
     'En bule betyr at dekket kan være skadet inni og kan sprekke. Ujevn slitasje kan bety feil hjulstilling eller feil lufttrykk.'),
   T('dekk-type', 'dekk', 'alle', 'Hva gjelder for dekkene om vinteren, og hvordan ser du at et dekk er et vinterdekk?',
-    ['Vinterdekk er merket M+S eller med et fjellsymbol med snøfnugg.', 'Har bilen piggdekk, skal den ha det på alle hjul.', 'Piggdekk er tillatt fra 1. november til første søndag etter 2. påskedag i Sør-Norge, og ellers når føret gjør det nødvendig.'],
+    ['Vinterdekk er merket M+S eller med et fjellsymbol med snøfnugg.', 'Har bilen piggdekk, skal den ha det på alle hjul.', 'Piggdekk er tillatt fra 1. november til første søndag etter 2. påskedag i Sør-Norge, og fra 16. oktober til 30. april i Nordland, Troms og Finnmark. Ellers bare når føret gjør det nødvendig.'],
     'Sommerdekk på vinterføre gir svært dårlig grep. Bilen må ha dekk som passer føret.'),
   T('dekk-reserve', 'dekk', 'alle', 'Hva har bilen ved punktering?',
     ['Vis hvor reservehjulet, nødhjulet eller tetningssettet ligger.', 'Et nødhjul har lav maksfart, som står på hjulet, og skal bare brukes til nærmeste verksted.'],
@@ -74,10 +78,10 @@ const LIST = [
     ['Trå på bremsepedalen: den skal være fast og ikke synke helt ned.', 'Kjør sakte fram og brems: bilen skal stanse rett, uten å trekke til siden.', 'Lytt etter skraping og pip.'],
     'En myk pedal kan bety luft i bremsene eller lekkasje. Trekker bilen skjevt, bremser hjulene ulikt. Ikke kjør før det er sjekket.'),
   T('brems-servo', 'bremser', 'fossil', 'Vis hvordan du kontrollerer bremseservoen.',
-    ['Med motoren av: trå pedalen 4–5 ganger til den blir hard.', 'Hold pedalen inne og start motoren.', 'Pedalen skal synke litt: da virker servoen.'],
+    ['Med motoren av: trå pedalen 4–5 ganger til den blir hard.', 'Hold pedalen inne og start motoren.', 'Pedalen skal synke litt: da virker servoen.', 'Testen virker på biler med vakuumservo. Mange nye biler har elektrisk bremseservo, og da står det i instruksjonsboka hvordan den kontrolleres.'],
     'Uten servo må du trå mye hardere for å bremse, og bremselengden blir lengre om du ikke er forberedt.'),
   T('brems-park', 'bremser', 'alle', 'Vis hvordan du bruker og kontrollerer parkeringsbremsen.',
-    ['Sett på parkeringsbremsen (spak, pedal eller knapp) og se at varsellampen tennes.', 'Prøv å kjøre forsiktig fram: bilen skal ikke rikke seg.', 'Løs den ut igjen og se at lampen slukker.'],
+    ['Sett på parkeringsbremsen (spak, pedal eller knapp) og se at varsellampen tennes.', 'Prøv å kjøre forsiktig fram: bilen skal ikke rikke seg.', 'Løs den ut igjen og se at lampen slukker.', 'Mange biler med elektrisk parkeringsbrems løser den ut av seg selv når du kjører. Se i instruksjonsboka hvordan den virker og kontrolleres i bilen din.'],
     'Holder ikke parkeringsbremsen, kan bilen rulle når den står i en bakke. Kjører du med den på, blir bremsene varme og slites.'),
   T('brems-vaeske', 'bremser', 'alle', 'Hvor kontrollerer du bremsevæsken, og hva ser du etter?',
     ['Vis beholderen under panseret: den er ofte merket med et bremsesymbol.', 'Nivået skal være mellom MIN og MAX.', 'Du skal ikke åpne den uten grunn: bremsevæske tar opp fukt.'],
@@ -92,7 +96,7 @@ const LIST = [
     'Mye slark betyr at det er slitte deler i styringen. Bilen styrer da upresist og kan bli farlig å kjøre.'),
   T('styr-servo', 'styring', 'alle', 'Hvordan merker du at servostyringen ikke virker?',
     ['Rattet blir tungt å vri, særlig når bilen står stille.', 'Mange biler viser en varsellampe for styring.', 'På eldre biler med hydraulisk servo kan nivået på servoolje sjekkes under panseret.'],
-    'Uten servo er bilen fortsatt mulig å styre, men det krever mye mer kraft. Kjør forsiktig til verksted.'),
+    'Uten servo krever styringen mye mer kraft, og på mange nye biler blir rattet så tungt at det ikke er forsvarlig å kjøre. Gul lampe: få det sjekket snart. Rød lampe eller svært tungt ratt: stans der det er trygt, og kjør ikke videre.'),
   T('styr-trekk', 'styring', 'alle', 'Bilen trekker til én side når du kjører rett fram. Hva kan det skyldes?',
     ['Ulikt lufttrykk i dekkene.', 'Feil hjulstilling.', 'At bremsen henger på ett hjul.'],
     'Sjekk lufttrykket først. Trekker bilen fortsatt, må den på verksted.'),
@@ -122,10 +126,10 @@ const LIST = [
     ['Mange lamper tennes en kort stund når bilen slås på. Det er en test av lampene.', 'De skal slukke etter noen sekunder.', 'En lampe som blir stående, varsler om en feil.'],
     'Slukker ikke lampen for bremser, kollisjonsputer eller ABS, er det en feil som må sjekkes før du kjører.'),
   T('varsel-brems', 'varsel', 'alle', 'Varsellampen for bremser lyser under kjøring. Hva gjør du?',
-    ['Sjekk først at parkeringsbremsen er helt løst ut.', 'Lyser den fortsatt, stans der det er trygt.', 'Kontroller bremsevæsken, og kjør ikke videre hvis nivået er lavt eller pedalen er myk.'],
+    ['Sjekk først at parkeringsbremsen er helt løst ut.', 'Lyser lampen fortsatt, stans der det er trygt.', 'Kjør ikke videre: kontroller bremsevæsken og ring veihjelp eller verksted.'],
     'Lampen kan bety lav bremsevæske eller feil i bremsesystemet. Bremsene kan svikte.'),
   T('varsel-lading', 'varsel', 'alle', 'Varsellampen for batteri eller lading lyser. Hva betyr det?',
-    ['Bilen lader ikke 12-voltsbatteriet som den skal.', 'Slå av det strømmen du ikke trenger, og kjør til verksted.', 'Bilen kan stoppe når batteriet er tomt.'],
+    ['Bilen lader ikke 12-voltsbatteriet som den skal.', 'Slå av det strømmen du ikke trenger, og kjør til verksted.', 'Bilen kan stoppe når batteriet er tomt.', 'På bensin- og dieselbiler kan en røket reim være årsaken, og den kan også drive vannpumpen. Følg med på temperaturen, og stans hvis den stiger.'],
     'Uten lading går 12-voltsbatteriet tomt. Da kan bilen stoppe, og lys og vindusviskere kan slutte å virke.'),
   T('varsel-dekk', 'varsel', 'alle', 'Varsellampen for dekktrykk lyser. Hva gjør du?',
     ['Stans der det er trygt og se over dekkene.', 'Mål lufttrykket og fyll til riktig trykk.', 'Synker trykket igjen, kan dekket være punktert.'],

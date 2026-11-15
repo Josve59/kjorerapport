@@ -21,7 +21,9 @@ test('demoturer og importerte turer teller ikke og er aldri låst', () => {
 
 test('skjermene som hører til Pluss', () => {
   assert.equal(gateFor('#/kamera'), 'camera');
-  assert.equal(gateFor('#/opplaering'), 'plan');
+  assert.equal(gateFor('#/opplaering'), null, 'Opplæring med teori og sikkerhet er gratis (0.20.0)');
+  assert.equal(gateFor('#/opplaering/teori'), null);
+  assert.equal(gateFor('#/opplaering/laereplan'), 'plan');
   assert.equal(gateFor('#/faresteder'), 'plan');
   assert.equal(gateFor('#/trafikklaerer'), null, 'samtalen med læreren er gratis (0.18.3)');
   assert.equal(gateFor('#/klar'), 'ready');

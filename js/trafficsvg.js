@@ -52,12 +52,12 @@ const SIGNS = {
   },
   206: () => `<polygon points="50,4 96,50 50,96 4,50" fill="${WH}" stroke="${BLK}" stroke-width="1.5"/><polygon points="50,15 85,50 50,85 15,50" fill="${YEL}"/>`,
   // Stripene holdes innenfor den gule flaten (klippes), så de ikke stikker ut over kanten
-  208: () => `${SIGNS[206]()}<clipPath id="c208"><polygon points="50,15 85,50 50,85 15,50"/></clipPath><g clip-path="url(#c208)" stroke="${BLK}" stroke-width="3.5"><line x1="30" y1="22" x2="78" y2="70"/><line x1="22" y1="30" x2="70" y2="78"/><line x1="38" y1="14" x2="86" y2="62"/></g>`,
+  208: () => `${SIGNS[206]()}<clipPath id="c208"><polygon points="50,15 85,50 50,85 15,50"/></clipPath><g clip-path="url(#c208)"><line x1="16" y1="84" x2="84" y2="16" stroke="${BLK}" stroke-width="13"/></g>`,
   210: () => tri(`<rect x="44" y="36" width="12" height="40" fill="${BLK}"/><rect x="30" y="53" width="40" height="5" fill="${BLK}"/>`),
   302: () => `<circle cx="50" cy="50" r="46" fill="${RED}"/><rect x="18" y="42" width="64" height="16" fill="${WH}"/>`,
   306: () => ring(),
   362: (n = 60, gul) => `${ring(gul ? YEL : WH)}${num(n)}`,
-  364: (n = 60) => `<circle cx="50" cy="50" r="45" fill="${WH}" stroke="${BLK}" stroke-width="2"/>${num(n, '#9a9a9a')}<clipPath id="c364"><circle cx="50" cy="50" r="40"/></clipPath><g clip-path="url(#c364)" stroke="${BLK}" stroke-width="2.5"><line x1="78" y1="30" x2="32" y2="76"/><line x1="70" y1="22" x2="24" y2="68"/><line x1="84" y1="38" x2="40" y2="82"/></g>`,
+  364: (n = 60) => `<circle cx="50" cy="50" r="45" fill="${WH}" stroke="${BLK}" stroke-width="2"/>${num(n, BLK)}<clipPath id="c364"><circle cx="50" cy="50" r="40"/></clipPath><g clip-path="url(#c364)" stroke="${BLK}" stroke-width="2.5"><line x1="78" y1="30" x2="32" y2="76"/><line x1="70" y1="22" x2="24" y2="68"/><line x1="84" y1="38" x2="40" y2="82"/></g>`,
   370: () => `<circle cx="50" cy="50" r="41" fill="${BLUE}" stroke="${RED}" stroke-width="9"/><g stroke="${RED}" stroke-width="9"><line x1="23" y1="23" x2="77" y2="77"/><line x1="77" y1="23" x2="23" y2="77"/></g>`,
   372: () => `<circle cx="50" cy="50" r="41" fill="${BLUE}" stroke="${RED}" stroke-width="9"/><line x1="23" y1="23" x2="77" y2="77" stroke="${RED}" stroke-width="9"/>`,
   334: () => `${ring()}<g transform="translate(0 -1)">${carRear(35, RED)}${carRear(65, BLK)}</g>`,
@@ -84,7 +84,7 @@ const SIGNS = {
   114: () => tri(`<polygon points="70,79 70,64 62,46 54,41 54,79" fill="${BLK}"/><circle cx="45" cy="52" r="3.5" fill="${BLK}"/><circle cx="40" cy="63" r="4.5" fill="${BLK}"/><circle cx="32" cy="74" r="4" fill="${BLK}"/>`),
   116: () => tri(`<g transform="rotate(-12 50 47) translate(50 47) scale(.62) translate(-50 -48)">${carRear(50, BLK)}</g><path d="M44 79 C37 72 50 68 44 59 M56 79 C49 72 62 68 56 59" fill="none" stroke="${BLK}" stroke-width="3"/>`),
   122: () => tri(`<path d="M32 79 V64 A18 20 0 0 1 68 64 V79 H60 V66 A10 11 0 0 0 40 66 V79 Z" fill="${BLK}"/>`),
-  124: () => tri(`<rect x="45" y="36" width="10" height="43" fill="${BLK}"/><rect x="30" y="58" width="40" height="10" fill="${BLK}"/>`),
+  124: () => tri(`<g transform="rotate(45 50 61)"><rect x="45" y="41" width="10" height="40" fill="${BLK}"/><rect x="30" y="56" width="40" height="10" fill="${BLK}"/></g>`),   // skrått kryss som på det ekte skiltet (0.20.0)
   134: () => tri(`<g fill="${BLK}"><rect x="31" y="58" width="38" height="5"/><rect x="31" y="68" width="38" height="5"/><rect x="34" y="52" width="5" height="27"/><rect x="47.5" y="52" width="5" height="27"/><rect x="61" y="52" width="5" height="27"/></g>`),
   140: () => tri(`<g fill="${BLK}"><rect x="31" y="74" width="7" height="4"/><rect x="41" y="74" width="7" height="4"/><rect x="51" y="74" width="7" height="4"/><rect x="61" y="74" width="7" height="4"/><circle cx="50" cy="42" r="4"/></g><g stroke="${BLK}" stroke-width="4" stroke-linecap="round" fill="none"><path d="M49 47 L47 59 L53 71"/><path d="M47 59 L41 70"/><path d="M49 50 L56 56"/><path d="M49 50 L42 55"/></g>`),
   142: () => tri(`${runner(43, 40, 38)}${runner(60, 52, 27)}`),
@@ -271,12 +271,262 @@ const LAMPS = {
   olje: ['rod', 'Varsellampe for oljetrykk', c => `<path d="M20 50 Q12 50 14 42 L22 44" fill="none" stroke="${c}" stroke-width="4.5" stroke-linecap="round"/><rect x="22" y="44" width="38" height="22" rx="3" fill="${c}"/><rect x="34" y="37" width="10" height="7" rx="1.5" fill="${c}"/><path d="M58 50 L80 38" stroke="${c}" stroke-width="6" stroke-linecap="round"/><path d="M82 50 Q78 58 82 62 Q86 58 82 50 Z" fill="${c}"/>`],
   styring: ['gul', 'Varsellampe for styring', c => `<circle cx="44" cy="50" r="22" fill="none" stroke="${c}" stroke-width="5.5"/><circle cx="44" cy="50" r="6" fill="${c}"/><path d="M24 46 H38 M50 46 H64 M44 56 V71" stroke="${c}" stroke-width="5"/>${bang(79, 32, c, 34)}`],
   naerlys: ['gronn', 'Kontrollampe for nærlys', c => `${headlamp(c)}<path d="M46 36 L22 44 M46 46 L22 54 M46 56 L22 64 M46 66 L22 74" stroke="${c}" stroke-width="5" stroke-linecap="round"/>`],
-  fjernlys: ['bla', 'Kontrollampe for fjernlys', c => `${headlamp(c)}<path d="M46 36 H20 M46 46 H20 M46 56 H20 M46 66 H20" stroke="${c}" stroke-width="5" stroke-linecap="round"/>`]
+  fjernlys: ['bla', 'Kontrollampe for fjernlys', c => `${headlamp(c)}<path d="M46 36 H20 M46 46 H20 M46 56 H20 M46 66 H20" stroke="${c}" stroke-width="5" stroke-linecap="round"/>`],
+  // Nye i 0.20.0
+  motor: ['gul', 'Gul varsellampe for motoren', c => `<path d="M16 50 H24 V42 H32 V34 H56 V40 H64 L71 33 H82 V71 H71 L64 64 H52 V72 H32 V64 H24 V58 H16 Z" fill="none" stroke="${c}" stroke-width="5.5" stroke-linejoin="round"/>`],
+  esc: ['gul', 'Lampe for antiskrens (ESC)', c => `<path d="M30 50 L36 34 H64 L70 50 V60 H30 Z" fill="none" stroke="${c}" stroke-width="5.5" stroke-linejoin="round"/><path d="M33 60 V66 M67 60 V66" stroke="${c}" stroke-width="6" stroke-linecap="round"/><path d="M38 72 C30 78 46 82 38 90 M62 72 C54 78 70 82 62 90" fill="none" stroke="${c}" stroke-width="4.5" stroke-linecap="round"/>`],
+  blink: ['gronn', 'Kontrollampe for blinklys', c => `<path d="M12 50 L34 30 V42 H45 V58 H34 V70 Z M88 50 L66 30 V42 H55 V58 H66 V70 Z" fill="${c}"/>`],
+  takebak: ['gul', 'Kontrollampe for tåkebaklys', c => `<path d="M44 30 Q20 30 20 50 Q20 70 44 70 Z" fill="none" stroke="${c}" stroke-width="5.5" stroke-linejoin="round"/><path d="M54 36 H82 M54 50 H82 M54 64 H82" stroke="${c}" stroke-width="5" stroke-linecap="round"/><path d="M68 26 C60 34 76 42 68 50 C60 58 76 66 68 74" fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round"/>`],
+  belte: ['rod', 'Varsellampe for bilbelte', c => `<circle cx="44" cy="22" r="8" fill="${c}"/><path d="M44 34 V58 H64 V80" fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 40 L60 48" stroke="${c}" stroke-width="6" stroke-linecap="round"/><path d="M28 34 L62 64" stroke="${c}" stroke-width="4.5" stroke-linecap="round"/><circle cx="66" cy="67" r="5" fill="none" stroke="${c}" stroke-width="3.5"/>`]
 };
 const lampSvg = k => {
   const [col, label, draw] = LAMPS[k], c = LAMP[col];
   return svg(`<rect width="100" height="100" rx="20" fill="#15191c"/><g opacity=".45" filter="url(#lgl)">${draw(c)}</g>${draw(c)}`.replace('<rect', '<defs><filter id="lgl" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3"/></filter></defs><rect'), label, '0 0 100 100', 'tsvg-lamp');
 };
+
+/* ==================== Flere tegninger (0.20.0) ====================
+   Eieren ønsket mye mer å se på i teoriøvingen. Tegningene under er av to slag:
+   - til spørsmålet (img): situasjonen spørsmålet handler om, uten å røpe svaret;
+   - til forklaringen (wimg i theory-b.js): vises først etter svaret, og kan derfor vise tall og regler.
+   Samme stil som kryssene over: veien sett ovenfra, høyrekjøring, bil A er deg (blå). */
+const WL = '#f4f4f4', GREY_CAR = '#8a9097', GREY_CAR2 = '#6b7280';
+const vroad = (x0, x1, edges = true) => `<rect x="${x0}" y="0" width="${x1 - x0}" height="200" fill="${ASP}"/>${edges ? `<g stroke="${WL}" stroke-width="1.6"><line x1="${x0 + 2}" y1="0" x2="${x0 + 2}" y2="200"/><line x1="${x1 - 2}" y1="0" x2="${x1 - 2}" y2="200"/></g>` : ''}`;
+const wdash = (x, y0 = 0, y1 = 200) => `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="${WL}" stroke-width="1.8" stroke-dasharray="9 9"/>`;
+const wsolid = (x, y0 = 0, y1 = 200, w = 1.8) => `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="${WL}" stroke-width="${w}"/>`;
+/* Blinklys på en bil: side -1 venstre, 1 høyre, foran og bak, i bilens retning */
+const carBlink = (x, y, rot, side) => `<g transform="translate(${x} ${y}) rotate(${rot})"><circle cx="${side * 7.4}" cy="-13.6" r="2.6" fill="#ffb300" class="tsvg-blink"/><circle cx="${side * 7.4}" cy="13.6" r="2.6" fill="#ffb300" class="tsvg-blink"/></g>`;
+const truck = (x, y, rot) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="-9.5" y="-30" width="19" height="60" rx="3" fill="#000" opacity=".18" transform="translate(1.2 1.6)"/><rect x="-9.5" y="-12" width="19" height="42" rx="2" fill="#e3e6ea" stroke="rgba(0,0,0,.45)" stroke-width="1"/><rect x="-9" y="-30" width="18" height="16" rx="3" fill="#2e7d5b" stroke="rgba(0,0,0,.45)" stroke-width="1"/><rect x="-7" y="-28.5" width="14" height="4.5" rx="1.2" fill="#dbe9f5"/></g>`;
+const ambulance = (x, y, rot) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="-9" y="-17" width="18" height="34" rx="3.5" fill="#000" opacity=".18" transform="translate(1.2 1.6)"/><rect x="-9" y="-17" width="18" height="34" rx="3.5" fill="#f7f7f2" stroke="rgba(0,0,0,.5)" stroke-width="1"/><rect x="-9" y="2" width="18" height="4" fill="#d9472b"/><path d="M-7 -10 Q0 -13 7 -10 L6 -6 H-6 Z" fill="#cfe0ee"/><rect x="-6.5" y="-4.5" width="5" height="3" rx="1" fill="#2f6bff" class="tsvg-blink"/><rect x="1.5" y="-4.5" width="5" height="3" rx="1" fill="#2f6bff"/><rect x="-6.5" y="11" width="5" height="3" rx="1" fill="#2f6bff"/><rect x="1.5" y="11" width="5" height="3" rx="1" fill="#2f6bff" class="tsvg-blink"/></g>`;
+const tram = (x, y) => `<g transform="translate(${x} ${y})"><rect x="-11" y="-46" width="22" height="92" rx="5" fill="#000" opacity=".18" transform="translate(1.2 1.6)"/><rect x="-11" y="-46" width="22" height="92" rx="5" fill="#2a6fc0" stroke="rgba(0,0,0,.45)" stroke-width="1"/><rect x="-8" y="-43" width="16" height="6" rx="2" fill="#dbe9f5"/><rect x="-7" y="-30" width="14" height="66" rx="2" fill="rgba(255,255,255,.18)"/>${[-24, 0, 24].map(d => `<rect x="9" y="${d - 5}" width="3" height="10" rx="1" fill="#f6d55c"/>`).join('')}</g>`;
+const kid = (x, y) => `<g transform="translate(${x} ${y}) scale(.8) translate(${-x} ${-y})">${person(x, y)}</g>`;
+const ballAt = (x, y) => `<circle cx="${x}" cy="${y}" r="4.2" fill="#e8423a" stroke="#fff" stroke-width="1"/><path d="M${x - 3} ${y - 1.5} Q${x} ${y + 1.5} ${x + 3} ${y - 1.5}" stroke="#fff" stroke-width="1" fill="none"/><path d="M${x + 7} ${y - 3} H${x + 13} M${x + 7} ${y + 1} H${x + 15} M${x + 7} ${y + 5} H${x + 12}" stroke="#14181b" stroke-width="1.2" stroke-linecap="round" opacity=".55"/>`;
+const house = (x, y, w, h, roof = '#a8321b') => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#e9e1d3" stroke="rgba(0,0,0,.35)"/><path d="M${x - 2} ${y} H${x + w + 2} L${x + w / 2} ${y - h * .35} Z" fill="${roof}" opacity=".9"/>`;
+const cone = (x, y) => `<polygon points="${x},${y - 5} ${x + 3.5},${y + 3} ${x - 3.5},${y + 3}" fill="#f57c00" stroke="#fff" stroke-width=".8"/>`;
+const barrier = (x0, x1, y) => { let s = `<rect x="${x0}" y="${y}" width="${x1 - x0}" height="6" fill="#fff" stroke="#c8102e" stroke-width="1"/>`; for (let x = x0 + 1; x < x1 - 3; x += 8) s += `<rect x="${x}" y="${y}" width="4" height="6" fill="#c8102e"/>`; return s; };
+const people = (pts) => pts.map(([x, y]) => person(x, y)).join('');
+
+Object.assign(SCENES, {
+  'forbi-venstresving': () => scene(`<rect x="0" y="50" width="76" height="40" fill="${ASP}"/>${vroad(70, 140)}<rect x="70" y="50" width="4" height="40" fill="${ASP}"/>${hLine(0, 70, 70)}${vLine(0, 200)}
+    ${car(107, 100, '#d9472b', 'B')}${carBlink(107, 100, 0, -1)}${arrow('M107 84 V72 Q107 60 95 60 H40', '#d9472b')}
+    ${car(114, 168, '#2e7dd1', 'A')}`,
+    'Vei med ett felt i hver retning og en sidevei til venstre. Bil B foran deg blinker til venstre og har lagt seg inntil midtlinjen. Du er bil A bak.'),
+  'gangfelt-skjult': () => scene(`${vroad(64, 136)}${wdash(100)}${zebra(67, 52, 66, 22, false)}${person(80, 66)}
+    ${car(82, 96, '#d9472b', 'B')}
+    ${car(118, 168, '#2e7dd1', 'A')}${arrow('M118 151 V116', '#2e7dd1')}`,
+    'Vei med to felt i samme retning og et gangfelt foran. I venstre felt har bil B stanset foran gangfeltet, og en fotgjenger er på vei over. Du er bil A i høyre felt.'),
+  'syklist-forbi': () => scene(`${vroad(76, 124)}${vLine(0, 200)}
+    ${bike(117, 98)}${arrow('M117 84 V60', '#111')}
+    ${car(88, 34, '#2f9e5b', 'C', 180)}
+    ${car(111, 168, '#2e7dd1', 'A')}`,
+    'Vei med ett felt i hver retning. En syklist sykler ytterst til høyre foran deg. Lenger fram kommer bil C imot. Du er bil A.'),
+  'lastebil-hoyre': () => scene(`${roads('nesw', { shoulderS: true })}
+    ${truck(110, 142, 0)}${carBlink(110, 142, 0, 1)}<g transform="translate(110 142)"><circle cx="8" cy="-28" r="2.6" fill="#ffb300" class="tsvg-blink"/></g>${arrow('M110 110 Q112 108 128 108 H190', '#111')}
+    ${car(119, 188, '#2e7dd1', 'A')}`,
+    'Kryss. En lastebil foran deg blinker til høyre og skal svinge til høyre. Du er bil A, like bak og til høyre for lastebilen.'),
+  ball: () => scene(`<rect x="52" y="0" width="14" height="200" fill="${SIDE}"/><rect x="134" y="0" width="14" height="200" fill="${SIDE}"/>${vroad(66, 134, false)}
+    ${house(8, 30, 34, 26)}${house(10, 120, 32, 24, '#5f6b76')}${house(158, 60, 34, 26, '#5f6b76')}${house(160, 150, 32, 24)}
+    ${car(124, 64, GREY_CAR)}${car(124, 120, GREY_CAR2)}${ballAt(108, 93)}
+    ${car(94, 170, '#2e7dd1', 'A')}${arrow('M94 153 V116', '#2e7dd1')}`,
+    'Gate i et boligområde med biler parkert langs kanten. En ball triller ut i veien mellom to parkerte biler foran deg. Du er bil A.'),
+  'buss-holdeplass': () => scene(`${vroad(76, 124)}<rect x="124" y="0" width="16" height="200" fill="${SIDE}"/>${vLine(0, 200)}
+    ${bus(112, 76, 0)}${people([[132, 64], [133, 90]])}
+    ${car(112, 168, '#2e7dd1', 'A')}${arrow('M112 151 V118', '#2e7dd1')}`,
+    'Vei med ett felt i hver retning. En buss har stanset ved holdeplassen foran deg, og det står folk ved holdeplassen. Du er bil A bak bussen.'),
+  trikk: () => scene(`${vroad(56, 144)}${vLine(0, 200)}<rect x="144" y="0" width="16" height="200" fill="${SIDE}"/><g stroke="#9aa1a7" stroke-width="1.6"><line x1="106" y1="0" x2="106" y2="200"/><line x1="118" y1="0" x2="118" y2="200"/></g>
+    ${tram(112, 78)}${people([[132, 70], [152, 86]])}${arrow('M126 92 H148', '#111')}
+    ${car(134, 170, '#2e7dd1', 'A')}`,
+    'Gate med trikkeskinner. En trikk står ved en holdeplass uten trafikkøy, og folk går av på høyre side og over til fortauet. Du er bil A og vil forbi på høyre side av trikken.'),
+  'ko-gangfelt': () => scene(`${vroad(76, 124)}${vLine(0, 200)}${zebra(78, 96, 44, 20, false)}
+    ${car(112, 72, GREY_CAR)}${car(112, 38, GREY_CAR2)}
+    ${car(112, 166, '#2e7dd1', 'A')}`,
+    'Det står kø foran deg. Den bakerste bilen i køen står like på den andre siden av et gangfelt. Du er bil A.'),
+  'ko-kryss': () => scene(`${roads('nesw')}
+    ${car(110, 56, GREY_CAR)}${car(110, 22, GREY_CAR2)}
+    ${car(110, 164, '#2e7dd1', 'A')}${arrow('M110 147 V126', '#2e7dd1')}`,
+    'Kryss. På den andre siden av krysset står det kø. Du er bil A og skal rett fram.'),
+  sykkelfelt: () => scene(`<rect x="140" y="38" width="60" height="40" fill="${ASP}"/>${vroad(76, 140)}<rect x="136" y="38" width="6" height="40" fill="${ASP}"/>${vLine(0, 200)}${wsolid(125, 0, 38, 2.6)}${wsolid(125, 78, 200, 2.6)}${hLine(144, 200, 58)}
+    ${bike(133, 116)}
+    ${car(112, 164, '#2e7dd1', 'A')}${carBlink(112, 164, 0, 1)}${arrow('M112 147 V124', '#2e7dd1')}`,
+    'Vei med sykkelfelt til høyre, avgrenset med en bred heltrukken hvit linje. Du er bil A og skal svinge til høyre i krysset foran. En syklist kommer i sykkelfeltet.'),
+  fletting: () => scene(`<polygon points="64,200 136,200 136,120 120,64 120,0 80,0 80,64 64,120" fill="${ASP}"/><polyline points="66,200 66,120 82,64 82,0" fill="none" stroke="${WL}" stroke-width="1.6"/><polyline points="134,200 134,120 118,64 118,0" fill="none" stroke="${WL}" stroke-width="1.6"/>${wdash(100, 110, 200)}
+    ${car(82, 140, '#d9472b', 'B')}${arrow('M82 123 V112 Q82 96 95 84', '#d9472b')}
+    ${car(118, 160, '#2e7dd1', 'A')}${arrow('M118 143 V122 Q118 104 106 92', '#2e7dd1')}`,
+    'To felt i samme retning går sammen til ett felt. Bil A er i høyre felt og bil B i venstre felt.'),
+  pakjoring: () => scene(`<rect x="40" y="0" width="16" height="200" fill="${GRASS}"/><polygon points="56,0 120,0 120,30 144,80 144,200 56,200" fill="${ASP}"/><line x1="58" y1="0" x2="58" y2="200" stroke="${YEL}" stroke-width="1.8"/>${wdash(88)}<polyline points="142,200 142,80 120,32 120,0" fill="none" stroke="${WL}" stroke-width="1.6"/><line x1="120" y1="200" x2="120" y2="80" stroke="${WL}" stroke-width="2.6" stroke-dasharray="4 4"/>
+    ${car(104, 104, '#d9472b', 'B')}${arrow('M104 87 V40', '#d9472b')}
+    ${car(132, 156, '#2e7dd1', 'A')}${carBlink(132, 156, 0, -1)}${arrow('M132 139 V96 Q132 80 112 66', '#2e7dd1')}`,
+    'Påkjøring til motorvei. Du er bil A i feltet for fartsøkning og skal inn på motorveien. Bil B kjører i høyre felt på motorveien.'),
+  feltslutt: () => scene(`<polygon points="64,200 136,200 136,110 104,48 104,0 64,0" fill="${ASP}"/><line x1="66" y1="0" x2="66" y2="200" stroke="${WL}" stroke-width="1.6"/><polyline points="134,200 134,110 102,48 102,0" fill="none" stroke="${WL}" stroke-width="1.6"/>${wdash(100, 104, 200)}
+    ${car(82, 118, '#d9472b', 'B')}${arrow('M82 101 V60', '#d9472b')}
+    ${car(118, 164, '#2e7dd1', 'A')}`,
+    'Vei med to felt i samme retning. Høyre felt slutter lenger fram. Du er bil A i høyre felt, og bil B kjører i venstre felt.'),
+  utrykning: () => scene(`${vroad(76, 124)}${vLine(0, 200)}
+    ${car(112, 80, '#2e7dd1', 'A')}
+    ${ambulance(112, 160, 0)}`,
+    'Vei med ett felt i hver retning. Bak deg kommer en ambulanse med blått blinklys. Du er bil A.'),
+  sperret: () => scene(`${vroad(76, 124)}${vLine(0, 200)}${barrier(102, 122, 62)}${cone(104, 78)}${cone(112, 82)}${cone(120, 86)}
+    ${car(88, 34, '#d9472b', 'B', 180)}${arrow('M88 51 V80', '#d9472b')}
+    ${car(112, 160, '#2e7dd1', 'A')}`,
+    'Vei med ett felt i hver retning. Lenger fram er feltet ditt sperret av et vegarbeid. Bil B kommer imot i det andre feltet. Du er bil A.'),
+  'tre-felt': () => scene(`${vroad(52, 148)}${wdash(84)}${wdash(116)}
+    ${car(68, 64, '#2f9e5b', 'C')}${car(100, 88, '#d9472b', 'B')}
+    ${car(132, 166, '#2e7dd1', 'A')}${carBlink(132, 166, 0, -1)}${arrow('M132 149 C132 120 70 130 70 96', '#2e7dd1')}`,
+    'Vei med tre felt i samme retning. Du er bil A i høyre felt og skal over i venstre felt. Bil B kjører i midtfeltet og bil C i venstre felt.'),
+  'gs-vei': () => scene(`<rect x="124" y="62" width="76" height="16" fill="#7d848b"/>${vroad(76, 124)}${vLine(0, 200)}
+    ${bike(152, 70, -90)}${arrow('M140 70 H128', '#111')}
+    ${car(112, 164, '#2e7dd1', 'A')}${arrow('M112 147 V104', '#2e7dd1')}`,
+    'Vei der en gang- og sykkelvei kommer inn fra høyre, uten sykkelkryssing eller gangfelt. En syklist på gang- og sykkelveien skal krysse veien. Du er bil A.'),
+  'utkjorsel-gs': () => scene(`<rect x="0" y="16" width="200" height="40" fill="${ASP}"/>${hLine(0, 200, 36)}<rect x="0" y="74" width="200" height="16" fill="#7d848b"/><rect x="0" y="120" width="200" height="80" fill="#9aa1a7"/><rect x="88" y="56" width="24" height="64" fill="${ASP}"/><rect x="88" y="74" width="24" height="16" fill="#7d848b"/>
+    <g stroke="${WL}" stroke-width="1.4">${[20, 46, 140, 166].map(x => `<line x1="${x}" y1="150" x2="${x}" y2="200"/>`).join('')}</g>${car(33, 176, GREY_CAR)}${car(153, 178, GREY_CAR2)}
+    ${bike(160, 82, -90)}${arrow('M148 82 H124', '#111')}
+    ${car(100, 140, '#2e7dd1', 'A')}${arrow('M100 123 V66', '#2e7dd1')}`,
+    'Du er bil A og kjører ut fra en parkeringsplass. Utkjørselen krysser en gang- og sykkelvei før veien. En syklist kommer på gang- og sykkelveien fra høyre.'),
+  'innkjorsel-fortau': () => scene(`${vroad(56, 104, false)}${vLine(0, 200, 80)}<rect x="104" y="0" width="14" height="200" fill="${SIDE}"/><rect x="118" y="60" width="44" height="26" fill="#8f969c"/>${house(162, 46, 34, 52, '#5f6b76')}
+    ${person(111, 112)}
+    ${car(92, 164, '#2e7dd1', 'A')}${carBlink(92, 164, 0, 1)}${arrow('M92 147 V84 Q92 73 104 73 H150', '#2e7dd1')}`,
+    'Du er bil A og skal svinge til høyre inn i en innkjørsel. Innkjørselen går over fortauet, og en fotgjenger går på fortauet.')
+});
+
+/* Veien sett fra førersetet (200 × 130) */
+const view = (body, label) => svg(`<defs><linearGradient id="vsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9d6f2"/><stop offset="1" stop-color="#e4eef7"/></linearGradient></defs>${body}`, label, '0 0 200 130', 'tsvg-view');
+const crestRoad = (half, centre) => {
+  // Veien stiger mot en bakketopp ved y = 64 og forsvinner der
+  // Veien går opp en kul og forsvinner over toppen, fortsatt bred (ikke mot et forsvinningspunkt, som en flat vei).
+  // Trærne bak toppen er halvt skjult: der bak ser du ikke.
+  const top = 62, ctl = 2 * top - 78, wt = half * 0.42;   // ctl: kontrollpunktet som gir toppen av kulen akkurat ved veiens topp
+  let s = `<rect width="200" height="130" fill="url(#vsky)"/>`;
+  s += `<g fill="#5d7a4c">${[[30, 58], [44, 54], [158, 56], [172, 60]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="9"/>`).join('')}</g>`;
+  s += `<path d="M0 78 Q100 ${ctl} 200 78 V130 H0 Z" fill="#8fae78"/><path d="M0 78 Q100 ${ctl} 200 78 V84 Q100 ${ctl + 6} 0 84 Z" fill="#7f9f69"/>`;
+  s += `<polygon points="${100 - half},130 ${100 + half},130 ${100 + wt},${top} ${100 - wt},${top}" fill="${ASP}"/>`;
+  s += `<polygon points="${100 - half},130 ${100 - half + 5},130 ${100 - wt + 1.6},${top} ${100 - wt},${top}" fill="${WL}"/><polygon points="${100 + half - 5},130 ${100 + half},130 ${100 + wt},${top} ${100 + wt - 1.6},${top}" fill="${WL}"/>`;
+  if (centre) s += [[126, 108, 3.4], [98, 84, 2.6], [74, 64, 2]].map(([y0, y1, w]) => `<polygon points="${100 - w},${y0} ${100 + w},${y0} ${100 + w * .8},${y1} ${100 - w * .8},${y1}" fill="${YEL}"/>`).join('');
+  return s;
+};
+const VIEWS = {
+  bakketopp: () => view(crestRoad(78, true), 'Veien foran deg går opp mot en bakketopp. Du ser ikke hva som er på den andre siden.'),
+  'bakketopp-smal': () => view(crestRoad(40, false), 'En smal vei uten midtlinje går opp mot en bakketopp. Du ser ikke hva som er på den andre siden.'),
+  morke: () => svg(`<defs><linearGradient id="vbeam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff3c4" stop-opacity=".55"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></linearGradient></defs>
+    <rect width="200" height="130" fill="#0b1020"/><rect y="62" width="200" height="68" fill="#121722"/><polygon points="22,130 178,130 104,62 96,62" fill="#20252c"/>
+    <polygon points="30,130 170,130 116,84 84,84" fill="url(#vbeam)"/>
+    <g fill="#e8d36a" opacity=".55">${[[124, 112, 3], [98, 92, 2]].map(([y0, y1, w]) => `<polygon points="${100 - w},${y0} ${100 + w},${y0} ${100 + w * .7},${y1} ${100 - w * .7},${y1}" />`).join('')}</g>
+    <g fill="#262c36"><circle cx="128" cy="62" r="2.6"/><rect x="125.6" y="64.5" width="4.8" height="9" rx="1.5"/><rect x="126" y="73" width="1.7" height="6"/><rect x="128.3" y="73" width="1.7" height="6"/></g>`,
+    'Mørk landevei med nærlys. Lyset når et stykke fram. En fotgjenger i mørke klær står i veikanten lenger fram.', '0 0 200 130', 'tsvg-view')
+};
+
+/* Små bilder av ting (piktogrammer) */
+const pict = (body, label, vb = '0 0 120 120') => svg(body, label, vb, 'tsvg-pict');
+const officer = arm => `<rect x="10" y="10" width="100" height="100" rx="16" fill="#e8eef7"/>
+  <g stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="60" cy="30" r="9" fill="#e8c4a0"/><path d="M49 25 H71 L69 19 H51 Z" fill="#14213d"/><rect x="47" y="24" width="26" height="4" rx="1.5" fill="#14213d"/>
+  <path d="M46 42 H74 L72 80 H48 Z" fill="#d7f21f" stroke="#14213d" stroke-width="2"/><path d="M48 60 H72 M48 66 H72" stroke="#c9ced3" stroke-width="3"/>
+  <path d="M51 80 L49 104 M69 80 L71 104" stroke="#14213d" stroke-width="8"/>
+  ${arm === 'opp' ? '<path d="M72 46 L76 8" stroke="#14213d" stroke-width="7"/><path d="M48 46 L42 74" stroke="#14213d" stroke-width="7"/>'
+    : '<path d="M72 46 L106 46" stroke="#14213d" stroke-width="7"/><path d="M48 46 L42 74" stroke="#14213d" stroke-width="7"/>'}</g>`;
+const PICTS = {
+  'politi-opp': () => pict(officer('opp'), 'Politibetjent som holder armen rett opp'),
+  'politi-side': () => pict(officer('side'), 'Politibetjent som holder armen rettet ut til siden'),
+  medisin: () => pict(`<path d="M20 44 L44 30 H100 L76 44 Z" fill="#dfe6ee" stroke="#6b7177" stroke-width="1.5" stroke-linejoin="round"/><path d="M76 44 L100 30 V84 L76 98 Z" fill="#c9d3de" stroke="#6b7177" stroke-width="1.5" stroke-linejoin="round"/><rect x="20" y="44" width="56" height="54" fill="#fff" stroke="#6b7177" stroke-width="1.5"/><rect x="20" y="52" width="56" height="8" fill="#2a6fc0"/><path d="M27 66 H58 M27 72 H50" stroke="#9aa1a7" stroke-width="3" stroke-linecap="round"/><polygon points="58,74 70,94 46,94" fill="#c8102e"/>`, 'En medisinpakke med en rød varseltrekant på'),
+  lskilt: () => pict(`<path d="M22 58 L32 30 H88 L98 58 Z" fill="#5a6f8c"/><path d="M34 34 H86 L93 55 H27 Z" fill="#cfe0ee"/><rect x="14" y="56" width="92" height="38" rx="8" fill="#6c84a6"/><rect x="18" y="62" width="14" height="10" rx="2" fill="#d9472b"/><rect x="88" y="62" width="14" height="10" rx="2" fill="#d9472b"/><rect x="18" y="94" width="16" height="10" rx="3" fill="#2a2f33"/><rect x="86" y="94" width="16" height="10" rx="3" fill="#2a2f33"/><rect x="45" y="62" width="30" height="28" rx="2" fill="#fff" stroke="#2a2f33" stroke-width="1.5"/><path d="M53 66 H59 V82 H68 V87 H53 Z" fill="#c8102e"/>`, 'Bil sett bakfra med L-skilt: rød L på hvit bunn'),
+  vinterdekk: () => pict(`<rect x="10" y="22" width="100" height="76" rx="14" fill="#2a2f33"/><path d="M18 84 L38 46 L48 62 L58 40 L70 62 L80 50 L100 84 Z" fill="none" stroke="#f4f4f4" stroke-width="3.5" stroke-linejoin="round"/><g stroke="#f4f4f4" stroke-width="2.6" stroke-linecap="round" transform="translate(59 70)"><path d="M0 -10 V10 M-8.7 -5 L8.7 5 M-8.7 5 L8.7 -5"/></g><text x="60" y="114" text-anchor="middle" font-weight="800" font-size="13" fill="var(--ink, #14181b)">M+S</text>`, 'Merkingen på et vinterdekk: fjell med tre topper og snøkrystall, og M+S', '0 0 120 120'),
+  sykkelstativ: () => pict(`<path d="M22 58 L32 30 H88 L98 58 Z" fill="#5a6f8c"/><path d="M34 34 H86 L93 55 H27 Z" fill="#cfe0ee"/><rect x="14" y="56" width="92" height="38" rx="8" fill="#6c84a6"/><rect x="18" y="70" width="14" height="12" rx="2" fill="#d9472b"/><rect x="88" y="70" width="14" height="12" rx="2" fill="#d9472b"/><rect x="45" y="80" width="30" height="9" rx="1.5" fill="#fff" stroke="#2a2f33"/><rect x="10" y="74" width="100" height="5" rx="2" fill="#2a2f33"/>${bicycle(42, 76, .9, '#14181b')}${bicycle(78, 80, .9, '#14181b')}`, 'Bil sett bakfra med to sykler på et sykkelstativ. Syklene dekker baklysene og kjennemerket.'),
+  dash: () => svg(`<rect width="220" height="110" rx="18" fill="#15191c"/><circle cx="40" cy="58" r="29" fill="none" stroke="#3a4148" stroke-width="5"/><circle cx="180" cy="58" r="29" fill="none" stroke="#3a4148" stroke-width="5"/><path d="M40 58 L27 41" stroke="#ff6b4a" stroke-width="3" stroke-linecap="round"/><path d="M180 58 L167 41" stroke="#ff6b4a" stroke-width="3" stroke-linecap="round"/>
+    ${[['brems', 86, 22], ['olje', 110, 22], ['lading', 134, 22], ['abs', 86, 52], ['motor', 110, 52], ['belte', 134, 52], ['blink', 98, 82], ['fjernlys', 122, 82]].map(([k, x, y]) => `<g transform="translate(${x - 11} ${y - 11}) scale(.22)">${LAMPS[k][2](LAMP[LAMPS[k][0]])}</g>`).join('')}`,
+    'Instrumentpanelet med mange varsellamper som lyser samtidig', '0 0 220 110', 'tsvg-dash')
+};
+
+/* Lokkene under panseret er merket med symboler (forenklet): motorolje, kjølevæske, bremsevæske og spylervæske */
+const capSvg = (sym, label) => pict(`<circle cx="60" cy="60" r="46" fill="#f2c230" stroke="#b58b10" stroke-width="3"/><circle cx="60" cy="60" r="38" fill="none" stroke="#c99a12" stroke-width="2" stroke-dasharray="3 5"/><g fill="none" stroke="#14181b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">${sym}</g>`, label);
+const CAPS = {
+  olje: () => capSvg(`<path d="M30 58 H64 L78 48 L82 52 L68 72 H30 Z" fill="#14181b"/><path d="M40 58 V52 H52 V58"/><path d="M86 60 Q83 66 86 69 Q89 66 86 60 Z" fill="#14181b" stroke-width="2"/>`, 'Lokket for motorolje er merket med en oljekanne'),
+  kjole: () => capSvg(`<path d="M60 26 V60"/><circle cx="60" cy="66" r="7" fill="#14181b"/><path d="M62 34 H70 M62 44 H70"/><path d="M30 84 Q37 78 44 84 T58 84 T72 84 T86 84"/>`, 'Lokket for kjølevæske er merket med et termometer i væske'),
+  brems: () => capSvg(`<circle cx="60" cy="60" r="15"/><path d="M38 42 A26 26 0 0 0 38 78 M82 42 A26 26 0 0 1 82 78"/>`, 'Lokket for bremsevæske er merket med bremsesymbolet'),
+  spyler: () => capSvg(`<path d="M26 80 Q60 30 94 80 Z"/><path d="M60 80 V70"/><path d="M60 70 Q52 58 44 56 M60 70 Q60 56 60 50 M60 70 Q68 58 76 56" stroke-width="3.5" stroke-dasharray="2 5"/>`, 'Lokket for spylervæske er merket med en frontrute med spylerstråle')
+};
+
+/* Forklaringstegninger, vises etter svaret. Følger lys og mørk modus (tekst i appens farger). */
+const DT = 'font-size="10" fill="var(--ink, #14181b)"', DM = 'font-size="9" fill="var(--muted, #4b586b)"';
+const diagram = (body, label, vb) => svg(defs + body, label, vb, 'tsvg-diagram');   // defs: pilspissene til arrow()
+const sideCar = (x, y, fill) => `<g transform="translate(${x} ${y}) rotate(90)">${car(0, 0, fill)}</g>`;
+const strip = (y, h = 22) => `<rect x="0" y="${y}" width="240" height="${h}" rx="4" fill="${ASP}"/>`;   // ett felt, bilen midt i
+const bracket = (x0, x1, y, text, up = true, col = 'var(--ink, #14181b)') => `<path d="M${x0} ${y + (up ? 5 : -5)} V${y} H${x1} V${y + (up ? 5 : -5)}" fill="none" stroke="${col}" stroke-width="1.4"/><text x="${(x0 + x1) / 2}" y="${y + (up ? -4 : 12)}" text-anchor="middle" ${DT} font-weight="700">${text}</text>`;
+const secondsDiagram = (v, t) => {
+  const mps = v / 3.6, px = 168 / (mps * 2);   // to sekunder fyller bredden
+  const x0 = 46, segs = Array.from({ length: t }, (_, i) => [x0 + i * mps * px, x0 + (i + 1) * mps * px]);
+  return diagram(`${strip(46)}${sideCar(30, 57, '#2e7dd1')}
+    ${segs.map(([a, b], i) => `${bracket(a, b, 38, `${i + 1}. sekund`)}<line x1="${b}" y1="44" x2="${b}" y2="70" stroke="var(--muted, #4b586b)" stroke-width="1" stroke-dasharray="2 2"/>`).join('')}
+    ${bracket(x0, segs[segs.length - 1][1], 82, `${v} km/t: rundt ${t === 1 ? Math.round(mps) : Math.round(mps * t / 5) * 5} meter`, false)}`,
+    `I ${v} km/t kjører du rundt ${Math.round(mps)} meter i sekundet${t > 1 ? `, og rundt ${Math.round(mps * t / 5) * 5} meter på ${t} sekunder` : ''}.`, '0 0 240 100');
+};
+const DIAGRAMS = {
+  stopp: () => diagram(`${strip(40)}${sideCar(26, 51, '#2e7dd1')}
+    <rect x="40" y="70" width="78" height="6" rx="2" fill="var(--muted, #4b586b)" opacity=".55"/><rect x="118" y="70" width="104" height="6" rx="2" fill="var(--brake, #c0392b)"/>
+    ${bracket(40, 118, 32, 'Reaksjonslengde')}${bracket(118, 222, 32, 'Bremselengde')}${bracket(40, 222, 90, 'Stopplengde', false)}`,
+    'Stopplengden er reaksjonslengden pluss bremselengden.', '0 0 240 108'),
+  dobbel: () => {
+    const row = (y, label, r, b, rTxt, bTxt) => `<text x="0" y="${y + 9}" ${DT} font-weight="700">${label}</text>
+      <rect x="62" y="${y}" width="${r}" height="12" rx="2" fill="var(--muted, #4b586b)" opacity=".55"/><rect x="${62 + r}" y="${y}" width="${b}" height="12" rx="2" fill="var(--brake, #c0392b)"/>
+      ${rTxt ? `<text x="${62 + r / 2}" y="${y - 4}" text-anchor="middle" ${DM}>${rTxt}</text><text x="${62 + r + b / 2}" y="${y - 4}" text-anchor="middle" ${DM}>${bTxt}</text>` : ''}`;
+    return diagram(`${row(18, '50 km/t', 22, 19)}${row(58, '100 km/t', 44, 76, 'reaksjon × 2', 'bremsing × 4')}
+      <rect x="62" y="88" width="10" height="8" rx="2" fill="var(--muted, #4b586b)" opacity=".55"/><text x="76" y="95" ${DM}>Reaksjonslengde</text><rect x="152" y="88" width="10" height="8" rx="2" fill="var(--brake, #c0392b)"/><text x="166" y="95" ${DM}>Bremselengde</text>`,
+      'Dobbel fart: reaksjonslengden blir dobbelt så lang, og bremselengden omtrent fire ganger så lang.', '0 0 240 104');
+  },
+  tidsavstand: () => diagram(`${strip(40)}<line x1="150" y1="18" x2="150" y2="40" stroke="var(--ink, #14181b)" stroke-width="2"/><rect x="143" y="8" width="14" height="12" rx="2" fill="#2a6fc0"/>
+    ${sideCar(172, 51, '#d9472b')}${sideCar(64, 51, '#2e7dd1')}
+    <text x="64" y="84" text-anchor="middle" ${DM}>Du</text><text x="172" y="84" text-anchor="middle" ${DM}>Bilen foran</text>
+    <text x="120" y="98" text-anchor="middle" ${DT} font-weight="700">Tell sekundene mellom bilen foran og deg</text>`,
+    'Velg et fast punkt, som en stolpe. Tell sekunder fra bilen foran passerer punktet til du gjør det.', '0 0 240 106'),
+  blindsone: () => diagram(`<rect width="200" height="200" rx="12" fill="${ASP}"/>${wdash(40)}${wdash(160)}
+    <polygon points="100,86 74,200 126,200" fill="#4a9dff" opacity=".28"/><polygon points="70,92 34,200 58,200" fill="#4a9dff" opacity=".35"/><polygon points="130,92 142,200 166,200" fill="#4a9dff" opacity=".35"/>
+    <polygon points="70,104 10,118 10,170 46,170" fill="#ff453a" opacity=".45"/><polygon points="130,104 190,118 190,170 154,170" fill="#ff453a" opacity=".45"/>
+    <g transform="translate(100 96) scale(2.4)">${car(0, 0, '#2e7dd1')}</g>
+    <text x="14" y="150" font-size="10" font-weight="700" fill="#fff">Blindsone</text><text x="186" y="150" text-anchor="end" font-size="10" font-weight="700" fill="#fff">Blindsone</text>
+    <text x="100" y="192" text-anchor="middle" font-size="9" fill="#fff">Blått: det speilene viser</text>`,
+    'Bilen sett ovenfra. Blått er det speilene viser. Rødt er blindsonene skrått bak på hver side, som du bare ser med skulderblikk.', '0 0 200 200'),
+  astolpe: () => diagram(`<rect width="200" height="150" rx="12" fill="${ASP}"/>${zebra(20, 30, 70, 20, false)}
+    <polygon points="80,121 86,117 45,0 -32,0" fill="#000" opacity=".35"/>
+    ${person(38, 44)}
+    <g transform="translate(100 140) scale(2.6)">${car(0, 0, '#2e7dd1')}</g>
+    <path d="M80 121 L86 117" stroke="#14181b" stroke-width="4.5" stroke-linecap="round"/><circle cx="92" cy="134" r="3.2" fill="#ffd34d" stroke="#14181b"/>
+    <text x="192" y="20" text-anchor="end" font-size="10" font-weight="700" fill="#fff">Skjult bak</text><text x="192" y="32" text-anchor="end" font-size="10" font-weight="700" fill="#fff">frontstolpen</text>`,
+    'Frontstolpen ved siden av frontruta skygger for et område foran til venstre. Der kan en fotgjenger være skjult, særlig når du svinger.', '0 0 200 150'),
+  '5m-kryss': () => diagram(`<rect width="200" height="200" rx="12" fill="${GRASS}"/><rect x="76" y="0" width="48" height="200" fill="${ASP}"/><rect x="124" y="30" width="76" height="44" fill="${ASP}"/>
+    <path d="M124 74 Q124 74 124 74" /><rect x="124" y="74" width="76" height="126" fill="${GRASS}"/><path d="M124 92 Q124 74 142 74 H124 Z" fill="${ASP}"/>${vLine(0, 200)}
+    <rect x="102" y="92" width="20" height="36" fill="var(--brake, #c0392b)" opacity=".5"/><circle cx="124" cy="92" r="3.2" fill="#ffd34d" stroke="#14181b"/>
+    <path d="M136 92 V128" stroke="#14181b" stroke-width="1.4"/><path d="M132 92 H140 M132 128 H140" stroke="#14181b" stroke-width="1.4"/><text x="144" y="114" font-size="11" font-weight="800" fill="#14181b">5 m</text>
+    ${car(112, 156, '#8a9097')}<text x="132" y="146" font-size="9" fill="#14181b">Gul prikk: her</text><text x="132" y="157" font-size="9" fill="#14181b">begynner kanten</text><text x="132" y="168" font-size="9" fill="#14181b">å runde</text>`,
+    'Du kan ikke stanse i krysset eller nærmere enn 5 meter fra det. De 5 meterne regnes fra der fortauskanten eller vegkanten begynner å runde.', '0 0 200 200'),
+  '5m-gangfelt': () => diagram(`<rect width="200" height="200" rx="12" fill="${GRASS}"/><rect x="76" y="0" width="48" height="200" fill="${ASP}"/>${vLine(0, 200)}${zebra(78, 62, 44, 22, false)}
+    <rect x="102" y="84" width="20" height="36" fill="var(--brake, #c0392b)" opacity=".5"/><rect x="77" y="61" width="46" height="24" fill="none" stroke="var(--brake, #c0392b)" stroke-width="2"/>
+    <path d="M136 84 V120" stroke="#14181b" stroke-width="1.4"/><path d="M132 84 H140 M132 120 H140" stroke="#14181b" stroke-width="1.4"/><text x="144" y="106" font-size="11" font-weight="800" fill="#14181b">5 m</text>
+    ${car(112, 150, '#8a9097')}`,
+    'Du kan ikke stanse på gangfeltet eller nærmere enn 5 meter foran det.', '0 0 200 200'),
+  trekant: () => diagram(`${strip(40)}${sideCar(214, 51, '#2e7dd1')}<circle cx="200" cy="44" r="2.4" fill="#ffb300" class="tsvg-blink"/><circle cx="200" cy="58" r="2.4" fill="#ffb300" class="tsvg-blink"/>
+    <polygon points="40,36 50,54 30,54" fill="#fff" stroke="#c8102e" stroke-width="3" stroke-linejoin="round"/>
+    ${bracket(40, 200, 84, 'om mulig minst 150 m', false)}${arrow('M2 51 H22', '#111')}`,
+    'Varseltrekanten settes så langt bak bilen at andre ser den i tide, om mulig minst 150 meter.', '0 0 240 100'),
+  nodnummer: () => diagram([['110', 'Brann', '#d9472b'], ['112', 'Politi', '#1d5fa6'], ['113', 'Ambulanse', '#1e7442']].map(([n, t, c], i) => `<g transform="translate(${4 + i * 80} 6)"><rect width="72" height="60" rx="10" fill="${c}"/><text x="36" y="30" text-anchor="middle" font-size="22" font-weight="800" fill="#fff">${n}</text><text x="36" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">${t}</text></g>`).join(''),
+    '110 er brann, 112 er politi, og 113 er medisinsk nødhjelp (ambulanse).', '0 0 240 72'),
+  monster: () => diagram(`<path d="M10 30 H230 V70 H10 Z" fill="#2a2f33"/>${[44, 100, 156, 212].map(x => `<rect x="${x - 9}" y="30" width="18" height="18" fill="var(--bg, #eef2f8)"/>`).join('')}
+    <rect x="96" y="12" width="8" height="34" fill="#9aa1a7"/><rect x="88" y="8" width="24" height="6" rx="2" fill="#6b7177"/>
+    <text x="10" y="90" ${DT} font-weight="700">Sommer: minst 1,6 mm</text><text x="230" y="90" text-anchor="end" ${DT} font-weight="700">Vinter: minst 3 mm</text>
+    <text x="120" y="106" text-anchor="middle" ${DM}>Mål i hovedrillene på personbil</text>`,
+    'Mønsterdybden måles i hovedrillene. En personbil skal ha minst 1,6 mm om sommeren og 3 mm om vinteren.', '0 0 240 112'),
+  gaende: () => diagram(`<rect width="200" height="150" rx="12" fill="${GRASS}"/><rect x="60" y="0" width="80" height="150" fill="${ASP}"/>${vLine(0, 150)}
+    ${person(64, 96)}${arrow('M64 78 V52', '#111')}
+    ${car(86, 34, '#d9472b', '', 180)}${arrow('M86 52 V70', '#d9472b')}
+    <text x="146" y="84" font-size="10" font-weight="700" fill="#14181b">Gå mot</text><text x="146" y="96" font-size="10" font-weight="700" fill="#14181b">trafikken</text>`,
+    'Uten fortau går gående ytterst til venstre, så de møter bilene og ser dem komme.', '0 0 200 150')
+};
+DIAGRAMS['sekund-80-1'] = () => secondsDiagram(80, 1);
+DIAGRAMS['sekund-80-2'] = () => secondsDiagram(80, 2);
+
+/* Nye oppmerkinger (0.20.0) */
+Object.assign(LINES, {
+  sperreomrade: () => road(`<clipPath id="csperr"><polygon points="60,22 70,48 70,112 60,138 50,112 50,48"/></clipPath><g clip-path="url(#csperr)" stroke="${YEL}" stroke-width="3">${Array.from({ length: 14 }, (_, i) => `<line x1="40" y1="${10 + i * 11}" x2="80" y2="${30 + i * 11}"/>`).join('')}</g><polygon points="60,22 70,48 70,112 60,138 50,112 50,48" fill="none" stroke="${YEL}" stroke-width="2.6" stroke-linejoin="round"/><line x1="60" y1="0" x2="60" y2="22" stroke="${YEL}" stroke-width="3" stroke-dasharray="10 12"/><line x1="60" y1="138" x2="60" y2="160" stroke="${YEL}" stroke-width="3" stroke-dasharray="10 12"/>${car(82, 128, '#2e7dd1')}`, 'Vei med et sperreområde midt i veien: skrå gule striper med heltrukken gul kant rundt.'),
+  pil: () => road(`<line x1="60" y1="0" x2="60" y2="160" stroke="#f4f4f4" stroke-width="2.4"/>
+    <path d="M37 98 V70 H32 L40 58 L48 70 H43 V98 Z" fill="#f4f4f4"/><path d="M77 98 V74 Q77 66 85 66 H86 V61 L95 69 L86 77 V72 H85 Q83 72 83 74 V98 Z" fill="#f4f4f4"/>
+    ${car(40, 132, '#2e7dd1')}`, 'To felt i samme retning før et kryss. Du er i venstre felt, der det er malt en pil rett fram. En heltrukken hvit linje skiller det fra feltet til høyre, som har pil til høyre.')
+});
 
 export function figure(key) {
   if (!key || typeof key !== 'string') return '';
@@ -285,11 +535,17 @@ export function figure(key) {
   if (kind === 'line' && LINES[a]) return LINES[a]();
   if (kind === 'light' && LIGHTS[a]) return light(a);
   if (kind === 'scene' && SCENES[a]) return SCENES[a]();
-  if (kind === 'lamp' && LAMPS[a]) return lampSvg(a);
+  if (kind === 'lamp' && LAMPS[a]) return b === 'anon' ? lampSvg(a).replace(/aria-label="[^"]*"/, 'aria-label="Symbol i instrumentpanelet"') : lampSvg(a);
+  if (kind === 'view' && VIEWS[a]) return VIEWS[a]();
+  if (kind === 'pict' && PICTS[a]) return PICTS[a]();
+  if (kind === 'cap' && CAPS[a]) return CAPS[a]();
+  if (kind === 'diagram' && DIAGRAMS[a]) return DIAGRAMS[a]();
   return '';
 }
 
 export const FIGURE_KEYS = [
   ...Object.keys(SIGNS).map(k => 'sign:' + k), ...Object.keys(LINES).map(k => 'line:' + k),
-  ...Object.keys(LIGHTS).map(k => 'light:' + k), ...Object.keys(SCENES).map(k => 'scene:' + k), ...Object.keys(LAMPS).map(k => 'lamp:' + k)
+  ...Object.keys(LIGHTS).map(k => 'light:' + k), ...Object.keys(SCENES).map(k => 'scene:' + k), ...Object.keys(LAMPS).map(k => 'lamp:' + k),
+  ...Object.keys(VIEWS).map(k => 'view:' + k), ...Object.keys(PICTS).map(k => 'pict:' + k), ...Object.keys(CAPS).map(k => 'cap:' + k),
+  ...Object.keys(DIAGRAMS).map(k => 'diagram:' + k)
 ];

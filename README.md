@@ -143,6 +143,83 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.20.0 – theory and the safety check up front, far more pictures, and everything fact-checked
+
+The owner's round 3:
+- Theory and safety-check practice are a big selling point, but they were hidden. They now have their own subtab.
+- The questions need far more pictures: «very few have something to show, and it is boring to practise».
+- «A big job, so it is important that everything is right: go over it and double-check.»
+
+**Opplæring has two subtabs**
+- **«Teori og sikkerhet»** is free and is shown first to learners. Teachers land on «Læreplan».
+- **«Læreplan»** belongs to Pluss and shows a lock in the subtab when Pluss is not active.
+- Routes: `#/opplaering/teori` (`THEORY_HOME` in `js/theoryui.js`) and `#/opplaering/laereplan`. `#/teori` now forwards to the theory subtab.
+- `gateFor` locks only `#/opplaering/laereplan`, and the Opplæring tab no longer has a lock.
+
+**The theory overview, in the hierarchy of profile 2.0**
+- The sign card at the top holds the exam, with «Ta en prøve» as the one yellow button.
+- It also shows **today's goal** (10 questions) and **days in a row**. These come from `practiceDays` in `js/theory.js`, which counts answers per local day and keeps 60 days.
+- Below it are four large shortcuts with pictures:
+  - quick practice
+  - the sign test
+  - the safety check
+  - practise your mistakes
+- Then «Fra turene dine», then the themes, each with its own colour.
+
+**Picture answers in the sign test**
+- «Hvilket skilt er «X»?» has four signs to choose from (`SIGN_PICK_QUESTIONS` in `js/theory-signs.js`).
+- After you answer, each sign shows its name, so you learn the other three as well.
+- They are practised together with «Hva betyr skiltet?». «Lært» still counts only the meaning questions.
+
+**Rewards, as in other practice apps**
+- A short message and confetti when you reach today's goal.
+- Confetti for a round with every answer right.
+- The result shows today's goal and days in a row.
+
+**53 new drawings** (`js/trafficsvg.js`, 140 in all)
+- Before, only 59 of 281 questions had a picture, all of them sign or right-of-way questions. Now 122 do, in every theme.
+- There are two kinds:
+  - `img`, shown with the question. It shows the situation without giving the answer away. A test checks that the screen-reader text does not contain the correct answer.
+  - `wimg`, new, shown with the explanation after you answer. It may show numbers and rules, for example 5 m before a junction or a zebra crossing, 150 m for the warning triangle, 1.6/3 mm tread depth, ×2 / ×4 when the speed doubles, and 110/112/113.
+- New families:
+  - `view:` the driver's view: hill crest, narrow crest, dark road.
+  - `pict:` police signals, the medicine triangle, the L-plate, the winter-tyre marking, a bike rack, the instrument panel.
+  - `cap:` the symbols on the caps under the bonnet.
+  - `diagram:` explanation drawings.
+  - 5 new warning lamps (engine, ESC, indicators, rear fog, seat belt).
+  - 2 new road markings.
+  - 19 new scenes: passing a car turning left, a hidden zebra crossing, a cyclist, a lorry turning right, a ball, a bus stop, a tram, queues, a cycle lane, merging, a motorway on-ramp, a lane ending, an emergency vehicle, a blocked lane, three lanes, a footpath and cycle path, a car park exit, a driveway.
+- 13 more safety-check tasks have a drawing, 21 of 46 in all. The motor-oil task now shows the symbol on the cap instead of the lamp.
+- The test page `.local-test/figurer.html` (not in git) shows them all.
+
+**Fact check**
+Five independent checkers went through all 281 questions, the 57 signs and the 46 safety-check tasks. They checked against Lovdata (trafikkreglene, vegtrafikkloven, skiltforskriften, bruksforskriften, førerkortforskriften, trafikkopplæringsforskriften) and vegvesen.no. A sixth checked the new picture–question pairs and found 14 drawing details to correct. Among them: an arrow through a car, a lane line dashed at the wrong end, yellow centre lines on both sides in the blind-spot drawing, and a cycle-lane arrow that gave the answer away. All are fixed, and t27 is worded so it can only be read one way. No correct answer was wrong. Fixed:
+- **Sign 124 «Farlig vegkryss»** was drawn as an upright cross and looked like 210 «Forkjørskryss», which means the opposite. It is now a diagonal X, as on the real sign.
+- **Other signs:**
+  - 208 has one wide band.
+  - 364 has a black number.
+  - The text for 104 no longer mentions a number that is not on the sign. The gradient is on a supplementary plate.
+- **f21 (blinking out of a roundabout):** limited to the second or a later exit. For the first exit, «when you drive in» was also right.
+- **v13** no longer says «alltid»: lights and signs come first, for the tram as well.
+- **s29 and s30** no longer show a picture that gave the answer away.
+- **Explanations made more precise:**
+  - r20: all two-wheelers.
+  - s37: the give-way line always comes with a sign.
+  - s24 and s29: danger signs are usually triangles.
+  - t32: give way to pedestrians when turning.
+  - a03: an exception for a short health-based withdrawal.
+  - a15: the 150 cm rule.
+  - a16: report hitting an animal to the police.
+  - a24: tunnels without emergency exits.
+- **References:** f22, k21, t11.
+- **Safety check:**
+  - Brake warning lamp: do not drive on.
+  - Power steering: a yellow lamp means have it checked soon. A red lamp or very heavy steering means do not drive.
+  - Electric parking brake and electric brake servo: see the manual.
+  - Charging lamp: watch the temperature.
+  - Studded-tyre dates for northern Norway.
+- **Not changed (note):** a06. From 1 January 2027 the ID requirement for øvelseskjøring changes wording (FOR-2026-09-16-1832). Look at it again when the new førerkortforskriften § 2-4 is published.
+
 ## What's new in 0.19.1 – a new app icon in the profile
 
 The owner chose proposal A of four («Skiltet») on 15 Nov 2026.
