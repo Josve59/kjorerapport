@@ -33,7 +33,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.18.4';
+export const APP_VERSION = '0.19.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -813,6 +813,7 @@ async function runCalibration() {
 }
 
 /* ---------- Kjørelogg ---------- */
+let logShowAll = false;   // «Vis alle turer» på Turer (0.19.0)
 async function renderLog() {
   show('log');
   const root = $('#log-root');
@@ -847,38 +848,58 @@ async function renderLog() {
   const wkFmt = new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short' });
   // Ukenummer (ISO 8601, som i norske kalendere) med mandagens dato under (0.12.1)
   const isoWeek = t => { const d = new Date(t); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7)); const jan4 = new Date(d.getFullYear(), 0, 4, 12); return 1 + Math.round(((d - jan4) / 86400000 - 3 + ((jan4.getDay() + 6) % 7)) / 7); };
+  // Rekkefølgen (0.19.0): summen som skiltkort, de siste turene (fanen heter Turer), så statistikken.
+  // Bare de fem siste vises først; resten ligger bak en knapp, så lista ikke dytter alt annet langt ned.
+  const real = rows.filter(x => isReal(x.d));
+  const SHOW = 5;
+  const tripRow = (x, i) => `<li${i >= SHOW ? ` class="more-row"${logShowAll ? '' : ' hidden'}` : ''}><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${esc(x.d.id)}">
+      <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
+      <span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.log.light.dark > 60 ? `${fmtHours(x.log.light.dark)} mørke` : ''].filter(Boolean).join(SEP)}</span>
+</span>
+      ${scoreBadge(x.res.overall, 40)}</button></li>`;
+  const moreLabel = open => (open ? 'Vis bare de siste' : `Vis alle ${real.length} turer`);
   root.innerHTML = `
-    ${filter ? `<p class="eyebrow pad">Elev: ${esc(filter)}</p>` : ''}
-    <section class="tiles">
-      <div class="tile"><span class="tile-val">${fmtHours(tot.total.sec)}</span><span class="tile-label">kjøretid</span></div>
-      <div class="tile"><span class="tile-val">${km(tot.total.km)}</span><span class="tile-label">kjørt</span></div>
-      <div class="tile"><span class="tile-val">${rows.length}</span><span class="tile-label">${rows.length === 1 ? 'tur' : 'turer'}</span></div>
-      <div class="tile"><span class="tile-val">${fmtHours(tot.light.dark)}</span><span class="tile-label">i mørke</span></div>
+    <section class="sign-card log-hero">
+      <p class="eyebrow">Kjørelogg${filter ? ` · ${esc(filter)}` : ''}</p>
+      <p class="log-big">${fmtHours(tot.total.sec)}</p>
+      <p class="log-big-label">øvelseskjøring</p>
+      <dl class="sign-stats">
+        <div><dt>kjørt</dt><dd>${km(tot.total.km)}</dd></div>
+        <div><dt>${rows.length === 1 ? 'tur' : 'turer'}</dt><dd>${rows.length}</dd></div>
+        <div><dt>i mørke</dt><dd>${fmtHours(tot.light.dark)}</dd></div>
+      </dl>
     </section>
-    <section class="card"><h2 class="card-title">${icon('map')}Veityper</h2>${bar(tot.sec, ['by', 'land', 'motor'], ROAD_LABEL, 'mix')}
-</section>
-    <section class="card"><h2 class="card-title">${icon('moon')}Lysforhold</h2>${bar(tot.light, ['day', 'twilight', 'dark'], LIGHT_LABEL, 'light')}
-</section>
-    <section class="card"><h2 class="card-title">${icon('snow')}Føre</h2>${['dry', 'wet', 'snow', 'ice'].some(k => tot.surface[k] > 0) ? `${bar(tot.surface, ['dry', 'wet', 'snow', 'ice'], SURFACE_LABEL, 'surf')}
-      ${tot.surface.unknown > 0 ? `<p class="muted small">${fmtHours(tot.surface.unknown)} er kjørt før føre kunne velges.</p>` : ''}` : '<p class="muted small">Føre er ikke valgt på noen tur ennå. Velg det når du starter en tur.</p>'}</section>
+    ${real.length ? `<h2 class="section-title">${real.length > SHOW ? 'Siste turer' : 'Turer'}</h2>
+    <ul class="drives log-list card trip-list" id="trip-list">${real.map(tripRow).join('')}</ul>
+    ${real.length > SHOW ? `<button type="button" class="btn secondary more-trips" id="btn-more-trips" aria-controls="trip-list" aria-expanded="${logShowAll}">${icon('chev', 20)}<span>${moreLabel(logShowAll)}</span></button>` : ''}` : ''}
+    ${excludedDrives.length ? `<h2 class="section-title">Holdt utenfor utregningene</h2>
+    <ul class="drives log-list card">${excludedDrives.map(d => `<li><button type="button" class="drive" data-id="${esc(d.id)}">
+      <span class="drive-main"><strong>${esc(shortDay(d.startedAt))}</strong><span class="muted small">${esc((d.excluded && d.excluded.reason) || 'Tatt ut')}</span></span>${icon('chev', 18)}</button></li>`).join('')}</ul>
+    <p class="muted small pad">Åpne turen og trykk «Regn med turen igjen» for å ta den med.</p>` : ''}
+    <h2 class="section-title">Statistikk</h2>
+    <section class="card"><h2 class="card-title">${icon('map')}Veier, lys og føre</h2>
+      <div class="mix-block"><h3>Veityper</h3>${bar(tot.sec, ['by', 'land', 'motor'], ROAD_LABEL, 'mix')}</div>
+      <div class="mix-block"><h3>Lysforhold</h3>${bar(tot.light, ['day', 'twilight', 'dark'], LIGHT_LABEL, 'light')}</div>
+      <div class="mix-block"><h3>Føre</h3>${['dry', 'wet', 'snow', 'ice'].some(k => tot.surface[k] > 0) ? `${bar(tot.surface, ['dry', 'wet', 'snow', 'ice'], SURFACE_LABEL, 'surf')}
+      ${tot.surface.unknown > 0 ? `<p class="muted small">${fmtHours(tot.surface.unknown)} er kjørt før føre kunne velges.</p>` : ''}` : '<p class="muted small">Føre er ikke valgt på noen tur ennå. Velg det når du starter en tur.</p>'}</div>
+    </section>
     <section class="card"><h2 class="card-title">${icon('chart')}Siste åtte uker</h2>
       <div class="week-bars" role="img" aria-label="Kjøretid per uke">${weeks.map(w => `<div class="wk"><span class="wk-val">${w.sec ? Math.round(w.sec / 60) : ''}</span><span class="wk-bar" style="height:${Math.max(2, w.sec / maxW * 100)}%"></span><span class="wk-lbl"><strong>${isoWeek(w.start)}</strong>${new Date(w.start).getDate()}.${new Date(w.start).getMonth() + 1}.</span></div>`).join('')}</div>
       <p class="muted small">Minutter per uke. Under: ukenummer og mandagens dato.</p></section>
     ${spotsCard}
     <details class="card how-calc"><summary>Slik regnes det</summary>
       <p class="muted small">Turer som er tatt ut av utregningene, teller med i tid og km her, fordi de ble kjørt. Unntaket er når noen andre kjørte. <strong>Motorvei</strong> er motorvei og motortrafikkvei slik Statens vegvesen har registrert dem, uansett fartsgrense. <strong>By</strong> er fartsgrense 50 eller lavere, resten er landevei. Uten nett anslås veitypen ut fra fartsgrensen og farten. <strong>Mørke</strong> er når sola står mer enn 6° under horisonten, skumring mellom 0 og 6°. <strong>Føre</strong> velges før hver tur. På snø og is er grensene for brå bremsing og svinger lavere, fordi bilen har mindre grep.</p></details>
-    <h2 class="section-title">Alle turer</h2>
-    <ul class="drives log-list card">${rows.filter(x => isReal(x.d)).map(x => `<li><button type="button" class="drive${lockedIds.has(x.d.id) ? ' locked' : ''}" data-id="${esc(x.d.id)}">
-      <span class="drive-main"><strong>${esc(shortDay(x.d.startedAt))}</strong>
-      <span class="muted small">${[fmtHours(x.log.total.sec), km(x.log.total.km), x.log.light.dark > 60 ? `${fmtHours(x.log.light.dark)} mørke` : ''].filter(Boolean).join(SEP)}</span>
-</span>
-      ${scoreBadge(x.res.overall, 40)}</button></li>`).join('')}</ul>
-    ${excludedDrives.length ? `<h2 class="section-title">Holdt utenfor utregningene</h2>
-    <ul class="drives log-list card">${excludedDrives.map(d => `<li><button type="button" class="drive" data-id="${d.id}">
-      <span class="drive-main"><strong>${esc(shortDay(d.startedAt))}</strong><span class="muted small">${esc((d.excluded && d.excluded.reason) || 'Tatt ut')}</span></span>${icon('chev', 18)}</button></li>`).join('')}</ul>
-    <p class="muted small pad">Åpne turen og trykk «Regn med turen igjen» for å ta den med.</p>` : ''}
     <button type="button" class="btn secondary" id="btn-log-csv2">${icon('download', 20)}Eksporter loggen (regneark)</button>`;
   root.querySelectorAll('.drive').forEach(b => b.onclick = () => { location.hash = '#/rapport/' + b.dataset.id; });
+  // Vis alle / vis bare de siste. Valget huskes til appen lukkes, så det står likt når du kommer tilbake fra en rapport.
+  const moreBtn = root.querySelector('#btn-more-trips');
+  if (moreBtn) moreBtn.onclick = () => {
+    logShowAll = !logShowAll;
+    root.querySelectorAll('.more-row').forEach(li => { li.hidden = !logShowAll; });
+    moreBtn.setAttribute('aria-expanded', String(logShowAll));
+    moreBtn.querySelector('span').textContent = moreLabel(logShowAll);
+    if (!logShowAll) moreBtn.scrollIntoView({ block: 'center' });
+  };
   const csv = () => exportLogCsv(rows, filter);
   root.querySelector('#btn-log-csv2').onclick = csv;
   $('#btn-log-spots').onclick = () => { location.hash = '#/faresteder'; };
@@ -1518,19 +1539,19 @@ async function renderPlan() {
   const { key, mine } = planState();
   const prog = planProgress();
   const dfmt = iso => new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
-  // Teori og sikkerhetskontroll (0.14.0) øverst: de skal være klare før oppkjøringen
+  // Fremdriften i læreplanen øverst som skiltkort (0.19.0), så teori og sikkerhetskontroll, så punktene
   const thP = theoryProgress();
   // Faresteder er flyttet til Turer (0.12.1): Opplæring er bare læreplanen
   root.innerHTML = `
-    <div class="mini-grid">
-      ${theoryMiniCards(thP, ['plan-theory', 'plan-safety'])}
-    </div>
-    <section class="card plan-head">
+    <section class="card plan-head sign-card">
       <p class="eyebrow">${driver ? esc(driver) : esc(s.name || 'Din opplæring')}</p>
       <p class="plan-prog"><strong>${prog.done}</strong> av ${prog.total} punkter krysset av</p>
       <span class="goal-bar"><span style="width:${(prog.done / prog.total * 100).toFixed(0)}%"></span></span>
       <p class="muted small">Etter læreplanen for klasse B. Trafikkskolen avgjør hva som er gjennomført.</p>
     </section>
+    <div class="mini-grid">
+      ${theoryMiniCards(thP, ['plan-theory', 'plan-safety'])}
+    </div>
     ${CURRICULUM.map(st => `<h2 class="group-title">${esc(st.stage)}</h2><section class="card"><ul class="plan-list">${st.items.map(it => {
       const e = it.auto ? ev[it.auto] : null;
       const st2 = mine[it.id] || {};
@@ -2555,7 +2576,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       drawBase(status);
       if (!unlock) return;
       const hero = root.querySelector('.hero');
-      if (hero) hero.insertAdjacentHTML('beforebegin', unlock);
+      if (hero) hero.insertAdjacentHTML('afterend', unlock);   // under resultatet (0.19.0): poengene er det viktigste
     };
     if (unlock) { const cur = getSettings(), seen = cur.celebrated || {}; if (!seen[id]) { saveSettings({ ...cur, celebrated: { ...seen, [id]: 1 } }); setTimeout(celebrate, 400); } }
     let enriching = false;

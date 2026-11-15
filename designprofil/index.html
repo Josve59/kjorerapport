@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Designprofil – Kjørerapport</title>
+  <meta name="description" content="Visuell profil 2.0 «Skilt og vei» for Kjørerapport: farger, skrift, hierarki og regler.">
+  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <style>
+    /* Bare for denne siden: rutenett for fargeprøver og typografiprøver. Alt annet er appens egne stiler. */
+    #app > .page-head { margin-top: 16px; }
+    .dp-intro { margin: 8px 4px 20px; }
+    .dp-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 0 0 14px; padding: 0; list-style: none; }
+    .dp-sw { border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); border: 1px solid var(--card-border); }
+    .dp-chip { height: 64px; display: flex; align-items: flex-end; padding: 8px 10px; font-weight: 800; font-size: .85rem; }
+    .dp-sw p { margin: 0; padding: 8px 10px 10px; font-size: .85rem; line-height: 1.35; }
+    .dp-sw code { font-size: .78rem; }
+    .dp-type > * { margin: 0 0 10px; }
+    .dp-type .lbl { display: block; font-size: .78rem; color: var(--muted); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 2px; }
+    .dp-levels { display: grid; gap: 10px; }
+    .dp-levels .sign-card, .dp-levels .card, .dp-levels .banner { margin: 0; }
+    .dp-rules { padding-left: 22px; margin: 0; display: grid; gap: 10px; }
+    .dp-rules li::marker { font-weight: 800; color: var(--link); }
+    .dp-btns .btn { margin-bottom: 10px; }
+    .dp-table { width: 100%; border-collapse: collapse; font-size: .9rem; table-layout: fixed; }
+    .dp-table th:nth-child(1) { width: 27%; } .dp-table th:nth-child(2) { width: 31%; }
+    .dp-table td { overflow-wrap: anywhere; hyphens: auto; }
+    .dp-table th, .dp-table td { text-align: left; vertical-align: top; padding: 8px 4px; border-top: 1px solid var(--line); }
+    .dp-table th { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; border-top: 0; }
+    .dp-src li { margin-bottom: 6px; overflow-wrap: anywhere; }
+    .dp-road { height: 22px; border-radius: 6px; margin: 4px 0 10px; background: repeating-linear-gradient(90deg, var(--lane) 0 26px, transparent 26px 46px) center / 100% 5px no-repeat, var(--asphalt); }
+  </style>
+</head>
+<body>
+<main id="app">
+  <div class="page-head"><h1 class="page-title">Designprofil</h1></div>
+
+  <section class="sign-card">
+    <p class="eyebrow">Visuell profil 2.0 · fra versjon 0.19.0</p>
+    <p class="start-hello" style="max-width:none">Skilt og vei</p>
+    <p style="margin:0">Kjørerapport henter uttrykket fra norske veier: blå opplysningsskilt med hvit kantlinje, gul midtlinje på mørk asfalt og en skrift som bygger på skiltskrift. Roen kommer fra luft og hvite kort. Kraften kommer fra ett blått skilt per skjerm.</p>
+  </section>
+
+  <p class="muted dp-intro">Siden bruker appens egne stilark. Fargene og kortene under er derfor de samme som i appen, og de skifter med lys og mørk modus.</p>
+
+  <h2 class="section-title">1. Idé og stemning</h2>
+  <section class="card">
+    <p><strong>Hvem appen er for:</strong> elever på 16–18 år, ledsageren (ofte en forelder) og trafikklæreren. De skal føle seg trygge, få ros når det går bra og se tydelig hva de skal øve på.</p>
+    <p><strong>Hvorfor vei og skilt:</strong> alt i appen handler om veien. Norske opplysningsskilt er blå med hvit kantlinje, og midtlinja er gul. Det gjør profilen gjenkjennelig og norsk uten å låne fra andre apper.</p>
+    <p style="margin:0"><strong>Kjennetegnet</strong> er skiltkortet: et blått kort med hvit kantlinje innenfor kanten, slik som på et ekte skilt. Det brukes bare én gang per skjerm, så det alltid viser det viktigste.</p>
+    <div class="dp-road" aria-hidden="true"></div>
+  </section>
+
+  <h2 class="section-title">2. Farger</h2>
+  <p class="muted small dp-intro">Én farge betyr én ting. Tallene viser kontrasten mot hvitt kort (lys) og mørkt kort (mørk). Krav: minst 4,5:1 for vanlig tekst.</p>
+  <ul class="dp-swatches">
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--brand);color:#fff">Veiblå</div><p><strong>Merkefarge.</strong> Skiltkortet, lenker, valgt fane og knapper du kan trykke på.<br><code>#0B4CB4 · 7,8:1</code><br><code>mørk: flate #0E45A8, tekst #8DB8FF · 8,7:1</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--primary);color:var(--on-primary)">Midtlinjegul</div><p><strong>Hovedhandling.</strong> Bare den ene viktigste knappen på skjermen, og veistriper.<br><code>#F5C518 · tekst #0F1A2B 10,7:1</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--ink);color:var(--bg)">Blekk</div><p><strong>Tekst.</strong> Nesten svart med et blått skjær.<br><code>#0F1A2B · 17,5:1</code><br><code>mørk: #E9EEF6 · 15:1</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--muted);color:var(--bg)">Grå tekst</div><p><strong>Forklaringer og etiketter.</strong><br><code>#4B586B · 7,2:1</code><br><code>mørk: #A3B0C4 · 8:1</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--bg);color:var(--ink);box-shadow:inset 0 -1px 0 var(--line)">Dagslys</div><p><strong>Bakgrunn.</strong> Svakt blått skjær.<br><code>#EEF2F8 · mørk: #080D17</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--surface);color:var(--ink);box-shadow:inset 0 -1px 0 var(--line)">Kort</div><p><strong>Innhold.</strong> Hvite kort, mørkeblå i mørk modus.<br><code>#FFFFFF · mørk: #111A28</code></p></li>
+  </ul>
+  <p class="muted small dp-intro" style="margin-top:0">Signalfarger brukes bare for det de betyr, aldri som pynt:</p>
+  <ul class="dp-swatches">
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--good);color:var(--on-color)">Grønn</div><p>Bra, nådd, riktig.<br><code>#23784A · 5,4:1</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--brake);color:var(--on-color)">Rød</div><p>Brå bremsing, feil, slett.<br><code>#C0392B · 5,4:1</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--turn);color:var(--on-color)">Oransje</div><p>Svinger og varsler.<br><code>#A15C0B · 5,2:1</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--accel);color:var(--on-color)">Fiolett</div><p>Akselerasjon.<br><code>#6941C6</code></p></li>
+    <li class="dp-sw"><div class="dp-chip" style="background:var(--chart);color:var(--on-color)">Blågrønn</div><p>Nøytrale diagrammer, som minutter per uke.<br><code>#0E7C86 · 4,95:1</code></p></li>
+  </ul>
+  <section class="card">
+    <h3 style="margin-top:0">Fordeling</h3>
+    <p style="margin:0">Som tommelfingerregel: omtrent 60 % lys bakgrunn og hvite kort, 30 % tekst og veiblått, og under 10 % gult. Gult blir sterkt nettopp fordi det er lite av det.</p>
+  </section>
+
+  <h2 class="section-title">3. Skrift</h2>
+  <section class="card dp-type">
+    <p class="muted small">Overpass, én skriftfamilie i hele appen. Den bygger på Highway Gothic, skriften på amerikanske veiskilt, og passer derfor til en app om kjøring. Teksten følger tekststørrelsen i iPhonens innstillinger.</p>
+    <div><span class="lbl">Sidetittel · 33 px · ekstra fet</span><p class="page-title" style="font-size:1.95rem">Turer</p></div>
+    <div><span class="lbl">Stort tall · 39 px · ekstra fet</span><p class="log-big" style="font-size:2.3rem;font-weight:800;margin:0;line-height:1.05">3 t 54 min</p></div>
+    <div><span class="lbl">Korttittel · 19 px · ekstra fet</span><p class="card-title" style="margin:0">Siste åtte uker</p></div>
+    <div><span class="lbl">Brødtekst · 17 px · vanlig</span><p>Se langt fram og slipp gassen tidlig.</p></div>
+    <div><span class="lbl">Liten tekst · 15 px · grå</span><p class="muted small">11 min · 8,9 km</p></div>
+    <div><span class="lbl">Etikett · 13,6 px · versaler</span><p class="eyebrow">Siste tur</p></div>
+    <p class="muted small" style="margin:0">Regel: høyst tre størrelser i ett kort. Tall står med like brede sifre, så de ikke hopper når de endrer seg.</p>
+  </section>
+
+  <h2 class="section-title">4. Hierarki</h2>
+  <p class="muted small dp-intro">Alt kan ikke være like viktig. Appen har fire nivåer, og hvert nivå ser annerledes ut:</p>
+  <div class="dp-levels">
+    <section class="sign-card">
+      <p class="eyebrow">Nivå 1 · Skiltkort</p>
+      <p style="margin:0">Det skjermen er til for. <strong>Ett per skjerm.</strong> Hjem: start tur. Turer: kjøreloggen. Rapport: poengsummen. Opplæring: fremdriften.</p>
+    </section>
+    <section class="card">
+      <h2 class="card-title">Nivå 2 · Kort</h2>
+      <p style="margin:0">Innholdet: siste tur, utvikling, statistikk. Hvitt kort med tittel øverst. Kort som fører videre, har en blå lenke nederst («Se rapporten ›»).</p>
+    </section>
+    <section class="card">
+      <h2 class="card-title">Nivå 3 · Rader</h2>
+      <ul class="drives" style="margin:0">
+        <li><span class="drive" style="min-height:56px"><span class="drive-main"><strong>I dag, 15:16</strong><span class="muted small">11 min · 8,9 km</span></span></span></li>
+        <li><span class="drive" style="min-height:56px"><span class="drive-main"><strong>Man. 9. nov., 15:34</strong><span class="muted small">11 min · 8,9 km</span></span></span></li>
+      </ul>
+    </section>
+    <div class="banner"><span>Nivå 4 · Merknader og påminnelser: tonet blått, mindre tekst, ingen skygge. Aldri sterkere enn innholdet.</span></div>
+  </div>
+
+  <h2 class="section-title">5. Regler</h2>
+  <section class="card">
+    <ol class="dp-rules">
+      <li><strong>Viktigst øverst.</strong> Folk leser ovenfra og ned. Svaret på «hva er denne skjermen til?» står først.</li>
+      <li><strong>Ett skiltkort per skjerm.</strong> Blir alt fremhevet, blir ingenting det.</li>
+      <li><strong>Én gul knapp per skjerm.</strong> Den gule er hovedhandlingen. Andre knapper er tonet blå, og mindre viktige valg er blå lenker.</li>
+      <li><strong>Én farge, én betydning.</strong> Blått kan trykkes på, grønt er bra, rødt er brå bremsing eller feil. Farge er aldri eneste kjennetegn: det står alltid tekst eller et ikon i tillegg.</li>
+      <li><strong>Vis lite først.</strong> De fem siste turene står framme, resten ligger bak «Vis alle». Forklaringer ligger bak «Slik regnes det».</li>
+      <li><strong>Samle det som hører sammen.</strong> Veityper, lys og føre er ett kort, ikke tre. Mer luft mellom grupper enn inne i dem.</li>
+      <li><strong>Systembeskjeder er små.</strong> Sikkerhetskopi og «Legg til på Hjem-skjerm» er tonede merknader, ikke store kort over innholdet.</li>
+      <li><strong>Logoen bare på Hjem.</strong> Andre skjermer har en stor tittel i stedet. Ingen trenger å bli minnet på hvilken app de bruker.</li>
+      <li><strong>Avstand i faste trinn:</strong> 4, 8, 12, 16, 24 og 32 px. Kort har 16–22 px luft inni og 14–16 px mellom seg.</li>
+      <li><strong>Lys og mørk modus, alltid.</strong> Mørk modus er «nattkjøring»: mørk blå i stedet for grå. All tekst holder minst 4,5:1, også i mørk modus.</li>
+    </ol>
+  </section>
+
+  <h2 class="section-title">6. Knapper</h2>
+  <section class="card dp-btns">
+    <button type="button" class="btn primary">Hovedhandling (gul)</button>
+    <button type="button" class="btn secondary">Vanlig knapp (tonet blå)</button>
+    <button type="button" class="btn danger">Slett (rød kant)</button>
+    <button type="button" class="link" style="padding-left:0">Lenke (blå tekst)</button>
+    <p class="muted small" style="margin:6px 0 0">Alle trykkflater er minst 44 px høye. Under kjøring er knappene større.</p>
+  </section>
+
+  <h2 class="section-title">7. Skjermene</h2>
+  <section class="card">
+    <table class="dp-table">
+      <thead><tr><th>Skjerm</th><th>Skiltkort</th><th>Så kommer</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Hjem</strong></td><td>Start kjøretur</td><td>Siste tur, nivå, øving, teori, utvikling</td></tr>
+        <tr><td><strong>Turer</strong></td><td>Kjøreloggen (tid, km, turer, mørke)</td><td>Fem siste turer, statistikk, faresteder</td></tr>
+        <tr><td><strong>Rapport</strong></td><td>Poengsum og stikkord</td><td>Nytt på turen, kort fortalt, neste øvingstur, kart</td></tr>
+        <tr><td><strong>Opplæring</strong></td><td>Punkter krysset av</td><td>Teori og sikkerhetskontroll, læreplanen</td></tr>
+        <tr><td><strong>Guide, Trafikklærer</strong></td><td>Ingen ennå</td><td>Vanlige kort</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <h2 class="section-title">8. Kilder</h2>
+  <section class="card">
+    <ul class="dp-src small">
+      <li>Apple Human Interface Guidelines: Color, Branding, Layout, Typography og Dark Mode (developer.apple.com/design/human-interface-guidelines).</li>
+      <li>Nielsen Norman Group: «5 Principles of Visual Design in UX» (nngroup.com/articles/principles-visual-design).</li>
+      <li>Google Material Design 3: fargeroller og tonepaletter (m3.material.io).</li>
+      <li>Statens vegvesen: «Filer og fargekoder for trafikkskilt» (vegvesen.no). Veiblått og gult har skiltfargene PMS 293 (blå) og 130 (gul) som utgangspunkt, tilpasset skjerm og kontrastkravene.</li>
+    </ul>
+  </section>
+  <p class="muted small center">Fargeverdiene ligger i <code>css/theme.css</code>. Endres de der, endres både appen og denne siden.</p>
+</main>
+</body>
+</html>

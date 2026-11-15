@@ -193,7 +193,7 @@ export function renderReport(root, r, ctx = {}) {
       ${enrichStatus ? `<p class="enrich-status ${enrichStatus.error ? 'error' : ''}" id="enrich-status" aria-live="polite">${esc(enrichStatus.text)}${enrichStatus.error && onFetch ? ' <button type="button" class="link" id="btn-fetch">Prøv igjen</button>' : ''}</p>`
         : (enrich && enrich.error && canFetch && onFetch ? `<p class="enrich-status error">Forrige henting feilet: ${esc(enrich.error)} <button type="button" class="link" id="btn-fetch">Prøv igjen</button></p>` : '')}
     </header>
-    <section class="hero card">
+    <section class="hero card sign-card">
       ${scoreRing(r.overall)}
       <div class="hero-text">
         <p class="rating">${esc(headline(r))}</p>

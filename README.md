@@ -20,6 +20,7 @@ sw.js                  service worker: caches everything so the app works offlin
 manifest.webmanifest   PWA manifest
 fonts/                 Overpass (self-hosted, variable weight)
 icons/                 app icons
+designprofil/          the visual profile 2.0: colours, type, hierarchy and design rules (not in the iPhone app)
 tests/                 unit tests for the analysis engine
 ```
 
@@ -141,6 +142,25 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - That is correct behaviour, not a bug.
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
+
+## What's new in 0.19.0 – visual profile 2.0 «Skilt og vei» and a clearer order on every screen
+
+The owner asked for a stronger visual identity («the app is very grey»), a clear hierarchy («not all info can sit at the same level») and a shorter trip list. The whole profile, with colours, contrast figures, type scale, four hierarchy levels and ten design rules, is in `designprofil/index.html`. It uses the app's own stylesheets, so it always shows the real colours in light and dark mode. It is not copied into the iPhone app.
+- **Idea:** Norwegian roads. Road-sign blue (from PMS 293, the colour of information signs) is the brand colour, yellow (the centre line) is the one main action, and the font Overpass is based on the road-sign typeface Highway Gothic. Dark mode is «night driving»: dark blue instead of grey.
+- **New colours** (`css/theme.css`): background `#EEF2F8`, text `#0F1A2B`, grey text `#4B586B`, brand blue `#0B4CB4` (7.8:1 on white). Dark: background `#080D17`, cards `#111A28`, link blue `#8DB8FF`. All text is at least 4.5:1. The signal colours (green, red, orange, violet) keep their meaning and values.
+- **The sign card** (`.sign-card`): a blue card with a white line just inside the edge, like an information sign. It is used once per screen, for what the screen is for: «Start kjøretur» on Hjem, the log total on Turer, the score in the report, and the curriculum progress on Opplæring. Inside it the colour variables switch, so text, score rings and bars turn light without extra rules.
+- **Hierarchy:**
+  - Four levels: sign card, white card, list rows, and tinted notices.
+  - The backup reminder and «Legg til på Hjem-skjerm» are now small tinted notices. The install hint moved below the content.
+  - «Nytt på denne turen» in the report now comes after the score.
+  - Opplæring starts with the progress, then theory and the safety check.
+  - The logo shows only on Hjem; other screens have a large title.
+  - Secondary buttons are tinted blue, and the yellow button is kept for the main action. Cards that lead on («Hva må du øve mer på?», «Faresteder») are plain white cards.
+- **Turer:**
+  - The total (time, km, trips, dark) is the sign card at the top.
+  - The five most recent trips follow, with «Vis alle N turer» to open the rest and «Vis bare de siste» to close them again. The choice holds until the app is closed.
+  - The statistics follow under «Statistikk». Road types, light and road surface are now one card instead of three.
+- The info pages (`css/side.css`) and the browser theme colour use the new colours too.
 
 ## What's new in 0.18.4 – calmer driving, a teacher choice for everyone, and «Etter timen»
 

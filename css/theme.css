@@ -1,29 +1,33 @@
-/* Kjørerapport – visuell stil 1.0 (v0.9.14). Lastes etter app.css og overstyrer farger, typografi, former og de
-   vanligste komponentene, likt i begge appene.
-   Retning: vei og skilt, men rolig. Signalgult for det man skal trykke på, skiltblått for lenker og informasjon,
-   grønt og rødt bare for bra og dårlig. Hvite kort uten streker i lys modus, egne flater i mørk modus.
-   Brukervennlighet: kontrast minst 4,5:1 på all tekst (også grå), trykkflater minst 48 px, tydelig fokusring,
-   og liten tekst aldri under 15 px. */
+/* Kjørerapport – visuell profil 2.0 «Skilt og vei» (0.19.0, før stil 1.0 fra v0.9.14). Lastes etter app.css og
+   overstyrer farger, typografi, former og de vanligste komponentene. Hele profilen med regler: designprofil/index.html.
+   Retning: norske veier. Veiblått som opplysningsskiltene, gult som midtlinja, mørk asfalt, og Overpass (bygger på
+   skiltskriften Highway Gothic). Roen kommer fra luft og hvite kort; kraften fra ett blått skiltkort per skjerm.
+   Brukervennlighet: kontrast minst 4,5:1 på all tekst (også grå), trykkflater minst 44–48 px, tydelig fokusring,
+   og liten tekst aldri under 13,6 px. */
 
 /* ---------- Farger ----------
-   Én farge betyr én ting (designgjennomgang etter Apples retningslinjer, color.md › Best practices):
-   blått = lenker og informasjon, fiolett = akselerasjon, oransje = svinger, rødt = bremsing og feil,
-   grønt = bra. Nøytrale dataserier (uker, poengutvikling, veityper) har egne farger (--chart, --cat-2, --cat-3). */
+   Én farge betyr én ting (Apples retningslinjer, color.md › Best practices):
+   veiblått = appen og det du kan trykke på (lenker, valgt fane, sekundærknapper, skiltkortet),
+   gult = den ene hovedhandlingen og veistriper, grønt = bra, rødt = bremsing og feil, oransje = svinger og varsler,
+   fiolett = akselerasjon. Nøytrale dataserier (uker, poengutvikling, veityper) har egne farger (--chart, --cat-2, --cat-3).
+   Bakgrunnen har et svakt blått skjær, så gråtonene hører til veiblått i stedet for å være grønngrå. */
 :root {
-  --bg: #f3f4f1; --surface: #ffffff; --surface-2: #eff1ee; --ink: #14181b; --muted: #545e66; --line: #e0e4df;
-  --primary: #f5c518; --on-primary: #14181b; --link: #1e5aa8; --focus: #1e5aa8;
+  --bg: #eef2f8; --surface: #ffffff; --surface-2: #e8eef7; --ink: #0f1a2b; --muted: #4b586b; --line: #d9e1ec;
+  --brand: #0b4cb4; --brand-2: #083b8f; --on-brand: #ffffff; --brand-tint: #e7eefa;
+  --primary: #f5c518; --on-primary: #0f1a2b; --link: #0b4cb4; --focus: #0b4cb4;
   --brake: #c0392b; --accel: #6941c6; --turn: #a15c0b; --good: #23784a; --sign: #c8102e;
   --chart: #0e7c86; --cat-2: #5f6b76; --cat-3: #b07d12; --on-color: #ffffff;
   --asphalt: #262c31; --road-edge: #1b2024; --lane: #f5c518;
   --radius: 20px; --radius-sm: 14px;
-  --shadow: 0 1px 2px rgba(16, 24, 32, .04), 0 6px 20px rgba(16, 24, 32, .06);
-  --shadow-lg: 0 14px 34px rgba(16, 24, 32, .16);
+  --shadow: 0 1px 2px rgba(15, 26, 43, .05), 0 6px 20px rgba(15, 26, 43, .07);
+  --shadow-lg: 0 14px 34px rgba(15, 26, 43, .16);
   --card-border: transparent;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f1214; --surface: #181c1f; --surface-2: #22272b; --ink: #eceeed; --muted: #a5aeb5; --line: #2b3136;
-    --primary: #f5c518; --on-primary: #14181b; --link: #84b6f4; --focus: #84b6f4;
+    --bg: #080d17; --surface: #111a28; --surface-2: #1a2435; --ink: #e9eef6; --muted: #a3b0c4; --line: #25314a;
+    --brand: #0e45a8; --brand-2: #0a347f; --on-brand: #ffffff; --brand-tint: #16284a;
+    --primary: #f5c518; --on-primary: #0f1a2b; --link: #8db8ff; --focus: #8db8ff;
     --brake: #f07a66; --accel: #b69cf7; --turn: #f0a257; --good: #5cc08a; --sign: #e0384f;
     --chart: #4cc3c9; --cat-2: #9aa6b0; --cat-3: #e0b04a; --on-color: #101315;
     --asphalt: #3a4248; --road-edge: #4c555c; --lane: #f5c518;
@@ -31,8 +35,9 @@
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0f1214; --surface: #181c1f; --surface-2: #22272b; --ink: #eceeed; --muted: #a5aeb5; --line: #2b3136;
-  --primary: #f5c518; --on-primary: #14181b; --link: #84b6f4; --focus: #84b6f4;
+  --bg: #080d17; --surface: #111a28; --surface-2: #1a2435; --ink: #e9eef6; --muted: #a3b0c4; --line: #25314a;
+  --brand: #0e45a8; --brand-2: #0a347f; --on-brand: #ffffff; --brand-tint: #16284a;
+  --primary: #f5c518; --on-primary: #0f1a2b; --link: #8db8ff; --focus: #8db8ff;
   --brake: #f07a66; --accel: #b69cf7; --turn: #f0a257; --good: #5cc08a; --sign: #e0384f;
   --chart: #4cc3c9; --cat-2: #9aa6b0; --cat-3: #e0b04a; --on-color: #101315;
   --asphalt: #3a4248; --road-edge: #4c555c; --lane: #f5c518;
@@ -83,8 +88,8 @@ a, .link { color: var(--link); }
 .segment { border: 0; background: var(--surface-2); padding: 4px; border-radius: 16px; gap: 4px; }
 .segment span { min-height: 48px; border-radius: 12px; color: var(--muted); transition: background .15s, color .15s; }
 .segment input:checked + span { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(16, 24, 32, .14); }
-:root[data-theme="dark"] .segment input:checked + span { background: #343b41; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .segment input:checked + span { background: #343b41; } }
+:root[data-theme="dark"] .segment input:checked + span { background: #2a3650; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .segment input:checked + span { background: #2a3650; } }
 .chip { border: 0; background: var(--surface-2); min-height: 44px; }
 .chip.on { background: var(--ink); color: var(--bg); }
 .quicknav { background: color-mix(in srgb, var(--bg) 92%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
@@ -118,10 +123,8 @@ input.switch:checked { background: var(--good); }
 .mini-grid { gap: 12px; }
 .mini-card, .t-cta, .log-card-btn, .last-card, .cam-card { transition: transform .12s var(--ease); }
 .mini-card:active, .t-cta:active, .log-card-btn:active, .cam-card:active { transform: scale(.985); }
-.t-cta { background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 22%, var(--surface)) 0%, var(--surface) 70%); }
-.t-cta .card-title .ico { color: #6b5300; background: color-mix(in srgb, var(--primary) 45%, transparent); }
-:root[data-theme="dark"] .t-cta .card-title .ico { color: var(--primary); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .t-cta .card-title .ico { color: var(--primary); } }
+/* Kort som fører videre er vanlige hvite kort (0.19.0): gult er bare for hovedknappen, blått viser at det kan trykkes */
+.t-cta { background: var(--surface); }
 .drives.card, .drive-section .drives { padding: 4px 14px; }
 .drives li + li { border-top-color: var(--line); }
 
@@ -160,10 +163,11 @@ input.switch:checked { background: var(--good); }
 
 /* «Øk kontrast» og «Reduser gjennomsiktighet» i iPhonens innstillinger */
 @media (prefers-contrast: more) {
-  :root { --muted: #3a4249; --line: #a9b1ab; --card-border: var(--line); }
+  :root { --muted: #34404f; --line: #a3b0c2; --card-border: var(--line); --brand: #083b8f; --link: #083b8f; }
 }
 @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
-  :root { --muted: #d0d6da; --line: #59626a; }
+  /* samme vekt som fargene for mørk modus over, ellers vant de */
+  :root:not([data-theme="light"]) { --muted: #d0d8e4; --line: #56637b; --link: #b3cfff; }
 }
 @media (prefers-reduced-transparency: reduce) {
   .appbar, .quicknav { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -473,3 +477,81 @@ dialog.sheet .pick-list .mode-opt > span { flex: 1; }
 .rec-sound[hidden] { display: none; }
 /* Førerkameraet under kjøring uten bilde (0.18.4): videoen må finnes for gjenkjenningen i nettleseren, men vises ikke */
 .rec-video.quiet { opacity: 0; pointer-events: none; }
+
+/* ---------- Visuell profil 2.0 «Skilt og vei» (0.19.0) ----------
+   Fire nivåer, så det viktigste alltid er lett å finne (designprofil/index.html › Hierarki):
+   1 Skiltkort: ett per skjerm, svaret på hva skjermen er til. 2 Kort: hvitt innhold. 3 Rader i lister.
+   4 Merknader og systembeskjeder: tonet, små, aldri sterkere enn innholdet. */
+
+/* Nivå 1: skiltkortet, som et blått opplysningsskilt med hvit kantlinje innenfor kanten. Fargevariablene byttes inni
+   kortet, så tekst, poengringer, stolper og knapper som bruker dem, blir lyse uten egne regler. */
+.sign-card {
+  --ink: #ffffff; --muted: #d3e0f7; --line: rgba(255, 255, 255, .24); --surface-2: rgba(255, 255, 255, .13); --bg: rgba(255, 255, 255, .14);
+  --surface: var(--brand); --link: #ffffff; --focus: #ffffff; --good: #7ee0a6; --brake: #ffa494; --turn: #ffc27a;
+  position: relative; isolation: isolate; color: var(--ink);
+  background: linear-gradient(160deg, var(--brand) 0%, var(--brand-2) 100%);
+  border: 0; border-radius: 22px; padding: 24px 22px 20px; margin-bottom: 16px;
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--brand) 30%, transparent);
+}
+.sign-card::before { content: ''; position: absolute; inset: 6px; z-index: -1; border: 2px solid rgba(255, 255, 255, .88); border-radius: 17px; pointer-events: none; }
+.sign-card .eyebrow { color: var(--muted); }
+.sign-card .delta-pill, .sign-card .delta-pill.up, .sign-card .delta-pill.down { background: rgba(255, 255, 255, .16); color: #ffffff; }
+@media (prefers-contrast: more) { .sign-card { --muted: #ffffff; } .sign-card::before { border-color: #ffffff; } }
+@media print {
+  .sign-card { --ink: #000; --muted: #444; --line: #ccc; --surface-2: #f2f2f2; --bg: #f2f2f2; --surface: #fff; --good: #23784a; --brake: #c0392b; --turn: #a15c0b;
+    background: none !important; color: #000; box-shadow: none; border: 1px solid #ccc; }
+  .sign-card::before { display: none; }
+}
+
+/* Startkortet på Hjem er skiltkortet der: veien med gul midtlinje krysser skiltet, under kantlinja */
+.start-card { padding: 26px 22px 18px; border-radius: 24px; }
+.start-card .start-road { z-index: -2; opacity: 1;
+  background: linear-gradient(90deg, transparent 0 8px, rgba(5, 16, 38, .32) 8px 112px, transparent 112px),
+              repeating-linear-gradient(180deg, var(--lane) 0 26px, transparent 26px 50px) center / 6px 100% no-repeat; }
+.start-hello { color: #ffffff; }
+.start-sub { color: var(--muted); opacity: 1; }
+.start-suggest { background: rgba(255, 255, 255, .14); color: #ffffff; font-weight: 700; }
+.start-btn { background: var(--primary); color: var(--on-primary); box-shadow: 0 8px 20px rgba(3, 12, 32, .35); }
+.start-demo { color: #ffffff; opacity: 1; }
+
+/* Nivå 4: merknader og påminnelser er tonet og små, så de ikke tar oppmerksomheten fra innholdet */
+.banner { background: var(--brand-tint); border: 0; box-shadow: none; border-radius: 16px; font-weight: 600; }
+.banner .btn.secondary { background: var(--surface); }
+.install-hint { background: var(--brand-tint); box-shadow: none; border: 0; padding: 14px 16px; font-size: .92rem; }
+.install-hint .btn.secondary { background: var(--surface); }
+#home > #install-hint { order: 16; }   /* gjelder bare nettleseren: etter innholdet, ikke før siste tur */
+
+/* Knapper: én gul hovedknapp per skjerm. Andre knapper er tonet veiblå, slik iPhonen viser vanlige knapper. */
+.btn.secondary { background: var(--brand-tint); color: var(--link); border: 0; }
+.btn.secondary:disabled { color: var(--muted); }
+.chip.on, .quicknav a.on { background: var(--brand); color: var(--on-brand); }
+
+/* Logoen står bare på Hjem (branding.md: ikke gjenta logoen i hele appen). Andre skjermer har stor tittel i stedet. */
+.screen:not(#home):has(> .page-head:not([hidden])) > .appbar .brand { visibility: hidden; }
+.page-title { font-size: 1.95rem; letter-spacing: -.02em; }
+.page-head:has(.page-actions) .page-title { font-size: 1.6rem; }   /* dato i rapporten og knapper ved siden av: én linje */
+
+/* Nivå 2: korttitler litt større enn brødteksten, så kortene får en tydelig topp */
+h2.card-title, .card-title { font-size: 1.12rem; }
+
+/* Turer (0.19.0): summen øverst som skiltkort, så de siste turene, så statistikken */
+.log-hero .log-big { font-size: 2.3rem; font-weight: 800; line-height: 1.05; letter-spacing: -.02em; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.log-hero .log-big-label { margin: 0 0 16px; color: var(--muted); font-weight: 600; }
+.sign-stats { display: grid; grid-template-columns: auto auto auto; gap: 8px; margin: 0; }   /* bredde etter tallene, så «1 t 11 min» står på én linje */
+.sign-stats div { background: var(--surface-2); border-radius: 12px; padding: 8px 8px 7px; min-width: 0; }
+.sign-stats dt { font-size: .8rem; color: var(--muted); }
+.sign-stats dd { margin: 0; font-size: .95rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.25; }
+@media (max-width: 420px) { .log-hero { padding-left: 18px; padding-right: 18px; } }
+.trip-list .more-row[hidden] { display: none; }
+.more-trips { margin: -4px 0 14px; }
+.more-trips .ico { transform: rotate(90deg); transition: transform .2s var(--ease, ease); }
+.more-trips[aria-expanded="true"] .ico { transform: rotate(-90deg); }
+.mix-block + .mix-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.mix-block h3 { display: flex; align-items: center; gap: 8px; font-size: 1rem; margin: 0 0 8px; }
+.mix-block h3 .ico { color: var(--muted); }
+.mix-block .legend { margin-bottom: 0; }
+.mix-block p:last-child { margin-bottom: 0; }
+
+/* Opplæring (0.19.0): fremdriften i læreplanen er skiltkortet */
+.plan-head.sign-card .plan-prog { color: var(--ink); }
+.plan-head.sign-card .goal-bar { display: block; margin: 4px 0 12px; background: rgba(255, 255, 255, .18); }

@@ -1,24 +1,24 @@
 /* Kjørerapport – stil for de vanlige nettsidene (infoside for trafikkskoler og personvern).
-   Samme farger og skrift som appen. */
+   Samme farger og skrift som appen (profil 2.0 «Skilt og vei», 0.19.0; se designprofil/index.html). */
 @font-face { font-family: 'Overpass'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('../fonts/overpass-latin.woff2') format('woff2'); unicode-range: U+0000-00B6, U+00B8-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: 'Overpass'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('../fonts/overpass-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 
 :root {
-  --bg: #e9ecea; --surface: #f7f8f6; --ink: #1f2428; --muted: #59626a; --line: #d2d7d3;
-  --asphalt: #3b4146; --lane: #f2be22; --good: #2f7d4f; --brake: #c8412b; --accel: #1f5fa8;
+  --bg: #eef2f8; --surface: #ffffff; --ink: #0f1a2b; --muted: #4b586b; --line: #d9e1ec;
+  --asphalt: #262c31; --lane: #f5c518; --good: #23784a; --brake: #c0392b; --accel: #0b4cb4;
   --radius: 14px;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #1b1f22; --surface: #23282c; --ink: #e7eae8; --muted: #a3abb1; --line: #363c41;
-    --asphalt: #4a5157; --lane: #f2c230; --good: #56b37c; --brake: #e3654e; --accel: #6a9fe0;
+    --bg: #080d17; --surface: #111a28; --ink: #e9eef6; --muted: #a3b0c4; --line: #25314a;
+    --asphalt: #3a4248; --lane: #f5c518; --good: #5cc08a; --brake: #f07a66; --accel: #8db8ff;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #1b1f22; --surface: #23282c; --ink: #e7eae8; --muted: #a3abb1; --line: #363c41;
-  --asphalt: #4a5157; --lane: #f2c230; --good: #56b37c; --brake: #e3654e; --accel: #6a9fe0;
+  --bg: #080d17; --surface: #111a28; --ink: #e9eef6; --muted: #a3b0c4; --line: #25314a;
+  --asphalt: #3a4248; --lane: #f5c518; --good: #5cc08a; --brake: #f07a66; --accel: #8db8ff;
   color-scheme: dark;
 }
 
