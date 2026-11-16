@@ -267,3 +267,79 @@ test('0.20.0: dagsmål og dager på rad', () => {
   assert.deepEqual(normProgress(q).days, q.days);
   assert.deepEqual(normProgress({}).days, {});
 });
+
+/* ---------- 0.21.0: teoriboka, klar i prosent, prøvedato og bokmerker ---------- */
+import { readinessPercent, dailyPlan, toggleMark } from '../js/theory.js';
+import { BOOK, sectionFor, bookChapter, SURFACES, stopDistance } from '../js/theory-book.js';
+
+test('0.21.0: teoriboka dekker alle spørsmål én gang, med tegninger som finnes', () => {
+  assert.deepEqual(BOOK.map(c => c.id), THEMES.map(t => t.id), 'ett kapittel per tema, i samme rekkefølge');
+  const ids = new Set(QUESTIONS.map(q => q.id)), seen = new Set();
+  for (const ch of BOOK) {
+    assert.ok(ch.intro.length > 20 && ch.sections.length >= 3, ch.id);
+    const secIds = new Set();
+    for (const s of ch.sections) {
+      assert.ok(!secIds.has(s.id), `${ch.id}/${s.id}: dobbel del`); secIds.add(s.id);
+      assert.ok(s.title && s.points.length >= 2 && s.qs.length >= 2, `${ch.id}/${s.id}`);
+      for (const q of s.qs) { assert.ok(ids.has(q), `${s.id}: ukjent spørsmål ${q}`); assert.ok(!seen.has(q), `${q} står i to deler`); seen.add(q); }
+      for (const p of s.points) {
+        assert.ok(p.b.length > 8, `${s.id}: regelen mangler`);
+        if (p.fig) assert.ok(figure(p.fig).startsWith('<svg'), `${s.id}: tegningen ${p.fig} finnes ikke`);
+      }
+    }
+  }
+  for (const q of QUESTIONS) assert.ok(sectionFor(q.id), `${q.id} har ingen del i teoriboka`);
+  assert.equal(sectionFor('sk202'), null, 'skiltprøven har egen side');
+  assert.equal(bookChapter('fart').sections[0].calc, 'stopp');
+});
+
+test('0.21.0: stopplengde-kalkulatoren regner som i teoriboka', () => {
+  const d = stopDistance(80, 0.8);
+  assert.equal(Math.round(d.reaction), 22, '80 km/t er rundt 22 meter i sekundet');
+  assert.equal(Math.round(d.braking), 31);
+  assert.equal(Math.round(d.total), 54);
+  // Dobbel fart: dobbel reaksjonslengde, fire ganger bremselengden
+  const a = stopDistance(50, 0.8), b = stopDistance(100, 0.8);
+  assert.ok(Math.abs(b.reaction / a.reaction - 2) < 1e-9);
+  assert.ok(Math.abs(b.braking / a.braking - 4) < 1e-9);
+  // Glattere føre gir lengre bremselengde
+  const order = SURFACES.map(f => stopDistance(80, f.mu).braking);
+  assert.deepEqual(order, order.slice().sort((x, y) => x - y));
+});
+
+test('0.21.0: klar i prosent veier temaene som på prøven, og prøvene teller halvparten', () => {
+  let p = emptyProgress();
+  assert.equal(readinessPercent(QUESTIONS, p, THEMES).percent, 0);
+  // Alt lært: 100 %
+  for (const q of QUESTIONS) for (let i = 0; i < 3; i++) p = answer(p, q.id, 0);
+  const all = readinessPercent(QUESTIONS, p, THEMES);
+  assert.equal(all.percent, 100);
+  for (const t of THEMES) assert.equal(all.byTheme[t.id], 100);
+  // Riktig én gang teller halvt
+  let h = emptyProgress();
+  for (const q of QUESTIONS) h = answer(h, q.id, 0);
+  assert.equal(readinessPercent(QUESTIONS, h, THEMES).percent, 50);
+  // En prøve med 36 av 45 trekker mot 80 %: (100 + 80) / 2 = 90
+  p = addExam(p, { correct: 36, total: 45, passed: false, byTheme: {} });
+  assert.equal(readinessPercent(QUESTIONS, p, THEMES).percent, 90);
+});
+
+test('0.21.0: prøvedato gir daglig plan, og bokmerker kan settes og fjernes', () => {
+  const now = new Date(2026, 10, 16, 15).getTime();
+  let p = emptyProgress();
+  assert.deepEqual(dailyPlan(QUESTIONS, p, now), { goal: 10, daysLeft: null, left: QUESTIONS.length });
+  p = { ...p, examDate: '2026-12-16' };   // 30 dager
+  const pl = dailyPlan(QUESTIONS, p, now);
+  assert.equal(pl.daysLeft, 30);
+  assert.equal(pl.goal, Math.ceil(QUESTIONS.length * 3 / 30));
+  assert.equal(dailyPlan(QUESTIONS, { ...p, examDate: '2026-11-17' }, now).goal, 60, 'aldri over 60');
+  assert.equal(dailyPlan(QUESTIONS, { ...p, examDate: '2026-11-01' }, now).goal, 10, 'passert dato: vanlig dagsmål');
+  // normProgress tar vare på dato og bokmerker, og rydder ugyldige
+  assert.equal(normProgress({ examDate: '16.12.2026' }).examDate, '');
+  assert.equal(normProgress({ examDate: '2026-12-16' }).examDate, '2026-12-16');
+  assert.deepEqual(normProgress({ marks: ['f01', 3, 'v02'] }).marks, ['f01', 'v02']);
+  let m = toggleMark(emptyProgress(), 'f01');
+  assert.deepEqual(m.marks, ['f01']);
+  m = toggleMark(m, 'f01');
+  assert.deepEqual(m.marks, []);
+});

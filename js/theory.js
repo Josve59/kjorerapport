@@ -27,7 +27,7 @@ export const LEARNED = 3;
 /* Klar for teoriprøven: bestått minst 3 av de 5 siste prøvene, og den siste */
 export const READY_RULE = { last: 5, passed: 3 };
 
-export const emptyProgress = () => ({ q: {}, exams: [], safety: {}, car: '', days: {} });
+export const emptyProgress = () => ({ q: {}, exams: [], safety: {}, car: '', days: {}, marks: [], examDate: '' });
 
 /* Fremgang fra innstillingene, alltid med alle felt */
 export function normProgress(p) {
@@ -37,7 +37,9 @@ export function normProgress(p) {
     exams: Array.isArray(o.exams) ? o.exams : [],
     safety: o.safety && typeof o.safety === 'object' ? o.safety : {},
     car: typeof o.car === 'string' ? o.car : '',
-    days: o.days && typeof o.days === 'object' && !Array.isArray(o.days) ? o.days : {}
+    days: o.days && typeof o.days === 'object' && !Array.isArray(o.days) ? o.days : {},
+    marks: Array.isArray(o.marks) ? o.marks.filter(x => typeof x === 'string').slice(0, 500) : [],
+    examDate: typeof o.examDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.examDate) ? o.examDate : ''
   };
 }
 
@@ -82,13 +84,52 @@ function bumpDay(days, now) {
   return out;
 }
 /* { today: svar i dag, goal, streak: dager på rad med minst ett svar, til og med i dag eller i går } */
-export function practiceDays(p, now = Date.now()) {
+export function practiceDays(p, now = Date.now(), goal = DAILY_GOAL) {
   const days = (p && p.days) || {}, today = days[dayKey(now)] || 0;
   const d = new Date(now); d.setHours(12, 0, 0, 0);
   if (!today) d.setDate(d.getDate() - 1);
   let streak = 0;
   while (days[dayKey(d.getTime())]) { streak++; d.setDate(d.getDate() - 1); }
-  return { today, goal: DAILY_GOAL, streak };
+  return { today, goal, streak };
+}
+
+/* Bokmerker (0.21.0): spørsmål eleven vil se igjen. Ny fremgang, den gamle endres ikke. */
+export function toggleMark(p, id) {
+  const marks = p.marks || [];
+  return { ...p, marks: marks.includes(id) ? marks.filter(x => x !== id) : marks.concat(id) };
+}
+
+/* Hvor klar du er, i prosent (0.21.0), som i andre øvingstjenester. Hvert tema veies som på prøven (EXAM_QUOTA).
+   Innenfor temaet teller et lært spørsmål 1, et som ble besvart riktig sist 0,5, og feil eller ikke øvd 0.
+   Har du tatt prøver, teller snittet av de tre siste halvparten. → { percent, byTheme: { tema: prosent } } */
+export function readinessPercent(questions, p, themes, quota = EXAM_QUOTA) {
+  const byTheme = {};
+  let sum = 0, weight = 0;
+  for (const t of themes) {
+    const qs = questions.filter(q => q.t === t.id);
+    if (!qs.length) continue;
+    const score = qs.reduce((s, q) => { const e = p.q[q.id]; return s + (isLearned(e) ? 1 : e && e.run > 0 ? 0.5 : 0); }, 0) / qs.length;
+    byTheme[t.id] = Math.round(score * 100);
+    const w = quota[t.id] || 1;
+    sum += score * w; weight += w;
+  }
+  let v = weight ? sum / weight : 0;
+  const last = (p.exams || []).slice(-3);
+  if (last.length) v = 0.5 * v + 0.5 * last.reduce((s, e) => s + e.correct / Math.max(1, e.total), 0) / last.length;
+  return { percent: Math.round(v * 100), byTheme };
+}
+
+/* Prøvedato og daglig plan (0.21.0): er datoen satt, fordeles spørsmålene som ikke er lært ennå (som må besvares
+   riktig tre ganger) på dagene som er igjen. Aldri under dagsmålet, aldri over 60. → { goal, daysLeft, left } */
+export function dailyPlan(questions, p, now = Date.now()) {
+  const left = questions.filter(q => !isLearned(p.q[q.id])).length;
+  if (!p.examDate) return { goal: DAILY_GOAL, daysLeft: null, left };
+  const [y, m, d] = p.examDate.split('-').map(Number);
+  const exam = new Date(y, m - 1, d, 12), today = new Date(now); today.setHours(12, 0, 0, 0);
+  const daysLeft = Math.round((exam - today) / 86400000);
+  if (daysLeft < 0) return { goal: DAILY_GOAL, daysLeft, left };
+  const goal = Math.min(60, Math.max(DAILY_GOAL, Math.ceil(left * LEARNED / Math.max(1, daysLeft))));
+  return { goal, daysLeft, left };
 }
 
 export const isLearned = e => !!e && e.run >= LEARNED;

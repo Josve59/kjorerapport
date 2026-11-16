@@ -21,7 +21,7 @@ import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit, overlayCamSigns } from './signs.js';
 import { createLaneEase } from './laneease.js';
 import { crestSpeed, speedScore, totalScore } from './speedfit.js';
-import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory, THEORY_HOME } from './theoryui.js';
+import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory, THEORY_HOME, renderBook, bookTitle } from './theoryui.js';
 import { normProgress, tagsFromDrives } from './theory.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
@@ -33,7 +33,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.20.0';
+export const APP_VERSION = '0.21.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -443,10 +443,13 @@ function renderTheoryRoute(h) {
   if (h === '#/teori') { location.replace(THEORY_HOME); return; }   // oversikten ligger i Opplæring (0.20.0)
   show('theory');
   const head = $('#theory-head'), title = $('#theory-title'), root = $('#theory-root');
-  const titles = { '#/teori/resultat': 'Resultat', '#/teori/skilt': 'Skiltprøven', '#/sikkerhetskontroll': 'Sikkerhetskontroll' };
+  const titles = { '#/teori/resultat': 'Resultat', '#/teori/skilt': 'Skiltprøven', '#/sikkerhetskontroll': 'Sikkerhetskontroll', '#/teori/bok': 'Teoriboka' };
+  const bookPath = h.startsWith('#/teori/bok/') ? h.slice('#/teori/bok/'.length) : null;   // teoriboka (0.21.0)
+  if (bookPath) titles[h] = bookTitle(bookPath);
   head.hidden = !titles[h];
   title.textContent = titles[h] || '';
-  if (h === '#/teori/ov') renderPractice(root, theoryCtx);
+  if (h === '#/teori/bok' || bookPath) renderBook(root, theoryCtx, bookPath || '');
+  else if (h === '#/teori/ov') renderPractice(root, theoryCtx);
   else if (h === '#/teori/prove') renderExam(root, theoryCtx);
   else if (h === '#/teori/resultat') renderExamResult(root, theoryCtx);
   else if (h === '#/teori/skilt') renderSignHub(root, theoryCtx);
@@ -3220,6 +3223,8 @@ function goBack() {
   const h = location.hash;
   // Teori og sikkerhetskontroll (0.14.0): fra øving og prøve til oversikten, fra oversikten dit du kom fra
   if (h === '#/teori/ov') { location.hash = practiceBack(); return; }
+  // Teoriboka (0.21.0): fra et kapittel tilbake dit du kom fra (øvingen etter «Les mer», eller bokas innhold)
+  if (h.startsWith('#/teori/bok/')) { location.hash = bookFrom || '#/teori/bok'; return; }
   if (/^#\/teori\//.test(h)) { location.hash = THEORY_HOME; return; }
   if (h === '#/sikkerhetskontroll/ov') { location.hash = '#/sikkerhetskontroll'; return; }
   if (h === '#/teori' || h === '#/sikkerhetskontroll') { location.hash = THEORY_HOME; return; }   // teorien ligger i Opplæring (0.20.0)
@@ -3240,9 +3245,10 @@ function releaseOverlays() {
   if (calibAbort) calibAbort();
 }
 
-let guidesFrom = null, prevHash = null, theoryFrom = null, reportFrom = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
+let guidesFrom = null, prevHash = null, theoryFrom = null, reportFrom = null, bookFrom = null;   // Guider åpnes fra Hjem eller Innstillinger, og «Tilbake» går dit
 function route() {
   const h = location.hash || '#/';
+  if (h.startsWith('#/teori/bok/') && !(prevHash || '').startsWith('#/teori/bok/')) bookFrom = prevHash && prevHash !== h ? prevHash : null;
   if (h === '#/pluss' && prevHash !== h) guidesFrom = prevHash;
   const inTheory = x => !!x && (x.startsWith('#/teori') || x.startsWith('#/sikkerhetskontroll'));
   if (inTheory(h) && !inTheory(prevHash)) theoryFrom = prevHash || '#/';

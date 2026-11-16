@@ -3,14 +3,15 @@
    Rutene: #/teori (oversikt), #/teori/ov (øving), #/teori/prove (prøve), #/teori/resultat, #/sikkerhetskontroll,
    #/sikkerhetskontroll/ov. Øving og prøve holdes i minnet; en påbegynt prøve lagres også lokalt, så den overlever
    at appen lukkes. */
-import { icon, speak, stopSpeaking, confirmDialog, sheetDialog, toast } from './ui.js';
+import { icon, speak, stopSpeaking, confirmDialog, sheetDialog, formDialog, toast } from './ui.js';
 import { esc } from './format.js';
 import { THEMES, QUESTIONS } from './theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from './safety-check.js';
 import { figure } from './trafficsvg.js';
 import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS, SIGN_PICK_QUESTIONS } from './theory-signs.js';
 import { EXAM, LEARNED, READY_RULE, READY_TEXT, HARD_SHARE, level, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
-  optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief, practiceDays } from './theory.js';
+  optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief, practiceDays, toggleMark, readinessPercent, dailyPlan } from './theory.js';
+import { BOOK, sectionFor, bookChapter, SURFACES, stopDistance } from './theory-book.js';
 
 const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS, SIGN_PICK_QUESTIONS).map(q => [q.id, q]));
 const SIGN_POOL = SIGN_QUESTIONS.concat(SIGN_PICK_QUESTIONS);   // skiltprøven: hva betyr skiltet, og hvilket skilt er det (0.20.0)
@@ -60,28 +61,41 @@ const readLine = q => `${q.q} ${q.a.map((a, i) => `${LETTERS[i]}: ${a}.`).join('
 const speakBtn = id => `<button type="button" class="icon-btn q-speak" id="${id}" aria-label="Les opp">${icon('volume', 22)}</button>`;
 
 /* ---------- Oversikt (underfanen «Teori og sikkerhet» i Opplæring) ----------
-   0.20.0: hierarki som resten av appen. Skiltkortet er teoriprøven med dagsmålet, så fire store snarveier med bilder
-   (rask øving, skiltprøven, sikkerhetskontrollen, feilene), så det turene tyder på, så temaene. */
-const dayLine = d => d.today >= d.goal ? `${icon('check', 18)}<span>Dagens mål er nådd: ${d.today} svar i dag</span>`
-  : `${icon('target', 18)}<span>I dag: ${d.today} av ${d.goal} spørsmål</span>`;
+   0.20.0: hierarki som resten av appen. Skiltkortet er teoriprøven med dagsmålet, så store snarveier med bilder,
+   så det turene tyder på, så temaene.
+   0.21.0 (sammenlignet med Teoritentamen): hvor klar du er i prosent, prøvedato med daglig plan, teoriboka og
+   bokmerker som snarveier, og mestring i prosent per tema. */
+const dayLine = d => `<span class="th-day-main">${d.today >= d.goal ? `${icon('check', 18)}<span>Dagens mål er nådd: ${d.today} svar i dag</span>`
+  : `${icon('target', 18)}<span>I dag: ${d.today} av ${d.goal} spørsmål</span>`}</span>`;
+const dateFmt = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }); };
+const planLine = pl => pl.daysLeft === null ? `${icon('clock', 16)}<span>Legg inn prøvedatoen og få en plan</span>`
+  : pl.daysLeft < 0 ? `${icon('clock', 16)}<span>Prøvedatoen er passert. Legg inn en ny</span>`
+  : `${icon('clock', 16)}<span>${pl.daysLeft === 0 ? 'Teoriprøven er i dag' : pl.daysLeft === 1 ? 'Teoriprøven er i morgen' : `Teoriprøven om ${pl.daysLeft} dager`}</span>`;
+/* Ring med prosent, i skiltkortet */
+const ring = pct => { const c = 2 * Math.PI * 26; return `<svg class="th-ring" viewBox="0 0 64 64" width="72" height="72" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="var(--primary)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(c * pct / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="33" text-anchor="middle" dominant-baseline="central" font-size="16" font-weight="800" fill="#fff">${pct}<tspan font-size="11" font-weight="700">%</tspan></text></svg>`; };
+export const planFor = p => dailyPlan(QUESTIONS, p);
 export async function renderTheoryHub(root, ctx) {
   stopTheory();
   const p = ctx.progress();
   const sum = theorySummary(p);
   const st = themeStats(QUESTIONS, p, THEMES);
   const exams = p.exams.slice(-10);
-  const ongoing = sum.exam, day = practiceDays(p);
+  const ongoing = sum.exam, plan = planFor(p), day = practiceDays(p, Date.now(), plan.goal);
+  const rd = readinessPercent(QUESTIONS, p, THEMES);
   const head = { start: 'Øv deg til teoriprøven', ovelse: 'Øv videre', nesten: 'Nesten klar', klar: 'Klar for teoriprøven' }[sum.ready.level];
-  const signsOk = signsLearned(p), wrongN = sum.wrong;
+  const signsOk = signsLearned(p), wrongN = sum.wrong, marks = (p.marks || []).filter(id => byId.has(id)).length;
   const tile = (id, fig, title, sub, pct, disabled = false) => `<button type="button" class="th-tile" id="${id}" ${disabled ? 'disabled' : ''}>
       <span class="th-tile-fig" aria-hidden="true">${fig}</span><strong>${title}</strong><span class="muted small">${sub}</span>
       ${pct === null ? '' : `<span class="th-bar"><span style="width:${pct}%"></span></span>`}</button>`;
   root.innerHTML = `
     <section class="sign-card th-sign lv-${sum.ready.level}">
-      <p class="eyebrow">Teoriprøven klasse B</p>
-      <h2 class="th-sign-head">${esc(head)}</h2>
+      <div class="th-sign-top">
+        <div><p class="eyebrow">Teoriprøven klasse B</p><h2 class="th-sign-head">${esc(head)}</h2></div>
+        <div class="th-ready-pct" role="img" aria-label="${rd.percent} prosent klar for teoriprøven">${ring(rd.percent)}<span>klar</span></div>
+      </div>
       <p class="th-day">${dayLine(day)}${day.streak > 1 ? `<span class="th-streak">${icon('flame', 18)}${day.streak} dager på rad</span>` : ''}</p>
       <span class="goal-bar th-day-bar"><span style="width:${Math.min(100, day.today / day.goal * 100)}%"></span></span>
+      <button type="button" class="th-date" id="th-date">${planLine(plan)}${plan.daysLeft !== null && plan.daysLeft >= 0 ? `<span class="th-date-d">${esc(dateFmt(p.examDate))}</span>` : ''}${icon('chev', 16)}</button>
       ${exams.length ? `<div class="th-dots" aria-label="De siste prøvene">${exams.map(e => `<span class="th-dot ${e.correct >= EXAM.solid ? 'ok' : e.passed ? 'mid' : 'no'}" title="${e.correct} av ${e.total}">${e.correct}</span>`).join('')}</div>` : ''}
       <p class="th-ready">${esc(READY_TEXT[sum.ready.level])}</p>
       <button type="button" class="btn primary" id="th-exam">${icon('clock', 20)}${ongoing ? 'Fortsett prøven' : 'Ta en prøve'}</button>
@@ -90,31 +104,45 @@ export async function renderTheoryHub(root, ctx) {
     <h2 class="group-title">Øv nå</h2>
     <div class="th-tiles">
       ${tile('th-mix', figure('scene:rundkjoring'), 'Rask øving', '10 blandede spørsmål', null)}
+      ${tile('th-to-book', `<span class="th-tile-ico th-ico-book">${icon('book', 30)}</span>`, 'Teoriboka', 'Les reglene, tema for tema', null)}
       ${tile('th-to-signs', `<span class="th-mini-signs">${['sign:202', 'sign:362:80', 'sign:146'].map(figure).join('')}</span>`, 'Skiltprøven', `${signsOk} av ${SIGNS.length} skilt lært`, Math.round(signsOk / SIGNS.length * 100))}
       ${tile('th-to-safety', figure('lamp:abs'), 'Sikkerhets&shy;kontrollen', `${sum.safety.known} av ${sum.safety.total} oppgaver kan du`, sum.safety.total ? Math.round(sum.safety.known / sum.safety.total * 100) : 0)}
       ${tile('th-wrong', `<span class="th-tile-ico">${icon('repeat', 30)}</span>`, 'Øv på feilene', wrongN ? `${wrongN} spørsmål å rette opp` : 'Ingen feil å øve på nå', null, !wrongN)}
+      ${tile('th-marks', `<span class="th-tile-ico th-ico-mark">${icon('star', 30)}</span>`, 'Bokmerker', marks ? `${marks} spørsmål du har merket` : 'Merk spørsmål med stjernen', null, !marks)}
     </div>
     <section class="card th-drive" id="th-drive" hidden></section>
     <h2 class="group-title">Temaene på prøven</h2>
+    <p class="muted small th-note th-note-top">Prosenten viser hvor godt du kan temaet: lærte spørsmål teller fullt, riktige sist teller halvt.</p>
     <section class="card th-themes"><ul class="th-list">${THEMES.map(t => {
-      const s = st[t.id], pct = s.total ? Math.round(s.learned / s.total * 100) : 0;
+      const s = st[t.id], pct = rd.byTheme[t.id] || 0;
       return `<li><button type="button" class="th-theme" data-theme="${t.id}">
         <span class="th-ico th-ico-${t.id}">${icon(t.icon, 22)}</span>
-        <span class="th-tt"><strong>${esc(t.title)}</strong><span class="muted small">${esc(t.blurb)}</span>
+        <span class="th-tt"><span class="th-tt-head"><strong>${esc(t.title)}</strong><span class="th-pct ${pct >= 80 ? 'ok' : pct >= 40 ? 'mid' : ''}">${pct} %</span></span><span class="muted small">${esc(t.blurb)}</span>
           <span class="th-bar"><span style="width:${pct}%"></span></span><span class="muted small">${s.learned} av ${s.total} lært${s.seen ? ` · ${Math.round(s.right / Math.max(1, s.answers) * 100)} % riktige svar` : ''}</span></span>
         ${icon('chev', 18)}</button></li>`;
     }).join('')}</ul></section>
-    <p class="muted small th-note">Prøven her er laget litt vanskeligere enn den ekte: minst ${Math.round(HARD_SHARE * 10)} av 10 oppgaver er vanskelige, og du bør ha ${EXAM.solid} riktige, ikke ${EXAM.pass}, før du regner deg som klar. ${exams.length ? `Prikkene viser de siste prøvene: grønn er ${EXAM.solid} eller mer. ` : ''}Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad. Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
+    <p class="muted small th-note">Prøven her er laget litt vanskeligere enn den ekte: minst ${Math.round(HARD_SHARE * 10)} av 10 oppgaver er vanskelige, og du bør ha ${EXAM.solid} riktige, ikke ${EXAM.pass}, før du regner deg som klar. ${exams.length ? `Prikkene viser de siste prøvene: grønn er ${EXAM.solid} eller mer. ` : ''}Prosenten «klar» veier temaene som på prøven, og de siste prøvene teller halvparten. Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad. Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
     ${Object.keys(p.q).length || p.exams.length ? '<button type="button" class="link th-reset" id="th-reset">Begynn på nytt</button>' : ''}`;
   root.querySelector('#th-exam').onclick = () => { if (!examInProgress()) startExam(ctx); ctx.go('#/teori/prove'); };
   root.querySelector('#th-wrong').onclick = () => startPractice(ctx, { title: 'Feilene dine', wrongOnly: true, n: 15 });
   root.querySelector('#th-mix').onclick = () => startPractice(ctx, { title: 'Rask øving', n: 10 });
+  root.querySelector('#th-to-book').onclick = () => ctx.go('#/teori/bok');
+  root.querySelector('#th-marks').onclick = () => { const ids = (ctx.progress().marks || []).filter(id => byId.has(id)); if (ids.length) startPractice(ctx, { title: 'Bokmerker', ids, n: ids.length, pool: ids.some(id => byId.get(id).sign) ? 'alle' : 'teori' }); };
   root.querySelector('#th-to-safety').onclick = () => ctx.go('#/sikkerhetskontroll');
   root.querySelector('#th-to-signs').onclick = () => ctx.go('#/teori/skilt');
+  root.querySelector('#th-date').onclick = async () => {
+    const cur = ctx.progress();
+    const v = await formDialog({ title: 'Når har du teoriprøven?', text: 'Appen fordeler spørsmålene du ikke har lært ennå på dagene som er igjen, og setter dagens mål etter det. Du kan endre datoen når du vil.',
+      body: `<label class="field"><span>Dato for teoriprøven</span><input type="date" class="sheet-input" id="th-date-in" value="${esc(cur.examDate || '')}"></label>${cur.examDate ? '<label class="toggle-row"><input type="checkbox" id="th-date-clear"> Fjern datoen</label>' : ''}`,
+      read: d => (d.querySelector('#th-date-clear') && d.querySelector('#th-date-clear').checked ? '' : d.querySelector('#th-date-in').value || '') });
+    if (v === null) return;
+    ctx.save({ ...ctx.progress(), examDate: /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '' });
+    renderTheoryHub(root, ctx);
+  };
   root.querySelectorAll('.th-theme').forEach(b => b.onclick = () => startPractice(ctx, { title: theme(b.dataset.theme).title, theme: b.dataset.theme, n: 10 }));
   const reset = root.querySelector('#th-reset');
   if (reset) reset.onclick = async () => {
-    if (!await confirmDialog({ title: 'Begynne på nytt?', text: 'Svarene og prøvene dine slettes, så alle spørsmål blir nye igjen. Sikkerhetskontrollen beholdes.', ok: 'Begynn på nytt', danger: true })) return;
+    if (!await confirmDialog({ title: 'Begynne på nytt?', text: 'Svarene og prøvene dine slettes, så alle spørsmål blir nye igjen. Sikkerhetskontrollen, bokmerkene og prøvedatoen beholdes.', ok: 'Begynn på nytt', danger: true })) return;
     const cur = ctx.progress();
     ctx.save({ ...cur, q: {}, exams: [], days: {} }); saveExam(null);
     renderTheoryHub(root, ctx);
@@ -135,7 +163,7 @@ export async function renderTheoryHub(root, ctx) {
 
 /* ---------- Øving med svar og forklaring etter hvert spørsmål ---------- */
 function startPractice(ctx, { title, n = 10, pool = 'teori', back = THEORY_HOME, ...filter }) {
-  const items = pickPractice(pool === 'skilt' ? SIGN_POOL : QUESTIONS, ctx.progress(), { n, ...filter });
+  const items = pickPractice(pool === 'skilt' ? SIGN_POOL : pool === 'alle' ? QUESTIONS.concat(SIGN_POOL) : QUESTIONS, ctx.progress(), { n, ...filter });
   if (!items.length) { toast('Ingen spørsmål å øve på her akkurat nå.', { type: 'ok' }); return; }
   practice = { title, back, filter: { n, pool, back, ...filter }, items: items.map(q => q.id), orders: Object.fromEntries(items.map(q => [q.id, optionOrder(q)])), i: 0, chosen: null, results: [] };
   ctx.go('#/teori/ov');
@@ -147,13 +175,16 @@ export function renderPractice(root, ctx) {
   const P = practice;
   if (P.i >= P.items.length) return renderPracticeDone(root, ctx);
   const q = byId.get(P.items[P.i]), t = theme(q.t), answered = P.chosen !== null, right = P.chosen === 0;
+  const marked = (ctx.progress().marks || []).includes(q.id), more = sectionFor(q.id);
+  const [rule, rest] = splitRule(q.why);
   root.innerHTML = `
     <div class="q-top"><span class="q-step"><strong>${esc(P.title)}</strong><span class="muted small">${P.i + 1} av ${P.items.length}</span></span>
+      <button type="button" class="icon-btn q-bm ${marked ? 'on' : ''}" id="q-bm" aria-pressed="${marked}" aria-label="${marked ? 'Fjern bokmerket' : 'Bokmerk spørsmålet'}">${icon('star', 22)}</button>
       <button type="button" class="icon-btn" id="q-close" aria-label="Avslutt øvingen">${icon('close', 22)}</button></div>
     <span class="th-bar q-prog"><span style="width:${(P.i + (answered ? 1 : 0)) / P.items.length * 100}%"></span></span>
     <section class="card q-card">
       <p class="eyebrow">${esc(q.eyebrow || t.title)}${level(q) >= 3 ? ' <span class="q-hard">Vanskelig</span>' : ''}</p>
-      ${q.img ? `<div class="q-fig">${figure(q.img)}</div>` : ''}
+      ${q.img ? `<div class="q-fig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.img)}">${figure(q.img)}</div>` : ''}
       <div class="q-head"><h2 class="q-text">${esc(q.q)}</h2>${speakBtn('q-read')}</div>
       <div class="q-opts ${q.pick ? 'q-pick' : ''}" role="group" aria-label="Svaralternativer">${P.orders[q.id].map((oi, k) => {
         const cls = !answered ? '' : oi === 0 ? 'right' : oi === P.chosen ? 'wrong' : 'dim';
@@ -164,10 +195,11 @@ export function renderPractice(root, ctx) {
       }).join('')}</div>
     </section>
     ${answered ? `<section class="card q-why ${right ? 'ok' : 'no'}" aria-live="polite">
-      <p class="q-verdict">${right ? `${icon('check', 20)}Riktig` : `${icon('close', 20)}Ikke riktig`}</p>
-      ${q.wimg ? `<div class="q-fig q-wfig">${figure(q.wimg)}</div>` : ''}
-      <p>${esc(q.why)}</p>
+      <p class="q-verdict"><span class="q-verdict-ico">${icon(right ? 'check' : 'close', 22)}</span>${right ? 'Riktig!' : 'Ikke riktig'}</p>
+      ${q.wimg ? `<div class="q-fig q-wfig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.wimg)}">${figure(q.wimg)}</div>` : ''}
+      <p class="q-rule">${esc(rule)}</p>${rest ? `<p>${esc(rest)}</p>` : ''}
       <p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
+      ${more ? `<button type="button" class="link q-more" id="q-more">${icon('book', 18)}<span>Les mer i teoriboka: ${esc(bookSection(more).title)}</span>${icon('chev', 16)}</button>` : ''}
     </section>
     <div class="q-dock"><button type="button" class="btn primary" id="q-next">${P.i + 1 < P.items.length ? 'Neste spørsmål' : 'Se hvordan det gikk'}${icon('chev', 20)}</button></div>` : ''}`;
   root.querySelector('#q-close').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
@@ -176,21 +208,45 @@ export function renderPractice(root, ctx) {
     if (P.chosen !== null) return;
     P.chosen = +b.dataset.oi;
     P.results.push(P.chosen === 0);
-    const before = practiceDays(ctx.progress()).today;
+    const goal = planFor(ctx.progress()).goal, before = practiceDays(ctx.progress(), Date.now(), goal).today;
     ctx.save(answer(ctx.progress(), q.id, P.chosen));
     ctx.vibrate(P.chosen === 0 ? 15 : [30, 40, 30]);
     // Dagsmålet nådd akkurat nå: litt feiring, som i andre øvingsapper (0.20.0)
-    const d = practiceDays(ctx.progress());
+    const d = practiceDays(ctx.progress(), Date.now(), goal);
     if (before < d.goal && d.today >= d.goal) { toast(`Dagens mål er nådd: ${d.goal} spørsmål!`, { type: 'ok' }); if (ctx.celebrate) setTimeout(ctx.celebrate, 300); }
     renderPractice(root, ctx);
     const w = root.querySelector('.q-why'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
   const next = root.querySelector('#q-next');
   if (next) next.onclick = () => { P.i++; P.chosen = null; renderPractice(root, ctx); window.scrollTo(0, 0); };
+  // Bokmerke (0.21.0): stjernen lagrer spørsmålet, så du kan øve på det igjen fra oversikten
+  root.querySelector('#q-bm').onclick = () => {
+    ctx.save(toggleMark(ctx.progress(), q.id));
+    const on = (ctx.progress().marks || []).includes(q.id), btn = root.querySelector('#q-bm');
+    btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', on); btn.setAttribute('aria-label', on ? 'Fjern bokmerket' : 'Bokmerk spørsmålet');
+    toast(on ? 'Lagt til i bokmerkene.' : 'Fjernet fra bokmerkene.', { type: 'ok' });
+  };
+  const moreBtn = root.querySelector('#q-more');
+  if (moreBtn) moreBtn.onclick = () => ctx.go(`#/teori/bok/${more.chapter}/${more.section}`);   // øvingen står der du var når du kommer tilbake
+  wireZoom(root);
+}
+
+/* Den første setningen i forklaringen er regelen: den uthevet, resten under (0.21.0) */
+function splitRule(text) {
+  const m = String(text).match(/^(.+?[.!?])\s+(?=[A-ZÆØÅ«0-9])/);
+  return m ? [m[1], text.slice(m[0].length)] : [text, ''];
+}
+/* Trykk på en tegning: vis den stor i et ark (0.21.0) */
+function wireZoom(root) {
+  root.querySelectorAll('.q-zoom').forEach(el => {
+    const open = () => sheetDialog({ body: `<div class="q-fig q-fig-big">${figure(el.dataset.fig)}</div>` });
+    el.onclick = open;
+    el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+  });
 }
 
 function renderPracticeDone(root, ctx) {
-  const P = practice, ok = P.results.filter(Boolean).length, day = practiceDays(ctx.progress());
+  const P = practice, ok = P.results.filter(Boolean).length, day = practiceDays(ctx.progress(), Date.now(), planFor(ctx.progress()).goal);
   const sumFig = q => (q.sign ? `<span class="q-sum-sign">${figure(q.pick ? q.imgs[0] : q.img)}</span>` : '');
   root.innerHTML = `
     <section class="sign-card th-sign ${ok === P.items.length ? 'lv-klar' : ok >= P.items.length * 0.85 ? 'lv-nesten' : 'lv-ovelse'}">
@@ -206,6 +262,83 @@ function renderPracticeDone(root, ctx) {
   if (ok === P.items.length && P.items.length >= 5 && ctx.celebrate) setTimeout(ctx.celebrate, 300);
   root.querySelector('#q-again').onclick = () => startPractice(ctx, { title: P.title, ...P.filter });
   root.querySelector('#q-hub').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
+}
+
+/* ---------- Teoriboka (0.21.0) ----------
+   Kort lesestoff per tema (theory-book.js), som teorikurset hos andre øvingstjenester. «Les mer» etter et svar går
+   rett til delen spørsmålet hører til, og hver del har en knapp for å øve på akkurat de spørsmålene. */
+const bookSection = ({ chapter, section }) => ((bookChapter(chapter) || { sections: [] }).sections.find(x => x.id === section)) || { title: '' };
+export const bookTitle = path => { const ch = bookChapter(String(path || '').split('/')[0]); return ch ? theme(ch.id).title : 'Teoriboka'; };
+const calcHtml = () => `<div class="bk-calc" id="bk-calc">
+    <h3 class="bk-calc-title">${icon('speed', 20)}Regn ut stopplengden</h3>
+    <label class="field bk-calc-speed"><span>Fart: <strong id="calc-v">80</strong> km/t</span><input type="range" min="30" max="120" step="10" value="80" id="calc-speed" aria-label="Fart i km/t"></label>
+    <div class="segment calc-seg" role="radiogroup" aria-label="Føre">${SURFACES.map((f, i) => `<label><input type="radio" name="calc-f" value="${f.id}" ${i === 0 ? 'checked' : ''}><span>${esc(f.label)}</span></label>`).join('')}</div>
+    <div id="calc-out" aria-live="polite"></div>
+    <p class="muted small">Omtrentlige tall: reaksjonstid 1 sekund og vanlige friksjonstall for føret. Den virkelige bremselengden varierer med dekk, bil, vei og hvor hardt du bremser.</p>
+  </div>`;
+function wireCalc(root) {
+  const el = root.querySelector('#bk-calc');
+  if (!el) return;
+  const draw = () => {
+    const v = +el.querySelector('#calc-speed').value, f = SURFACES.find(x => x.id === el.querySelector('input[name=calc-f]:checked').value);
+    const d = stopDistance(v, f.mu), max = stopDistance(120, f.mu).total;
+    el.querySelector('#calc-v').textContent = v;
+    el.querySelector('#calc-out').innerHTML = `<div class="calc-bar"><span class="calc-r" style="width:${d.reaction / max * 100}%"></span><span class="calc-b" style="width:${d.braking / max * 100}%"></span></div>
+      <dl class="calc-nums"><div><dt>Reaksjon</dt><dd>${Math.round(d.reaction)} m</dd></div><div><dt>Bremsing</dt><dd>${Math.round(d.braking)} m</dd></div><div class="calc-sum"><dt>Stopplengde</dt><dd>${Math.round(d.total)} m</dd></div></dl>`;
+  };
+  el.querySelector('#calc-speed').oninput = draw;
+  el.querySelectorAll('input[name=calc-f]').forEach(r => r.onchange = draw);
+  draw();
+}
+export function renderBook(root, ctx, path = '') {
+  stopSpeaking();
+  const [chId, secId] = String(path).split('/');
+  const p = ctx.progress(), rd = readinessPercent(QUESTIONS, p, THEMES);
+  const ch = chId ? bookChapter(chId) : null;
+  if (!ch) {
+    root.innerHTML = `
+      <section class="sign-card th-sign"><p class="eyebrow">Teoriboka</p><h2 class="th-sign-head">Reglene, tema for tema</h2>
+        <p>Kort lesestoff til hvert tema på teoriprøven, med tegninger. Les en del, og øv på spørsmålene som hører til. Etter hvert svar i øvingen kan du gå rett hit med «Les mer».</p></section>
+      <section class="card th-themes"><ul class="th-list">${BOOK.map(c => `<li><button type="button" class="th-theme" data-ch="${c.id}">
+        <span class="th-ico th-ico-${c.id}">${icon(theme(c.id).icon, 22)}</span>
+        <span class="th-tt"><span class="th-tt-head"><strong>${esc(theme(c.id).title)}</strong><span class="th-pct ${(rd.byTheme[c.id] || 0) >= 80 ? 'ok' : (rd.byTheme[c.id] || 0) >= 40 ? 'mid' : ''}">${rd.byTheme[c.id] || 0} %</span></span>
+          <span class="muted small">${esc(c.intro)}</span><span class="muted small">${c.sections.length} deler</span></span>
+        ${icon('chev', 18)}</button></li>`).join('')}</ul></section>
+      <p class="muted small th-note">Teoriboka er appens egen, skrevet ut fra vegtrafikkloven, trafikkreglene, skiltforskriften og de andre forskriftene, slik de står på Lovdata. Den er en kort oppsummering, ikke hele regelverket.</p>`;
+    root.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => ctx.go(`#/teori/bok/${b.dataset.ch}`));
+    return;
+  }
+  const qn = s => s.qs.filter(id => byId.has(id)).length;
+  root.innerHTML = `
+    <p class="muted bk-intro">${esc(ch.intro)}</p>
+    <nav class="bk-toc" aria-label="Delene i kapitlet">${ch.sections.map(x => `<a href="#/teori/bok/${ch.id}/${x.id}" class="bk-toc-link" data-sec="${x.id}">${esc(x.title)}</a>`).join('')}</nav>
+    ${ch.sections.map(x => `<section class="card bk-sec" id="bk-${x.id}">
+      <h2 class="card-title">${esc(x.title)}</h2>
+      ${x.points.map(pt => `<div class="bk-pt">
+        ${pt.fig ? `<div class="q-fig q-zoom bk-fig" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(pt.fig)}">${figure(pt.fig)}</div>` : ''}
+        <p class="bk-rule">${esc(pt.b)}</p>${pt.t ? `<p class="bk-text">${esc(pt.t)}</p>` : ''}</div>`).join('')}
+      ${x.calc === 'stopp' ? calcHtml() : ''}
+      <button type="button" class="btn secondary bk-go" data-sec="${x.id}">${icon('quiz', 20)}Øv på dette (${qn(x)} spørsmål)</button>
+    </section>`).join('')}
+    <button type="button" class="btn primary" id="bk-all">${icon('quiz', 20)}Øv på hele temaet</button>
+    ${ch.id === 'skilt' ? `<button type="button" class="btn secondary" id="bk-signs">${icon('sign', 20)}Til skiltprøven: alle ${SIGNS.length} skiltene</button>` : ''}`;
+  root.querySelectorAll('.bk-go').forEach(b => b.onclick = () => {
+    const x = ch.sections.find(y => y.id === b.dataset.sec), ids = x.qs.filter(id => byId.has(id));
+    startPractice(ctx, { title: x.title, ids, n: ids.length, back: `#/teori/bok/${ch.id}/${x.id}` });
+  });
+  root.querySelector('#bk-all').onclick = () => startPractice(ctx, { title: theme(ch.id).title, theme: ch.id, n: 10, back: `#/teori/bok/${ch.id}` });
+  const sg = root.querySelector('#bk-signs'); if (sg) sg.onclick = () => ctx.go('#/teori/skilt');
+  // Innholdslista bytter adresse uten ny side i historikken, og ruller til delen
+  root.querySelectorAll('.bk-toc-link').forEach(a => a.onclick = e => { e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); scrollToSec(a.dataset.sec); });
+  wireZoom(root);
+  wireCalc(root);
+  if (secId) requestAnimationFrame(() => scrollToSec(secId));
+}
+function scrollToSec(id) {
+  const el = document.getElementById('bk-' + id);
+  if (!el) return;
+  const y = el.getBoundingClientRect().top + window.scrollY - 76;   // under den faste topplinja
+  window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 }
 
 /* ---------- Skiltprøven ---------- */

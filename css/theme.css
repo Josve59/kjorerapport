@@ -627,3 +627,71 @@ h2.card-title, .card-title { font-size: 1.12rem; }
 .s-lamp .tsvg-diagram { width: 100%; max-width: 320px; height: auto; }
 .s-lamp .tsvg-pict, .s-lamp .tsvg-dash { width: auto; height: 110px; }
 .tsvg-diagram text, .tsvg-view text, .tsvg-pict text { font-family: inherit; }
+
+/* ---------- Teori 0.21.0: klar i prosent, prøvedato, bokmerker, teoriboka ---------- */
+.th-sign-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.th-sign-top .th-sign-head { margin-bottom: 8px; }
+.th-ready-pct { flex: none; display: flex; flex-direction: column; align-items: center; margin-top: -4px; font-size: .78rem; font-weight: 700; color: var(--muted); }
+.th-ring { display: block; }
+.th-date { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin: 0 0 10px; padding: 8px 12px; border: 0; border-radius: 12px; background: rgba(255, 255, 255, .14); color: var(--ink); font: inherit; font-size: .92rem; font-weight: 700; text-align: left; cursor: pointer; }
+.th-date > span:first-of-type { flex: 1; }
+.th-date-d { font-weight: 600; color: var(--muted); }
+.th-tt-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.th-pct { flex: none; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: .8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.th-pct.mid { background: color-mix(in srgb, var(--primary) 30%, var(--surface)); color: var(--ink); }
+.th-pct.ok { background: color-mix(in srgb, var(--good) 18%, var(--surface)); color: var(--good); }
+.th-note-top { margin: -4px 6px 10px; }
+.th-ico-book { background: color-mix(in srgb, #0e7c86 16%, var(--surface)); color: #0e7c86; }
+.th-ico-mark { background: color-mix(in srgb, var(--primary) 30%, var(--surface)); color: #8a6200; }
+:root[data-theme="dark"] .th-ico-mark { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); color: var(--primary); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .th-ico-mark { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); color: var(--primary); } }
+
+/* Øvingen: bokmerke, svaret, regelen uthevet, Les mer, stor tegning */
+.q-bm { color: var(--muted); }
+.q-bm.on { color: #c99a12; }
+.q-bm.on .ico { fill: currentColor; }
+.q-verdict { font-size: 1.2rem; }
+.q-verdict-ico { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: var(--on-color); }
+.q-why.ok .q-verdict-ico { background: var(--good); }
+.q-why.no .q-verdict-ico { background: var(--brake); }
+.q-rule { font-weight: 800; font-size: 1.05rem; line-height: 1.4; margin: 4px 0 8px; }
+.q-more { display: flex; align-items: center; gap: 8px; width: 100%; margin: 6px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); text-align: left; font-size: 1rem; }
+.q-more span { flex: 1; }
+.q-zoom { cursor: zoom-in; -webkit-tap-highlight-color: transparent; }
+.q-zoom:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 12px; }
+.q-fig-big { margin: 0; }
+.q-fig-big .tsvg { width: 100%; max-width: none; max-height: 70vh; height: auto; }
+.q-fig-big .tsvg-lamp, .q-fig-big .tsvg-pict, .q-fig-big .tsvg-sign { width: 70%; margin: 0 auto; display: block; }
+
+/* Teoriboka */
+.bk-intro { margin: 0 6px 12px; }
+.bk-toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.bk-toc-link { display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px; border-radius: 999px; background: var(--brand-tint); color: var(--link); font-weight: 700; font-size: .88rem; text-decoration: none; }
+.bk-sec { scroll-margin-top: 80px; }
+.bk-pt { padding: 10px 0; }
+.bk-pt + .bk-pt { border-top: 1px solid var(--line); }
+.bk-rule { font-weight: 800; margin: 0 0 4px; line-height: 1.4; }
+.bk-text { margin: 0; color: var(--ink); }
+.bk-fig { margin: 2px 0 10px; }
+.bk-fig .tsvg-scene { max-width: 240px; }
+.bk-fig .tsvg-sign, .bk-fig .tsvg-lamp { width: 84px; height: 84px; }
+.bk-fig .tsvg-light { max-width: 46px; }
+.bk-fig .tsvg-pict { width: 110px; height: 110px; }
+.bk-go { margin: 8px 0 0; }
+/* Stopplengde-kalkulatoren */
+.bk-calc { margin: 10px 0 4px; padding: 14px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.bk-calc-title { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 1.05rem; }
+.bk-calc-speed { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; }
+.bk-calc-speed input[type=range] { width: 100%; min-height: 32px; accent-color: var(--link); }
+.calc-seg { margin: 0 0 12px; }
+.calc-seg span { font-size: .85rem; padding: 0 6px; }
+.calc-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--bg); margin: 0 0 10px; }
+.calc-r { background: color-mix(in srgb, var(--muted) 60%, transparent); }
+.calc-b { background: var(--brake); }
+.calc-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; }
+.calc-nums div { min-width: 0; }
+.calc-nums dt { font-size: .78rem; color: var(--muted); }
+.calc-nums dd { margin: 0; font-weight: 800; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.calc-sum dd { color: var(--brake); }
+.th-day-main { display: inline-flex; align-items: center; gap: 6px; }
+.th-day-main .ico { flex: none; }

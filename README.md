@@ -143,6 +143,57 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.21.0 – a theory book, readiness in percent and a plan up to the exam date
+
+The owner asked to weigh our practice against Teoritentamen and make the right improvements: «I still feel ours is a bit behind».
+
+**What we compared against.** Only Teoritentamen's public pages and the App Store description («Teoritentamen for bil») were read. Their questions were not read or copied: their terms forbid automated or systematic use, and the content is protected by copyright. Their strengths that we lacked:
+- a theory book where every question links to the rule behind it;
+- a short, bold key rule in each explanation;
+- zoom on pictures;
+- a readiness score and mastery per theme;
+- an exam date with a daily plan;
+- bookmarks.
+
+**The theory book** (`js/theory-book.js`, `#/teori/bok`)
+- 7 chapters with the same ids as the themes, 35 sections in all. Each section has short rules in bold with a sentence of explanation and, where it helps, a drawing from `js/trafficsvg.js`.
+- Every question belongs to exactly one section (a test checks this). After you answer, «Les mer i teoriboka: <section>» opens that section, and back takes you to the question.
+- Each section ends with «Øv på dette (n spørsmål)», and each chapter with «Øv på hele temaet». The sign chapter also links to the sign test.
+- **Stopping-distance calculator** in «Stopplengde og avstand»: speed 30–120 km/h and the surface (dry, wet, snow, ice) give the reaction distance, braking distance and stopping distance. Reaction time is 1 s, and braking is v²/(2·μ·g) with μ 0.8 / 0.5 / 0.2 / 0.1. 80 km/h on dry asphalt gives 22 + 31 = 54 m. The app says the numbers are approximate.
+
+**The overview**
+- A **readiness ring** in the sign card (`readinessPercent` in `js/theory.js`). Each theme is weighted by its share of the 45 exam questions: a learned question counts 1 and a tried one ½. Once you have taken exams, half the score is the average of the last three.
+- **Exam date**: tap «Teoriprøven om …» to set it. `dailyPlan` spreads the questions left to learn over the days left, at least 10 and at most 60 a day. Today's goal follows it.
+- **Bookmarks**: a star on each question, and its own «Bokmerker» tile for practising them. Resetting progress keeps the bookmarks and the date.
+- A percentage chip on each theme.
+
+**Practice**
+- The explanation starts with the rule in bold (the first sentence of `why`), followed by the rest.
+- The verdict has an icon: «Riktig!» or «Ikke riktig».
+- Tap a picture to see it large.
+
+**Tests:** four new ones. The book covers every question exactly once and every drawing exists. The calculator: 22/31/54 m at 80 km/h on dry asphalt, ×2 reaction and ×4 braking when the speed doubles, and longer braking on each worse surface. Readiness: 0, 100, 50 and 90 for known progress. The daily plan, bookmarks and `normProgress`.
+
+**Fact check of the book.** An independent checker read every point against Lovdata, vegvesen.no and Mattilsynet, and against the question explanations. No wrong answers, but nine points had been condensed too far. All are fixed:
+- **Tunnel fire:** drive out if you can, and leave the car only if you can't get past.
+- **Train and tram:** lights and signs come first for the tram. At a level crossing you still always look for trains.
+- **Yellow background:** it means temporary only on warning, prohibition and information signs. Many direction signs are always yellow.
+- **Overtaking:**
+  - the two-wheeler exception also applies where sight is hindered;
+  - you may not overtake any vehicle that hides part of the crossing, not only one that has stopped.
+- **Practice driving:** the traffic rules and the rules on alcohol and health also apply to the learner.
+- **Accidents:**
+  - the police are called for death or injury that is «ikke ubetydelig»;
+  - damage to property where the owner isn't present goes to the owner or the police;
+  - large game goes to the police, and pets and livestock go to the owner, or to the police if the owner can't be reached.
+- **Pedestrians:** they use the pavement or shoulder first. On the carriageway they walk on the left, or on the right if the left is dangerous.
+- **Chains:** «on the drive wheels» is now its own piece of advice, not part of the legal exception.
+
+Twelve questions had no point that held their answer. They now do: a18, a37, a40, k05, k18, k31, k32, k34, r30, r34, s46, v14. t29 moved to «Syklister og motorsykler». The v13 and a16 explanations got the same fixes for trains and animals.
+
+**Checked** in the browser at phone width in light and dark mode: the overview, the book, the calculator, «Les mer» and back, the bookmark, the date dialog (19 days left gave 45 a day) and zoom.
+**Not checked:** the book on the iPhone itself.
+
 ## What's new in 0.20.0 – theory and the safety check up front, far more pictures, and everything fact-checked
 
 The owner's round 3:
