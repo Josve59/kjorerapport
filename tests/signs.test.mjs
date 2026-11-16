@@ -115,3 +115,23 @@ test('fartsskilt: skilt som ble lest, men ikke godtatt, meldes', () => {
   assert.deepEqual(tr.takeMissed(), [{ limit: 50, reads: 2, share: 1, w: 33 }]);
   assert.deepEqual(tr.takeMissed(), [], 'meldes én gang');
 });
+
+test('0.22.1: et skilt kartet bekreftet, slippes når kartet viser høyere grense etter en sving', () => {
+  const cl = createCamLimit();
+  cl.sign(50, 0, 50, 18);                     // vanlig 50-skilt, kartet sier det samme
+  assert.equal(cl.current(400, 50).agree, true);
+  assert.equal(cl.current(600, 80).limit, 50, 'kartet har akkurat byttet: skiltet gjelder ennå');
+  assert.equal(cl.current(620, 80).limit, 50);
+  assert.equal(cl.current(631, 80), null, 'etter 30 m på 80-veien gjelder kartet');
+  // Midlertidig skilt (kartet sa 80 hele tiden) holdes som før, også når kartet viser noe annet en stund
+  const tmp = createCamLimit();
+  tmp.sign(50, 0, 80);
+  assert.equal(tmp.current(400, 80).limit, 50);
+  assert.equal(tmp.current(430, 90).limit, 50, 'ikke bekreftet av kartet: 100 m som før');
+  assert.equal(tmp.current(540, 90), null);
+  // Bekreftet skilt, kartet viser lavere grense (kryssende gate): 100 m som før
+  const low = createCamLimit();
+  low.sign(50, 0, 50);
+  assert.equal(low.current(300, 50).limit, 50);
+  assert.equal(low.current(340, 30).limit, 50, 'lavere i kartet: venter som før');
+});

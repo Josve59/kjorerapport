@@ -196,7 +196,9 @@ function report(drive, input, file, exportVersion) {
     const alone = seen.filter(x => mapAt(x.t) !== x.limit && !ll.some(y => y.src !== 'kamera' && y.t >= x.t && y.t <= x.t + 15 && y.limit === x.limit));
     line('Skilt', `${n0(seen.length)} lest av kameraet${perf && perf.signReads ? ` (${n0(perf.signReads)} lesninger)` : ''} · kartet hadde eller fikk samme grense for ${n0(seen.length - alone.length)}`);
     if (alone.length) more(`kartet sa noe annet (midlertidig skilt eller feillesning): ${alone.slice(0, 6).map(x => `${hms0(x.t)} skilt ${x.limit}, kart ${mapAt(x.t) ?? '–'}`).join(' · ')}`);
-    if (perf && perf.signMissed) more(`lest uten å bli godtatt: ${n0(perf.signMissed)}${(perf.signMissLog || []).length ? ` (${perf.signMissLog.slice(0, 8).map(m => `${m.limit} lest ${m.reads} ganger, ${m.w} piksler`).join(' · ')})` : ''}`);
+    // Tid og kartets grense der skiltet ble lest (at er klokka på telefonen, fra 0.13.9): stemte kartet, gjorde det ikke noe
+    const t0 = Date.parse(drive.startedAt), mapNear = t => { const now = mapAt(t), soon = mapAt(t + 10); return now === soon ? now : `${now ?? '–'}→${soon ?? '–'}`; };
+    if (perf && perf.signMissed) more(`lest uten å bli godtatt: ${n0(perf.signMissed)}${(perf.signMissLog || []).length ? ` (${perf.signMissLog.slice(0, 8).map(m => `${Number.isFinite(m.at) && t0 ? `${hms0((m.at - t0) / 1000)} ` : ''}${m.limit} lest ${m.reads} ganger, ${m.w} piksler${Number.isFinite(m.at) && t0 ? `, kart ${mapNear((m.at - t0) / 1000) ?? '–'}` : ''}`).join(' · ')})` : ''}`);
   }
   const sw = speedWarnings(loc, drive.liveLimits || []);
   const n = sw.episodes.length;
@@ -206,7 +208,10 @@ function report(drive, input, file, exportVersion) {
     line('Fartsvarsler', `${n0(n)} ${n === 1 ? 'varsel' : 'varsler'}, ${n0(sw.total)} s til sammen (regnet ut på nytt fra GPS-farten og lagrede fartsgrenser)`);
     // De verste, med tid i turen: en lav grense midt i høy fart er ofte en feil fartsgrense fra NVDB, ikke fart
     const worst = [...sw.episodes].sort((a, b) => b.over - a.over).slice(0, 3);
-    more(`verst: ${worst.map(e => `${hms(e.t0)} ${n0(e.kmh)} km/t i ${e.limit}-sone${e.cam ? ' (skilt fra kameraet)' : ''}, ${n0(e.t1 - e.t0)} s`).join(' · ')}`);
+    // Kartet hevet grensen like etter (innen 6 s), og farten var under den nye: trolig skiltet før kartets strekning.
+    // Pipet venter da (0.18.4), og rapporten etter turen teller det ikke (analyzeSpeeding), men den røde kanten vises.
+    const raised = e => { const x = (drive.liveLimits || []).find(y => y.src !== 'kamera' && y.t >= e.t0 && y.t <= e.t1 + 6 && Number.isFinite(y.limit) && y.limit > e.limit); return x && e.kmh <= x.limit + 4 ? x.limit : null; };
+    more(`verst: ${worst.map(e => `${hms(e.t0)} ${n0(e.kmh)} km/t i ${e.limit}-sone${e.cam ? ' (skilt fra kameraet)' : ''}, ${n0(e.t1 - e.t0)} s${raised(e) ? ` (kartet viste ${raised(e)} like etter)` : ''}`).join(' · ')}`);
   }
   return out.join('\n');
 }

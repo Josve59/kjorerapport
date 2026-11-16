@@ -20,11 +20,17 @@ nonisolated enum ModelPace {
     nonisolated(unsafe) static var lightCars = false
 
     /// Minste tid mellom to svar, i sekunder. Kamerabildene kommer 15 ganger i sekundet (hvert 0,067 s).
+    /// 0.22.1, etter turen 16. nov. kl. 20.01 (39 min): normal i 5 min, «lunken» i 7 min, så «varm» resten av turen.
+    /// Med 3,2 svar i sekundet ble telefonen aldri kjølig igjen. Nå går modellene litt saktere allerede fra «lunken»
+    /// (4 i sekundet), og fra «varm» går feltlinjene 2,6 og bilene 2 i sekundet. Følgingen av feltlinjer og biler i
+    /// nettappen holder svaret i 0,8–1 s, så det holder fortsatt. Med den lille bilmodellen er «varm» det vanlige
+    /// på lange turer, og det er der telefonen trenger å avlaste.
     static func gate(cars: Bool) -> Double {
         if still { return 0.65 }   // 1,5 i sekundet: følgingen i nettappen slipper en bil etter 1 s uten svar
         switch ProcessInfo.processInfo.thermalState {
-        case .nominal, .fair: return cars && !lightCars ? 0.39 : 0.19
-        case .serious: return cars && !lightCars ? 0.46 : 0.31
+        case .nominal: return cars && !lightCars ? 0.39 : 0.19
+        case .fair: return cars && !lightCars ? 0.39 : 0.24
+        case .serious: return cars ? (lightCars ? 0.5 : 0.46) : 0.38
         default: return 0.95
         }
     }

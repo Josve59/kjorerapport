@@ -241,8 +241,12 @@ export function signTracker({ maxGap = 900, minReads = 3, minShare = 0.6 } = {})
      tok ellers bort et midlertidig skilt.
    - Et skilt som viser høyere enn NVDB, og som NVDB ikke følger etter innen upM, gjelder ikke lenger: midlertidige
      og digitale skilt setter farten ned, så høyere er som regel en feillesning eller skiltet til en annen vei, og
-     for høy grense er den farlige feilen. */
-export function createCamLimit({ maxM = 3000, nvdbM = 150, stableM = 100, upM = 300 } = {}) {
+     for høy grense er den farlige feilen.
+   0.22.1, etter turen 16. nov. kl. 19.18: et 50-skilt som kartet bekreftet, gjaldt fortsatt 100 m inn på en 80-vei
+   etter en rundkjøring, og skjermen viste rød kant for 62 km/t «i 50-sone». Har kartet bekreftet skiltet, er det
+   kartets strekning skiltet hører til. Viser kartet så en høyere grense i upStableM, er bilen på en ny vei og
+   skiltet slippes. Skilt kartet ikke har bekreftet (midlertidige og digitale), holdes som før. */
+export function createCamLimit({ maxM = 3000, nvdbM = 150, stableM = 100, upM = 300, upStableM = 30 } = {}) {
   let cam = null, next = null;
   const sign = (limit, distM, nvdb, aheadM = 0) => {
     const ahead = Number.isFinite(aheadM) && aheadM > 0 ? aheadM : 0;
@@ -258,7 +262,7 @@ export function createCamLimit({ maxM = 3000, nvdbM = 150, stableM = 100, upM = 
     if (known && nvdb === cam.limit) cam.agreed = true;
     if (known && Number.isFinite(cam.nvdb0) && nvdb !== cam.nvdb0) { if (!cam.chg || cam.chg.v !== nvdb) cam.chg = { v: nvdb, d: distM }; }
     else if (known) cam.chg = null;
-    const newStretch = cam.chg && since > nvdbM && distM - cam.chg.d >= stableM;
+    const newStretch = cam.chg && since > nvdbM && distM - cam.chg.d >= (cam.agreed && cam.chg.v > cam.limit ? upStableM : stableM);
     // Mot kartets verdi ved skiltet, ikke et kort feiltreff i kartet akkurat nå
     const tooHigh = Number.isFinite(cam.nvdb0) && cam.limit > cam.nvdb0 && !cam.agreed && since > upM;
     if (since > maxM || newStretch || tooHigh) { cam = null; return null; }

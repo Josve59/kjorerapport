@@ -143,6 +143,36 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.22.1 – the two drives of 16 November: a sign that was held too long, and heat on long drives
+
+The owner sent two drives on 0.22.0: 19:18 (9 min, 4.6 km) and 20:01 (39 min, 17.8 km), both in the dark, mostly in town.
+
+**What the drives showed**
+- **Face:** found in 90 and 94 % of pictures, and 78–85 % on dark roads. Good.
+- **Lane lines:** at 45 km/h and up, both lines were found in 77–95 % of pictures, as before. In town at low speed there is often no line, and the state switches about 20 times a minute. This is mostly streets without markings and junctions, not a fault in the model.
+- **Car model D-FINE small:** 113–174 ms per picture, something found in 71–82 % of pictures.
+- **Heat:** the 9-minute drive never got «varm». The 39-minute drive was «varm» 67 % of the time (88–92 % with medium in November). It went «varm» after about 12.5 minutes and never cooled back down at 3.2 answers per second.
+- **Signs:** 5 read and accepted. One 50 sign where the map said 80 is probably a real sign: the map switched to 50 after the turn. Four signs were read twice without being accepted, and the map had the same limit for all four, so nothing was lost.
+- **Speed warnings:** none of the warnings the report tool found were real.
+  - 19:18 at 3:38, «62 km/h in a 50 zone»: a 50 sign read before a roundabout still applied for 100 m on the 80 road after it. Fixed below.
+  - 20:01 at 29:35, «57 km/h in a 40 zone»: the map switched to 60 two seconds later. The driver sped up after the sign, before the map's stretch began. The beep waits in that case (0.18.4), and the report after the drive does not count it, but the red edge shows for a moment.
+
+**Fixed**
+- **A sign the map confirmed is let go sooner** (`createCamLimit` in `js/signs.js`, copied to `kamera/js`). When the map shows a higher limit for 30 m, the car is on a new road and the map applies. Before, it took 100 m. Signs the map has not confirmed, such as temporary and digital signs, are held as before, and so is a lower limit in the map, such as a crossing street. A test covers this.
+- **The models slow down more when the phone is warm** (`ModelPace` in `LaneDetector.swift`):
+
+  | Phone state | Before | Now |
+  | --- | --- | --- |
+  | «lunken» | 5 answers per second | 4 answers per second |
+  | «varm» | lanes and cars 3.2 per second | lanes 2.6, cars 2 per second |
+
+  The web app holds a lane answer for up to 1.5 s and a car for 1 s, so tracking still works. Whether the phone now cools down from «varm» can only be seen on the next long drive.
+- **`tools/turrapport.mjs`:**
+  - Signs read but not accepted are shown with the time and the map's limit there.
+  - A speed warning is marked «kartet viste N like etter» when the map raised the limit just after.
+
+**Open (question to the owner):** In the speed part of the 19:18 drive, the stored limits give two short periods: 43 km/h in a 30 zone at about 1:53, and 39 km/h in a 30 zone at about 2:22. The map showed 30 there for only a few seconds between 40/50 stretches. Without checking the map again, it is unclear whether the roads were 30 zones or the map matched a side street. Ask the owner whether the report showed them and whether the roads were 30.
+
 ## What's new in 0.22.0 – «Hvem kjører først?», crossings that play, sign cards and livelier practice
 
 The owner asked: look more at the theory part, and make it easier to practise with better animations and pictures. «Be creative.»
