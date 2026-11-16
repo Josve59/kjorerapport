@@ -157,7 +157,7 @@ The owner answered the open question from 0.22.1: on the 19:18 drive «var ingen
 
 **Checked on the 19:18 drive on the phone (0.22.2):** matched again with the new code, the report now has «unknown» at 1:51 and 2:20 instead of 30. Two seconds of 30 remain at 2:34, at 10 km/h by a junction, which does not count. The speed episode at 4:56 (61 in 50) was there before too: the map gives 50 on the road the car turned onto.
 **Tests:** two new ones, 272 in all: side streets across the road, and the 50 road next to the 80 road with good and poor GPS.
-**Not checked:** the screen's live limit with the new hold rule replayed over the whole drive. The phone was locked.
+**The screen's live limit replayed over the whole 19:18 drive on the phone** (the owner unlocked it). The map for the whole route was fetched first, and the GPS points were fed through `createLiveLimit` in order. Compared with what the screen showed on the drive, only three places differ: 1:53 and 2:22 are unknown instead of 30, and the limit is 50 from 4:59, straight after the turn-off, instead of 80 until 5:26. Everything else is the same.
 
 ## What's new in 0.22.1 – the two drives of 16 November: a sign that was held too long, and heat on long drives
 
