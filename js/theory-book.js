@@ -339,3 +339,11 @@ export function stopDistance(kmh, mu, reaction = 1) {
   const r = v * reaction, b = (v * v) / (2 * mu * 9.81);
   return { reaction: r, braking: b, total: r + b };
 }
+/* Farten når du treffer noe som står «at» meter fram (0.22.0, til avspillingen i kalkulatoren). Treffer du før
+   reaksjonstida er over, er farten uendret; ellers bremser bilen med friksjonen mu fram til treffpunktet. */
+export function impactSpeed(kmh, mu, at, reaction = 1) {
+  const v = kmh / 3.6, r = v * reaction;
+  if (at <= r) return kmh;
+  const v2 = v * v - 2 * mu * 9.81 * (at - r);
+  return v2 > 0 ? Math.sqrt(v2) * 3.6 : 0;
+}

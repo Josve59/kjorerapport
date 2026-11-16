@@ -1007,7 +1007,7 @@ export const QUESTIONS = [
     'Trafikkreglene § 7 nr. 2', { img: 'scene:venstresving', lvl: 1 }),
   Q('v03', 'vikeplikt', 'A kjører rett fram på en vei uten skilt. B kommer fra en sidevei på høyre side. Hvem har vikeplikt?',
     ['A, fordi B kommer fra høyre', 'B, fordi B kommer fra en sidevei', 'B, fordi A kjører på den gjennomgående veien', 'B, fordi B må svinge ut på veien'],
-    'Høyreregelen gjelder også i T-kryss og på veier som ser ut som hovedvei, så lenge ingen skilt sier noe annet.',
+    'Høyreregelen gjelder også i T-kryss og på veier som ser ut som hovedvei, så lenge ingen skilt, lys eller politi sier noe annet. Er sideveien en avkjørsel fra eiendom, parkeringsplass eller gårdsvei, har den som kommer derfra, likevel vikeplikt.',
     'Trafikkreglene § 7 nr. 2', { img: 'scene:t-kryss' }),
   Q('v04', 'vikeplikt', 'B kjører ut fra en parkeringsplass. Hvem har vikeplikt?',
     ['Bil B, som kommer fra parkeringsplassen', 'Bil A, fordi B kommer fra høyre', 'Bil A, hvis B har blinket i god tid', 'Den som kommer først fram til utkjøringen'],

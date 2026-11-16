@@ -7,11 +7,13 @@ import { icon, speak, stopSpeaking, confirmDialog, sheetDialog, formDialog, toas
 import { esc } from './format.js';
 import { THEMES, QUESTIONS } from './theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from './safety-check.js';
-import { figure } from './trafficsvg.js';
+import { figure, crossingMovers } from './trafficsvg.js';
 import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS, SIGN_PICK_QUESTIONS } from './theory-signs.js';
+import { playCrossing } from './crossanim.js';
+import { CROSS_PUZZLES, MOVER_NAMES, PUZZLE_BY_SCENE, crossKey, flatOrder, checkOrder, orderText, pickCross, crossSolved } from './theory-crossings.js';
 import { EXAM, LEARNED, READY_RULE, READY_TEXT, HARD_SHARE, level, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
   optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief, practiceDays, toggleMark, readinessPercent, dailyPlan } from './theory.js';
-import { BOOK, sectionFor, bookChapter, SURFACES, stopDistance } from './theory-book.js';
+import { BOOK, sectionFor, bookChapter, SURFACES, stopDistance, impactSpeed } from './theory-book.js';
 
 const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS, SIGN_PICK_QUESTIONS).map(q => [q.id, q]));
 const SIGN_POOL = SIGN_QUESTIONS.concat(SIGN_PICK_QUESTIONS);   // skiltprøven: hva betyr skiltet, og hvilket skilt er det (0.20.0)
@@ -30,7 +32,9 @@ const loadExam = () => { try { return JSON.parse(localStorage.getItem(EXAM_KEY) 
 const saveExam = e => { try { if (e) localStorage.setItem(EXAM_KEY, JSON.stringify(e)); else localStorage.removeItem(EXAM_KEY); } catch { /* privat modus */ } };
 let lastResult = null;   // siste leverte prøve, til resultatskjermen
 
-export function stopTheory() { if (examTimer) { clearInterval(examTimer); examTimer = null; } stopSpeaking(); }
+let player = null;     // et kryss som spilles av (0.22.0)
+const stopPlayer = () => { if (player) { player.stop(); player = null; } };
+export function stopTheory() { if (examTimer) { clearInterval(examTimer); examTimer = null; } stopSpeaking(); stopPlayer(); }
 export const examInProgress = () => { const e = loadExam(); return e && !e.done ? e : null; };
 /* Status til trafikklærersiden (teacher.js) */
 export const teacherTheory = p => theoryBrief(p, { questions: QUESTIONS, signQuestions: SIGN_QUESTIONS, tasks: SAFETY });
@@ -105,6 +109,10 @@ export async function renderTheoryHub(root, ctx) {
     <div class="th-tiles">
       ${tile('th-mix', figure('scene:rundkjoring'), 'Rask øving', '10 blandede spørsmål', null)}
       ${tile('th-to-book', `<span class="th-tile-ico th-ico-book">${icon('book', 30)}</span>`, 'Teoriboka', 'Les reglene, tema for tema', null)}
+      <button type="button" class="th-tile th-tile-wide" id="th-cross">
+        <span class="th-tile-fig" aria-hidden="true">${figure('scene:kryss-tre')}</span>
+        <span class="th-wide-txt"><strong>Hvem kjører først?</strong><span class="muted small">Trykk på bilene i riktig rekkefølge, og se krysset spilles av.</span>
+          <span class="muted small">${crossSolved(p)} av ${CROSS_PUZZLES.length} kryss riktig sist</span><span class="th-bar"><span style="width:${Math.round(crossSolved(p) / CROSS_PUZZLES.length * 100)}%"></span></span></span></button>
       ${tile('th-to-signs', `<span class="th-mini-signs">${['sign:202', 'sign:362:80', 'sign:146'].map(figure).join('')}</span>`, 'Skiltprøven', `${signsOk} av ${SIGNS.length} skilt lært`, Math.round(signsOk / SIGNS.length * 100))}
       ${tile('th-to-safety', figure('lamp:abs'), 'Sikkerhets&shy;kontrollen', `${sum.safety.known} av ${sum.safety.total} oppgaver kan du`, sum.safety.total ? Math.round(sum.safety.known / sum.safety.total * 100) : 0)}
       ${tile('th-wrong', `<span class="th-tile-ico">${icon('repeat', 30)}</span>`, 'Øv på feilene', wrongN ? `${wrongN} spørsmål å rette opp` : 'Ingen feil å øve på nå', null, !wrongN)}
@@ -127,6 +135,7 @@ export async function renderTheoryHub(root, ctx) {
   root.querySelector('#th-wrong').onclick = () => startPractice(ctx, { title: 'Feilene dine', wrongOnly: true, n: 15 });
   root.querySelector('#th-mix').onclick = () => startPractice(ctx, { title: 'Rask øving', n: 10 });
   root.querySelector('#th-to-book').onclick = () => ctx.go('#/teori/bok');
+  root.querySelector('#th-cross').onclick = () => startCross(ctx);
   root.querySelector('#th-marks').onclick = () => { const ids = (ctx.progress().marks || []).filter(id => byId.has(id)); if (ids.length) startPractice(ctx, { title: 'Bokmerker', ids, n: ids.length, pool: ids.some(id => byId.get(id).sign) ? 'alle' : 'teori' }); };
   root.querySelector('#th-to-safety').onclick = () => ctx.go('#/sikkerhetskontroll');
   root.querySelector('#th-to-signs').onclick = () => ctx.go('#/teori/skilt');
@@ -171,18 +180,21 @@ function startPractice(ctx, { title, n = 10, pool = 'teori', back = THEORY_HOME,
 
 export function renderPractice(root, ctx) {
   if (!practice) { ctx.go(THEORY_HOME); return; }
-  stopSpeaking();
+  stopSpeaking(); stopPlayer();
   const P = practice;
   if (P.i >= P.items.length) return renderPracticeDone(root, ctx);
   const q = byId.get(P.items[P.i]), t = theme(q.t), answered = P.chosen !== null, right = P.chosen === 0;
   const marked = (ctx.progress().marks || []).includes(q.id), more = sectionFor(q.id);
   const [rule, rest] = splitRule(q.why);
+  const pct = (P.i + (answered ? 1 : 0)) / P.items.length * 100, from = P.shown === undefined ? pct : P.shown;
+  const combo = right ? runEnd(P.results) : 0;
+  const play = [q.img, q.wimg].map(k => String(k || '').replace(/^scene:/, '')).find(k => PUZZLE_BY_SCENE.has(k));
   root.innerHTML = `
     <div class="q-top"><span class="q-step"><strong>${esc(P.title)}</strong><span class="muted small">${P.i + 1} av ${P.items.length}</span></span>
       <button type="button" class="icon-btn q-bm ${marked ? 'on' : ''}" id="q-bm" aria-pressed="${marked}" aria-label="${marked ? 'Fjern bokmerket' : 'Bokmerk spørsmålet'}">${icon('star', 22)}</button>
       <button type="button" class="icon-btn" id="q-close" aria-label="Avslutt øvingen">${icon('close', 22)}</button></div>
-    <span class="th-bar q-prog"><span style="width:${(P.i + (answered ? 1 : 0)) / P.items.length * 100}%"></span></span>
-    <section class="card q-card">
+    <span class="th-bar q-prog"><span id="q-prog-fill" style="width:${from}%"></span></span>
+    <section class="card q-card ${answered ? '' : 'q-enter'}">
       <p class="eyebrow">${esc(q.eyebrow || t.title)}${level(q) >= 3 ? ' <span class="q-hard">Vanskelig</span>' : ''}</p>
       ${q.img ? `<div class="q-fig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.img)}">${figure(q.img)}</div>` : ''}
       <div class="q-head"><h2 class="q-text">${esc(q.q)}</h2>${speakBtn('q-read')}</div>
@@ -195,8 +207,9 @@ export function renderPractice(root, ctx) {
       }).join('')}</div>
     </section>
     ${answered ? `<section class="card q-why ${right ? 'ok' : 'no'}" aria-live="polite">
-      <p class="q-verdict"><span class="q-verdict-ico">${icon(right ? 'check' : 'close', 22)}</span>${right ? 'Riktig!' : 'Ikke riktig'}</p>
-      ${q.wimg ? `<div class="q-fig q-wfig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.wimg)}">${figure(q.wimg)}</div>` : ''}
+      <p class="q-verdict"><span class="q-verdict-ico">${icon(right ? 'check' : 'close', 22)}</span>${right ? 'Riktig!' : 'Ikke riktig'}${combo >= 3 ? `<span class="q-combo">${icon('flame', 16)}${combo} på rad</span>` : ''}</p>
+      ${q.wimg && !play ? `<div class="q-fig q-wfig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.wimg)}">${figure(q.wimg)}</div>` : ''}
+      ${play ? `<div class="cx-player"><button type="button" class="btn secondary cx-playbtn" data-play="${play}">${icon('play', 20)}Se hvem som kjører først</button></div>` : ''}
       <p class="q-rule">${esc(rule)}</p>${rest ? `<p>${esc(rest)}</p>` : ''}
       <p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
       ${more ? `<button type="button" class="link q-more" id="q-more">${icon('book', 18)}<span>Les mer i teoriboka: ${esc(bookSection(more).title)}</span>${icon('chev', 16)}</button>` : ''}
@@ -229,6 +242,30 @@ export function renderPractice(root, ctx) {
   const moreBtn = root.querySelector('#q-more');
   if (moreBtn) moreBtn.onclick = () => ctx.go(`#/teori/bok/${more.chapter}/${more.section}`);   // øvingen står der du var når du kommer tilbake
   wireZoom(root);
+  wirePlayers(root);
+  // Framdriften glir fram fra der den var (0.22.0)
+  const fill = root.querySelector('#q-prog-fill');
+  if (fill && from !== pct) requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = pct + '%'; }));
+  P.shown = pct;
+}
+/* Antall riktige på rad på slutten av runden */
+const runEnd = rs => { let n = 0; for (let i = rs.length - 1; i >= 0 && rs[i]; i--) n++; return n; };
+
+/* «Se hvem som kjører først»: spiller av krysset i øvingen og i teoriboka (0.22.0). Knappen står i en .cx-player;
+   har den ingen tegning fra før, legges en inn over knappen. */
+function wirePlayers(root) {
+  root.querySelectorAll('[data-play]').forEach(btn => btn.onclick = () => {
+    const pz = PUZZLE_BY_SCENE.get(btn.dataset.play), box = btn.closest('.cx-player');
+    if (!pz || !box) return;
+    if (!box.querySelector('.cx-fig')) box.insertAdjacentHTML('afterbegin', `<div class="q-fig cx-fig">${figure('scene:' + pz.scene)}</div>`);
+    if (!box.querySelector('.cx-cap')) box.querySelector('.cx-fig').insertAdjacentHTML('afterend', '<p class="cx-cap" aria-live="polite"></p>');
+    const cap = box.querySelector('.cx-cap');
+    btn.innerHTML = `${icon('repeat', 20)}Spill av igjen`;
+    stopPlayer();
+    player = playCrossing(box.querySelector('.cx-fig svg'), pz.order, {
+      onStep: i => { cap.textContent = i < pz.steps.length ? `${i + 1}. ${pz.steps[i]}` : `Rekkefølgen: ${orderText(flatOrder(pz))}.`; }
+    });
+  });
 }
 
 /* Den første setningen i forklaringen er regelen: den uthevet, resten under (0.21.0) */
@@ -274,24 +311,82 @@ const calcHtml = () => `<div class="bk-calc" id="bk-calc">
     <label class="field bk-calc-speed"><span>Fart: <strong id="calc-v">80</strong> km/t</span><input type="range" min="30" max="120" step="10" value="80" id="calc-speed" aria-label="Fart i km/t"></label>
     <div class="segment calc-seg" role="radiogroup" aria-label="Føre">${SURFACES.map((f, i) => `<label><input type="radio" name="calc-f" value="${f.id}" ${i === 0 ? 'checked' : ''}><span>${esc(f.label)}</span></label>`).join('')}</div>
     <div id="calc-out" aria-live="polite"></div>
+    <div class="sim" id="sim">
+      <p class="sim-q"><strong>Et barn springer ut i veien.</strong> Barnet står der du ville stanset fra 50 km/t på samme føre. Rekker du å stanse?</p>
+      <div class="sim-fig" id="sim-fig"></div>
+      <button type="button" class="btn secondary" id="sim-play">${icon('play', 20)}Spill av</button>
+      <p class="sim-res" id="sim-res" aria-live="polite"></p>
+    </div>
     <p class="muted small">Omtrentlige tall: reaksjonstid 1 sekund og vanlige friksjonstall for føret. Den virkelige bremselengden varierer med dekk, bil, vei og hvor hardt du bremser.</p>
   </div>`;
+/* Stopplengden spilt av (0.22.0): bilen kjører i reaksjonstida (grått), bremser (rødt) og stanser, eller treffer
+   barnet. Tida går som i virkeligheten, men korter ned når hele forløpet ville tatt mer enn 4 sekunder (glatt føre). */
+const G = 9.81;
+function simSvg(kmh, mu) {
+  const d = stopDistance(kmh, mu), kid = stopDistance(50, mu).total, span = Math.max(d.total, kid) * 1.1, k = 250 / span, x0 = 36;
+  return { k, x0, d, kid, svg: `<svg viewBox="0 0 300 88" class="sim-svg" role="img" aria-label="Veien foran bilen, med barnet ${Math.round(kid)} meter fram">
+    <rect x="0" y="28" width="300" height="40" rx="6" fill="#5a6066"/><line x1="0" y1="31" x2="300" y2="31" stroke="#f4f4f4" stroke-width="1.4"/><line x1="0" y1="65" x2="300" y2="65" stroke="#f4f4f4" stroke-width="1.4"/>
+    <rect id="sim-r" x="${x0}" y="44" width="0" height="8" rx="3" fill="#aab2ba"/><rect id="sim-b" x="${x0}" y="44" width="0" height="8" rx="3" fill="#e2563f"/>
+    <g transform="translate(${(x0 + kid * k).toFixed(1)} 48)"><line class="sim-ink-l" x1="0" y1="-32" x2="0" y2="-22" stroke-width="1.2" stroke-dasharray="2 2"/>
+      <text class="sim-ink" y="-36" text-anchor="middle" font-size="12" font-weight="800">${Math.round(kid)} m</text>
+      <g transform="scale(1.45)"><circle cy="-8" r="3.4" fill="#f5c518"/><path d="M0 -4 V5 M0 5 L-3 11 M0 5 L3 11 M-4.5 -1 L0 -3 L4.5 0" stroke="#f5c518" stroke-width="2.6" stroke-linecap="round" fill="none"/></g></g>
+    <g id="sim-car" transform="translate(${x0} 48)"><rect x="-32" y="-10" width="32" height="20" rx="6" fill="#2e7dd1" stroke="rgba(0,0,0,.4)"/><rect x="-12" y="-7.5" width="6" height="15" rx="2" fill="#dbe9f5"/><rect x="-2.5" y="-8" width="2.5" height="3.5" rx=".8" fill="#fff4bf"/><rect x="-2.5" y="4.5" width="2.5" height="3.5" rx=".8" fill="#fff4bf"/></g>
+    <g id="sim-hit" opacity="0"><circle cx="${(x0 + kid * k).toFixed(1)}" cy="48" r="17" fill="none" stroke="#e2563f" stroke-width="3.5"/></g>
+  </svg>` };
+}
+let simRaf = 0;
 function wireCalc(root) {
   const el = root.querySelector('#bk-calc');
   if (!el) return;
+  const read = () => ({ v: +el.querySelector('#calc-speed').value, f: SURFACES.find(x => x.id === el.querySelector('input[name=calc-f]:checked').value) });
+  let sim = null;
   const draw = () => {
-    const v = +el.querySelector('#calc-speed').value, f = SURFACES.find(x => x.id === el.querySelector('input[name=calc-f]:checked').value);
+    cancelAnimationFrame(simRaf);
+    const { v, f } = read();
     const d = stopDistance(v, f.mu), max = stopDistance(120, f.mu).total;
     el.querySelector('#calc-v').textContent = v;
     el.querySelector('#calc-out').innerHTML = `<div class="calc-bar"><span class="calc-r" style="width:${d.reaction / max * 100}%"></span><span class="calc-b" style="width:${d.braking / max * 100}%"></span></div>
       <dl class="calc-nums"><div><dt>Reaksjon</dt><dd>${Math.round(d.reaction)} m</dd></div><div><dt>Bremsing</dt><dd>${Math.round(d.braking)} m</dd></div><div class="calc-sum"><dt>Stopplengde</dt><dd>${Math.round(d.total)} m</dd></div></dl>`;
+    sim = simSvg(v, f.mu);
+    el.querySelector('#sim-fig').innerHTML = sim.svg;
+    el.querySelector('#sim-res').textContent = '';
+    el.querySelector('#sim-res').className = 'sim-res';
+  };
+  const play = () => {
+    draw();
+    const { v, f } = read(), vm = v / 3.6, a = f.mu * G, tb = vm / a, T = 1 + tb, scale = Math.min(1, 4 / T);
+    const hit = sim.d.total > sim.kid + 0.5, end = hit ? sim.kid : sim.d.total;
+    const car = el.querySelector('#sim-car'), r = el.querySelector('#sim-r'), b = el.querySelector('#sim-b');
+    const pos = t => (t <= 1 ? vm * t : Math.min(sim.d.total, vm + vm * (t - 1) - a * (t - 1) ** 2 / 2));
+    const show = s => {
+      const x = sim.x0 + s * sim.k;
+      car.setAttribute('transform', `translate(${x.toFixed(1)} 48)`);
+      const rx = Math.min(s, sim.d.reaction) * sim.k;
+      r.setAttribute('width', rx.toFixed(1));
+      b.setAttribute('x', (sim.x0 + rx).toFixed(1)); b.setAttribute('width', Math.max(0, (s - sim.d.reaction) * sim.k).toFixed(1));
+    };
+    const finish = () => {
+      show(end);
+      const res = el.querySelector('#sim-res'), gap = sim.kid - sim.d.total;
+      if (hit) { el.querySelector('#sim-hit').setAttribute('opacity', '1'); res.className = 'sim-res no'; res.textContent = `Du treffer barnet i ${Math.round(impactSpeed(v, f.mu, sim.kid))} km/t. ${sim.kid <= sim.d.reaction ? 'Du rakk ikke å begynne å bremse.' : 'Bilen har ikke fått bremset ned i tide.'}`; }
+      else { res.className = 'sim-res ok'; res.textContent = gap < 0.5 ? 'Du stanser akkurat ved barnet.' : `Du stanser ${Math.round(gap)} m før barnet.`; }
+    };
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
+    const t0 = performance.now();
+    const tick = now => {
+      const t = (now - t0) / 1000 / scale, s = pos(t);
+      if (s >= end - 0.01 || t >= T) { finish(); return; }
+      show(s); simRaf = requestAnimationFrame(tick);
+    };
+    simRaf = requestAnimationFrame(tick);
   };
   el.querySelector('#calc-speed').oninput = draw;
-  el.querySelectorAll('input[name=calc-f]').forEach(r => r.onchange = draw);
+  el.querySelectorAll('input[name=calc-f]').forEach(x => x.onchange = draw);
+  el.querySelector('#sim-play').onclick = play;
   draw();
 }
 export function renderBook(root, ctx, path = '') {
-  stopSpeaking();
+  stopSpeaking(); stopPlayer();
   const [chId, secId] = String(path).split('/');
   const p = ctx.progress(), rd = readinessPercent(QUESTIONS, p, THEMES);
   const ch = chId ? bookChapter(chId) : null;
@@ -314,9 +409,11 @@ export function renderBook(root, ctx, path = '') {
     <nav class="bk-toc" aria-label="Delene i kapitlet">${ch.sections.map(x => `<a href="#/teori/bok/${ch.id}/${x.id}" class="bk-toc-link" data-sec="${x.id}">${esc(x.title)}</a>`).join('')}</nav>
     ${ch.sections.map(x => `<section class="card bk-sec" id="bk-${x.id}">
       <h2 class="card-title">${esc(x.title)}</h2>
-      ${x.points.map(pt => `<div class="bk-pt">
-        ${pt.fig ? `<div class="q-fig q-zoom bk-fig" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(pt.fig)}">${figure(pt.fig)}</div>` : ''}
-        <p class="bk-rule">${esc(pt.b)}</p>${pt.t ? `<p class="bk-text">${esc(pt.t)}</p>` : ''}</div>`).join('')}
+      ${x.points.map(pt => { const pl = PUZZLE_BY_SCENE.get(String(pt.fig || '').replace(/^scene:/, '')); return `<div class="bk-pt">
+        ${pl ? `<div class="cx-player"><div class="q-fig cx-fig bk-fig">${figure(pt.fig)}</div><p class="cx-cap" aria-live="polite"></p>
+          <button type="button" class="link cx-playbtn" data-play="${pl.scene}">${icon('play', 18)}Spill av krysset</button></div>`
+        : pt.fig ? `<div class="q-fig q-zoom bk-fig" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(pt.fig)}">${figure(pt.fig)}</div>` : ''}
+        <p class="bk-rule">${esc(pt.b)}</p>${pt.t ? `<p class="bk-text">${esc(pt.t)}</p>` : ''}</div>`; }).join('')}
       ${x.calc === 'stopp' ? calcHtml() : ''}
       <button type="button" class="btn secondary bk-go" data-sec="${x.id}">${icon('quiz', 20)}Øv på dette (${qn(x)} spørsmål)</button>
     </section>`).join('')}
@@ -331,6 +428,7 @@ export function renderBook(root, ctx, path = '') {
   // Innholdslista bytter adresse uten ny side i historikken, og ruller til delen
   root.querySelectorAll('.bk-toc-link').forEach(a => a.onclick = e => { e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); scrollToSec(a.dataset.sec); });
   wireZoom(root);
+  wirePlayers(root);
   wireCalc(root);
   if (secId) requestAnimationFrame(() => scrollToSec(secId));
 }
@@ -357,6 +455,7 @@ export function renderSignHub(root, ctx) {
       <span class="th-bar"><span style="width:${learned / SIGNS.length * 100}%"></span></span>
       <p class="muted small">${learned} av ${SIGNS.length} skilt lært. Et skilt er lært når du har svart riktig på det ${LEARNED} ganger på rad.</p>
       <button type="button" class="btn primary" id="sg-go">${icon('quiz', 20)}Øv på skiltene</button>
+      <button type="button" class="btn secondary" id="sg-cards">${icon('layers', 20)}Skiltkort: snu og lær</button>
       ${wrong ? `<button type="button" class="btn secondary" id="sg-wrong">${icon('repeat', 20)}Øv på feilene (${wrong})</button>` : ''}
     </section>
     <p class="muted small th-note">Trykk på et skilt for å se hva det betyr.</p>
@@ -372,6 +471,7 @@ export function renderSignHub(root, ctx) {
     <p class="muted small th-note">Navnene og betydningen er hentet fra skiltforskriften. Tegningene er forenklet, så de ekte skiltene kan se litt annerledes ut.</p>`;
   const go = (title, extra = {}) => startPractice(ctx, { title, pool: 'skilt', back: '#/teori/skilt', n: 10, ...extra });   // halvparten «hva betyr», halvparten «hvilket skilt»
   root.querySelector('#sg-go').onclick = () => go('Skiltprøven');
+  root.querySelector('#sg-cards').onclick = () => startCards(ctx);
   const w = root.querySelector('#sg-wrong'); if (w) w.onclick = () => go('Skiltene du bommet på', { wrongOnly: true, n: 15 });
   root.querySelectorAll('.sg-group-go').forEach(b => b.onclick = () => {
     const g = SIGN_GROUPS.find(x => x.id === b.dataset.group);
@@ -385,6 +485,193 @@ export function renderSignHub(root, ctx) {
       onOpen: d => { const r = d.querySelector('#sg-read'); if (r) r.onclick = e => { e.preventDefault(); speak(`${s.name}. ${s.meaning}`); }; }
     }).then(stopSpeaking);
   });
+}
+
+/* ---------- Skiltkort (0.22.0) ----------
+   Et roligere alternativ til skiltprøven: se skiltet, snu kortet og si selv om du kunne det. Sveip til høyre for
+   «Kan det» og til venstre for «Øv mer»; de du må øve mer på, kommer igjen litt senere i bunken. Kortene lagres ikke
+   som svar i skiltprøven, så «lært» der betyr fortsatt riktige svar på prøvespørsmålene. */
+let cards = null;   // { deck: [skiltnr], i, flipped, known: [], again: Set, total }
+const CARD_N = 20;
+function newCards(p) {
+  const shuffle = a => a.map(x => [Math.random(), x]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
+  const list = [...shuffle(SIGNS.filter(s => signState(p.q['sk' + s.id]) !== 'lart')), ...shuffle(SIGNS.filter(s => signState(p.q['sk' + s.id]) === 'lart'))].slice(0, CARD_N).map(s => s.id);
+  return { deck: list.slice(), i: 0, flipped: false, known: [], again: new Set(), total: list.length };
+}
+function startCards(ctx) { cards = newCards(ctx.progress()); ctx.go('#/teori/skiltkort'); }
+export function renderCards(root, ctx) {
+  stopSpeaking();
+  if (!cards) cards = newCards(ctx.progress());
+  const K = cards;
+  if (K.i >= K.deck.length) return renderCardsDone(root, ctx);
+  const s = SIGNS.find(x => x.id === K.deck[K.i]), seen = K.known.length + K.again.size;
+  root.innerHTML = `
+    <div class="q-top"><span class="q-step"><strong>Skiltkort</strong><span class="muted small">${Math.min(K.total, K.known.length + 1)} av ${K.total} · ${K.known.length} kan du</span></span>
+      <button type="button" class="icon-btn" id="fc-close" aria-label="Avslutt">${icon('close', 22)}</button></div>
+    <span class="th-bar q-prog"><span style="width:${K.known.length / K.total * 100}%"></span></span>
+    <div class="fc-stage">
+      <button type="button" class="fc-card ${K.flipped ? 'flipped' : ''}" id="fc-card" aria-label="${K.flipped ? `${esc(s.name)}. ${esc(s.meaning)}` : 'Skiltkort. Trykk for å snu og se hva skiltet betyr'}">
+        <span class="fc-inner">
+          <span class="fc-face fc-front" aria-hidden="${K.flipped}"><span class="fc-fig">${figure(s.img)}</span><span class="fc-hint">${icon('repeat', 18)}Hva betyr skiltet? Trykk for å snu</span></span>
+          <span class="fc-face fc-back" aria-hidden="${!K.flipped}"><span class="fc-fig small">${figure(s.img)}</span><strong class="fc-name">${esc(s.name)}</strong><span class="fc-mean">${esc(s.meaning)}</span><span class="muted small">Skilt ${s.id === '306' ? '306.0' : s.id}</span></span>
+        </span>
+        <span class="fc-stamp fc-stamp-yes" aria-hidden="true">${icon('check', 22)}Kan det</span><span class="fc-stamp fc-stamp-no" aria-hidden="true">${icon('repeat', 22)}Øv mer</span>
+      </button>
+    </div>
+    <div class="fc-actions"><button type="button" class="btn secondary" id="fc-no">${icon('repeat', 20)}Øv mer</button><button type="button" class="btn primary" id="fc-yes">${icon('check', 20)}Kan det</button></div>
+    <p class="muted small fc-tip">${seen ? 'Sveip kortet til høyre hvis du kunne det, eller til venstre for å øve mer.' : 'Snu kortet når du har tenkt deg om. Sveip til høyre hvis du kunne det, til venstre for å øve mer.'}</p>`;
+  const card = root.querySelector('#fc-card');
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const decide = (ok, dir = ok ? 1 : -1) => {
+    if (ok) K.known.push(s.id);
+    else { K.again.add(s.id); K.deck.splice(Math.min(K.deck.length, K.i + 4), 0, s.id); }   // kommer igjen om noen kort
+    ctx.vibrate(ok ? 12 : [20, 30, 20]);
+    const next = () => { K.i++; K.flipped = false; renderCards(root, ctx); };
+    if (reduce) { next(); return; }
+    card.style.transition = 'transform .28s ease-in, opacity .28s ease-in';
+    card.style.transform = `translateX(${dir * 120}%) rotate(${dir * 18}deg)`; card.style.opacity = '0';
+    setTimeout(next, 260);
+  };
+  // Trykk snur, sveip avgjør
+  let x0 = null, dx = 0, moved = false;
+  card.onpointerdown = e => { x0 = e.clientX; dx = 0; moved = false; card.setPointerCapture(e.pointerId); card.style.transition = 'none'; };
+  card.onpointermove = e => {
+    if (x0 === null) return;
+    dx = e.clientX - x0; if (Math.abs(dx) > 8) moved = true;
+    if (!moved) return;
+    card.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+    card.classList.toggle('yes', dx > 50); card.classList.toggle('no', dx < -50);
+  };
+  const up = () => {
+    if (x0 === null) return;
+    x0 = null;
+    if (moved && Math.abs(dx) > 90) { decide(dx > 0); return; }
+    card.style.transition = 'transform .2s ease-out'; card.style.transform = ''; card.classList.remove('yes', 'no');
+    if (!moved) { K.flipped = !K.flipped; card.classList.toggle('flipped', K.flipped); card.setAttribute('aria-label', K.flipped ? `${s.name}. ${s.meaning}` : 'Skiltkort. Trykk for å snu og se hva skiltet betyr'); }
+  };
+  card.onpointerup = up; card.onpointercancel = up;
+  card.onkeydown = e => { if (e.key === 'ArrowRight') decide(true); if (e.key === 'ArrowLeft') decide(false); };
+  card.onclick = e => e.preventDefault();   // pekerhendelsene over gjør jobben (også for tastatur: Enter gir click)
+  card.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') { K.flipped = !K.flipped; card.classList.toggle('flipped', K.flipped); } });
+  root.querySelector('#fc-yes').onclick = () => decide(true);
+  root.querySelector('#fc-no').onclick = () => decide(false);
+  root.querySelector('#fc-close').onclick = () => { cards = null; ctx.go('#/teori/skilt'); };
+}
+function renderCardsDone(root, ctx) {
+  const K = cards, again = [...K.again], firstTry = K.known.filter(id => !K.again.has(id)).length;
+  root.innerHTML = `
+    <section class="sign-card th-sign ${firstTry === K.total ? 'lv-klar' : 'lv-nesten'}">
+      <p class="eyebrow">Skiltkort</p>
+      <h2 class="th-sign-head">${firstTry} av ${K.total} kunne du med en gang</h2>
+      <p>${again.length === 1 ? 'Dette skiltet måtte du øve mer på. Ta det i skiltprøven, så teller det som lært.' : again.length ? `Disse ${again.length} skiltene måtte du øve mer på. Ta dem i skiltprøven, så teller de som lært.` : 'Alle satt med en gang. Ta skiltprøven, så teller de som lært.'}</p>
+    </section>
+    ${again.length ? `<section class="card"><ul class="sg-grid fc-again">${again.map(id => { const s = SIGNS.find(x => x.id === id); return `<li><span class="sg-tile"><span class="sg-fig">${figure(s.img)}</span><span class="sg-name">${esc(s.name)}</span></span></li>`; }).join('')}</ul></section>` : ''}
+    ${again.length ? `<button type="button" class="btn primary" id="fc-test">${icon('quiz', 20)}Øv på ${again.length === 1 ? 'det' : 'disse'} i skiltprøven</button>` : ''}
+    <button type="button" class="btn ${again.length ? 'secondary' : 'primary'}" id="fc-new">${icon('layers', 20)}Nye skiltkort</button>
+    <button type="button" class="btn secondary" id="fc-hub">Til skiltene</button>`;
+  if (!again.length && K.total >= 10 && ctx.celebrate) setTimeout(ctx.celebrate, 300);
+  const t = root.querySelector('#fc-test');
+  if (t) t.onclick = () => { const ids = SIGN_POOL.filter(q => again.includes(q.sign)).map(q => q.id); cards = null; startPractice(ctx, { title: 'Skiltene fra kortene', pool: 'skilt', ids, n: ids.length, back: '#/teori/skilt' }); };
+  root.querySelector('#fc-new').onclick = () => { cards = newCards(ctx.progress()); renderCards(root, ctx); window.scrollTo(0, 0); };
+  root.querySelector('#fc-hub').onclick = () => { cards = null; ctx.go('#/teori/skilt'); };
+}
+
+/* ---------- Hvem kjører først? (0.22.0) ----------
+   Eieren ønsket animasjoner og framstillinger som gjør det lettere å øve. Her trykker eleven på trafikantene i den
+   rekkefølgen de kjører, og ser så krysset spilles av med forklaring for hvert steg. Svarene lagres som kx-<id>. */
+let cross = null;   // { items: [id], i, tapped: [id], checked, results: [bool] }
+const newCross = p => ({ items: pickCross(p).map(pz => pz.id), i: 0, tapped: [], checked: false, results: [] });
+function startCross(ctx) { cross = newCross(ctx.progress()); ctx.go('#/teori/kryss'); }
+export function renderCross(root, ctx) {
+  stopSpeaking(); stopPlayer();
+  if (!cross) cross = newCross(ctx.progress());
+  const X = cross;
+  if (X.i >= X.items.length) return renderCrossDone(root, ctx);
+  const pz = CROSS_PUZZLES.find(x => x.id === X.items[X.i]), movers = crossingMovers(pz.scene);
+  const checked = X.checked, right = checked && checkOrder(pz, X.tapped), more = sectionFor(pz.qid);
+  const [rule, rest] = splitRule(pz.why), combo = right ? runEnd(X.results) : 0;
+  const shown = checked ? flatOrder(pz) : X.tapped;
+  root.innerHTML = `
+    <div class="q-top"><span class="q-step"><strong>Hvem kjører først?</strong><span class="muted small">${X.i + 1} av ${X.items.length}</span></span>
+      <button type="button" class="icon-btn" id="cx-close" aria-label="Avslutt">${icon('close', 22)}</button></div>
+    <span class="th-bar q-prog"><span style="width:${(X.i + (checked ? 1 : 0)) / X.items.length * 100}%"></span></span>
+    <section class="card q-card ${checked ? '' : 'q-enter'}">
+      ${checked ? `<p class="cx-verdict ${right ? 'ok' : 'no'}"><span class="q-verdict-ico">${icon(right ? 'check' : 'close', 20)}</span>${right ? 'Riktig!' : 'Ikke riktig'}${combo >= 3 ? `<span class="q-combo">${icon('flame', 16)}${combo} på rad</span>` : ''}</p>`
+        : `<p class="eyebrow">Vikeplikt${pz.lvl >= 3 ? ' <span class="q-hard">Vanskelig</span>' : ''}</p>`}
+      <div class="q-fig cx-fig ${checked ? '' : 'cx-tap'}" id="cx-fig">${figure('scene:' + pz.scene)}</div>
+      <p class="cx-cap" id="cx-cap" aria-live="polite">${checked ? '' : X.tapped.length ? `Valgt: ${esc(orderText(X.tapped))}` : ''}</p>
+      <h2 class="q-text">${esc(pz.intro)} Hvem skal først?</h2>
+      ${checked ? '' : `<p class="muted small cx-help">Trykk på trafikantene i den rekkefølgen de kjører, i bildet eller på knappene under.</p>`}
+      <div class="cx-chips" role="group" aria-label="Trafikantene">${movers.map(m => { const n = shown.indexOf(m.id) + 1; return `<button type="button" class="cx-chip ${n ? 'on' : ''} ${checked ? 'ok' : ''}" data-id="${m.id}" ${checked || n ? 'disabled' : ''}><span class="cx-n">${n || ''}</span>${esc(MOVER_NAMES[m.id] || m.id)}</button>`; }).join('')}</div>
+      ${!checked && X.tapped.length ? `<button type="button" class="link cx-undo" id="cx-undo">${icon('undo', 18)}Angre</button>` : ''}
+    </section>
+    ${checked ? `<section class="card q-why ${right ? 'ok' : 'no'}">
+      <p class="cx-answer">Rekkefølgen: <strong>${esc(orderText(flatOrder(pz)))}</strong>${right ? '' : `<span class="muted"> · du svarte ${esc(orderText(X.tapped, false))}</span>`}</p>
+      <ol class="cx-steps">${pz.steps.map((st, i) => `<li data-step="${i}">${esc(st)}</li>`).join('')}</ol>
+      <p class="q-rule">${esc(rule)}</p>${rest ? `<p>${esc(rest)}</p>` : ''}
+      <p class="muted small">${icon('book', 16)} ${esc(pz.ref)}</p>
+      <button type="button" class="btn secondary" id="cx-replay">${icon('repeat', 20)}Spill av igjen</button>
+      ${more ? `<button type="button" class="link q-more" id="cx-more">${icon('book', 18)}<span>Les mer i teoriboka: ${esc(bookSection(more).title)}</span>${icon('chev', 16)}</button>` : ''}
+    </section>
+    <div class="q-dock"><button type="button" class="btn primary" id="cx-next">${X.i + 1 < X.items.length ? 'Neste kryss' : 'Se hvordan det gikk'}${icon('chev', 20)}</button></div>` : ''}`;
+  const svg = root.querySelector('#cx-fig svg');
+  // Tallene på trafikantene: det eleven har valgt, og etter svaret den riktige rekkefølgen
+  shown.forEach((id, i) => { const g = svg.querySelector(`.cx-mover[data-id="${id}"]`); if (g) g.insertAdjacentHTML('beforeend', `<g class="cx-num ${checked ? 'ok' : ''}" transform="translate(11 -15)"><g class="cx-num-in"><circle r="7.5"/><text text-anchor="middle" dominant-baseline="central" y=".6">${i + 1}</text></g></g>`); });
+  root.querySelector('#cx-close').onclick = () => { cross = null; ctx.go(THEORY_HOME); };
+  if (!checked) {
+    const tap = id => {
+      if (X.checked || X.tapped.includes(id) || !movers.some(m => m.id === id)) return;
+      X.tapped.push(id); ctx.vibrate(8);
+      const left = movers.map(m => m.id).filter(x => !X.tapped.includes(x));
+      if (left.length === 1) X.tapped.push(left[0]);   // den siste gir seg selv
+      if (X.tapped.length === movers.length) {
+        X.checked = true;
+        const ok = checkOrder(pz, X.tapped);
+        X.results.push(ok);
+        const goal = planFor(ctx.progress()).goal, before = practiceDays(ctx.progress(), Date.now(), goal).today;
+        ctx.save(answer(ctx.progress(), crossKey(pz.id), ok ? 0 : 1));
+        ctx.vibrate(ok ? 15 : [30, 40, 30]);
+        const d = practiceDays(ctx.progress(), Date.now(), goal);
+        if (before < d.goal && d.today >= d.goal) { toast(`Dagens mål er nådd: ${d.goal} svar!`, { type: 'ok' }); if (ctx.celebrate) setTimeout(ctx.celebrate, 300); }
+      }
+      renderCross(root, ctx);
+    };
+    svg.addEventListener('click', e => { const g = e.target.closest('.cx-mover'); if (g) tap(g.dataset.id); });
+    root.querySelectorAll('.cx-chip').forEach(b => b.onclick = () => tap(b.dataset.id));
+    const undo = root.querySelector('#cx-undo');
+    if (undo) undo.onclick = () => { X.tapped.pop(); renderCross(root, ctx); };
+    return;
+  }
+  // Etter svaret: spill av krysset, steg for steg
+  const cap = root.querySelector('#cx-cap'), steps = root.querySelectorAll('.cx-steps li');
+  const play = () => {
+    stopPlayer();
+    svg.querySelectorAll('.cx-num').forEach(n => n.remove());
+    player = playCrossing(svg, pz.order, { onStep: i => {
+      cap.textContent = i < pz.steps.length ? `${i + 1}. ${pz.steps[i]}` : `Rekkefølgen: ${orderText(flatOrder(pz))}.`;
+      steps.forEach((li, k) => li.classList.toggle('on', k === i));
+    } });
+  };
+  setTimeout(() => { if (root.contains(svg)) play(); }, 450);
+  root.querySelector('#cx-replay').onclick = play;
+  const mb = root.querySelector('#cx-more');
+  if (mb) mb.onclick = () => ctx.go(`#/teori/bok/${more.chapter}/${more.section}`);
+  root.querySelector('#cx-next').onclick = () => { X.i++; X.tapped = []; X.checked = false; renderCross(root, ctx); window.scrollTo(0, 0); };
+}
+function renderCrossDone(root, ctx) {
+  const X = cross, ok = X.results.filter(Boolean).length;
+  root.innerHTML = `
+    <section class="sign-card th-sign ${ok === X.items.length ? 'lv-klar' : ok >= X.items.length * 0.8 ? 'lv-nesten' : 'lv-ovelse'}">
+      <p class="eyebrow">Hvem kjører først?</p>
+      <h2 class="th-sign-head">${ok} av ${X.items.length} kryss riktig</h2>
+      <p>${ok === X.items.length ? 'Alt riktig. Du kan vikepliktreglene i disse kryssene!' : 'Kryssene du bommet på, kommer først neste gang.'}</p>
+    </section>
+    <section class="card"><ul class="q-sum">${X.items.map((id, i) => { const pz = CROSS_PUZZLES.find(x => x.id === id); return `<li class="${X.results[i] ? 'ok' : 'no'}">${icon(X.results[i] ? 'check' : 'close', 18)}<span class="q-sum-sign cx-sum-fig">${figure('scene:' + pz.scene)}</span><span>${esc(pz.intro)}</span></li>`; }).join('')}</ul></section>
+    <button type="button" class="btn primary" id="cx-again">${icon('repeat', 20)}Nye kryss</button>
+    <button type="button" class="btn secondary" id="cx-hub">Til oversikten</button>`;
+  if (ok === X.items.length && ctx.celebrate) setTimeout(ctx.celebrate, 300);
+  root.querySelector('#cx-again').onclick = () => { cross = newCross(ctx.progress()); renderCross(root, ctx); window.scrollTo(0, 0); };
+  root.querySelector('#cx-hub').onclick = () => { cross = null; ctx.go(THEORY_HOME); };
 }
 
 /* ---------- Prøve som den ekte ---------- */

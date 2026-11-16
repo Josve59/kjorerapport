@@ -695,3 +695,102 @@ h2.card-title, .card-title { font-size: 1.12rem; }
 .calc-sum dd { color: var(--brake); }
 .th-day-main { display: inline-flex; align-items: center; gap: 6px; }
 .th-day-main .ico { flex: none; }
+
+/* ---------- 0.22.0: Hvem kjører først?, skiltkort, avspilling og små animasjoner ----------
+   Eieren ønsket at det skulle være lettere og morsommere å øve. Bevegelsen forklarer noe (hvem kjører, hva som
+   skjedde med svaret), og alt står stille med «Reduser bevegelse». */
+.th-tile-wide { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 14px; }
+.th-tile-wide .th-tile-fig { height: 96px; margin: 0; flex: none; }
+.th-tile-wide .th-tile-fig .tsvg { height: 96px; }
+.th-wide-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.th-wide-txt .th-bar { width: 100%; margin-top: 6px; }
+
+/* Kryss som spilles av. Tegningene har faste farger i begge modusene, så tallene har det også. */
+.cx-arrows { transition: opacity .3s; }
+.cx-arrows.cx-hide { opacity: 0; }
+.cx-tap .cx-mover { cursor: pointer; }
+.cx-num circle { fill: #0b4cb4; stroke: #fff; stroke-width: 1.6; }
+.cx-num.ok circle { fill: #23784a; }
+.cx-num text { fill: #fff; font: 800 9px Arial, Helvetica, sans-serif; }
+.cx-num-in { transform-box: fill-box; transform-origin: center; animation: q-pop .3s cubic-bezier(.2, 1.4, .4, 1); }
+.cx-cap { margin: -4px 0 12px; font-weight: 700; text-align: center; line-height: 1.35; }
+.cx-cap:empty { display: none; }
+.cx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.cx-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 16px 8px 8px; border: 2px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: border-color .15s, transform .12s; }
+.cx-chip:active:not(:disabled) { transform: scale(.97); }
+.cx-chip:disabled { cursor: default; }
+.cx-chip .cx-n { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); color: var(--muted); font-weight: 800; }
+.cx-chip.on { border-color: var(--link); }
+.cx-chip.on .cx-n { background: var(--link); color: var(--surface); animation: q-pop .3s cubic-bezier(.2, 1.4, .4, 1); }
+.cx-chip.ok { border-color: var(--good); }
+.cx-chip.ok .cx-n { background: var(--good); color: var(--on-color); }
+.cx-undo { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; }
+.cx-help { margin: 4px 0 0; }
+.cx-answer { margin: 0 0 8px; }
+.cx-steps { margin: 0 0 12px; padding-left: 1.5em; }
+.cx-steps li { padding: 4px 8px; margin-left: -8px; border-radius: 8px; transition: background .25s; }
+.cx-steps li.on { background: var(--brand-tint); }
+.cx-player { margin: 4px 0 12px; }
+.cx-player > .btn { margin: 0; }
+.cx-player .cx-playbtn.link { display: inline-flex; align-items: center; gap: 6px; }
+.cx-sum-fig .tsvg { width: 40px; height: 40px; border-radius: 8px; }
+#cx-replay { margin: 0 0 6px; }
+
+/* «Riktig!» og «Ikke riktig»: kortet glir inn, feil svar rister, riktig svar lyser opp */
+@keyframes q-card-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes q-why-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes q-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+@keyframes q-pop { 0% { transform: scale(.5); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes q-glow { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 50%, transparent); } to { box-shadow: 0 0 0 12px transparent; } }
+.q-card.q-enter { animation: q-card-in .28s ease-out; }
+.q-why { animation: q-why-in .3s ease-out; }
+.q-opt.wrong { animation: q-shake .42s ease-in-out; }
+.q-opt.right { animation: q-glow .8s ease-out; }
+.q-opt .q-mark, .q-verdict-ico { animation: q-pop .35s cubic-bezier(.2, 1.4, .4, 1); }
+.q-prog > span { transition: width .5s cubic-bezier(.3, .7, .3, 1); }
+.q-combo { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, #f59f00 18%, var(--surface)); color: var(--ink); font-size: .85rem; font-weight: 800; animation: q-pop .45s cubic-bezier(.2, 1.4, .4, 1); }
+.q-combo .ico { color: #e8590c; }
+
+/* Stopplengden spilt av */
+.sim { margin: 14px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.sim-q { margin: 0 0 8px; }
+.sim-fig .sim-svg { display: block; width: 100%; height: auto; }
+.sim-ink { fill: var(--ink); }
+.sim-ink-l { stroke: var(--ink); }
+.sim > .btn { margin: 8px 0 0; }
+.sim-res { margin: 10px 0 0; font-weight: 800; }
+.sim-res:empty { display: none; }
+.sim-res.ok { color: var(--good); }
+.sim-res.no { color: var(--brake); }
+
+/* Skiltkort: kortet snus i 3D og sveipes til siden */
+.fc-stage { perspective: 1200px; margin: 6px 0 14px; }
+.fc-card { position: relative; display: block; width: 100%; height: min(440px, 56vh); min-height: 320px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.fc-inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .5s cubic-bezier(.3, .7, .3, 1); }
+.fc-card.flipped .fc-inner { transform: rotateY(180deg); }
+.fc-face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 22px; border: 1px solid var(--card-border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-lg, var(--shadow)); text-align: center; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+.fc-back { transform: rotateY(180deg); }
+.fc-fig .tsvg { width: 180px; height: 180px; }
+.fc-fig.small .tsvg { width: 92px; height: 92px; }
+.fc-hint { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .92rem; font-weight: 600; }
+.fc-name { font-size: 1.25rem; line-height: 1.25; }
+.fc-mean { line-height: 1.45; }
+.fc-stamp { position: absolute; top: 18px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 12px; font-weight: 800; opacity: 0; transition: opacity .15s; pointer-events: none; }
+.fc-stamp-yes { left: 18px; background: var(--good); color: var(--on-color); }
+.fc-stamp-no { right: 18px; background: var(--brake); color: var(--on-color); }
+.fc-card.yes .fc-stamp-yes, .fc-card.no .fc-stamp-no { opacity: 1; }
+.fc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fc-actions .btn { margin: 0; }
+.fc-tip { margin-top: 10px; text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .q-card.q-enter, .q-why, .q-opt.wrong, .q-opt.right, .q-opt .q-mark, .q-verdict-ico, .q-combo, .cx-num-in, .cx-chip.on .cx-n { animation: none; }
+  .fc-inner, .cx-arrows, .q-prog > span { transition: none; }
+}
+.cx-verdict { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 1.1rem; font-weight: 800; }
+.cx-verdict.ok { color: var(--good); }
+.cx-verdict.no { color: var(--brake); }
+.cx-verdict.ok .q-verdict-ico { background: var(--good); }
+.cx-verdict.no .q-verdict-ico { background: var(--brake); }
+.cx-hit { stroke: none; }
+.sim > .btn.secondary { background: var(--surface); }

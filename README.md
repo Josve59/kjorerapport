@@ -143,6 +143,58 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.22.0 – «Hvem kjører først?», crossings that play, sign cards and livelier practice
+
+The owner asked: look more at the theory part, and make it easier to practise with better animations and pictures. «Be creative.»
+
+**«Hvem kjører først?»** (`#/teori/kryss`, `js/theory-crossings.js`)
+- A new practice mode with 15 crossings, shown as a wide tile on the overview. You tap the road users in the order they drive, either in the drawing or on the buttons underneath. With two road users, one tap is enough.
+- After you answer, the crossing **plays**: the cars, the cyclist and the pedestrian move in the correct order, with one sentence per step under the drawing. You can play it again, and «Les mer» goes to the theory book.
+- Every crossing builds on a vikeplikt question in `theory-b.js` (`qid`) with the same drawing, so the order and explanation say the same as a question that has already been fact-checked. Tests check this.
+- An independent checker went through all 15 against trafikkreglene § 7, § 9 and § 10. It also checked the routes: the right lanes, nobody driving through someone who is waiting, and the roundabout driven anticlockwise. All the orders are right. Two small things were fixed:
+  - the t-kryss text (and v03) now says that lights and police also come first, and that an exit from a property, car park or farm road gives way anyway;
+  - the cyclist's arrow in hoyresving-sykkel no longer points up onto the pavement.
+- A round has 6 crossings. Those you got wrong last time come first, then the easy ones. Answers are saved as `kx-<id>` and count towards today's goal.
+
+**Crossings that play everywhere**
+- 15 of the crossing drawings in `js/trafficsvg.js` are now built from road users with a route (`CROSS`). The same drawing is the still picture in the questions and the animation (`js/crossanim.js`). Vehicles pull away gently and turn with the road. The pedestrian walks.
+- In practice, those questions get «Se hvem som kjører først» after you answer. In the theory book, the drawings have «Spill av krysset».
+- The t-kryss drawing now shows B turning left out of the side road. Before, B's direction was not shown. The answer to v03 is the same.
+
+**The stopping distance plays, with a child in the road** (theory book, «Stopplengde og avstand»)
+- A child stands where you would stop from 50 km/h on the same surface. «Spill av» drives the car: grey for the reaction time, red for braking.
+- Above 50 km/h you hit the child, and the app gives the speed. From 60 km/h on dry asphalt it is about 41 km/h. The formula is `impactSpeed` in `theory-book.js`.
+- Time runs as in real life, but is shortened when the whole sequence would take more than 4 seconds.
+
+**Sign cards** (`#/teori/skiltkort`, from the sign test)
+- A calmer way to learn the signs. You see the sign, flip the card in 3D, and say whether you knew it: swipe right or tap «Kan det», swipe left or tap «Øv mer».
+- Cards you need to practise come back four cards later. At the end you can take those signs in the sign test. The cards are not saved as answers, so «lært» still means correct answers in the test.
+
+**Livelier practice**
+- The question card slides in, a wrong answer shakes, the right answer glows, and the check mark pops.
+- The progress bar slides forward.
+- After three or more right in a row, «N på rad» appears with a flame.
+- With «Reduser bevegelse» switched on, everything is still. The crossings then jump from step to step.
+
+**A bug fixed on the way.** Arrowheads in the drawings could disappear when the same drawing was also on a hidden screen, because the ids were the same. `figure()` now gives every drawing its own ids.
+
+**Tests:** five new ones, 269 in all.
+- Every crossing has a drawing, routes and an order with every road user, and builds on a question with the same drawing.
+- The order matches the answer to that question.
+- Checking an answer, and which crossings a round picks.
+- Impact speed.
+- Unique ids.
+
+**Checked** in the browser at phone width in light and dark mode:
+- the overview tile;
+- a whole crossing round, with right and wrong answers and the playback;
+- all 15 routes, drawn as ghosts along the way;
+- «Se hvem som kjører først» in practice and in the book;
+- the stopping distance with the child;
+- the sign cards with flip, swipe and the summary.
+
+**On the iPhone:** the crossing plays at 60 frames per second (measured with KJ_JS), with at most 24 ms between frames. **Not checked by hand:** swiping the sign cards with a finger.
+
 ## What's new in 0.21.0 – a theory book, readiness in percent and a plan up to the exam date
 
 The owner asked to weigh our practice against Teoritentamen and make the right improvements: «I still feel ours is a bit behind».

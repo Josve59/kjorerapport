@@ -203,54 +203,6 @@ function roundabout(twoLanes = false) {
 }
 
 const SCENES = {
-  hoyre: () => scene(`${roads('nesw')}
-    ${car(110, 160, '#2e7dd1', 'A')}${arrow('M110 143 V66', '#2e7dd1')}
-    ${car(160, 90, '#d9472b', 'B', -90)}${arrow('M143 90 H66', '#d9472b')}`,
-    'Kryss uten skilt eller lys. Bil A kommer nedenfra og skal rett fram. Bil B kommer fra høyre side av bildet og skal rett fram.'),
-  venstresving: () => scene(`${roads('nesw')}
-    ${car(110, 160, '#2e7dd1', 'A')}${arrow('M110 143 V108 Q110 90 92 90 H40', '#2e7dd1')}
-    ${car(90, 40, '#d9472b', 'B', 180)}${arrow('M90 57 V150', '#d9472b')}`,
-    'Kryss. Bil A kommer nedenfra og skal svinge til venstre. Bil B kommer ovenfra mot A og skal rett fram.'),
-  't-kryss': () => scene(`${roads('esw')}
-    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M57 110 H150', '#2e7dd1')}
-    ${car(110, 170, '#d9472b', 'B')}${arrow('M110 153 V128', '#d9472b')}`,
-    'T-kryss uten skilt. Bil A kjører fra venstre mot høyre på den gjennomgående veien. Bil B kommer nedenfra fra sideveien.'),
-  parkering: () => scene(`${roads('ew')}<rect x="96" y="134" width="74" height="56" rx="6" fill="#8a9097"/><rect x="104" y="118" width="16" height="18" fill="${ASP}"/><g stroke="#f4f4f4" stroke-width="1.4"><line x1="132" y1="140" x2="132" y2="160"/><line x1="148" y1="140" x2="148" y2="160"/></g><text x="156" y="182" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="18" fill="#fff">P</text>
-    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M57 110 H92', '#2e7dd1')}
-    ${car(112, 154, '#d9472b', 'B')}${arrow('M112 137 V118 Q112 110 122 110 H162', '#d9472b')}`,
-    'Vei med en parkeringsplass nedenfor. Bil A kjører på veien fra venstre mot høyre. Bil B kjører ut fra parkeringsplassen.'),
-  buss: () => scene(`${roads('ew')}<path d="M112 120 L122 132 H176 L186 120 Z" fill="${ASP}"/>
-    ${bus(150, 122, 90, true)}${arrow('M128 116 Q132 110 150 110 H186', '#d9472b')}
-    ${car(40, 110, '#2e7dd1', 'A', 90)}${arrow('M57 110 H96', '#2e7dd1')}
-    ${smallSpeed(30, 146, 50)}`,
-    'Vei med fartsgrense 50. En buss står ved holdeplassen foran bil A, blinker til venstre og skal kjøre ut.'),
-  gangfelt: () => scene(`${roads('ns')}${zebra(83, 62, 36, 24, false)}${person(129, 78)}
-    ${car(110, 160, '#2e7dd1', 'A')}${arrow('M110 143 V98', '#2e7dd1')}`,
-    'Gangfelt uten trafikklys. En fotgjenger står ved kanten og er på vei ut i gangfeltet. Bil A nærmer seg nedenfra.'),
-  'hoyresving-sykkel': () => scene(`${roads('nesw', { shoulderS: true })}
-    ${car(110, 172, '#2e7dd1', 'A')}${arrow('M110 155 V130 Q110 110 130 110 H178', '#2e7dd1')}
-    ${bike(124.5, 146)}${arrow('M124.5 130 V58', '#111')}`,
-    'Kryss. Bil A kommer nedenfra og skal svinge til høyre. En syklist på vegskulderen til høyre for bilen skal rett fram.'),
-  rundkjoring: () => scene(`${roundabout()}${shark(100, 118, 152, 1)}
-    ${smallSign202(134, 168)}
-    ${car(109, 178, '#2e7dd1', 'A')}${arrow('M109 161 V152', '#2e7dd1')}
-    ${car(56, 122, '#d9472b', 'B', 140)}${arrow('M67 135 Q80 150 96 150', '#d9472b')}`,
-    'Rundkjøring med vikepliktskilt ved innkjøringen. Bil A skal kjøre inn nedenfra. Bil B er allerede i rundkjøringen og kommer fra venstre mot A.'),
-  'sving-gangfelt': () => scene(`${roads('nesw')}${zebra(132, 82, 22, 36, true)}${person(143, 98)}
-    ${car(108, 160, '#2e7dd1', 'A')}${arrow('M108 143 V128 Q108 110 126 110 H182', '#2e7dd1')}`,
-    'Kryss. Bil A kommer nedenfra og skal svinge til høyre. I veien A svinger inn i, er det et gangfelt der en fotgjenger går over.'),
-  // Nye i 0.16.0, til vanskelige vikepliktspørsmål
-  'kryss-tre': () => scene(`${roads('nesw')}
-    ${car(110, 162, '#2e7dd1', 'A')}${arrow('M110 145 V62', '#2e7dd1')}
-    ${car(162, 90, '#d9472b', 'B', -90)}${arrow('M145 90 H62', '#d9472b')}
-    ${car(38, 110, '#2f9e5b', 'C', 90)}${arrow('M55 110 H138', '#2f9e5b')}`,
-    'Kryss uten skilt eller lys. Bil A kommer nedenfra, bil B fra høyre side av bildet og bil C fra venstre side. Alle skal rett fram.'),
-  'forkjorsvei-venstre': () => scene(`${roads('nesw')}${shark(100, 120, 124, 1)}${shark(80, 100, 76, -1)}
-    ${smallSign206(30, 140)}${smallSign202(134, 146)}
-    ${car(36, 110, '#2e7dd1', 'A', 90)}${arrow('M53 110 H88 Q110 110 110 88 V30', '#2e7dd1')}
-    ${car(164, 90, '#d9472b', 'B', -90)}${arrow('M147 90 H40', '#d9472b')}
-    ${car(110, 168, '#2f9e5b', 'C')}${arrow('M110 151 V132', '#2f9e5b')}`,
-    'Kryss der veien fra venstre til høyre er forkjørsvei. Bil A kjører på forkjørsveien fra venstre og skal svinge til venstre. Bil B kommer imot på forkjørsveien og skal rett fram. Bil C står ved vikepliktskiltet i sideveien nedenfra og skal rett fram.'),
   'rundkjoring-to': () => scene(`${roundabout(true)}
     ${car(111.5, 154.3, '#d9472b', 'B', 78)}${arrow('M122.6 150.7 A55.5 55.5 0 0 0 150.3 76.5', '#d9472b')}
     ${car(131.5, 122.1, '#2e7dd1', 'A', 35)}${arrow('M140 110 Q156 106 184 109', '#2e7dd1')}`,
@@ -364,28 +316,94 @@ Object.assign(SCENES, {
     ${car(112, 80, '#2e7dd1', 'A')}
     ${ambulance(112, 160, 0)}`,
     'Vei med ett felt i hver retning. Bak deg kommer en ambulanse med blått blinklys. Du er bil A.'),
-  sperret: () => scene(`${vroad(76, 124)}${vLine(0, 200)}${barrier(102, 122, 62)}${cone(104, 78)}${cone(112, 82)}${cone(120, 86)}
-    ${car(88, 34, '#d9472b', 'B', 180)}${arrow('M88 51 V80', '#d9472b')}
-    ${car(112, 160, '#2e7dd1', 'A')}`,
-    'Vei med ett felt i hver retning. Lenger fram er feltet ditt sperret av et vegarbeid. Bil B kommer imot i det andre feltet. Du er bil A.'),
   'tre-felt': () => scene(`${vroad(52, 148)}${wdash(84)}${wdash(116)}
     ${car(68, 64, '#2f9e5b', 'C')}${car(100, 88, '#d9472b', 'B')}
     ${car(132, 166, '#2e7dd1', 'A')}${carBlink(132, 166, 0, -1)}${arrow('M132 149 C132 120 70 130 70 96', '#2e7dd1')}`,
     'Vei med tre felt i samme retning. Du er bil A i høyre felt og skal over i venstre felt. Bil B kjører i midtfeltet og bil C i venstre felt.'),
-  'gs-vei': () => scene(`<rect x="124" y="62" width="76" height="16" fill="#7d848b"/>${vroad(76, 124)}${vLine(0, 200)}
-    ${bike(152, 70, -90)}${arrow('M140 70 H128', '#111')}
-    ${car(112, 164, '#2e7dd1', 'A')}${arrow('M112 147 V104', '#2e7dd1')}`,
-    'Vei der en gang- og sykkelvei kommer inn fra høyre, uten sykkelkryssing eller gangfelt. En syklist på gang- og sykkelveien skal krysse veien. Du er bil A.'),
-  'utkjorsel-gs': () => scene(`<rect x="0" y="16" width="200" height="40" fill="${ASP}"/>${hLine(0, 200, 36)}<rect x="0" y="74" width="200" height="16" fill="#7d848b"/><rect x="0" y="120" width="200" height="80" fill="#9aa1a7"/><rect x="88" y="56" width="24" height="64" fill="${ASP}"/><rect x="88" y="74" width="24" height="16" fill="#7d848b"/>
-    <g stroke="${WL}" stroke-width="1.4">${[20, 46, 140, 166].map(x => `<line x1="${x}" y1="150" x2="${x}" y2="200"/>`).join('')}</g>${car(33, 176, GREY_CAR)}${car(153, 178, GREY_CAR2)}
-    ${bike(160, 82, -90)}${arrow('M148 82 H124', '#111')}
-    ${car(100, 140, '#2e7dd1', 'A')}${arrow('M100 123 V66', '#2e7dd1')}`,
-    'Du er bil A og kjører ut fra en parkeringsplass. Utkjørselen krysser en gang- og sykkelvei før veien. En syklist kommer på gang- og sykkelveien fra høyre.'),
-  'innkjorsel-fortau': () => scene(`${vroad(56, 104, false)}${vLine(0, 200, 80)}<rect x="104" y="0" width="14" height="200" fill="${SIDE}"/><rect x="118" y="60" width="44" height="26" fill="#8f969c"/>${house(162, 46, 34, 52, '#5f6b76')}
-    ${person(111, 112)}
-    ${car(92, 164, '#2e7dd1', 'A')}${carBlink(92, 164, 0, 1)}${arrow('M92 147 V84 Q92 73 104 73 H150', '#2e7dd1')}`,
-    'Du er bil A og skal svinge til høyre inn i en innkjørsel. Innkjørselen går over fortauet, og en fotgjenger går på fortauet.')
 });
+
+/* ==================== Kryss som kan spilles av (0.22.0) ====================
+   Eieren ønsket animasjoner som gjør det lettere å øve. Kryssene under er tegnet som bakgrunn pluss trafikanter, og
+   hver trafikant har en bane (d) fra der den står og videre. Den samme tegningen er stillbildet i spørsmålene
+   (scene:<navn>), og crossanim.js spiller den av: trafikantene kjører langs banene i den rekkefølgen reglene gir.
+   Bil, sykkel og buss er tegnet med fronten opp og dreies etter banen; fotgjengeren står oppreist. */
+const CBLUE = '#2e7dd1', REDC = '#d9472b', GREENC = '#2f9e5b';
+const badge = (label, fill) => `<g class="cx-badge"><circle r="6.2" fill="#fff" stroke="${fill}" stroke-width="1.6"/><text y=".4" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="8.5" fill="#14181b">${label}</text></g>`;
+const MOVER_BODY = {
+  car: m => car(0, 0, m.col) + (m.blink ? carBlink(0, 0, 0, m.blink) : ''),
+  bike: () => bike(0, 0),
+  person: () => person(0, 0),
+  bus: m => bus(0, 0, 0, !!m.blink)
+};
+/* Startpunktet er det første punktet i banen */
+export const pathStart = d => { const m = String(d).match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/); return m ? [+m[1], +m[2]] : [0, 0]; };
+const moverSvg = m => { const [x, y] = pathStart(m.d); return `<g class="cx-mover" data-id="${m.id}" data-kind="${m.kind}" transform="translate(${x} ${y})"><circle class="cx-hit" r="19" fill="transparent" stroke="none"/><g class="cx-body" transform="rotate(${m.kind === 'person' ? 0 : m.rot || 0})">${MOVER_BODY[m.kind](m)}</g>${m.kind === 'car' ? badge(m.id, m.col) : ''}</g>`; };
+const P202 = () => smallSign202(134, 168);
+const CROSS = {
+  hoyre: { bg: () => roads('nesw'), label: 'Kryss uten skilt eller lys. Bil A kommer nedenfra og skal rett fram. Bil B kommer fra høyre side av bildet og skal rett fram.', movers: [
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M110 160 V-30', arrow: 'M110 143 V66' },
+    { id: 'B', kind: 'car', col: REDC, rot: -90, d: 'M160 90 H-30', arrow: 'M143 90 H66' }] },
+  venstresving: { bg: () => roads('nesw'), label: 'Kryss. Bil A kommer nedenfra og skal svinge til venstre. Bil B kommer ovenfra mot A og skal rett fram.', movers: [
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M110 160 V108 Q110 90 92 90 H-30', arrow: 'M110 143 V108 Q110 90 92 90 H40' },
+    { id: 'B', kind: 'car', col: REDC, rot: 180, d: 'M90 40 V230', arrow: 'M90 57 V150' }] },
+  't-kryss': { bg: () => roads('esw'), label: 'T-kryss uten skilt. Bil A kjører fra venstre mot høyre på den gjennomgående veien. Bil B kommer nedenfra fra sideveien og skal svinge til venstre.', movers: [
+    { id: 'A', kind: 'car', col: CBLUE, rot: 90, d: 'M40 110 H230', arrow: 'M57 110 H150' },
+    { id: 'B', kind: 'car', col: REDC, rot: 0, d: 'M110 170 V108 Q110 90 92 90 H-30', arrow: 'M110 153 V108 Q110 90 92 90 H66' }] },
+  parkering: { bg: () => `${roads('ew')}<rect x="96" y="134" width="74" height="56" rx="6" fill="#8a9097"/><rect x="104" y="118" width="16" height="18" fill="${ASP}"/><g stroke="#f4f4f4" stroke-width="1.4"><line x1="132" y1="140" x2="132" y2="160"/><line x1="148" y1="140" x2="148" y2="160"/></g><text x="156" y="182" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="18" fill="#fff">P</text>`,
+    label: 'Vei med en parkeringsplass nedenfor. Bil A kjører på veien fra venstre mot høyre. Bil B kjører ut fra parkeringsplassen.', movers: [
+    { id: 'A', kind: 'car', col: CBLUE, rot: 90, d: 'M40 110 H230', arrow: 'M57 110 H92' },
+    { id: 'B', kind: 'car', col: REDC, rot: 0, d: 'M112 154 V122 Q112 110 124 110 H230', arrow: 'M112 137 V122 Q112 110 124 110 H162' }] },
+  buss: { bg: () => `${roads('ew')}<path d="M112 120 L122 132 H176 L186 120 Z" fill="${ASP}"/>${smallSpeed(30, 146, 50)}`,
+    label: 'Vei med fartsgrense 50. En buss står ved holdeplassen foran bil A, blinker til venstre og skal kjøre ut.', movers: [
+    { id: 'bus', kind: 'bus', blink: true, rot: 90, d: 'M150 122 C168 122 172 110 194 110 H330', arrow: 'M128 116 Q132 110 150 110 H186', acol: REDC },
+    { id: 'A', kind: 'car', col: CBLUE, rot: 90, d: 'M40 110 H330', arrow: 'M57 110 H96' }] },
+  gangfelt: { bg: () => `${roads('ns')}${zebra(83, 62, 36, 24, false)}`, label: 'Gangfelt uten trafikklys. En fotgjenger står ved kanten og er på vei ut i gangfeltet. Bil A nærmer seg nedenfra.', movers: [
+    { id: 'P', kind: 'person', d: 'M129 78 H62' },
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M110 160 V-30', arrow: 'M110 143 V98' }] },
+  'hoyresving-sykkel': { bg: () => roads('nesw', { shoulderS: true }), label: 'Kryss. Bil A kommer nedenfra og skal svinge til høyre. En syklist på vegskulderen til høyre for bilen skal rett fram.', movers: [
+    { id: 'S', kind: 'bike', rot: 0, d: 'M124.5 146 V128 Q124.5 114 116 106 V-30', arrow: 'M124.5 132 V128 Q124.5 114 116 106 V58', acol: '#111' },
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M110 172 V130 Q110 110 130 110 H230', arrow: 'M110 155 V130 Q110 110 130 110 H178' }] },
+  rundkjoring: { bg: () => `${roundabout()}${shark(100, 118, 152, 1)}${P202()}`, label: 'Rundkjøring med vikepliktskilt ved innkjøringen. Bil A skal kjøre inn nedenfra. Bil B er allerede i rundkjøringen og kommer fra venstre mot A.', movers: [
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M109 178 V158 Q109 147 120 141 A44 44 0 0 0 128 65 Q112 55 110 42 V-30', arrow: 'M109 161 V152' },
+    { id: 'B', kind: 'car', col: REDC, rot: 140, d: 'M56 122 A46 46 0 0 0 100 146 A46 46 0 0 0 141 121 Q149 110 164 110 H230', arrow: 'M67 135 Q80 150 96 150' }] },
+  'sving-gangfelt': { bg: () => `${roads('nesw')}${zebra(132, 82, 22, 36, true)}`, label: 'Kryss. Bil A kommer nedenfra og skal svinge til høyre. I veien A svinger inn i, er det et gangfelt der en fotgjenger går over.', movers: [
+    { id: 'P', kind: 'person', d: 'M143 98 V136' },
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M108 160 V128 Q108 110 126 110 H230', arrow: 'M108 143 V128 Q108 110 126 110 H182' }] },
+  'kryss-tre': { bg: () => roads('nesw'), label: 'Kryss uten skilt eller lys. Bil A kommer nedenfra, bil B fra høyre side av bildet og bil C fra venstre side. Alle skal rett fram.', movers: [
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M110 162 V-30', arrow: 'M110 145 V62' },
+    { id: 'B', kind: 'car', col: REDC, rot: -90, d: 'M162 90 H-30', arrow: 'M145 90 H62' },
+    { id: 'C', kind: 'car', col: GREENC, rot: 90, d: 'M38 110 H230', arrow: 'M55 110 H138' }] },
+  'forkjorsvei-venstre': { bg: () => `${roads('nesw')}${shark(100, 120, 124, 1)}${shark(80, 100, 76, -1)}${smallSign206(30, 140)}${smallSign202(134, 146)}`,
+    label: 'Kryss der veien fra venstre til høyre er forkjørsvei. Bil A kjører på forkjørsveien fra venstre og skal svinge til venstre. Bil B kommer imot på forkjørsveien og skal rett fram. Bil C står ved vikepliktskiltet i sideveien nedenfra og skal rett fram.', movers: [
+    { id: 'A', kind: 'car', col: CBLUE, rot: 90, d: 'M36 110 H88 Q110 110 110 88 V-30', arrow: 'M53 110 H88 Q110 110 110 88 V30' },
+    { id: 'B', kind: 'car', col: REDC, rot: -90, d: 'M164 90 H-30', arrow: 'M147 90 H40' },
+    { id: 'C', kind: 'car', col: GREENC, rot: 0, d: 'M110 168 V-30', arrow: 'M110 151 V132' }] },
+  sperret: { bg: () => `${vroad(76, 124)}${vLine(0, 200)}${barrier(102, 122, 62)}${cone(104, 78)}${cone(112, 82)}${cone(120, 86)}`,
+    label: 'Vei med ett felt i hver retning. Lenger fram er feltet ditt sperret av et vegarbeid. Bil B kommer imot i det andre feltet. Du er bil A.', movers: [
+    { id: 'B', kind: 'car', col: REDC, rot: 180, d: 'M88 34 V230', arrow: 'M88 51 V80' },
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M112 160 V122 C112 106 88 108 88 92 V56 C88 42 112 44 112 28 V-30' }] },
+  'gs-vei': { bg: () => `<rect x="124" y="62" width="76" height="16" fill="#7d848b"/>${vroad(76, 124)}${vLine(0, 200)}`,
+    label: 'Vei der en gang- og sykkelvei kommer inn fra høyre, uten sykkelkryssing eller gangfelt. En syklist på gang- og sykkelveien skal krysse veien. Du er bil A.', movers: [
+    { id: 'S', kind: 'bike', rot: -90, d: 'M152 70 H52', arrow: 'M140 70 H128', acol: '#111' },
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M112 164 V-30', arrow: 'M112 147 V104' }] },
+  'utkjorsel-gs': { bg: () => `<rect x="0" y="16" width="200" height="40" fill="${ASP}"/>${hLine(0, 200, 36)}<rect x="0" y="74" width="200" height="16" fill="#7d848b"/><rect x="0" y="120" width="200" height="80" fill="#9aa1a7"/><rect x="88" y="56" width="24" height="64" fill="${ASP}"/><rect x="88" y="74" width="24" height="16" fill="#7d848b"/>
+    <g stroke="${WL}" stroke-width="1.4">${[20, 46, 140, 166].map(x => `<line x1="${x}" y1="150" x2="${x}" y2="200"/>`).join('')}</g>${car(33, 176, GREY_CAR)}${car(153, 178, GREY_CAR2)}`,
+    label: 'Du er bil A og kjører ut fra en parkeringsplass. Utkjørselen krysser en gang- og sykkelvei før veien. En syklist kommer på gang- og sykkelveien fra høyre.', movers: [
+    { id: 'S', kind: 'bike', rot: -90, d: 'M160 82 H-30', arrow: 'M148 82 H124', acol: '#111' },
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, d: 'M100 140 V62 Q100 46 116 46 H230', arrow: 'M100 123 V66' }] },
+  'innkjorsel-fortau': { bg: () => `${vroad(56, 104, false)}${vLine(0, 200, 80)}<rect x="104" y="0" width="14" height="200" fill="${SIDE}"/><rect x="118" y="60" width="44" height="26" fill="#8f969c"/>${house(162, 46, 34, 52, '#5f6b76')}`,
+    label: 'Du er bil A og skal svinge til høyre inn i en innkjørsel. Innkjørselen går over fortauet, og en fotgjenger går på fortauet.', movers: [
+    { id: 'P', kind: 'person', d: 'M111 112 V8' },
+    { id: 'A', kind: 'car', col: CBLUE, rot: 0, blink: 1, d: 'M92 164 V84 Q92 73 104 73 H142', arrow: 'M92 147 V84 Q92 73 104 73 H150' }] }
+};
+function crossingBody(k) {
+  const s = CROSS[k];
+  return `${s.bg()}<g class="cx-movers">${s.movers.map(moverSvg).join('')}</g><g class="cx-arrows">${s.movers.filter(m => m.arrow).map(m => arrow(m.arrow, m.acol || m.col || '#111')).join('')}</g><g class="cx-paths">${s.movers.map(m => `<path data-id="${m.id}" d="${m.d}" fill="none"/>`).join('')}</g>`;
+}
+Object.assign(SCENES, Object.fromEntries(Object.keys(CROSS).map(k => [k, () => scene(crossingBody(k), CROSS[k].label)])));
+/* Til crossanim.js og testene: hvilke kryss som kan spilles av, og trafikantene i dem */
+export const CROSS_KEYS = Object.keys(CROSS);
+export const crossingMovers = k => (CROSS[k] ? CROSS[k].movers.map(({ id, kind, d }) => ({ id, kind, d })) : []);
 
 /* Veien sett fra førersetet (200 × 130) */
 const view = (body, label) => svg(`<defs><linearGradient id="vsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9d6f2"/><stop offset="1" stop-color="#e4eef7"/></linearGradient></defs>${body}`, label, '0 0 200 130', 'tsvg-view');
@@ -528,7 +546,18 @@ Object.assign(LINES, {
     ${car(40, 132, '#2e7dd1')}`, 'To felt i samme retning før et kryss. Du er i venstre felt, der det er malt en pil rett fram. En heltrukken hvit linje skiller det fra feltet til høyre, som har pil til høyre.')
 });
 
-export function figure(key) {
+/* Hver tegning får egne id-er (0.22.0). Pilspisser og utsnitt pekes til med id, og når samme id finnes i en skjult
+   skjerm lenger opp i dokumentet, viser nettleseren ikke pilspissen. */
+let uid = 0;
+function uniqueIds(s) {
+  const ids = new Set([...s.matchAll(/ id="([^"]+)"/g)].map(m => m[1]));
+  if (!ids.size) return s;
+  const n = ++uid;
+  for (const id of ids) s = s.split(` id="${id}"`).join(` id="${id}-${n}"`).split(`url(#${id})`).join(`url(#${id}-${n})`);
+  return s;
+}
+export function figure(key) { return uniqueIds(figureRaw(key)); }
+function figureRaw(key) {
   if (!key || typeof key !== 'string') return '';
   const [kind, a, b, c] = key.split(':');
   if (kind === 'sign' && SIGNS[a]) return svg(SIGNS[a](b, c === 'gul'), 'Trafikkskilt', '0 0 100 100', 'tsvg-sign');

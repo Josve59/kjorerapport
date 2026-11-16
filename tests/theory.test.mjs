@@ -343,3 +343,81 @@ test('0.21.0: prøvedato gir daglig plan, og bokmerker kan settes og fjernes', (
   m = toggleMark(m, 'f01');
   assert.deepEqual(m.marks, []);
 });
+
+/* ---------- 0.22.0: Hvem kjører først?, avspilte kryss og stopplengde med hindring ---------- */
+import { CROSS_KEYS, crossingMovers, pathStart } from '../js/trafficsvg.js';
+import { CROSS_PUZZLES, PUZZLE_BY_SCENE, MOVER_NAMES, checkOrder, flatOrder, orderText, pickCross, crossKey, crossSolved } from '../js/theory-crossings.js';
+import { impactSpeed, stopDistance as stopD } from '../js/theory-book.js';
+
+test('0.22.0: hvert kryss har tegning, trafikanter med bane og en rekkefølge med alle sammen', () => {
+  assert.equal(CROSS_PUZZLES.length, 15);
+  assert.equal(new Set(CROSS_PUZZLES.map(p => p.id)).size, CROSS_PUZZLES.length);
+  for (const pz of CROSS_PUZZLES) {
+    assert.ok(CROSS_KEYS.includes(pz.scene), `${pz.id}: tegningen kan spilles av`);
+    const svg = figure('scene:' + pz.scene);
+    const movers = crossingMovers(pz.scene), ids = movers.map(m => m.id);
+    for (const m of movers) {
+      assert.ok(svg.includes(`data-id="${m.id}"`), `${pz.id}: ${m.id} er i tegningen`);
+      assert.match(m.d, /^M\s*-?[\d.]+[\s,]+-?[\d.]+/, `${pz.id}: banen til ${m.id} starter med M x y`);
+      const [x, y] = pathStart(m.d);
+      assert.ok(svg.includes(`translate(${x} ${y})`), `${pz.id}: ${m.id} står der banen starter`);
+      assert.ok(MOVER_NAMES[m.id], `${pz.id}: ${m.id} har et navn på knappen`);
+    }
+    // Rekkefølgen har hver trafikant nøyaktig én gang, og ett steg per gruppe
+    assert.deepEqual([...flatOrder(pz)].sort(), [...ids].sort(), `${pz.id}: rekkefølgen har alle trafikantene`);
+    assert.equal(pz.steps.length, pz.order.length, `${pz.id}: én forklaring per steg`);
+    assert.ok(pz.why && pz.ref && pz.intro, `${pz.id}: forklaring, kilde og tekst`);
+    // Bygger på et faktasjekket spørsmål med samme tegning
+    const q = QUESTIONS.find(x => x.id === pz.qid);
+    assert.ok(q, `${pz.id}: spørsmålet ${pz.qid} finnes`);
+    assert.ok([q.img, q.wimg].includes('scene:' + pz.scene), `${pz.id}: ${pz.qid} bruker samme tegning`);
+  }
+  assert.equal(PUZZLE_BY_SCENE.size, CROSS_PUZZLES.length);
+});
+
+test('0.22.0: rekkefølgen stemmer med svaret i spørsmålet der spørsmålet gir hele rekkefølgen', () => {
+  for (const pz of CROSS_PUZZLES.filter(p => p.order.length === 3)) {
+    const q = QUESTIONS.find(x => x.id === pz.qid);
+    assert.equal(orderText(flatOrder(pz)), q.a[0], `${pz.id}: ${q.a[0]}`);
+  }
+  // To trafikanter: den som har vikeplikt etter spørsmålet, kjører sist
+  const last = id => flatOrder(CROSS_PUZZLES.find(p => p.id === id)).at(-1);
+  assert.equal(last('hoyre'), 'A');         // v01: Bil A har vikeplikt
+  assert.equal(last('parkering'), 'B');     // v04: B fra parkeringsplassen
+  assert.equal(last('gs-vei'), 'S');        // v26: syklisten fra gang- og sykkelveien
+  assert.equal(last('utkjorsel-gs'), 'A');  // v32: du fra parkeringsplassen
+  assert.equal(last('sperret'), 'A');       // v22: sperringen på din side
+});
+
+test('0.22.0: svaret sjekkes, og en runde tar de uløste først', () => {
+  const pz = CROSS_PUZZLES.find(p => p.id === 'kryss-tre');
+  assert.equal(checkOrder(pz, ['B', 'A', 'C']), true);
+  assert.equal(checkOrder(pz, ['A', 'B', 'C']), false);
+  assert.equal(checkOrder(pz, ['B', 'A']), false, 'alle må være med');
+  assert.equal(orderText(['P', 'A']), 'Fotgjengeren, så A');
+  assert.equal(orderText(['A', 'S'], false), 'A, så syklisten');
+  let p = emptyProgress();
+  const first = pickCross(p, 6, () => 0);
+  assert.equal(first.length, 6);
+  assert.deepEqual(first.map(x => x.lvl), [1, 1, 1, 1, 1, 2], 'nye elever får de lette først');
+  p = answer(p, crossKey('kryss-tre'), 1);                      // feil sist
+  for (const x of CROSS_PUZZLES.filter(x => x.id !== 'kryss-tre')) p = answer(p, crossKey(x.id), 0);
+  assert.equal(pickCross(p, 6, () => 0)[0].id, 'kryss-tre', 'det du bommet på, kommer først');
+  assert.equal(crossSolved(p), CROSS_PUZZLES.length - 1);
+});
+
+test('0.22.0: treffart i stopplengde-avspillingen', () => {
+  const kid = stopD(50, 0.8).total;                       // der du stanser fra 50 km/t
+  assert.equal(Math.round(impactSpeed(50, 0.8, kid)), 0, 'fra 50 stanser du akkurat');
+  assert.equal(Math.round(impactSpeed(60, 0.8, kid)), 41, 'fra 60 treffer du i omtrent 41 km/t');
+  assert.equal(impactSpeed(80, 0.8, 10), 80, 'innenfor reaksjonslengden treffer du i full fart');
+  assert.equal(Math.round(impactSpeed(60, 0.5, stopD(50, 0.5).total)), 38, 'vått føre: samme mønster');
+});
+
+test('0.22.0: tegningene får egne id-er, så pilspissene vises selv om samme tegning står flere steder', () => {
+  const a = figure('scene:hoyre'), b = figure('scene:hoyre');
+  const ids = s => [...s.matchAll(/ id="([^"]+)"/g)].map(m => m[1]);
+  assert.ok(ids(a).length > 0);
+  assert.equal(ids(a).filter(x => ids(b).includes(x)).length, 0, 'ingen felles id-er');
+  for (const s of [a, b]) for (const m of s.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids(s).includes(m[1]), `${m[1]} peker til en id i samme tegning`);
+});
