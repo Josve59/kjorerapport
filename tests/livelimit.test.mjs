@@ -65,3 +65,21 @@ test('fartsgrensen foran bilen: 80 like foran når bilen er i 60-sonen (0.18.4)'
   assert.equal(ll.ahead({ lat: 63.4, lon: 10.498, heading: 270 }, 150), 60, 'vestover går vi fra 80-sonen, ikke inn i den');
   assert.equal(ll.ahead({ lat: 63.4, lon: 10.45 }, 150), null, 'uten kjøreretning: vet ikke');
 });
+
+test('0.22.2: med god GPS holdes ikke 80-veien når bilen har tatt av inn på 50-veien ved siden av', async () => {
+  // 80-vei østover langs 63.40, og en 50-vei parallelt 9 m lenger sør (avkjøring eller lokalvei)
+  const latPerM = 1 / 111320;
+  const road80 = { limit: 80, pts: [{ lat: 63.4, lon: 10.38 }, { lat: 63.4, lon: 10.42 }] };
+  const road50 = { limit: 50, pts: [{ lat: 63.4 - 9 * latPerM, lon: 10.40 }, { lat: 63.4 - 9 * latPerM, lon: 10.42 }] };
+  const run = async acc => {
+    const ll = createLiveLimit({ fetchBox: async () => [road80, road50] });
+    ll.update({ lat: 63.4, lon: 10.39, acc }); await tick();
+    for (let lon = 10.3901; lon < 10.3999; lon += 0.0002) ll.update({ lat: 63.4, lon, acc });   // på 80-veien
+    assert.equal(ll.limit, 80);
+    let last;
+    for (let lon = 10.4005; lon < 10.405; lon += 0.0002) last = ll.update({ lat: 63.4 - 9 * latPerM, lon, acc }).limit;   // på 50-veien
+    return last;
+  };
+  assert.equal(await run(2), 50, 'GPS sikker på 2 m: 50-veien');
+  assert.equal(await run(30), 80, 'dårlig GPS (30 m): holdes som før');
+});

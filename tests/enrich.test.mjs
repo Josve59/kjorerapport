@@ -21,10 +21,10 @@ test('ruten deles i biter på ca. 1,5 km og bokser slås sammen', () => {
 test('fartsgrense matches til nærmeste strekning innen 25 m', () => {
   const road50 = { limit: 50, pts: [{ lat: 63.4300, lon: 10.3900 }, { lat: 63.4300, lon: 10.4000 }] };   // øst–vest
   const road30 = { limit: 30, pts: [{ lat: 63.4320, lon: 10.3900 }, { lat: 63.4320, lon: 10.4000 }] };   // 220 m lenger nord
-  const pts = [
-    { lat: 63.43001, lon: 10.395 },   // ~1 m fra 50-veien
-    { lat: 63.43200, lon: 10.395 },   // på 30-veien
-    { lat: 63.43100, lon: 10.395 }    // midt mellom, 110 m fra begge
+  const pts = [   // bilen kjører østover (0.22.2: gater på tvers av kjøreretningen velges ikke)
+    { lat: 63.43001, lon: 10.395, heading: 90 },   // ~1 m fra 50-veien
+    { lat: 63.43200, lon: 10.395, heading: 90 },   // på 30-veien
+    { lat: 63.43100, lon: 10.395, heading: 90 }    // midt mellom, 110 m fra begge
   ];
   assert.deepEqual(matchLimits(pts, [road50, road30]), [50, 30, NaN]);
 });
@@ -114,4 +114,20 @@ test('fartsgrense: vei på tvers velges ikke, korte hopp glattes, og fart inn mo
   assert.equal(analyzeSpeeding(ramp, rl).episodes.length, 0);
   const town = ramp.map(p => ({ ...p })); const tl = ramp.map(() => 70);
   assert.equal(analyzeSpeeding(town, tl).episodes.length, 1, 'samme fart uten høyere grense etterpå er en overskridelse');
+});
+
+test('0.22.2: mangler veien fartsgrense i kartet, velges ikke en sidegate på tvers', () => {
+  const lonPerM = 1 / (111320 * Math.cos(63.4 * Math.PI / 180)), latPerM = 1 / 111320;
+  // Bilen kjører østover på en vei uten fartsgrense i kartet. To sidegater (30) krysser 10 og 15 m unna, på tvers.
+  const pts = Array.from({ length: 20 }, (_, i) => ({ t: i, lat: 63.4, lon: 10.4 + i * 12 * lonPerM, kmh: 45 }));
+  const side = x => ({ limit: 30, pts: [{ lat: 63.4 - 200 * latPerM, lon: 10.4 + x * lonPerM }, { lat: 63.4 + 200 * latPerM, lon: 10.4 + x * lonPerM }] });
+  const out = matchLimits(pts, [side(70), side(165)]);
+  assert.ok(out.every(v => Number.isNaN(v)), `ukjent, ikke 30: ${out.join(',')}`);
+  // En strekning langs veien 20 m unna tas fortsatt, og en i 45° (sving) også
+  const along = { limit: 50, pts: [{ lat: 63.4 + 20 * latPerM, lon: 10.4 }, { lat: 63.4 + 20 * latPerM, lon: 10.4 + 300 * lonPerM }] };
+  assert.ok(matchLimits(pts, [side(70), along]).every(v => v === 50));
+  const diag = { limit: 40, pts: [{ lat: 63.4 - 100 * latPerM, lon: 10.4 - 100 * lonPerM }, { lat: 63.4 + 300 * latPerM, lon: 10.4 + 300 * lonPerM }] };
+  assert.equal(matchLimits([{ lat: 63.4, lon: 10.4 + 10 * lonPerM, heading: 90 }], [diag])[0], 40, '45°: kan være veien i en sving');
+  // Står bilen stille (ingen retning), tas nærmeste som før
+  assert.equal(matchLimits([{ lat: 63.4, lon: 10.4 + 68 * lonPerM }], [side(70)])[0], 30);
 });

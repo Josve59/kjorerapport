@@ -143,6 +143,22 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.22.2 – no false 30 from side streets, and no 80 on the road next to it
+
+The owner answered the open question from 0.22.1: on the 19:18 drive «var ingen 30 sone, 40 til rundt 1:30 så 50 til motorveien».
+
+**What the map data showed.** The app on the phone read the limits the report had stored, then fetched the vegvesen's speed-limit stretches for the area again, as it does itself for a report. Only distances and limits were printed; no positions left the phone.
+- **1:54–2:03 and 2:21–2:30:** the road the car drove on has no speed limit in NVDB there. The only stretches within 25 m were side streets crossing it at 81–90°, and they are 30. When nothing ran along the road, `matchLimits` took the nearest stretch in any direction, so the side street gave «30». This was the case both in the report (43 i 30 and 39 i 30) and on the screen during the drive.
+- **4:56–5:26:** the car turned off the 80 road onto a 50 road right next to it: 0–1 m from the 50 road and 7–13 m from the 80 road, with GPS accurate to 2 m. The report chose 50, which is right. The screen held on to 80 for 80 seconds, until the camera read the 50 sign, because the rule that keeps the road the car is on (0.13.1) allows 25 m whatever the GPS accuracy. A limit that is too high is the dangerous error.
+
+**Fixed** (`js/enrich.js` and `js/livelimit.js`, copied to `kamera/js`)
+- **`matchLimits` never chooses a stretch more than 60° across the direction of travel.** Where the road has no limit in the map, the limit is unknown, not the side street's. With no direction (car standing still), the nearest one is chosen as before. `LIMITS_V` is now 3, so older drives are matched again the next time the report is opened.
+- **With good GPS (up to 10 m), the screen no longer holds on to a road that is more than 6 m farther away than the road the car is on** (`limitDistance` in `enrich.js`). With poor GPS, it holds as before.
+
+**Checked on the 19:18 drive on the phone (0.22.2):** matched again with the new code, the report now has «unknown» at 1:51 and 2:20 instead of 30. Two seconds of 30 remain at 2:34, at 10 km/h by a junction, which does not count. The speed episode at 4:56 (61 in 50) was there before too: the map gives 50 on the road the car turned onto.
+**Tests:** two new ones, 272 in all: side streets across the road, and the 50 road next to the 80 road with good and poor GPS.
+**Not checked:** the screen's live limit with the new hold rule replayed over the whole drive. The phone was locked.
+
 ## What's new in 0.22.1 – the two drives of 16 November: a sign that was held too long, and heat on long drives
 
 The owner sent two drives on 0.22.0: 19:18 (9 min, 4.6 km) and 20:01 (39 min, 17.8 km), both in the dark, mostly in town.

@@ -3,7 +3,7 @@
    hentes i bakgrunnen før bilen kommer til kanten. Krever nett og at «Veidata» er på.
    Verdien skifter først når to av de tre siste punktene er enige, så den ikke blinker i kryss.
    Det er NVDB sin fartsgrense, ikke skiltene: i Sverige og der NVDB mangler data vises «–». */
-import { fetchLimitBox, fetchAtkBox, fetchRoadInfo, matchLimits } from './enrich.js';
+import { fetchLimitBox, fetchAtkBox, fetchRoadInfo, matchLimits, limitDistance } from './enrich.js';
 import { createLiveAtk } from './liveatk.js';
 import { matchRoad, laneCount, laneWidthFrom } from './roadshape.js';
 
@@ -54,9 +54,16 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
     // GPS-ens usikkerhet, går ikke grensen ned eller blir ukjent. Dårlig GPS (30–50 m) dro ellers punktet bort fra
     // 80-veien og over på en 30-gate på tvers (turen 6. nov. kl. 15.35: 79 km/t «i 30-sone» i 12 s). En høyere
     // grense tas med en gang: holdt tilbake ga den varsel til føreren som gasset opp etter skiltet.
+    // 0.22.2, turen 16. nov. kl. 19.18: bilen tok av fra 80-veien inn på en 50-vei like ved siden av (1 m fra 50-veien,
+    // 7–13 m fra 80-veien, GPS-en sikker på 2 m), og skjermen viste 80 i 80 s. Med god GPS (inntil 10 m) holdes derfor
+    // ikke en vei som ligger mer enn 6 m lenger unna enn veien bilen er på. For høy grense er den farlige feilen.
     if (Number.isFinite(current) && !(v >= current) && pt.heading !== null) {
       const radius = Math.max(25, Number.isFinite(p.acc) ? Math.min(p.acc, 50) : 0);
-      if (matchLimits([pt], near.filter(s => s.limit === current), radius, { parallelOnly: true })[0] === current) v = current;
+      if (matchLimits([pt], near.filter(s => s.limit === current), radius, { parallelOnly: true })[0] === current) {
+        const good = Number.isFinite(p.acc) && p.acc <= 10 && Number.isFinite(v);
+        const farther = good && limitDistance(pt, near.filter(s => s.limit === current)) > limitDistance(pt, near.filter(s => s.limit === v)) + 6;
+        if (!farther) v = current;
+      }
     }
     recent.push(Number.isFinite(v) ? v : null);
     if (recent.length > 3) recent.shift();

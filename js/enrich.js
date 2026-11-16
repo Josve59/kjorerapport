@@ -27,6 +27,7 @@ const MOTORWAY = { type: 595 };
 const KARTVERKET = 'https://ws.geonorge.no/adresser/v1/punktsok';
 const CLIENT = 'Kjorerapport PWA (github.com/Josve59/kjorerapport)';
 const MATCH_M = 25;            // maks avstand fra GPS-punkt til fartsgrensestrekning
+const CROSS_DEG = 60;          // strekninger mer enn 60° på tvers av kjøreretningen er en annen gate (0.22.2)
 const CHUNK_M = 1500;          // rutebiter per NVDB-kall
 const CHUNK_LONG_M = 3000;     // lange turer (over 40 km): større biter, færre kall
 const PAD_DEG = 0.0008;        // ca. 60–90 m utvidelse av utsnittet
@@ -127,16 +128,37 @@ export function matchLimits(points, segments, maxM = MATCH_M, { parallelOnly = f
       if (p.lat < s.minLat - dLat || p.lat > s.maxLat + dLat || p.lon < s.minLon - dLon || p.lon > s.maxLon + dLon) continue;
       for (let i = 1; i < s.pts.length; i++) {
         const d = segDist(p, s.pts[i - 1], s.pts[i], cos);
-        if (d < best) { best = d; limit = s.limit; }
-        if (h !== null && d < bestPar && metres(s.pts[i - 1], s.pts[i]) > 1) {
+        if (d >= best && d >= bestPar) continue;
+        let ang = null;
+        if (h !== null && metres(s.pts[i - 1], s.pts[i]) > 1) {
           const diff = Math.abs(((brg(s.pts[i - 1], s.pts[i]) - h) % 180 + 180) % 180);
-          if (Math.min(diff, 180 - diff) <= 35) { bestPar = d; limitPar = s.limit; }
+          ang = Math.min(diff, 180 - diff);
         }
+        if (ang !== null && ang <= 35 && d < bestPar) { bestPar = d; limitPar = s.limit; }
+        // Nærmeste i alle retninger når ingen går langs veien, men aldri en gate på tvers (0.22.2): på turen 16. nov.
+        // kl. 19.18 manglet NVDB fartsgrense på veien bilen kjørte, og sidegatene på tvers (30) ble valgt i 50-sonen.
+        if (d < best && (ang === null || ang <= CROSS_DEG)) { best = d; limit = s.limit; }
       }
     }
     if (bestPar <= maxM) return limitPar;
     return best <= maxM && !parallelOnly ? limit : NaN;
   });
+}
+
+/* Avstanden (m) fra ett punkt { lat, lon, heading } til nærmeste strekning langs kjøreretningen (innen 35°), eller
+   Infinity. Til livelimit.js (0.22.2), som må vite hvor mye lenger unna en vei er enn en annen. */
+export function limitDistance(p, segments) {
+  if (!p || !Number.isFinite(p.heading)) return Infinity;
+  const cos = Math.cos(p.lat * Math.PI / 180);
+  const brg = (a, b) => (Math.atan2((b.lon - a.lon) * Math.cos(a.lat * Math.PI / 180), b.lat - a.lat) * 180 / Math.PI + 360) % 360;
+  let best = Infinity;
+  for (const s of segments || []) for (let i = 1; i < (s.pts || []).length; i++) {
+    const a = s.pts[i - 1], b = s.pts[i];
+    if (metres(a, b) <= 1) continue;
+    const diff = Math.abs(((brg(a, b) - p.heading) % 180 + 180) % 180);
+    if (Math.min(diff, 180 - diff) <= 35) best = Math.min(best, segDist(p, a, b, cos));
+  }
+  return best;
 }
 
 /* Fyller små hull (≤ 3 punkter uten treff) med nabogrensen, så korte tap av treff ikke bryter episoder. */
@@ -644,7 +666,7 @@ export function evaluateRoad(points, road, events = [], limits = null) {
 
 /* Henter det som er slått på og mangler, og returnerer et enrich-objekt som lagres på turen. */
 export const ROAD_V = 3;
-export const LIMITS_V = 2;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet
+export const LIMITS_V = 3;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet; v3 (0.22.2): aldri gater på tvers
 export const MOTOR_V = 1;    // 0.18.0: motorvei og motortrafikkvei fra NVDB
 /* Bare motorveiene, for eldre turer som mangler dem (kjøreloggen henter dem i bakgrunnen) */
 export async function enrichMotorway(r, existing, signal) {
