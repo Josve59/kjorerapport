@@ -1,6 +1,6 @@
 # Slik sender du Kjørerapport til App Store
 
-Alt i appen og alle tekster og bilder er klare. Det som står igjen, er det bare du kan gjøre: Apple-kontoen, avtalene og knappene. Regn med 1–2 timer arbeid, og så 1–3 dager venting på Apple.
+**17. november: ikke klar ennå.** Se tabellen øverst i [README.md](README.md) for det som må gjøres før 28. november. Resten av denne sida er fortsatt riktig rekkefølge. Regn med 1–2 timer arbeid, og så 1–3 dager venting på Apple.
 
 Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). Her er rekkefølgen.
 

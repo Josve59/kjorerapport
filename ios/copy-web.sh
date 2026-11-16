@@ -3,6 +3,12 @@
 # Appen viser den fra en lokal server på telefonen (WebServer.swift), så alt virker uten nett.
 set -e
 SRC="$SRCROOT/.."
+# App Store-bygg (Release) skal bare ha modellene i git (2026-11-17). Testmodellene i .local-test/app-models er ikke
+# avklart for salg (feltvektene n2 er trent på A2D2, CC BY-ND), så bygget stopper heller enn å ta dem med i stillhet.
+if [ "$CONFIGURATION" = "Release" ] && { [ -d "$SRC/.local-test/app-models/DFine.mlmodelc" ] || [ -d "$SRC/.local-test/app-models/Lanes.mlmodelc" ] || [ -d "$SRC/.local-test/app-models/DFineTest.mlmodelc" ]; }; then
+  echo "error: Release-bygg med testmodeller fra .local-test/app-models. Flytt mappen bort før et App Store-bygg (se appstore/README.md)."
+  exit 1
+fi
 RES="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
 DST="$RES/web"
 mkdir -p "$DST"

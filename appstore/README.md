@@ -2,7 +2,24 @@
 
 Everything that will go into App Store Connect and the app's settings file when the iPhone app is built (phase 1). It is written for a native app in SwiftUI that records with the phone's own sensors and reuses today's analysis and report (see «Architecture» at the bottom). Today's web app is unchanged.
 
-Status, 5 November 2026: **everything is ready for submission.** The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). The only things left are Apple's: the developer account (from the 18th birthday), the agreements, and pressing the buttons.
+**Status, 17 November 2026 (app 0.22.2): NOT ready for submission.** The package below was written for 0.11 (5 November). Since then the app has gained theory and safety-check practice, the driving-teacher mode with messages, visual profile 2.0, a new icon and new road-camera models. Before the owner's 18th birthday (28 November) these must be done:
+
+| # | What | Why | Who |
+| --- | --- | --- | --- |
+| 1 | **Decide the models for sale.** The car model on trial (D-FINE small, COCO only, Apache 2.0) should go into git as the shipping model. The lane weights `n2` (A2D2, CC BY-ND) must stay out unless the owner decides otherwise, so the app ships with the comma10k weights from git. | Today the road-tested setup is not the one that may be sold. `copy-web.sh` now stops a Release build while test models are in `.local-test/app-models`. | Owner decides, Claude does it |
+| 2 | **Road-test the build that will be sold.** A Release build with the shipping models on at least one long drive. | Every drive so far has been a Debug build with the test models. | Owner drives |
+| 3 | **New screenshots.** The 7 in `skjermbilder/` are from 0.11.4, with the old look and without theory. | Guideline 2.3: the screenshots must show the app as it is. | Claude |
+| 4 | **New description, promotional text and keywords.** Add theory, the sign test, the safety check, «Hvem kjører først?» and the teacher mode. Speed cameras are off by default. | Guideline 2.3. | Claude, owner approves |
+| 5 | **Update the review notes (section 7).** Pluss no longer includes the «Opplæring» tab: theory is free, only «Læreplan» is Pluss. Explain the teacher messages (files via the share sheet). | The reviewer follows the notes. | Claude |
+| 6 | **Decide the age-rating answers for messaging.** The learner and the teacher exchange messages as files, and the app shows the other person's text. | Guidelines 1.2 and the age-rating questionnaire. | Owner decides |
+| 7 | **Privacy label.** Recommended now: declare «Precise Location – App Functionality – not linked – no tracking», because coordinates go to NVDB and Kartverket, instead of «Data Not Collected». | Safer reading of guideline 5.1.2. | Owner decides |
+| 8 | **A driving teacher reviews the theory and the theory book.** | Agents fact-checked everything, but no person with a teaching licence has. | Owner |
+| 9 | **The name.** «Kjørerapport: Øvelseskjøring» or a new one (Lappeklar was proposed). | Must be decided before the app is created in App Store Connect. | Owner decides |
+| 10 | **Renew the free signing before 24 November 00:35.** | Otherwise the test phone stops opening the app. | Claude, phone connected |
+
+After the 28th: enrolment (1–2 days, sometimes more), agreements, bank and tax, TestFlight on the owner's phone and preferably one other iPhone, then review (1–3 days). A realistic release date is early December.
+
+The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). Its «Allerede ferdig» list is from 5 November: see the table above.
 
 ---
 
