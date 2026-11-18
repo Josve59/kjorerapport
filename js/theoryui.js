@@ -11,6 +11,7 @@ import { figure, crossingMovers } from './trafficsvg.js';
 import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS, SIGN_PICK_QUESTIONS } from './theory-signs.js';
 import { playCrossing } from './crossanim.js';
 import { CROSS_PUZZLES, MOVER_NAMES, PUZZLE_BY_SCENE, crossKey, flatOrder, checkOrder, orderText, pickCross, crossSolved } from './theory-crossings.js';
+import { hasTheory, FREE_THEORY } from './plus.js';
 import { EXAM, LEARNED, READY_RULE, READY_TEXT, HARD_SHARE, level, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
   optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief, practiceDays, toggleMark, readinessPercent, dailyPlan } from './theory.js';
 import { BOOK, sectionFor, bookChapter, SURFACES, stopDistance, impactSpeed } from './theory-book.js';
@@ -54,6 +55,12 @@ export function theorySummary(p) {
 export function theoryMiniCards(p, ids) {
   const t = theorySummary(p), last = p.exams[p.exams.length - 1];
   let big, small;
+  // Uten Pluss (0.23.0): de gratis spørsmålene, og sikkerhetskontrollen som en del av Pluss
+  if (!hasTheory()) {
+    const done = freeDone(p);
+    return `<button type="button" class="card mini-card" id="${ids[0]}"><span class="card-title">${icon('quiz')}Teoriprøven</span><strong>${done >= FREE_THEORY.length ? `${done} av ${FREE_THEORY.length}` : '10 gratis'}</strong><span class="muted small">${done >= FREE_THEORY.length ? 'gratis spørsmål tatt' : 'spørsmål å prøve'}</span></button>
+    <button type="button" class="card mini-card" id="${ids[1]}"><span class="card-title">${icon('wrench')}Sikkerhets&shy;kontroll</span><strong>${SAFETY.length} oppgaver</strong><span class="muted small">med Pluss</span></button>`;
+  }
   if (t.exam) { big = `${Object.keys(t.exam.answers).length} av ${t.exam.ids.length}`; small = 'Prøve påbegynt, fortsett'; }
   else if (last) { big = `${last.correct} av ${last.total}`; small = t.ready.level === 'klar' ? 'Klar for teoriprøven' : last.passed ? 'Siste prøve bestått' : 'Siste prøve ikke bestått'; }
   else { big = `${t.learned} lært`; small = `av ${t.total} spørsmål`; }
@@ -78,8 +85,50 @@ const planLine = pl => pl.daysLeft === null ? `${icon('clock', 16)}<span>Legg in
 /* Ring med prosent, i skiltkortet */
 const ring = pct => { const c = 2 * Math.PI * 26; return `<svg class="th-ring" viewBox="0 0 64 64" width="72" height="72" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="var(--primary)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(c * pct / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="33" text-anchor="middle" dominant-baseline="central" font-size="16" font-weight="800" fill="#fff">${pct}<tspan font-size="11" font-weight="700">%</tspan></text></svg>`; };
 export const planFor = p => dailyPlan(QUESTIONS, p);
+/* ---------- Uten Pluss (0.23.0): 10 gratis spørsmål, og hva som følger med Pluss ----------
+   Eieren: teorien er det store salgspunktet. Uten Pluss vises de 10 gratis spørsmålene som det ene valget (gul knapp),
+   og resten av teorien som låste fliser som fører til Pluss-siden. */
+const TO_PLUS = '#/pluss/teori';
+const freeDone = p => FREE_THEORY.filter(id => p.q[id]).length;
+function renderTheoryFree(root, ctx) {
+  const p = ctx.progress(), done = freeDone(p), all = done >= FREE_THEORY.length;
+  const right = FREE_THEORY.filter(id => p.q[id] && p.q[id].run > 0).length;
+  const lockTile = (fig, title, sub) => `<button type="button" class="th-tile th-locked" data-plus="1">
+      <span class="th-tile-fig" aria-hidden="true">${fig}</span><strong>${title}</strong><span class="muted small">${sub}</span>
+      <span class="lock-tag">${icon('lock', 14)}Pluss</span></button>`;
+  root.innerHTML = `
+    <section class="sign-card th-sign lv-start">
+      <p class="eyebrow">Teoriprøven klasse B</p>
+      <h2 class="th-sign-head">${all ? `${right} av ${FREE_THEORY.length} riktige` : done ? 'Fortsett der du slapp' : 'Prøv 10 gratis spørsmål'}</h2>
+      <p>${all ? 'Det var de 10 gratis spørsmålene. Med Pluss får du alle 281, prøver som den ekte og hele teoriboka.' : 'Ti av de beste spørsmålene i appen, med tegninger, kryss som spilles av og forklaring etter hvert svar.'}</p>
+      ${done && !all ? `<span class="th-bar"><span style="width:${done / FREE_THEORY.length * 100}%"></span></span><p class="th-exam-meta">${done} av ${FREE_THEORY.length} tatt</p>` : ''}
+      <button type="button" class="btn primary" id="th-free">${icon('quiz', 20)}${all ? 'Se hva du får med Pluss' : done ? 'Fortsett de gratis spørsmålene' : 'Prøv 10 gratis spørsmål'}</button>
+      ${all ? `<button type="button" class="btn secondary" id="th-free-again">${icon('repeat', 20)}Ta de 10 igjen</button>` : ''}
+    </section>
+    <h2 class="group-title">Med Pluss</h2>
+    <div class="th-tiles">
+      ${lockTile(`<span class="th-tile-ico">${icon('clock', 30)}</span>`, 'Prøve som den ekte', '45 oppgaver og 90 minutter, litt vanskeligere enn den ekte')}
+      ${lockTile(`<span class="th-tile-ico th-ico-book">${icon('book', 30)}</span>`, 'Teoriboka', 'Reglene tema for tema, med tegninger')}
+      ${lockTile(figure('scene:kryss-tre'), 'Hvem kjører først?', `${CROSS_PUZZLES.length} kryss som spilles av`)}
+      ${lockTile(`<span class="th-mini-signs">${['sign:202', 'sign:362:80', 'sign:146'].map(figure).join('')}</span>`, 'Skiltprøven', `Alle ${SIGNS.length} skiltene, og skiltkort`)}
+      ${lockTile(figure('lamp:abs'), 'Sikkerhets&shy;kontrollen', `Alle ${SAFETY.length} oppgavene fra oppkjøringen`)}
+      ${lockTile(`<span class="th-tile-ico">${icon('repeat', 30)}</span>`, 'Øv på feilene', 'Det du bommet på, kommer igjen')}
+    </div>
+    <section class="card th-plus-card">
+      <h2 class="card-title">${icon('check')}Alt i teorien med Pluss</h2>
+      <ul class="th-why"><li>${QUESTIONS.length} spørsmål i de sju temaene på prøven</li><li>Hvor klar du er i prosent, og en plan fram til prøvedatoen</li><li>Ett kjøp, ikke abonnement, for hele familien</li></ul>
+      <button type="button" class="btn secondary" id="th-to-plus">Se Pluss</button>
+    </section>
+    <p class="muted small th-note">Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>`;
+  const free = () => startPractice(ctx, { title: 'Gratis spørsmål', ids: FREE_THEORY, n: FREE_THEORY.length, pool: 'alle', free: true });
+  root.querySelector('#th-free').onclick = () => (all ? ctx.go(TO_PLUS) : free());
+  const again = root.querySelector('#th-free-again'); if (again) again.onclick = free;
+  root.querySelectorAll('[data-plus], #th-to-plus').forEach(b => b.onclick = () => ctx.go(TO_PLUS));
+}
+
 export async function renderTheoryHub(root, ctx) {
   stopTheory();
+  if (!hasTheory()) { renderTheoryFree(root, ctx); return; }
   const p = ctx.progress();
   const sum = theorySummary(p);
   const st = themeStats(QUESTIONS, p, THEMES);
@@ -172,7 +221,9 @@ export async function renderTheoryHub(root, ctx) {
 
 /* ---------- Øving med svar og forklaring etter hvert spørsmål ---------- */
 function startPractice(ctx, { title, n = 10, pool = 'teori', back = THEORY_HOME, ...filter }) {
-  const items = pickPractice(pool === 'skilt' ? SIGN_POOL : pool === 'alle' ? QUESTIONS.concat(SIGN_POOL) : QUESTIONS, ctx.progress(), { n, ...filter });
+  // De gratis spørsmålene (0.23.0) kommer alltid i samme rekkefølge, det beste først
+  const items = filter.free ? FREE_THEORY.map(id => byId.get(id)).filter(Boolean)
+    : pickPractice(pool === 'skilt' ? SIGN_POOL : pool === 'alle' ? QUESTIONS.concat(SIGN_POOL) : QUESTIONS, ctx.progress(), { n, ...filter });
   if (!items.length) { toast('Ingen spørsmål å øve på her akkurat nå.', { type: 'ok' }); return; }
   practice = { title, back, filter: { n, pool, back, ...filter }, items: items.map(q => q.id), orders: Object.fromEntries(items.map(q => [q.id, optionOrder(q)])), i: 0, chosen: null, results: [] };
   ctx.go('#/teori/ov');
@@ -180,6 +231,7 @@ function startPractice(ctx, { title, n = 10, pool = 'teori', back = THEORY_HOME,
 
 export function renderPractice(root, ctx) {
   if (!practice) { ctx.go(THEORY_HOME); return; }
+  if (!hasTheory() && !practice.filter.free) { practice = null; ctx.go(TO_PLUS); return; }   // øving utenom de gratis krever Pluss
   stopSpeaking(); stopPlayer();
   const P = practice;
   if (P.i >= P.items.length) return renderPracticeDone(root, ctx);
@@ -289,14 +341,19 @@ function renderPracticeDone(root, ctx) {
     <section class="sign-card th-sign ${ok === P.items.length ? 'lv-klar' : ok >= P.items.length * 0.85 ? 'lv-nesten' : 'lv-ovelse'}">
       <p class="eyebrow">${esc(P.title)}</p>
       <h2 class="th-sign-head">${ok} av ${P.items.length} riktige</h2>
-      <p>${ok === P.items.length ? 'Alt riktig. Bra jobbet!' : 'Spørsmålene du svarte feil på, kommer igjen neste gang du øver.'}</p>
-      <p class="th-day">${dayLine(day)}${day.streak > 1 ? `<span class="th-streak">${icon('flame', 18)}${day.streak} dager på rad</span>` : ''}</p>
-      <span class="goal-bar th-day-bar"><span style="width:${Math.min(100, day.today / day.goal * 100)}%"></span></span>
+      <p>${ok === P.items.length ? 'Alt riktig. Bra jobbet!' : P.filter.free && !hasTheory() ? 'Forklaringen står ved hvert spørsmål når du tar dem igjen.' : 'Spørsmålene du svarte feil på, kommer igjen neste gang du øver.'}</p>
+      ${P.filter.free && !hasTheory() ? '' : `<p class="th-day">${dayLine(day)}${day.streak > 1 ? `<span class="th-streak">${icon('flame', 18)}${day.streak} dager på rad</span>` : ''}</p>
+      <span class="goal-bar th-day-bar"><span style="width:${Math.min(100, day.today / day.goal * 100)}%"></span></span>`}
     </section>
     <section class="card"><ul class="q-sum">${P.items.map((id, i) => `<li class="${P.results[i] ? 'ok' : 'no'}">${icon(P.results[i] ? 'check' : 'close', 18)}${sumFig(byId.get(id))}<span>${esc(byId.get(id).label || byId.get(id).q)}</span></li>`).join('')}</ul></section>
-    <button type="button" class="btn primary" id="q-again">${icon('repeat', 20)}Øv videre</button>
+    ${P.filter.free && !hasTheory() ? `<section class="card th-plus-card"><h2 class="card-title">${icon('check')}Det var de 10 gratis</h2>
+      <p>Med Pluss får du alle ${QUESTIONS.length} spørsmålene, prøver som den ekte, teoriboka, skiltprøven og sikkerhetskontrollen. Ett kjøp, for hele familien.</p></section>
+    <button type="button" class="btn primary" id="q-plus">Se Pluss</button>
+    <button type="button" class="btn secondary" id="q-again">${icon('repeat', 20)}Ta de 10 igjen</button>`
+    : `<button type="button" class="btn primary" id="q-again">${icon('repeat', 20)}Øv videre</button>`}
     <button type="button" class="btn secondary" id="q-hub">Til oversikten</button>`;
   if (ok === P.items.length && P.items.length >= 5 && ctx.celebrate) setTimeout(ctx.celebrate, 300);
+  const qp = root.querySelector('#q-plus'); if (qp) qp.onclick = () => { practice = null; ctx.go(TO_PLUS); };
   root.querySelector('#q-again').onclick = () => startPractice(ctx, { title: P.title, ...P.filter });
   root.querySelector('#q-hub').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
 }
@@ -390,6 +447,11 @@ export function renderBook(root, ctx, path = '') {
   const [chId, secId] = String(path).split('/');
   const p = ctx.progress(), rd = readinessPercent(QUESTIONS, p, THEMES);
   const ch = chId ? bookChapter(chId) : null;
+  // Uten Pluss (0.23.0): bare delene de gratis spørsmålene hører til, så «Les mer» virker der
+  const free = !hasTheory();
+  const open = free && ch ? new Set(FREE_THEORY.map(sectionFor).filter(s => s && s.chapter === ch.id).map(s => s.section)) : null;
+  const secs = ch ? ch.sections.filter(x => !open || open.has(x.id)) : [];
+  if (free && (!ch || !secs.length)) { ctx.go(TO_PLUS); return; }
   if (!ch) {
     root.innerHTML = `
       <section class="sign-card th-sign"><p class="eyebrow">Teoriboka</p><h2 class="th-sign-head">Reglene, tema for tema</h2>
@@ -406,8 +468,8 @@ export function renderBook(root, ctx, path = '') {
   const qn = s => s.qs.filter(id => byId.has(id)).length;
   root.innerHTML = `
     <p class="muted bk-intro">${esc(ch.intro)}</p>
-    <nav class="bk-toc" aria-label="Delene i kapitlet">${ch.sections.map(x => `<a href="#/teori/bok/${ch.id}/${x.id}" class="bk-toc-link" data-sec="${x.id}">${esc(x.title)}</a>`).join('')}</nav>
-    ${ch.sections.map(x => `<section class="card bk-sec" id="bk-${x.id}">
+    <nav class="bk-toc" aria-label="Delene i kapitlet">${secs.map(x => `<a href="#/teori/bok/${ch.id}/${x.id}" class="bk-toc-link" data-sec="${x.id}">${esc(x.title)}</a>`).join('')}</nav>
+    ${secs.map(x => `<section class="card bk-sec" id="bk-${x.id}">
       <h2 class="card-title">${esc(x.title)}</h2>
       ${x.points.map(pt => { const pl = PUZZLE_BY_SCENE.get(String(pt.fig || '').replace(/^scene:/, '')); return `<div class="bk-pt">
         ${pl ? `<div class="cx-player"><div class="q-fig cx-fig bk-fig">${figure(pt.fig)}</div><p class="cx-cap" aria-live="polite"></p>
@@ -415,15 +477,20 @@ export function renderBook(root, ctx, path = '') {
         : pt.fig ? `<div class="q-fig q-zoom bk-fig" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(pt.fig)}">${figure(pt.fig)}</div>` : ''}
         <p class="bk-rule">${esc(pt.b)}</p>${pt.t ? `<p class="bk-text">${esc(pt.t)}</p>` : ''}</div>`; }).join('')}
       ${x.calc === 'stopp' ? calcHtml() : ''}
-      <button type="button" class="btn secondary bk-go" data-sec="${x.id}">${icon('quiz', 20)}Øv på dette (${qn(x)} spørsmål)</button>
+      ${free ? '' : `<button type="button" class="btn secondary bk-go" data-sec="${x.id}">${icon('quiz', 20)}Øv på dette (${qn(x)} spørsmål)</button>`}
     </section>`).join('')}
-    <button type="button" class="btn primary" id="bk-all">${icon('quiz', 20)}Øv på hele temaet</button>
-    ${ch.id === 'skilt' ? `<button type="button" class="btn secondary" id="bk-signs">${icon('sign', 20)}Til skiltprøven: alle ${SIGNS.length} skiltene</button>` : ''}`;
+    ${free ? `<section class="card th-plus-card"><h2 class="card-title">${icon('book')}Resten av teoriboka er en del av Pluss</h2>
+      <p>Alle de sju temaene, ${BOOK.reduce((n, c) => n + c.sections.length, 0)} deler med tegninger, og øving på akkurat det du leser.</p>
+      <button type="button" class="btn primary" id="bk-plus">Se Pluss</button></section>`
+    : `<button type="button" class="btn primary" id="bk-all">${icon('quiz', 20)}Øv på hele temaet</button>
+    ${ch.id === 'skilt' ? `<button type="button" class="btn secondary" id="bk-signs">${icon('sign', 20)}Til skiltprøven: alle ${SIGNS.length} skiltene</button>` : ''}`}`;
   root.querySelectorAll('.bk-go').forEach(b => b.onclick = () => {
     const x = ch.sections.find(y => y.id === b.dataset.sec), ids = x.qs.filter(id => byId.has(id));
     startPractice(ctx, { title: x.title, ids, n: ids.length, back: `#/teori/bok/${ch.id}/${x.id}` });
   });
-  root.querySelector('#bk-all').onclick = () => startPractice(ctx, { title: theme(ch.id).title, theme: ch.id, n: 10, back: `#/teori/bok/${ch.id}` });
+  const all = root.querySelector('#bk-all');
+  if (all) all.onclick = () => startPractice(ctx, { title: theme(ch.id).title, theme: ch.id, n: 10, back: `#/teori/bok/${ch.id}` });
+  const bp = root.querySelector('#bk-plus'); if (bp) bp.onclick = () => ctx.go(TO_PLUS);
   const sg = root.querySelector('#bk-signs'); if (sg) sg.onclick = () => ctx.go('#/teori/skilt');
   // Innholdslista bytter adresse uten ny side i historikken, og ruller til delen
   root.querySelectorAll('.bk-toc-link').forEach(a => a.onclick = e => { e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); scrollToSec(a.dataset.sec); });

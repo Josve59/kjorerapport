@@ -143,6 +143,59 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.23.0 – theory in Pluss, 10 free questions, no trial, NOK 499
+
+The owner's decisions (18 November, ahead of a meeting with a driving school):
+- Theory is the big reason to buy Pluss, and a one-time purchase is attractive.
+- There is no free trial, because many people buy a theory app 7–14 days before the test.
+- Instead, 10 fixed, very good questions are free.
+- The price is NOK 499 for families, and NOK 350 per pupil for driving schools.
+
+**What is free and what is Pluss** (`js/plus.js`)
+- **New in Pluss:** all theory and the safety check. That covers 281 questions, exams, the theory book, the sign test and sign cards, «Hvem kjører først?», mistakes, bookmarks, readiness and the exam-date plan, and all 46 safety-check tasks. The theory is first on the Pluss screen (`PLUS_FEATURES.theory`).
+- **Free:** `FREE_THEORY`, in a fixed order, with something from every theme and the best the app has:
+  - v02 and v40: crossings that play;
+  - f05: the driver's view of a hill crest;
+  - sp124: picture answers, 124 against 210;
+  - f02: double speed, with «Les mer» to the stopping-distance calculator;
+  - t24: a ball in the road;
+  - k08: ABS;
+  - s34: the no-overtaking line;
+  - r09: 5 m from a junction;
+  - a26: medicine with a red warning triangle.
+  
+  The theory-book sections these questions link to are open as well. Recording, the report, the map, limits, the log and export are free as before.
+- **Gating:** `gateFor` gives `theory` for the exam, the sign test, the sign cards, the crossings, the book index, the safety check and the new `#/pluss/teori`. `hasFeature(gate)` decides. The overview and `#/teori/ov` stay open for the free round, and `theoryui.js` stops all other practice without Pluss.
+- **Without Pluss, the theory overview** shows «Prøv 10 gratis spørsmål» as the one yellow button, and the rest as locked tiles that lead to the Pluss screen. After the round, «Se hva du får med Pluss» and «Ta de 10 igjen». The Hjem card says «10 gratis».
+- **The web version in Safari** keeps everything else free, but not the theory (`WEB_THEORY = false`). Pluss cannot be bought there, so the free questions were otherwise the whole theory for anyone. The Pluss screen there says that theory is in the iPhone app.
+
+**No trial**
+- The «14 dagers prøveperiode» purchase is removed from `PlusStore.swift`, `NativeRecorder.swift`, `Bridge.js`, the Pluss screen, Settings, the camera card and `Pluss.storekit`.
+- The test price in `Pluss.storekit` is 499.
+
+**A bug fixed:** «Øv videre» and «Ta de 10 igjen» did nothing. The practice round is started from `#/teori/ov` itself, and the same address gave no new screen. `theoryCtx.go` now draws the screen again when the address is the same.
+
+**App Store** (`appstore/`)
+- New description with the theory first.
+- New subtitle: «Teoriprøve og øvelseskjøring».
+- New keywords, with «teoriprøve» and «sikkerhetskontroll».
+- New promotional text.
+- Review notes: one purchase, no trial, how to reach the free questions, and how the teacher messages work.
+- Section 12: NOK 499. Do not create the trial product. Rules for school codes: Apple codes may only be given away; paid school deals need our own codes under 3.1.3(c), planned after launch.
+- The help page and the privacy page no longer mention the trial.
+
+**Tests:** two new ones, 273 in all. Theory is gated in the web version and the developer switch unlocks it. The 10 free questions exist, are all different, all have a drawing, cover all seven themes, and include a crossing that plays and a question with picture answers.
+
+**Checked** in the browser at phone width in light and dark mode, in view mode «Gratis» and «Pluss»:
+- the free overview, the free round in the right order, and the result screen;
+- «Ta de 10 igjen»;
+- the theory book with only the free sections;
+- the Pluss screen with theory first, and the web version's theory screen;
+- the full overview with Pluss;
+- the Hjem cards.
+
+**Not checked:** the Pluss screen and the purchase on the iPhone with App Store. That needs TestFlight after the 28th. The owner's phone has Pluss through the view mode.
+
 ## What's new in 0.22.2 – no false 30 from side streets, and no 80 on the road next to it
 
 The owner answered the open question from 0.22.1: on the 19:18 drive «var ingen 30 sone, 40 til rundt 1:30 så 50 til motorveien».

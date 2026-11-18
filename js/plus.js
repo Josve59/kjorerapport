@@ -3,11 +3,13 @@
    rapportene for de FREE_REPORTS siste turene. Pluss: kameraene, opplæringsplanen (med faresteder),
    trafikklærersiden og rapportene for alle eldre turer. Nettversjonen (Safari) har alt, som før.
    Turene slettes aldri og kan alltid eksporteres, også uten Pluss.
-   Prøveperiode (0.11.2): et gratis kjøp i App Store («14 dagers prøveperiode», Apples regel for apper uten abonnement)
-   låser opp Pluss i 14 dager, én gang per Apple-ID. */
+   0.23.0 (eieren): teorien og sikkerhetskontrollen er det store salgspunktet, så de hører til Pluss, og 10 faste
+   spørsmål er gratis å prøve. Det er ingen prøveperiode lenger: mange kjøper en teoriapp 7–14 dager før prøven, og
+   14 gratis dager ville gitt hele teorien gratis. Prisen er 499 kr (App Store Connect), for hele familien. */
 
 export const FREE_REPORTS = 10;
 export const PLUS_FEATURES = {
+  theory: { icon: 'quiz', title: 'Hele teorien og sikkerhetskontrollen', text: 'Alle 281 spørsmålene med tegninger og forklaring, prøver som den ekte, teoriboka, skiltprøven og skiltkortene, «Hvem kjører først?» og alle 46 oppgavene i sikkerhetskontrollen.' },
   camera: { icon: 'camera', title: 'Kameraene', text: 'Speil- og skulderblikk med frontkameraet, og bilen foran, feltlinjene og fartsskiltene med bakkameraet samtidig.' },
   plan: { icon: 'book', title: 'Opplæringsplanen', text: 'Hele læreplanen for klasse B, med det appen har sett på turene, og faresteder på kartet.' },
   teacher: { icon: 'school', title: 'Til trafikklæreren', text: 'Oppsummering av øvingen siden forrige kjøretime, klar til å vise eller dele.' },
@@ -16,8 +18,7 @@ export const PLUS_FEATURES = {
 };
 
 const native = () => typeof window !== 'undefined' && !!(window.kjNative && window.kjNative.plusStatus);
-let state = { owned: false, available: false, price: null, loaded: false, trialAvailable: false, trialEnd: null };
-let trialTimer = null;
+let state = { owned: false, available: false, price: null, loaded: false };
 let devOverride = null;   // utviklerdelen: true/false overstyrer, null = som App Store sier
 const listeners = new Set();
 const notify = () => { for (const fn of listeners) try { fn(hasPlus()); } catch { /* */ } };
@@ -26,24 +27,21 @@ const notify = () => { for (const fn of listeners) try { fn(hasPlus()); } catch 
 export function hasPlus() {
   if (devOverride !== null) return devOverride;
   if (!native()) return true;
-  return state.owned || trialActive();
+  return state.owned;
 }
-/* Prøveperioden pågår nå (og er ikke kjøpt) */
-export function trialActive(now = Date.now()) {
-  const end = state.trialEnd ? Date.parse(state.trialEnd) : NaN;
-  return Number.isFinite(end) && end > now;
+/* Teorien (0.23.0): bare med Pluss, også i nettversjonen. Nettversjonen har ellers alt gratis, men der kan Pluss ikke
+   kjøpes, og spørsmålene ville da vært gratis for alle. Utviklerbryteren overstyrer som for resten av Pluss. */
+export const WEB_THEORY = false;
+export function hasTheory() {
+  if (devOverride !== null) return devOverride;
+  if (!native()) return WEB_THEORY;
+  return state.owned;
 }
-/* Hele dager igjen av prøveperioden (avrundet opp), eller 0 */
-export function trialDaysLeft(now = Date.now()) {
-  const end = state.trialEnd ? Date.parse(state.trialEnd) : NaN;
-  return Number.isFinite(end) && end > now ? Math.ceil((end - now) / 86400000) : 0;
-}
-/* Når prøveperioden går ut mens appen er åpen, låses Pluss igjen */
-function armTrialTimer() {
-  clearTimeout(trialTimer);
-  const end = state.trialEnd ? Date.parse(state.trialEnd) : NaN;
-  if (Number.isFinite(end) && end > Date.now() && end - Date.now() < 2 ** 31 - 1) trialTimer = setTimeout(notify, end - Date.now() + 1000);
-}
+/* Har brukeren funksjonen (nøkkel fra PLUS_FEATURES eller gateFor)? */
+export const hasFeature = key => (key === 'theory' ? hasTheory() : hasPlus());
+/* De 10 gratis spørsmålene (0.23.0), i rekkefølgen de vises: noe fra hvert tema, med det beste appen har (kryss som
+   spilles av, førerens utsikt, bildesvar, stopplengden med kalkulatoren i teoriboka, lamper og linjer). */
+export const FREE_THEORY = ['v02', 'f05', 'sp124', 'f02', 't24', 'k08', 's34', 'r09', 'a26', 'v40'];
 export const plusState = () => ({ ...state, native: native(), dev: devOverride });
 export function onPlusChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function setDevPlus(v) { devOverride = v === true || v === false ? v : null; notify(); }
@@ -52,8 +50,7 @@ export function setDevPlus(v) { devOverride = v === true || v === false ? v : nu
 export async function refreshPlus() {
   if (!native()) { state = { ...state, owned: true, loaded: true }; return plusState(); }
   const r = await window.kjNative.plusStatus().catch(() => null);
-  if (r) state = { owned: !!r.owned, available: !!r.available, price: r.price || null, loaded: true, trialAvailable: !!r.trialAvailable, trialEnd: r.trialEnd || null };
-  armTrialTimer();
+  if (r) state = { owned: !!r.owned, available: !!r.available, price: r.price || null, loaded: true };
   notify();
   return plusState();
 }
@@ -61,13 +58,10 @@ export async function refreshPlus() {
 const run = async cmd => {
   const r = await window.kjNative[cmd]().catch(e => ({ error: String(e && e.message || e) }));
   if (r && typeof r.owned === 'boolean') state = { ...state, owned: r.owned };
-  if (r && 'trialEnd' in r) state = { ...state, trialEnd: r.trialEnd || null, trialAvailable: !!r.trialAvailable };
-  armTrialTimer();
   notify();
-  return { owned: hasPlus(), bought: state.owned || devOverride === true, error: r && r.error ? r.error : null };   // bought: kjøpt (ikke bare prøve)
+  return { owned: hasPlus(), bought: state.owned || devOverride === true, error: r && r.error ? r.error : null };
 };
 export const buyPlus = () => (native() ? run('plusBuy') : Promise.resolve({ owned: true, bought: true, error: null }));
-export const startTrial = () => (native() ? run('plusTrial') : Promise.resolve({ owned: true, bought: true, error: null }));
 export const restorePlus = () => (native() ? run('plusRestore') : Promise.resolve({ owned: true, bought: true, error: null }));
 export const redeemPlus = () => (native() ? run('plusRedeem') : Promise.resolve({ owned: true, bought: true, error: null }));
 
@@ -88,6 +82,10 @@ export function reportLocked(drives, id, plus) {
 /* Hvilken Pluss-funksjon en skjerm hører til, eller null. «Til trafikklæreren» er ikke sperret (0.18.3): samtalen med
    læreren er gratis, så eleven alltid kan lese svaret. Bare oppsummeringen av øvingen på den siden hører til Pluss. */
 export function gateFor(hash) {
-  // Opplæring er gratis (0.20.0): teori og sikkerhetskontroll står der. Bare underfanen «Læreplan» hører til Pluss.
-  return { '#/kamera': 'camera', '#/opplaering/laereplan': 'plan', '#/faresteder': 'plan', '#/klar': 'ready' }[hash] || null;
+  // Opplæring-fanen er åpen (0.20.0). Underfanen «Læreplan» hører til Pluss.
+  // 0.23.0: teorien og sikkerhetskontrollen hører til Pluss. Oversikten (#/opplaering/teori) og øvingen (#/teori/ov)
+  // er åpne, siden de 10 gratis spørsmålene går der; theoryui.js sperrer resten. Teoriboka sperres i theoryui.js per del.
+  return { '#/kamera': 'camera', '#/opplaering/laereplan': 'plan', '#/faresteder': 'plan', '#/klar': 'ready',
+    '#/teori/prove': 'theory', '#/teori/resultat': 'theory', '#/teori/skilt': 'theory', '#/teori/skiltkort': 'theory', '#/teori/kryss': 'theory',
+    '#/teori/bok': 'theory', '#/sikkerhetskontroll': 'theory', '#/sikkerhetskontroll/ov': 'theory', '#/pluss/teori': 'theory' }[hash] || null;
 }

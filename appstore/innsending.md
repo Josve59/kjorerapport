@@ -50,12 +50,13 @@ Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). H
   - SKU: kjorerapport
 - Er navnet opptatt, prøv «Kjørerapport – øvelseskjøring» eller si fra til Claude.
 
-### 5. Opprett de to kjøpene (Monetization › In-App Purchases)
-Begge er **Non-Consumable**. Feltene står i README del 12:
-- **Pluss**: ID `net.svendsenmedia.kjorerapport.pluss`, 349 kr, Familiedeling på
-- **14-day Trial**: ID `net.svendsenmedia.kjorerapport.pluss.trial14`, gratis
+### 5. Opprett kjøpet (Monetization › In-App Purchases)
+Ett kjøp, **Non-Consumable**. Feltene står i README del 12:
+- **Pluss**: ID `net.svendsenmedia.kjorerapport.pluss`, **499 kr**, Familiedeling på
 
-Til begge: last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet.
+Ikke lag den gamle prøveperioden (`…pluss.trial14`). Appen har ingen prøveperiode lenger.
+
+Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet. Bildet må tas på nytt, siden Pluss-siden er endret.
 
 ### 6. Last opp appen
 - I Xcode: velg **Any iOS Device (arm64)** øverst, så **Product › Archive**.
@@ -66,8 +67,8 @@ Til begge: last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-
 - Etter 10–30 minutter dukker bygget opp under **TestFlight**. Installer TestFlight-appen på telefonen og legg deg selv til som tester.
 - Prøv:
   - en kort tur
-  - «Prøv gratis i 14 dager»
-  - «Kjøp»
+  - de 10 gratis teorispørsmålene, og at resten av teorien er låst
+  - «Kjøp», og at teorien låses opp
   - «Gjenopprett kjøp»
 
   Kjøp i TestFlight er gratis.
@@ -88,7 +89,7 @@ Til begge: last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-
 | Tilgjengelighet | Bare Norge |
 | Copyright | © 2026 Svendsen Media |
 | App Review | Notatet i README del 7, ditt navn, telefon og e-post. Ingen innlogging trengs. |
-| Kjøp | Legg til begge kjøpene på versjonen (de må sendes sammen med første versjon) |
+| Kjøp | Legg til kjøpet på versjonen (det må sendes sammen med første versjon) |
 
 ### 9. Send til vurdering
 - Velg bygget under «Build», og trykk **Add for Review › Submit**.

@@ -24,7 +24,7 @@ import { crestSpeed, speedScore, totalScore } from './speedfit.js';
 import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory, THEORY_HOME, renderBook, bookTitle, renderCross, renderCards } from './theoryui.js';
 import { normProgress, tagsFromDrives } from './theory.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
-import { hasPlus, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, startTrial, trialActive, trialDaysLeft, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
+import { hasPlus, hasTheory, hasFeature, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
 import { checkCalibration, facePosition } from './calibcheck.js';
 import { openDevChart } from './devchart.js';
@@ -33,7 +33,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.22.2';
+export const APP_VERSION = '0.23.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -189,7 +189,7 @@ function updateCamCard() {
   const settings = getSettings(), calibrated = !!getCalib();
   $('#btn-go-camera').classList.toggle('warn', hasPlus() && !!settings.cameraOn && !calibrated && !roadOnly());
   $('#cam-card-title').textContent = roadOnly() ? 'Veikamera' : 'Speil og skulderblikk';
-  $('#cam-card-text').textContent = !hasPlus() ? (plusState().trialAvailable ? 'Prøv Pluss gratis i 14 dager: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.' : 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.')
+  $('#cam-card-text').textContent = !hasPlus() ? 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.'
     : roadOnly() ? (settings.cameraOn ? 'Veikameraet er slått på: bilen foran, feltlinjene og fartsskiltene. Trykk for å teste.' : 'Veikameraet er valgt, men ikke slått på. Trykk for å teste og slå det på.')
     : !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
     : calibrated ? (roadWanted() ? 'Kalibrert og slått på, med veikameraet samtidig. Trykk for å teste.' : 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.')
@@ -438,7 +438,8 @@ async function theoryDriveTags() {
   }
   return tagsFromDrives(sig);
 }
-const theoryCtx = { progress: theoryProgress, save: saveTheory, driveTags: theoryDriveTags, go: h => { location.hash = h; }, vibrate, celebrate: () => celebrate() };
+// go: samme adresse som nå tegner skjermen på nytt (0.23.0: «Øv videre» og «Ta de 10 igjen» står på #/teori/ov)
+const theoryCtx = { progress: theoryProgress, save: saveTheory, driveTags: theoryDriveTags, go: h => { if (location.hash === h) { route(); window.scrollTo(0, 0); } else location.hash = h; }, vibrate, celebrate: () => celebrate() };
 function renderTheoryRoute(h) {
   if (h === '#/teori') { location.replace(THEORY_HOME); return; }   // oversikten ligger i Opplæring (0.20.0)
   show('theory');
@@ -534,22 +535,29 @@ async function renderPlus(feature = null) {
     const st = plusState(), owned = hasPlus();
     const order = feature && PLUS_FEATURES[feature] ? [feature, ...Object.keys(PLUS_FEATURES).filter(k => k !== feature)] : Object.keys(PLUS_FEATURES);
     const price = st.price ? `Kjøp for ${esc(st.price)}` : 'Kjøp Pluss';
-    const owns = st.owned || st.dev === true || !st.native, trial = owned && !owns && trialActive(), canTrial = !owned && st.native && st.trialAvailable;
-    const days = trialDaysLeft(), endTxt = st.trialEnd ? new Date(st.trialEnd).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }) : '';
+    // Nettversjonen (0.23.0): resten er gratis der, men teorien hører til Pluss i iPhone-appen og kan ikke kjøpes her
+    if (!st.native && feature === 'theory' && !hasTheory()) {
+      root.innerHTML = `
+        <section class="plus-hero"><span class="plus-badge">${icon('check', 18)}Pluss</span>
+          <h2>Teorien er en del av Pluss i iPhone-appen</h2>
+          <p>Her kan du prøve 10 gratis spørsmål. Alle 281 spørsmålene, prøvene, teoriboka, skiltprøven og sikkerhetskontrollen finnes i iPhone-appen Kjørerapport, med Pluss.</p></section>
+        <button type="button" class="btn secondary" id="plus-back">Tilbake</button>`;
+      root.querySelector('#plus-back').onclick = () => goBack();
+      return;
+    }
     root.innerHTML = `
       <section class="plus-hero">
         <span class="plus-badge">${icon('check', 18)}Pluss</span>
-        <h2>${trial ? `Prøveperioden: ${days} ${days === 1 ? 'dag' : 'dager'} igjen` : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingskjøringen'}</h2>
-        <p>${trial ? `Alt i Pluss er låst opp til ${esc(endTxt)}. Etterpå er det gratis delene som før, og alle turene dine er med videre. Kjøper du, beholder du Pluss for godt.` : owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
+        <h2>${owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
+        <p>${owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
       </section>
       <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${owned ? `<span class="plus-ok">${icon('check', 18)}</span>` : ''}</div>`; }).join('')}</section>
-      ${owned && !trial ? `<button type="button" class="btn secondary" id="plus-back">Tilbake</button>` : `
-      ${canTrial ? `<button type="button" class="btn primary plus-buy" id="plus-trial">Prøv gratis i 14 dager</button>` : ''}
-      <button type="button" class="btn ${canTrial ? 'secondary' : 'primary'} plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
-      <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : canTrial ? 'Prøven er gratis og stopper av seg selv etter 14 dager. Ingenting trekkes, og det fornyes ikke.' : `Betales med Apple-ID-en din. Ingen automatisk fornyelse.${!owned && st.native && st.trialEnd ? ' Prøveperioden er brukt.' : ''}`}</p>`}
-      ${owned && !trial ? '' : `
+      ${owned ? `<button type="button" class="btn secondary" id="plus-back">Tilbake</button>` : `
+      <button type="button" class="btn primary plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
+      <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse.'}</p>`}
+      ${owned ? '' : `
       <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button></div>`}
-      <p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg og rapportene for de ${FREE_REPORTS} siste turene. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>`;
+      <p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>`;
     const back = root.querySelector('#plus-back');
     if (back) back.onclick = () => goBack();
     const act = async (btn, fn, okText) => {
@@ -557,7 +565,7 @@ async function renderPlus(feature = null) {
       const r = await fn();
       btn.disabled = false; btn.textContent = old;
       if (r.error === 'avbrutt') return;
-      if (fn === startTrial ? r.owned : r.bought) { vibrate([30, 60, 30]); toast(okText, { type: 'ok' }); if (gateFor(location.hash)) route(); else draw(); return; }
+      if (r.bought) { vibrate([30, 60, 30]); toast(okText, { type: 'ok' }); if (gateFor(location.hash)) route(); else draw(); return; }
       if (r.error === 'avbrutt') return;
       if (!r.error && fn === redeemPlus) { toast('Koden behandles. Pluss låses opp av seg selv når App Store har godkjent den.', { ms: 5000 }); return; }
       if (r.error === 'venter') { infoDialog({ title: 'Venter på godkjenning', text: 'Kjøpet må godkjennes (for eksempel av en forelder med «Spør før kjøp»). Pluss låses opp av seg selv når det er godkjent.' }); return; }
@@ -566,8 +574,6 @@ async function renderPlus(feature = null) {
     };
     const buy = root.querySelector('#plus-buy');
     if (buy) buy.onclick = () => act(buy, buyPlus, 'Pluss er låst opp. God tur!');
-    const tr = root.querySelector('#plus-trial');
-    if (tr) tr.onclick = () => act(tr, startTrial, 'Prøveperioden er i gang: Pluss er låst opp i 14 dager.');
     const res = root.querySelector('#plus-restore');
     if (res) res.onclick = () => act(res, restorePlus, 'Pluss er gjenopprettet.');
     const code = root.querySelector('#plus-code');
@@ -2813,10 +2819,8 @@ async function renderSettings() {
   const pr = $('#plus-row');
   pr.hidden = !plusState().native;
   if (!pr.hidden) {
-    const pst = plusState(), inTrial = !pst.owned && trialActive(), dl = trialDaysLeft();
-    pr.innerHTML = inTrial ? `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Prøveperiode: ${dl} ${dl === 1 ? 'dag' : 'dager'} igjen</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Kjøp</button>`
-      : hasPlus() ? `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Låst opp. Takk!</span></span>`
-      : `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">${pst.trialAvailable ? 'Prøv gratis i 14 dager: kameraene, opplæringsplanen, klar for oppkjøring og alle rapportene' : 'Kameraene, opplæringsplanen, trafikklæreren, klar for oppkjøring og alle rapportene'}</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Se Pluss</button>`;
+    pr.innerHTML = hasPlus() ? `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Låst opp. Takk!</span></span>`
+      : `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Hele teorien, kameraene, opplæringsplanen, trafikklæreren, klar for oppkjøring og alle rapportene</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Se Pluss</button>`;
     const b = pr.querySelector('#btn-plus-row');
     if (b) b.onclick = () => { location.hash = '#/pluss'; };
   }
@@ -3234,7 +3238,7 @@ function goBack() {
   if (h.startsWith('#/elev/')) { location.hash = '#/trafikklaerer'; return; }   // elevsiden → elevlisten (0.18.0)
   // En rapport åpnet fra elevsiden går tilbake dit
   if (h.startsWith('#/rapport/') && reportFrom && reportFrom.startsWith('#/elev/')) { location.hash = reportFrom; return; }
-  location.hash = h === '#/faresteder' ? '#/logg' : h === '#/pluss' ? (guidesFrom || '#/') : gateFor(h) && !hasPlus() ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
+  location.hash = h === '#/faresteder' ? '#/logg' : h.startsWith('#/pluss') ? (guidesFrom || '#/') : gateFor(h) && !hasFeature(gateFor(h)) ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
 }
 
 /* Overlegg som låser siden (fullskjerm kart og kamera) lukkes ved hvert skjermbytte. Før 0.10.1 kunne «Tilbake»
@@ -3252,7 +3256,7 @@ let guidesFrom = null, prevHash = null, theoryFrom = null, reportFrom = null, bo
 function route() {
   const h = location.hash || '#/';
   if (h.startsWith('#/teori/bok/') && !(prevHash || '').startsWith('#/teori/bok/')) bookFrom = prevHash && prevHash !== h ? prevHash : null;
-  if (h === '#/pluss' && prevHash !== h) guidesFrom = prevHash;
+  if (h.startsWith('#/pluss') && !(prevHash || '').startsWith('#/pluss')) guidesFrom = prevHash;   // også #/pluss/teori (0.23.0)
   const inTheory = x => !!x && (x.startsWith('#/teori') || x.startsWith('#/sikkerhetskontroll'));
   if (inTheory(h) && !inTheory(prevHash)) theoryFrom = prevHash || '#/';
   if (h.startsWith('#/rapport/') && !(prevHash || '').startsWith('#/rapport/')) reportFrom = prevHash || '#/';
@@ -3269,12 +3273,13 @@ function route() {
   if (!['#/kamera', '#/sjekk', '#/opptak'].includes(h) && cam.state().running && !(recorder && recorder.running)) { cam.stopCamera(); if (camUnsub) { camUnsub(); camUnsub = null; } }
   // Pluss (0.11.0): skjermene som hører til Pluss viser Pluss-siden i stedet, med den funksjonen øverst
   const gate = gateFor(h);
-  if (gate && !hasPlus()) {
+  if (gate && !hasFeature(gate)) {
     if (cam.state().running && !(recorder && recorder.running)) { cam.stopCamera(); if (camUnsub) { camUnsub(); camUnsub = null; } }   // f.eks. prøven gikk ut på kameraskjermen
     renderPlus(gate); return;
   }
   if (h === '#/') renderHome();
   else if (h === '#/pluss') renderPlus();
+  else if (h === '#/pluss/teori') location.replace(THEORY_HOME);   // kjøpt: rett til teorien (0.23.0)
   else if (h === '#/sjekk') renderPrecheck();
   else if (h === '#/opptak') { if (!recorder) location.hash = '#/'; }
   else if (h === '#/demo') renderDemoReport();
@@ -3326,10 +3331,10 @@ function init() {
     if (plus) setTimeout(maybeCamIntro, 600);
     // Bare skjermene som ser annerledes ut med og uten Pluss tegnes på nytt (ikke sjekken før kjøring eller opptaket)
     const h = location.hash || '#/';
-    if (!(recorder && recorder.running) && (gateFor(h) || h.startsWith('#/rapport/') || ['#/', '#/logg', '#/innstillinger', '#/pluss'].includes(h))) route();
+    // Teorien (0.23.0) ser også annerledes ut med og uten Pluss
+    if (!(recorder && recorder.running) && (gateFor(h) || h.startsWith('#/rapport/') || h.startsWith('#/opplaering') || h.startsWith('#/teori') || ['#/', '#/logg', '#/innstillinger', '#/pluss'].includes(h))) route();
   });
-  // Første status fra App Store kommer etter at Hjem er tegnet: tegn Hjem på nytt hvis prøveperioden kan tilbys
-  refreshPlus().then(() => { updatePlusMarks(); if (!hasPlus() && plusState().trialAvailable && !screens.home.hidden) renderHome(); }).catch(() => {});
+  refreshPlus().then(() => updatePlusMarks()).catch(() => {});
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
   $('#btn-check-update').onclick = async () => {
     if (!swReg) { toast('Oppdatering virker bare i appen fra nettadressen, ikke lokalt.', { type: 'info' }); return; }

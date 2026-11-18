@@ -9,8 +9,8 @@ Everything that will go into App Store Connect and the app's settings file when 
 | 1 | **Decide the models for sale.** The car model on trial (D-FINE small, COCO only, Apache 2.0) should go into git as the shipping model. The lane weights `n2` (A2D2, CC BY-ND) must stay out unless the owner decides otherwise, so the app ships with the comma10k weights from git. | Today the road-tested setup is not the one that may be sold. `copy-web.sh` now stops a Release build while test models are in `.local-test/app-models`. | Owner decides, Claude does it |
 | 2 | **Road-test the build that will be sold.** A Release build with the shipping models on at least one long drive. | Every drive so far has been a Debug build with the test models. | Owner drives |
 | 3 | **New screenshots.** The 7 in `skjermbilder/` are from 0.11.4, with the old look and without theory. | Guideline 2.3: the screenshots must show the app as it is. | Claude |
-| 4 | **New description, promotional text and keywords.** Add theory, the sign test, the safety check, «Hvem kjører først?» and the teacher mode. Speed cameras are off by default. | Guideline 2.3. | Claude, owner approves |
-| 5 | **Update the review notes (section 7).** Pluss no longer includes the «Opplæring» tab: theory is free, only «Læreplan» is Pluss. Explain the teacher messages (files via the share sheet). | The reviewer follows the notes. | Claude |
+| 4 | ~~New description, promotional text and keywords.~~ **Done 18 Nov (0.23.0)**: theory first, the safety check, «Hvem kjører først?», the teacher messages; speed-camera warnings no longer promised. The owner should read it through. | Guideline 2.3. | Owner approves |
+| 5 | ~~Update the review notes (section 7).~~ **Done 18 Nov (0.23.0)**: one purchase at NOK 499, no trial, theory in Pluss with 10 free questions, teacher messages explained. | The reviewer follows the notes. | Done |
 | 6 | **Decide the age-rating answers for messaging.** The learner and the teacher exchange messages as files, and the app shows the other person's text. | Guidelines 1.2 and the age-rating questionnaire. | Owner decides |
 | 7 | **Privacy label.** Recommended now: declare «Precise Location – App Functionality – not linked – no tracking», because coordinates go to NVDB and Kartverket, instead of «Data Not Collected». | Safer reading of guideline 5.1.2. | Owner decides |
 | 8 | **A driving teacher reviews the theory and the theory book.** | Agents fact-checked everything, but no person with a teaching licence has. | Owner |
@@ -31,7 +31,7 @@ The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). Its «Al
 | Create an **Apple Developer** account (about NOK 1,200 a year) | TestFlight on your own phone and publishing | developer.apple.com/programs |
 | Enrol as an **individual** | An ENK is not a legal entity, so Apple only accepts it as an individual. Your legal name is shown as the seller. Requires age 18 | Same place |
 | Check that the name **«Kjørerapport»** is free | The name must be unique in the App Store | App Store Connect when the app is created |
-| Decide on the **price** | The app is free to download; «Kjørerapport Pluss» is a one-time in-app purchase (section 12) | App Store Connect |
+| Set the **price** | Decided 18 Nov: the app is free to download; «Kjørerapport Pluss» is a one-time in-app purchase at NOK 499 for the whole family (section 12). Driving schools: NOK 350 per pupil excl. VAT, invoiced directly (see section 12) | App Store Connect |
 | Sign the **Paid Applications agreement** and add bank and tax details | Needed before any in-app purchase can be sold | App Store Connect › Business |
 
 ---
@@ -41,10 +41,10 @@ The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). Its «Al
 | Field | Text | Length |
 |---|---|---|
 | **Name** | Kjørerapport: Øvelseskjøring | 28 of 30 |
-| **Subtitle** | Tilbakemelding etter hver tur | 29 of 30 |
-| **Keywords** | `førerkort,lappen,kjøreskole,trafikkskole,ledsager,elev,kjøretime,fartsgrense,speil,oppkjøring` | 97 of 100 bytes |
-| **Promotional text** | Øv smartere på lappen. Kjørerapport måler bremsing, gass, svinger og fart på hver øvingstur, og forteller hva dere bør øve på neste gang. | 137 of 170 |
-| **Description** | See [`beskrivelse.txt`](beskrivelse.txt) | 2058 of 4000 |
+| **Subtitle** | Teoriprøve og øvelseskjøring | 28 of 30 |
+| **Keywords** | `teoriprøve,førerkort,lappen,trafikkskole,skilt,ledsager,oppkjøring,fartsgrense,sikkerhetskontroll` | 100 of 100 bytes |
+| **Promotional text** | Øv til lappen i én app: teoriprøven med 281 spørsmål, sikkerhetskontrollen og en rapport etter hver øvingstur. Prøv 10 teorispørsmål gratis. | 140 of 170 |
+| **Description** | See [`beskrivelse.txt`](beskrivelse.txt) (rewritten 18 Nov for 0.23.0: theory first) | 3343 of 4000 |
 | **Primary language** | Norwegian (Bokmål) | |
 | **Primary category** | Education | |
 | **Secondary category** | Navigation | |
@@ -132,7 +132,9 @@ Paste into «Notes» under App Review Information (in English, since the reviewe
 >
 > **Camera (optional):** off by default. When enabled, face and road analysis run on-device; no images or video are stored or transmitted.
 >
-> **In-app purchases.** «Kjørerapport Pluss» (non-consumable, one-time, Family Sharing on) unlocks the cameras, the training plan, the driving-teacher summary, «Hva må du øve mer på?» and reports for drives older than the 10 latest. «14-day Trial» is a free non-consumable, offered as described in guideline 3.1.1: it unlocks Pluss for 14 days from the purchase date, then the app returns to the free features. No charge, no renewal. Recording, the report, the map, speed limits and data export are always free. Both purchases and «Gjenopprett kjøp» (Restore) are on the Pluss screen: Settings (gear icon) › «Kjørerapport Pluss», or tap the «Opplæring» tab.
+> **In-app purchase.** One non-consumable, «Kjørerapport Pluss» (one-time, Family Sharing on, no trial). It unlocks the full theory practice and the safety check, the cameras, the training plan, the driving-teacher summary, «Hva må du øve mer på?» and reports for drives older than the 10 latest. Free for everyone: recording, the report, the map, speed limits, data export, and 10 theory questions (tab «Opplæring» › «Teori og sikkerhet» › «Prøv 10 gratis spørsmål»). Every locked theory tile opens the Pluss screen; it is also under Settings (gear icon) › «Kjørerapport Pluss». «Gjenopprett kjøp» (Restore) and «Kode fra trafikkskolen» (Apple offer codes) are on the same screen.
+>
+> **Messages between learner and driving teacher:** sent as a file through the iOS share sheet (Messages, Mail, AirDrop) to someone the user already knows. The app has no chat service, no server and no user directory.
 >
 > **Cameras on the simulator or without a car:** the cameras need a real device mounted in a car to be useful. They can be started under Home › «Kamera: speil- og skulderblikk» › «Start kamera».
 
@@ -211,39 +213,27 @@ How they were made:
 | Type | **Non-Consumable** |
 | Reference name | Pluss |
 | Product ID | `net.svendsenmedia.kjorerapport.pluss` (must match `PlusStore.swift` exactly) |
-| Price | NOK 349 (price point 349,00), all countries where the app is sold |
+| Price | NOK 499 (price point 499,00), decided 18 Nov 2026 |
 | Family Sharing | **On** (the app says the purchase works for the whole family) |
 | Display name (Norwegian) | Kjørerapport Pluss |
-| Description (Norwegian) | Kameraene, opplæringsplanen, trafikklæreren og alle rapportene. Ett kjøp, ikke abonnement. |
+| Description (Norwegian) | Hele teorien, kameraene, opplæringsplanen, trafikklæreren og alle rapportene. Ett kjøp, ikke abonnement. |
 | Review screenshot | A screenshot of the Pluss screen (Innstillinger › Se Pluss) |
-| Review note | «Unlocks the cameras, the training plan, the driving-teacher summary and all older reports. Restore is on the same screen.» |
+| Review note | «Unlocks the full theory practice and safety check, the cameras, the training plan, the driving-teacher summary and all older reports. Restore is on the same screen.» |
 
-**The free trial (0.11.2)** – a second in-app purchase, created the same way:
-
-| Field | Value |
-| --- | --- |
-| Type | **Non-Consumable** |
-| Reference name | **14-day Trial** (Apple's guideline 3.1.1 asks for this kind of name) |
-| Product ID | `net.svendsenmedia.kjorerapport.pluss.trial14` (must match `PlusStore.swift` exactly) |
-| Price | **Free** (price point 0) |
-| Family Sharing | Off |
-| Display name (Norwegian) | Pluss – 14 dagers prøveperiode |
-| Description (Norwegian) | Prøv alt i Pluss gratis i 14 dager. Ingenting trekkes, og det fornyes ikke. |
-| Review screenshot | The Pluss screen with «Prøv gratis i 14 dager» |
-| Review note | «Free 14-day trial of Pluss, as described in guideline 3.1.1. Pluss is unlocked for 14 days from the trial purchase date, then the app returns to the free features. No charge, no renewal.» |
+**No free trial (decided 18 Nov 2026, 0.23.0).** Many learners buy a theory app 7–14 days before the test, so a 14-day trial would have given the whole theory away. Do **not** create the old «14-day Trial» product (`…pluss.trial14`); the app no longer asks for it. Instead, 10 fixed theory questions are free (`FREE_THEORY` in `js/plus.js`).
 
 - The first in-app purchase must be **submitted together with an app version** (choose it under «In-App Purchases» on the version page).
 - The **Paid Applications agreement**, bank and tax details must be in place, or the product will show «Får ikke kontakt med App Store».
 - **Small Business Program** (developer.apple.com): Apple then takes 15 % instead of 30 %. Apply before the first sale.
-- **Codes for driving schools:** Monetization › In-App Purchases › Pluss › Offer Codes. Apple generates the codes; give a driving school a batch, and the pupils use «Kode fra trafikkskolen» on the Pluss screen. Apple added offer codes for one-time purchases in 2025. Check that the option is there for a non-consumable before promising it to a school.
+- **Codes for driving schools:** for a pilot, Apple offer codes (Monetization › In-App Purchases › Pluss › Offer Codes) can be given away free; the pupils use «Kode fra trafikkskolen» on the Pluss screen. They may **not** be sold. Paid school deals (NOK 350 per pupil excl. VAT, invoiced directly) need our own access codes with a small server (planned after launch), sold only to driving schools under guideline 3.1.3(c), never to individuals, and with no school price or link shown in the app.
 
 **Testing without paying:**
 - **In Xcode:** ▶︎ in Xcode uses `ios/Pluss.storekit` (chosen in the shared scheme «Kjorerapport»). The purchase sheet appears, nothing is charged, and Debug › StoreKit › Manage Transactions lets you delete the purchase to test again.
 - **TestFlight:** testers buy with their own Apple ID in the sandbox, free of charge.
-- **The developer section:** «Pluss (test)» can force Pluss on or off in Xcode and TestFlight builds.
+- **The developer section:** the view mode («Gratis» / «Pluss») forces Pluss off or on in Xcode and TestFlight builds.
 
 **What is free and what is Pluss** (`js/plus.js`):
-- **Free:** recording, report, map, speed limit, speed-camera warnings, guides, driving log, export and backup, and reports for the 10 latest real drives.
-- **Pluss:** the cameras, the training plan (with hotspots), the driving-teacher page, «Hva må du øve mer på?» and reports for all older drives.
+- **Free:** recording, report, map, speed limit, speed-camera warnings, guides, driving log, export and backup, reports for the 10 latest real drives, and 10 theory questions (with the theory-book sections they link to).
+- **Pluss:** all theory (281 questions, exams, theory book, sign test and sign cards, «Hvem kjører først?», mistakes and bookmarks) and the safety check (since 0.23.0), the cameras, the training plan (with hotspots), the driving-teacher summary, «Hva må du øve mer på?» and reports for all older drives.
 - **Nothing is ever deleted or held back:** a locked report shows «Eksporter turen».
-- **The web version in Safari** keeps everything free. It cannot record with the screen locked or use both cameras.
+- **The web version in Safari** keeps everything else free, but not the theory (`WEB_THEORY` in `js/plus.js`): Pluss cannot be bought there, so it shows the 10 free questions. It cannot record with the screen locked or use both cameras.

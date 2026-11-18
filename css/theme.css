@@ -794,3 +794,9 @@ h2.card-title, .card-title { font-size: 1.12rem; }
 .cx-verdict.no .q-verdict-ico { background: var(--brake); }
 .cx-hit { stroke: none; }
 .sim > .btn.secondary { background: var(--surface); }
+
+/* 0.23.0: teorien uten Pluss – de gratis spørsmålene og låste fliser */
+.th-locked .lock-tag { margin: 8px 0 0; }
+.th-locked .th-tile-fig { opacity: .8; }
+.th-plus-card p { margin: 0 0 12px; }
+.th-plus-card .btn { margin-bottom: 0; }
