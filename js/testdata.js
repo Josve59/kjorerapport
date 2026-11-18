@@ -10,9 +10,10 @@ export const TEST_STUDENTS = [
   { name: 'Sara', email: 'sara@example.com', n: 9, k: [1.0, 0.7], days: 60 }
 ];
 
-export async function createTestDrives(now = Date.now()) {
+export async function createTestDrives(now = Date.now(), { only = null } = {}) {
   let made = 0;
   for (const [si, st] of TEST_STUDENTS.entries()) {
+    if (only && !only.includes(st.name)) continue;   // demoen (0.24.0) lager Emma selv, langs ekte gater
     for (let i = 0; i < st.n; i++) {
       const id = `test-${st.name.toLowerCase()}-${i}`;
       const f = st.n > 1 ? i / (st.n - 1) : 1;

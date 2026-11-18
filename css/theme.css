@@ -800,3 +800,36 @@ h2.card-title, .card-title { font-size: 1.12rem; }
 .th-locked .th-tile-fig { opacity: .8; }
 .th-plus-card p { margin: 0 0 12px; }
 .th-plus-card .btn { margin-bottom: 0; }
+
+/* 0.24.0: demovisning for trafikkskoler */
+.demo-bar { position: fixed; left: 50%; bottom: calc(72px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 999px; background: var(--brand); color: #fff; font-size: .85rem; font-weight: 700; box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, .25)); }
+.demo-bar .link { color: #fff; text-decoration: underline; font-weight: 800; white-space: nowrap; }
+.demo-bar[hidden] { display: none; }
+.demo-bar span { white-space: nowrap; }
+/* Demolinja ligger over fanelinja: litt mer luft nederst, så den ikke dekker det siste på siden */
+body.has-tabbar.is-demo #app { padding-bottom: calc(132px + env(safe-area-inset-bottom)); }
+.demo-start { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.demo-start p { margin: 0 0 10px; }
+.demo-start .btn { margin: 0; }
+
+/* Kjørelogg til forsikringen (0.24.0): skiltkortet er laget for et skjermbilde, tabellen for PDF-en */
+.ins-hero .goal-bar { margin: 0 0 14px; }
+.ins-hero .log-big-label { margin-bottom: 10px; }
+.ins-stamp { margin: 12px 0 0; font-size: .8rem; color: var(--muted); }
+.ins-who { margin-bottom: 14px; }
+.ins-help p { margin: 0 0 12px; }
+.ins-help .btn { margin: 0 0 8px; }
+.ins-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: .95rem; }
+.ins-table th, .ins-table td { padding: 9px 4px; text-align: left; border-bottom: 1px solid var(--line); }
+.ins-table th:first-child, .ins-table td:first-child { padding-left: 0; }
+.ins-table th:last-child, .ins-table td:last-child { padding-right: 0; }
+.ins-table .num { text-align: right; white-space: nowrap; }
+.ins-table thead th { font-size: .8rem; color: var(--muted); font-weight: 700; }
+.ins-table tfoot th, .ins-table tfoot td { font-weight: 800; border-bottom: 0; }
+@media print {
+  .ins-help, .ins-who { display: none !important; }
+  .ins-hero .goal-bar { background: #ddd !important; }
+  .ins-hero .goal-bar span { background: #333 !important; }
+  .ins-list { break-inside: auto; }
+  .ins-table tr { break-inside: avoid; }
+}

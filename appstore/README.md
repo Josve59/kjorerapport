@@ -43,7 +43,7 @@ The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). Its «Al
 | **Name** | Kjørerapport: Øvelseskjøring | 28 of 30 |
 | **Subtitle** | Teoriprøve og øvelseskjøring | 28 of 30 |
 | **Keywords** | `teoriprøve,førerkort,lappen,trafikkskole,skilt,ledsager,oppkjøring,fartsgrense,sikkerhetskontroll` | 100 of 100 bytes |
-| **Promotional text** | Øv til lappen i én app: teoriprøven med 281 spørsmål, sikkerhetskontrollen og en rapport etter hver øvingstur. Prøv 10 teorispørsmål gratis. | 140 of 170 |
+| **Promotional text** | Øv til lappen i én app: teoriprøven med 420 spørsmål, sikkerhetskontrollen og en rapport etter hver øvingstur. Prøv 10 teorispørsmål gratis. | 140 of 170 |
 | **Description** | See [`beskrivelse.txt`](beskrivelse.txt) (rewritten 18 Nov for 0.23.0: theory first) | 3343 of 4000 |
 | **Primary language** | Norwegian (Bokmål) | |
 | **Primary category** | Education | |
@@ -234,6 +234,6 @@ How they were made:
 
 **What is free and what is Pluss** (`js/plus.js`):
 - **Free:** recording, report, map, speed limit, speed-camera warnings, guides, driving log, export and backup, reports for the 10 latest real drives, and 10 theory questions (with the theory-book sections they link to).
-- **Pluss:** all theory (281 questions, exams, theory book, sign test and sign cards, «Hvem kjører først?», mistakes and bookmarks) and the safety check (since 0.23.0), the cameras, the training plan (with hotspots), the driving-teacher summary, «Hva må du øve mer på?» and reports for all older drives.
+- **Pluss:** all theory (420 questions, 123 signs, exams, theory book, sign test and sign cards, «Hvem kjører først?», mistakes and bookmarks) and the safety check (since 0.23.0), the cameras, the training plan (with hotspots), the driving-teacher summary, «Hva må du øve mer på?» and reports for all older drives.
 - **Nothing is ever deleted or held back:** a locked report shows «Eksporter turen».
 - **The web version in Safari** keeps everything else free, but not the theory (`WEB_THEORY` in `js/plus.js`): Pluss cannot be bought there, so it shows the 10 free questions. It cannot record with the screen locked or use both cameras.

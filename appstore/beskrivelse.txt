@@ -1,12 +1,13 @@
 Kjørerapport samler øvingen til lappen i én app: teoriprøven, sikkerhetskontrollen og øvelseskjøringen. Fest telefonen i holderen, la ledsageren trykke Start, og kjør som vanlig. Når dere stopper, får dere en rapport med det som gikk bra, det som bør øves på, og et forslag til neste øvingstur.
 
 TEORIPRØVEN KLASSE B
-• 281 spørsmål i de sju temaene på prøven, med tegninger og forklaring etter hvert svar.
+• 420 spørsmål i de sju temaene på prøven, med tegninger og forklaring etter hvert svar.
 • Prøver som den ekte: 45 oppgaver og 90 minutter, litt vanskeligere enn den ekte prøven.
 • Teoriboka: reglene tema for tema. Etter hvert svar går du rett til regelen med «Les mer».
 • «Hvem kjører først?»: trykk på bilene i riktig rekkefølge, og se krysset spilles av.
-• Skiltprøven og skiltkort med alle 57 skiltene.
+• Skiltprøven og skiltkort med alle 123 skiltene.
 • Hvor klar du er i prosent, og en plan fram til prøvedatoen.
+• Påminnelse om dagens teori på klokkeslettet du velger.
 • Prøv 10 spørsmål gratis.
 Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.
 
@@ -28,6 +29,7 @@ RAPPORTEN ETTER HVER TUR
 
 FØLG FREMGANGEN
 • Kjørelogg med tid, kilometer, veityper, lysforhold og føre.
+• Kjørelogg til forsikringen: kilometerne mot 2 000 km, som PDF eller skjermbilde. Mange forsikringsselskap gir høyere startbonus etter 2 000 km øvelseskjøring.
 • Kjøreutviklingen fra 0 til 100, og steder der det gjentatte ganger skjer noe.
 • Opplæringsplan etter læreplanen for klasse B, der appen viser hva dere har øvd på.
 • «Hva må du øve mer på?» før oppkjøringen. Det er trafikklæreren som avgjør når du er klar.

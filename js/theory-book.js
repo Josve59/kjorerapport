@@ -11,7 +11,7 @@ export const BOOK = [
   {
     id: 'fart', intro: 'Hvor fort du kjører, hvor du plasserer bilen, og hvor langt du trenger for å stanse.',
     sections: [
-      { id: 'stopplengde', title: 'Stopplengde og avstand', calc: 'stopp', qs: ['f01', 'f02', 'f03', 'f04', 'f11', 'f12', 'f13', 'f14', 'f39'],
+      { id: 'stopplengde', title: 'Stopplengde og avstand', calc: 'stopp', qs: ['f01', 'f02', 'f03', 'f04', 'f11', 'f12', 'f13', 'f14', 'f39', 'f47', 'f48', 'f49', 'f50'],
         points: [
           P('Stopplengde er reaksjonslengde pluss bremselengde.', 'Først kjører du videre mens du reagerer, så bremser bilen ned. Stopplengden er hele strekningen fra du oppdager en fare til bilen står stille.', 'diagram:stopp'),
           P('Dobbel fart gir dobbel reaksjonslengde og omtrent fire ganger så lang bremselengde.', 'Du bruker like lang tid på å reagere i alle farter, men i dobbel fart kjører du dobbelt så langt på den tiden. Bremselengden øker med kvadratet av farten.', 'diagram:dobbel'),
@@ -19,20 +19,20 @@ export const BOOK = [
           P('Avstanden til bilen foran skal være så stor at du ikke kjører på om den bremser.', 'Hvor stor den må være, avhenger av fart, føre og sikt. Tell sekunder fra bilen foran passerer et fast punkt til du gjør det: jo høyere fart og dårligere føre, jo flere sekunder trenger du. Sekundene er en tommelfingerregel, ikke selve regelen.', 'diagram:tidsavstand'),
           P('Se langt fram.', 'Da oppdager du det som skjer i god tid, kan slippe gassen i stedet for å bremse hardt, og kjøringen blir både tryggere og jevnere.')
         ] },
-      { id: 'sikt', title: 'Sikt, bakketopper og mørke', qs: ['f05', 'f06', 'f35', 'f36', 'f32', 'f33', 'f34', 'f44'],
+      { id: 'sikt', title: 'Sikt, bakketopper og mørke', qs: ['f05', 'f06', 'f35', 'f36', 'f32', 'f33', 'f34', 'f44', 'f57', 'f58', 'f59'],
         points: [
           P('Du skal kunne stanse på den strekningen du ser.', 'Fartsgrensen er bare en øvre grense. Over en bakketopp eller i en uoversiktlig sving kan riktig fart være mye lavere.', 'view:bakketopp'),
           P('På smal vei uten midtlinje har dere i praksis bare halve sikten hver.', 'Møtende kan komme midt i veien. Hold godt til høyre og senk farten før toppen.', 'view:bakketopp-smal'),
           P('I mørket er det lyset som avgjør hvor langt du ser.', 'En fotgjenger i mørke klær uten refleks ser du med nærlys ofte først når personen er rundt 25–30 meter foran. Med refleks ser du personen mye tidligere. Senk farten der du kan vente gående.', 'view:morke'),
           P('Lys skal alltid være på under kjøring, også om dagen.', 'Kjørelys holder om dagen. Når lys eller sikt krever det, bruker du nærlys. Blend ned fra fjernlys når du møter noen og når du kjører bak andre. Tåkebaklys bruker du bare når sikten er svært dårlig.')
         ] },
-      { id: 'fore', title: 'Føre og veigrep', qs: ['f07', 'f08', 'f09', 'f10'],
+      { id: 'fore', title: 'Føre og veigrep', qs: ['f07', 'f08', 'f09', 'f10', 'f60', 'f61', 'f62', 'f63'],
         points: [
           P('Glattest er det ofte rundt null grader.', 'Da kan det ligge et tynt lag vann på isen. Våt is gir dårligst veggrep, og bremselengden kan bli mange ganger så lang som på tørr asfalt. Vær særlig forsiktig på bruer, i skygge og der veien ser blank ut.'),
           P('På glatt vei: lav fart, god avstand og myke bevegelser.', 'Da har du mest veggrep å gå på når du må bremse eller svinge.'),
           P('Vannplaning: dekkene flyter oppå vannet og mister grepet.', 'Det skjer lettere i høy fart, med slitte dekk og i dype vannsamlinger. Slipp gassen, hold rattet rolig og unngå å bremse hardt til dekkene får tak igjen.')
         ] },
-      { id: 'felt', title: 'Plassering og feltvalg', qs: ['f15', 'f16', 'f17', 'f18', 'f19', 'f20', 'f21', 'f22', 'f40'],
+      { id: 'felt', title: 'Plassering og feltvalg', qs: ['f15', 'f16', 'f17', 'f18', 'f19', 'f20', 'f21', 'f22', 'f40', 'f54', 'f55', 'f56'],
         points: [
           P('Høyre felt er hovedregelen.', 'Venstre felt bruker du blant annet til forbikjøring og når du skal svinge til venstre.'),
           P('Velg felt i god tid før du svinger.', 'Skal du til venstre, legger du deg i feltet lengst til venstre. Skal du til høyre, i feltet lengst til høyre. Svinger du inn på en vei med flere felt i din retning, kan du velge det feltet som passer best.'),
@@ -40,7 +40,7 @@ export const BOOK = [
           P('I rundkjøringen blinker du til høyre når du skal ut.', 'Skal du ta første avkjøring, ligger du i høyre felt og blinker til høyre allerede før du kjører inn. Skal du lenger, begynner du å blinke når du passerer avkjøringen før den du skal ta.'),
           P('Skal du av motorveien, legger du deg i feltet for fartsreduksjon så snart det begynner.', 'Bremse ned gjør du der, ikke i hovedfeltet.')
         ] },
-      { id: 'forbikjoring', title: 'Forbikjøring', qs: ['f23', 'f24', 'f25', 'f26', 'f27', 'f41', 'f42', 'f43', 'r20', 'r21', 's47'],
+      { id: 'forbikjoring', title: 'Forbikjøring', qs: ['f23', 'f24', 'f25', 'f26', 'f27', 'f41', 'f42', 'f43', 'r20', 'r21', 's47', 'f51', 'f52', 'f53'],
         points: [
           P('Forbikjøring er forbudt der sikten er hindret av bakketopp, kurve eller annet.', 'Unntakene er felt der møtende trafikk ikke er tillatt, for eksempel på vei med midtdeler, og forbikjøring av en sykkel, moped eller motorsykkel som holder seg til høyre i feltet. Også da må du ha god plass og sikt.'),
           P('Like før og i kryss er forbikjøring forbudt, med noen unntak.', 'Det er lov i kryss med trafikklys eller politi, når den kryssende veien har vikeplikt etter skilt, på vei med to eller flere felt i din retning, når den foran svinger til venstre og du kjører forbi til høyre, og når du kjører forbi en sykkel, moped eller motorsykkel som holder seg til høyre i feltet. Høyreregelen er ikke vikeplikt etter skilt.'),
@@ -49,7 +49,7 @@ export const BOOK = [
           P('Kjør ikke forbi et kjøretøy som skjuler noe av gangfeltet foran.', 'Det kan ha stanset eller bremset for en fotgjenger du ikke ser.', 'scene:gangfelt-skjult'),
           P('Den som blir forbikjørt, holder til høyre og øker ikke farten.')
         ] },
-      { id: 'tegn', title: 'Speil, tegn og planovergang', qs: ['f28', 'f29', 'f30', 'f31', 'f37', 'f38', 'f45', 'f46'],
+      { id: 'tegn', title: 'Speil, tegn og planovergang', qs: ['f28', 'f29', 'f30', 'f31', 'f37', 'f38', 'f45', 'f46', 'f64', 'f65', 'f66'],
         points: [
           P('Ta skulderblikk før du skifter felt eller kjører ut.', 'Skrått bak på hver side ser du verken i innvendig eller utvendig speil.', 'diagram:blindsone'),
           P('Gi tegn med blinklys i god tid når du svinger eller flytter bilen merkbart sidelengs.'),
@@ -62,7 +62,7 @@ export const BOOK = [
   {
     id: 'trafikanter', intro: 'Hvordan du tar hensyn til barn, gående, syklister og andre, og hva som tar oppmerksomheten din.',
     sections: [
-      { id: 'myke', title: 'Barn og gående', qs: ['t01', 't03', 't08', 't20', 't21', 't24', 't30', 't31', 't32'],
+      { id: 'myke', title: 'Barn og gående', qs: ['t01', 't03', 't08', 't20', 't21', 't24', 't30', 't31', 't32', 't45', 't46', 't47'],
         points: [
           P('Ser du barn ved veien, holder du særlig lav fart og er klar til å stanse straks.', 'Barn tenker på leken, ikke på trafikken. En ball i veien kan bety at et barn kommer etter.', 'scene:ball'),
           P('Det samme gjelder ved skolepatrulje, og når du ser noen med hvit stokk eller som er hemmet i trafikken.', 'Ikke bruk hornet: det kan skremme.'),
@@ -70,7 +70,7 @@ export const BOOK = [
           P('Gående kan krysse veien der det ikke er gangfelt i nærheten.', 'De skal gå rett over og ikke skape fare. Du har som hovedregel ikke vikeplikt for dem der, men svinger du i et kryss, har du vikeplikt for gående som krysser veien du svinger inn i.'),
           P('Vis hensyn mot dem som er ved veien.', 'Senk farten, så du ikke spruter vann eller søle på dem.')
         ] },
-      { id: 'sykkel', title: 'Syklister og motorsykler', qs: ['t04', 't05', 't06', 't23', 't29', 't34', 't35'],
+      { id: 'sykkel', title: 'Syklister og motorsykler', qs: ['t04', 't05', 't06', 't23', 't29', 't34', 't35', 't48', 't49'],
         points: [
           P('Gi god sideavstand når du kjører forbi en syklist, og bare når det er trygt.', 'Syklisten kan vingle. Sperrelinjen må du ikke kjøre over, heller ikke for å komme forbi.', 'scene:syklist-forbi'),
           P('Syklister kan kjøre forbi biler på både venstre og høyre side.', 'Sjekk speil og skulder til høyre før du svinger til høyre. Andre sykler kjører de forbi på venstre side.'),
@@ -78,14 +78,14 @@ export const BOOK = [
           P('Syklister og elsparkesykler kan bruke fortauet når det er lite folk og ikke til fare.', 'Forbi gående skal de holde god avstand og omtrent gangfart, høyst 6 km/t. Regn med at de kan komme fort når du krysser et fortau.'),
           P('Motorsykler er lette å overse.', 'De er smale, blir lett skjult, og farten er vanskelig å bedømme. Se en ekstra gang før du svinger eller kjører ut.')
         ] },
-      { id: 'kollektiv', title: 'Buss, trikk og store kjøretøy', qs: ['t02', 't07', 't17', 't22', 't26'],
+      { id: 'kollektiv', title: 'Buss, trikk og store kjøretøy', qs: ['t02', 't07', 't17', 't22', 't26', 't50', 't51', 't52'],
         points: [
           P('Ved buss eller trikk på holdeplass holder du særlig lav fart og er klar til å stanse.', 'Passasjerer kan gå ut foran eller bak.', 'scene:buss-holdeplass'),
           P('Står trikken ved holdeplass uten trafikkøy, stanser du og gir fri vei for dem som går av og på.', '', 'scene:trikk'),
           P('Hold deg unna rett bak og på siden av store kjøretøy.', 'De har store blindsoner, og i svinger kutter bakhjulene innover. Med god avstand ser du mer, og sjåføren ser deg i speilene.', 'scene:lastebil-hoyre'),
           P('Gult blinkende lys på arbeidskjøretøy betyr at de kan fravike en del regler.', 'Hold god avstand og vær klar for at kjøretøyet kan stanse, rygge eller svinge uventet.')
         ] },
-      { id: 'foreren', title: 'Oppmerksomhet og samspill', qs: ['t09', 't10', 't11', 't12', 't13', 't18', 't19', 't25', 't27', 't28'],
+      { id: 'foreren', title: 'Oppmerksomhet og samspill', qs: ['t09', 't10', 't11', 't12', 't13', 't18', 't19', 't25', 't27', 't28', 't36', 't37', 't38', 't39', 't40', 't41', 't42', 't43', 't44'],
         points: [
           P('Trøtthet, rus og uoppmerksomhet øker reaksjonstiden mest.'),
           P('Håndholdt mobil er forbudt under kjøring.', 'Det gjelder også i kø og når du venter på grønt lys. Brudd gir bot og tre prikker.'),
@@ -94,7 +94,7 @@ export const BOOK = [
           P('Blir du blendet av møtende, ser du mot høyre veikant og senker farten.'),
           P('Vis i god tid hva du skal, og følg med på hva andre skal.', 'Ikke vink andre over: det kan lede dem ut i fare fra trafikk du ikke ser. Stopper køen, venter du før gangfeltet så du ikke blir stående i det.')
         ] },
-      { id: 'miljo', title: 'Miljø', qs: ['t14', 't15', 't16', 't33'],
+      { id: 'miljo', title: 'Miljø', qs: ['t14', 't15', 't16', 't33', 't53', 't54', 't55'],
         points: [
           P('Jevn fart, tidlig gasslipp og myke akselerasjoner gir lavest forbruk og minst utslipp.'),
           P('Unødig tomgang og unødvendig kjøring ved bebyggelse er forbudt.'),
@@ -105,7 +105,7 @@ export const BOOK = [
   {
     id: 'ansvar', intro: 'Øvelseskjøring, førerkortet, rus og prikker, og hva du gjør ved et uhell.',
     sections: [
-      { id: 'ovelse', title: 'Øvelseskjøring og førerkort', qs: ['a02', 'a03', 'a04', 'a05', 'a06', 'a07', 'a08', 'a41'],
+      { id: 'ovelse', title: 'Øvelseskjøring og førerkort', qs: ['a02', 'a03', 'a04', 'a05', 'a06', 'a07', 'a08', 'a41', 'a42', 'a43', 'a44', 'a45', 'a46', 'a47', 'a48', 'a49', 'a50'],
         points: [
           P('Du kan begynne å øvelseskjøre bil fra du er 16 år, når trafikalt grunnkurs er fullført.'),
           P('Ledsageren må ha fylt 25 år og hatt førerkort for bil uten avbrudd de siste 5 årene.', 'Ledsageren regnes som fører, men trafikkreglene og reglene om rus og helse gjelder også for eleven. Det kan bare være én elev om gangen.'),
@@ -114,7 +114,7 @@ export const BOOK = [
           P('Fra 1. november til 15. mars må mørkekjøringen være tatt før du kan øvelseskjøre.'),
           P('Første førerkort for bil har 2 års prøveperiode.')
         ] },
-      { id: 'prikker', title: 'Rus, prikker og førerretten', qs: ['a01', 'a09', 'a10', 'a11', 'a12', 'a25', 'a26', 'a27', 'a35', 'a37', 'a38', 'a39', 'a40', 'r05'],
+      { id: 'prikker', title: 'Rus, prikker og førerretten', qs: ['a01', 'a09', 'a10', 'a11', 'a12', 'a25', 'a26', 'a27', 'a35', 'a37', 'a38', 'a39', 'a40', 'r05', 'a51', 'a52', 'a53', 'a54', 'a55'],
         points: [
           P('Promillegrensen er 0,2.', 'Over den regnes du alltid som påvirket, men du kan være påvirket under den også. Bare tid får alkoholen ut av kroppen.'),
           P('Medisin med rød varseltrekant kan svekke evnen til å kjøre.', 'Spør legen eller apoteket før du kjører.', 'pict:medisin'),
@@ -124,7 +124,7 @@ export const BOOK = [
           P('Den som har voldt et uhell og blir straffet for ikke å ha hjulpet de skadde, mister førerretten for alltid.'),
           P('Kjør ikke når du er trøtt eller syk.', 'Bare hvile hjelper mot trøtthet. Stans på et trygt sted og ta en kort lur.')
         ] },
-      { id: 'uhell', title: 'Uhell og førstehjelp', qs: ['a16', 'a17', 'a18', 'a19', 'a20', 'a21', 'a22', 'a23', 'a24'],
+      { id: 'uhell', title: 'Uhell og førstehjelp', qs: ['a16', 'a17', 'a18', 'a19', 'a20', 'a21', 'a22', 'a23', 'a24', 'a58'],
         points: [
           P('Ved uhell skal du stanse og hjelpe personer og dyr som er skadet.', 'Er noen drept eller skadet, og skaden ikke er ubetydelig, skal politiet varsles. Er det bare skade på ting, oppgir dere navn og adresse til hverandre. Er eieren ikke der, for eksempel ved en parkert bil, gir du beskjed til eieren eller politiet snarest.'),
           P('Har du kjørt på elg, hjort eller rådyr, melder du fra til politiet.', 'Har du kjørt på et husdyr eller kjæledyr, gir du beskjed til eieren, eller til politiet hvis du ikke får tak i eieren.'),
@@ -132,14 +132,14 @@ export const BOOK = [
           P('Puster personen ikke normalt: ring 113 og start hjerte-lunge-redning.', '30 kompresjoner og 2 innblåsninger. Puster personen normalt, legger du den i stabilt sideleie og følger med på pusten.', 'diagram:nodnummer'),
           P('Brenner det i en tunnel, kjører du ut hvis du kan.', 'Kommer du ikke forbi, stanser du, slår på nødsignallyset og går bort fra røyken: til nærmeste nødutgang eller ut av tunnelen. La nøkkelen stå i bilen.')
         ] },
-      { id: 'passasjer', title: 'Passasjerer og barn', qs: ['a13', 'a14', 'a15', 'a34'],
+      { id: 'passasjer', title: 'Passasjerer og barn', qs: ['a13', 'a14', 'a15', 'a34', 'a56', 'a57'],
         points: [
           P('Føreren har ansvaret for at passasjerer under 15 år er sikret.'),
           P('Sett aldri et bakovervendt barnesete foran en kollisjonspute som er på.', 'Puten utløses med stor kraft. Slå den av, eller sett barnesetet i baksetet.'),
           P('Barn under 135 cm skal ha barnesete eller beltepute.', 'Hovedregelen er at barn under 150 cm skal bruke godkjent sikringsutstyr.'),
           P('Ha ikke med flere enn bilen er registrert for.')
         ] },
-      { id: 'eier', title: 'Bilens stand og papirer', qs: ['a28', 'a29', 'a30', 'a31', 'a32', 'a33', 'a36'],
+      { id: 'eier', title: 'Bilens stand og papirer', qs: ['a28', 'a29', 'a30', 'a31', 'a32', 'a33', 'a36', 'a59', 'a60', 'a61'],
         points: [
           P('Føreren skal sjekke at bilen er i forsvarlig stand før kjøring.', 'Fjern snø, is og dugg fra alle ruter og speil, og snø fra taket.'),
           P('Alle registrerte biler skal ha ansvarsforsikring.'),
@@ -151,7 +151,7 @@ export const BOOK = [
   {
     id: 'kjoretoy', intro: 'Dekk, varsellamper, bremser og systemene i bilen.',
     sections: [
-      { id: 'dekk', title: 'Dekk og kjetting', qs: ['k01', 'k02', 'k03', 'k04', 'k05', 'k06', 'k07', 'k24', 'k31', 'k32', 'k33', 'k34'],
+      { id: 'dekk', title: 'Dekk og kjetting', qs: ['k01', 'k02', 'k03', 'k04', 'k05', 'k06', 'k07', 'k24', 'k31', 'k32', 'k33', 'k34', 'k37', 'k38', 'k39'],
         points: [
           P('Minste mønsterdybde for personbil er 1,6 mm om sommeren og 3 mm om vinteren.', 'Mål i hovedrillene. Vinterkravet gjelder fra 1. november til første søndag etter 2. påskedag, og i Nordland, Troms og Finnmark fra 16. oktober til 30. april.', 'diagram:monster'),
           P('Piggdekk er forbudt fra første mandag etter 2. påskedag til 31. oktober.', 'Unntaket er når føret gjør det nødvendig. I Nordland, Troms og Finnmark gjelder forbudet fra 1. mai til 15. oktober.'),
@@ -162,7 +162,7 @@ export const BOOK = [
           P('Riktig lufttrykk står i instruksjonsboka eller på et merke i bilen.', 'Tallet på dekksiden er høyeste tillatte trykk for dekket. For lavt trykk gir dårligere styring og veggrep og høyere forbruk.'),
           P('Vinterdekk er merket M+S eller med et fjell med snøkrystall.', '', 'pict:vinterdekk')
         ] },
-      { id: 'lamper', title: 'Varsellamper', qs: ['k11', 'k12', 'k13', 'k14', 'k15', 'k29'],
+      { id: 'lamper', title: 'Varsellamper', qs: ['k11', 'k12', 'k13', 'k14', 'k15', 'k29', 'k40', 'k41', 'k42'],
         points: [
           P('Rød lampe: stans så snart det er trygt.', 'For eksempel feil på bremser, oljetrykk eller kjøling.', 'lamp:olje'),
           P('Gul eller oransje lampe: noe må sjekkes snart.', 'For eksempel lavt dekktrykk eller feil på ABS eller motor.', 'lamp:motor'),
@@ -170,7 +170,7 @@ export const BOOK = [
           P('Når du starter bilen, lyser lampene et øyeblikk som en test.', 'En lampe som ikke slukker, varsler om en feil.', 'pict:dash'),
           P('Blinker blinklyset mye raskere enn vanlig, er en pære trolig ødelagt.')
         ] },
-      { id: 'bremser', title: 'Bremser, styring og væsker', qs: ['k08', 'k09', 'k10', 'k16', 'k17', 'k18', 'k25', 'k26'],
+      { id: 'bremser', title: 'Bremser, styring og væsker', qs: ['k08', 'k09', 'k10', 'k16', 'k17', 'k18', 'k25', 'k26', 'k43', 'k44', 'k45'],
         points: [
           P('Med ABS tråkker du hardt, holder pedalen inne og styrer.', 'ABS hindrer at hjulene låser seg, så du kan styre mens du bremser. Bremselengden blir ikke alltid kortere.', 'lamp:abs'),
           P('Antiskrens (ESC) bremser enkelthjul så bilen holder kursen.', 'Den kan ikke oppheve fysikken: for høy fart er fortsatt for høy fart.', 'lamp:esc'),
@@ -179,13 +179,13 @@ export const BOOK = [
           P('Bremseservoen på en bensin- eller dieselbil kan du sjekke selv.', 'Trå pedalen flere ganger med motoren av, hold den inne og start: pedalen skal synke litt. Gjør den ikke det, blir bremsingen mye tyngre.'),
           P('Bytt slitte viskerblader, og bruk vinterspylervæske om vinteren.')
         ] },
-      { id: 'stotte', title: 'Førerstøtte og elbil', qs: ['k19', 'k20', 'k21', 'k22', 'k23', 'k30'],
+      { id: 'stotte', title: 'Førerstøtte og elbil', qs: ['k19', 'k20', 'k21', 'k22', 'k23', 'k30', 'k46', 'k47', 'k48', 'k49', 'k50'],
         points: [
           P('Du har alltid ansvaret, også når førerstøttesystemene er på.'),
           P('Filholder og nødbrems hjelper, men du kan ikke stole på dem.', 'De ser ikke alt, og virker dårligere i mørke, regn og snø og der linjene er slitte.'),
           P('En elbil bremser når du slipper gassen, og kommer kortere i kulde.', 'Lær hvor kraftig bilen deres bremser, og husk at det er du som må bremse i tide.')
         ] },
-      { id: 'sikring', title: 'Sikring, last og utstyr', qs: ['k27', 'k28', 'k35', 'k36', 'r30', 'r31'],
+      { id: 'sikring', title: 'Sikring, last og utstyr', qs: ['k27', 'k28', 'k35', 'k36', 'r30', 'r31', 'k51', 'k52', 'k53', 'k54', 'k55', 'k56'],
         points: [
           P('Hodestøtten skal være omtrent i høyde med toppen av hodet, nær bakhodet.'),
           P('Bilbeltet skal ligge lavt over hoftene og midt over skulderen.'),
@@ -199,7 +199,7 @@ export const BOOK = [
   {
     id: 'regler', intro: 'Grunnregelen, fartsgrensene og reglene for stans og parkering.',
     sections: [
-      { id: 'grunnregel', title: 'Grunnregelen og fartsgrensene', qs: ['r01', 'r02', 'r03', 'r04', 'r06', 'r16', 'r25'],
+      { id: 'grunnregel', title: 'Grunnregelen og fartsgrensene', qs: ['r01', 'r02', 'r03', 'r04', 'r06', 'r16', 'r25', 'r39', 'r42', 'r48', 'r49', 'r50', 'r51', 'r52', 'r53', 'r55'],
         points: [
           P('Grunnregelen: alle skal være hensynsfulle og varsomme, så det ikke oppstår fare.', 'Du skal heller ikke hindre eller forstyrre annen trafikk unødig. Den gjelder alltid, også der ingen annen regel sier noe.'),
           P('Fartsgrensen er 50 km/t i tettbygd strøk og 80 km/t utenfor, når ingen skilt sier noe annet.'),
@@ -207,7 +207,7 @@ export const BOOK = [
           P('Med tilhenger kjører du høyst 80 km/t der fartsgrensen er høyere.', 'Unntaket er når både bil og tilhenger er godkjent for 100 km/t.'),
           P('I gatetun og gågate kjører du i gangfart og har vikeplikt for gående.', 'I gatetun kan du bare parkere på merkede plasser.', 'sign:540')
         ] },
-      { id: 'stans', title: 'Stans og parkering', qs: ['r09', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15', 'r17', 'r18', 'r22', 'r23', 'r24', 'r26', 'r32', 'r35'],
+      { id: 'stans', title: 'Stans og parkering', qs: ['r09', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15', 'r17', 'r18', 'r22', 'r23', 'r24', 'r26', 'r32', 'r35', 'r40', 'r43', 'r44', 'r45'],
         points: [
           P('Du kan ikke stanse nærmere enn 5 meter fra et kryss.', 'Avstanden regnes fra der fortauskanten eller veikanten begynner å runde.', 'diagram:5m-kryss'),
           P('Du kan ikke stanse på et gangfelt eller nærmere enn 5 meter foran det.', '', 'diagram:5m-gangfelt'),
@@ -216,7 +216,7 @@ export const BOOK = [
           P('Står bilen på en mørk vei der den er vanskelig å se, skal parkeringslyset være på.'),
           P('Går du fra bilen, sørger du for at den ikke kan sette seg i gang eller brukes av andre.')
         ] },
-      { id: 'veier', title: 'Motorvei, felt og kryss', qs: ['r07', 'r08', 'r19', 'r27', 'r28', 'r29', 'r33', 'r34'],
+      { id: 'veier', title: 'Motorvei, felt og kryss', qs: ['r07', 'r08', 'r19', 'r27', 'r28', 'r29', 'r33', 'r34', 'r36', 'r37', 'r38', 'r41', 'r46', 'r47', 'r54'],
         points: [
           P('På motorvei og motortrafikkvei er rygging, vending og stans forbudt.', 'Det gjelder også på skulderen og i av- og påkjøringene.', 'sign:502'),
           P('Bare motorvogner som lovlig kan kjøre minst 40 km/t, kan bruke motorvei.', 'Moped er forbudt der.'),
@@ -229,7 +229,7 @@ export const BOOK = [
   {
     id: 'skilt', intro: 'Hvordan du kjenner igjen skiltgruppene, og hva linjene i veien betyr. Alle skiltene øver du på i skiltprøven.',
     sections: [
-      { id: 'grupper', title: 'Skiltgruppene', qs: ['s24', 's25', 's26', 's27', 's28', 's29', 's30', 's31', 's33', 's46', 's48'],
+      { id: 'grupper', title: 'Skiltgruppene', qs: ['s24', 's25', 's26', 's27', 's28', 's29', 's30', 's31', 's33', 's46', 's48', 's49', 's50', 's51', 's52', 's53'],
         points: [
           P('Fareskilt er som regel trekanter med rød kant.', 'De varsler om fare: senk farten og vær klar.', 'sign:116'),
           P('Forbudsskilt er runde med rød kant, og gjelder som regel fram til nærmeste kryss.', 'Fartsgrensen er et unntak: den gjelder til den oppheves.', 'sign:372'),
@@ -239,7 +239,7 @@ export const BOOK = [
           P('På underskiltet «Tid» gjelder sorte tall hverdager unntatt lørdag, tall i parentes lørdager og røde tall søndager og helligdager.', 'Står det ingen røde tall, gjelder skiltet ikke på søndager og helligdager.'),
           P('Underskiltet «Anbefalt fart» er ikke en fartsgrense.', 'Er det glatt, mørkt eller dårlig sikt, må du kjøre saktere.')
         ] },
-      { id: 'vikeskilt', title: 'Vikeplikt- og forkjørsskilt', qs: ['s01', 's02', 's03', 's04', 's05', 's06', 's32'],
+      { id: 'vikeskilt', title: 'Vikeplikt- og forkjørsskilt', qs: ['s01', 's02', 's03', 's04', 's05', 's06', 's32', 's54', 's55', 's56'],
         points: [
           P('Ved Vikeplikt (202) viker du for trafikk fra begge retninger.', '', 'sign:202'),
           P('Ved Stopp (204) stanser du helt, også når veien er fri.', 'Stans ved stopplinjen, og rull forsiktig fram hvis du ikke ser godt nok.', 'sign:204'),
@@ -247,14 +247,14 @@ export const BOOK = [
           P('Forkjørskryss (210) og Farlig vegkryss (124) er ikke det samme.', 'Ved 210 har sideveiene vikeplikt for deg. Ved 124 gjelder høyreregelen.', 'sign:124'),
           P('Trafikklys gjelder foran vikepliktskilt.', 'Skiltet gjelder igjen når lyset er av eller blinker gult.')
         ] },
-      { id: 'forbud', title: 'Fartsgrenser og forbud', qs: ['s07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15', 's44', 's45'],
+      { id: 'forbud', title: 'Fartsgrenser og forbud', qs: ['s07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15', 's44', 's45', 's57', 's58', 's59', 's60'],
         points: [
           P('Fartsgrensen gjelder til et nytt skilt opphever den.', 'Den gjelder også etter kryss. Etter skilt 364 «Slutt på særskilt fartsgrense» gjelder den generelle grensen.', 'sign:362:60'),
           P('Stans forbudt (370) og Parkering forbudt (372) gjelder på den siden der skiltet står.', 'Fram til nærmeste kryss eller nytt skilt. Ved 372 kan du stanse kort for av- og påstigning.', 'sign:370'),
           P('Forbikjøringsforbud (334) gjelder til skilt 336, ikke bare til krysset.', 'Du kan fortsatt kjøre forbi sykler og motorsykler.', 'sign:334'),
           P('Vendingsforbud (332) gjelder til og med første kryss.')
         ] },
-      { id: 'pabud', title: 'Påbud og opplysning', qs: ['s16', 's17', 's18', 's19', 's20', 's21', 's22', 's23'],
+      { id: 'pabud', title: 'Påbud og opplysning', qs: ['s16', 's17', 's18', 's19', 's20', 's21', 's22', 's23', 's61', 's62', 's63'],
         points: [
           P('Påbudt kjøreretning (402) viser hvilken vei du skal kjøre.', 'Påbudt kjørefelt (404) viser hvilken side du skal kjøre forbi, for eksempel på en trafikkøy.', 'sign:402'),
           P('Motorveg (502) og Motortrafikkveg (503) viser at egne regler gjelder.', 'Blant annet er rygging, vending og stans forbudt. Fartsgrensen står på egne skilt.', 'sign:502'),
@@ -263,7 +263,7 @@ export const BOOK = [
           P('Blindveg (527): veien er stengt lenger fram, så du må snu.', '', 'sign:527'),
           P('Parkering (552): parkering er tillatt, men andre regler gjelder fortsatt.', 'Du kan for eksempel ikke parkere nærmere enn 5 meter fra et kryss.', 'sign:552')
         ] },
-      { id: 'oppmerking', title: 'Linjene i veien', qs: ['s34', 's35', 's36', 's37', 's38', 's39', 's40', 's41', 's42', 's43'],
+      { id: 'oppmerking', title: 'Linjene i veien', qs: ['s34', 's35', 's36', 's37', 's38', 's39', 's40', 's41', 's42', 's43', 's64', 's65', 's66', 's67', 's68'],
         points: [
           P('Sperrelinje: du må ikke kjøre på eller over den.', 'Heller ikke for å svinge inn på en sidevei.', 'line:sperre'),
           P('Varsellinje: lange streker og korte mellomrom.', 'Den varsler kort sikt. Krysse den kan du, men bare når det er trygt.', 'line:varsel'),
@@ -277,25 +277,25 @@ export const BOOK = [
   {
     id: 'vikeplikt', intro: 'Hvem som skal vike: høyreregelen, sving, utkjøring, gangfelt, lys og politiets tegn.',
     sections: [
-      { id: 'hoyreregel', title: 'Høyreregelen', qs: ['v01', 'v03', 'v31', 'v40'],
+      { id: 'hoyreregel', title: 'Høyreregelen', qs: ['v01', 'v03', 'v31', 'v40', 'v58', 'v59'],
         points: [
           P('Uten skilt eller lys har du vikeplikt for dem som kommer fra høyre.', '', 'scene:hoyre'),
           P('Det gjelder også i T-kryss og på veier som ser ut som hovedvei.', 'Rundkjøringer har som regel vikepliktskilt. Uten skilt gjelder høyreregelen der også.', 'scene:t-kryss')
         ] },
-      { id: 'sving', title: 'Sving og møtende', qs: ['v02', 'v09', 'v22', 'v29', 'v36', 'v41', 'v42'],
+      { id: 'sving', title: 'Sving og møtende', qs: ['v02', 'v09', 'v22', 'v29', 'v36', 'v41', 'v42', 'v56', 'v57', 'v62'],
         points: [
           P('Svinger du til venstre, viker du for møtende som skal rett fram eller til høyre.', 'Også på grønt lys og på forkjørsvei.', 'scene:venstresving'),
           P('Svinger du, viker du for gående og syklende som skal rett fram.', 'Se i speilet og over skulderen før du svinger.', 'scene:hoyresving-sykkel'),
           P('Er veien delvis sperret, har den vikeplikt som har sperringen på sin side.', '', 'scene:sperret')
         ] },
-      { id: 'utkjoring', title: 'Ut fra parkering, eiendom og veikanten', qs: ['v04', 'v05', 'v10', 'v11', 'v24', 'v25', 'v26', 'v32', 'v34', 'v35'],
+      { id: 'utkjoring', title: 'Ut fra parkering, eiendom og veikanten', qs: ['v04', 'v05', 'v10', 'v11', 'v24', 'v25', 'v26', 'v32', 'v34', 'v35', 'v60'],
         points: [
           P('Fra parkeringsplass, eiendom, bensinstasjon og gatetun har du vikeplikt for alle.', '', 'scene:parkering'),
           P('Rygger eller vender du, har du vikeplikt for all annen trafikk.', 'Ser du ikke godt nok bak bilen, ber du noen passe på eller går ut og ser selv.'),
           P('Kjører du ut fra veikanten eller over et fortau, har du vikeplikt.', 'Over fortau viker du for gående, og svinger du inn over et fortau, også for syklende der.', 'scene:innkjorsel-fortau'),
           P('Fra gang- og sykkelvei har syklisten vikeplikt for trafikken på veien.', 'Vær likevel forberedt på at syklisten ikke stanser.', 'scene:gs-vei')
         ] },
-      { id: 'gangfelt', title: 'Gangfelt, buss og utrykning', qs: ['v06', 'v07', 'v08', 'v12', 'v13', 'v14'],
+      { id: 'gangfelt', title: 'Gangfelt, buss og utrykning', qs: ['v06', 'v07', 'v08', 'v12', 'v13', 'v14', 'v44', 'v45', 'v46', 'v47', 'v48', 'v49'],
         points: [
           P('Ved gangfelt uten lys viker du for gående som er i eller på vei ut i det.', '', 'scene:gangfelt'),
           P('Buss som gir tegn fra holdeplass: vikeplikt der fartsgrensen er 60 km/t eller lavere.', '', 'scene:buss'),
@@ -303,14 +303,14 @@ export const BOOK = [
           P('Gi fri vei for tog og sporvogn, og stans om nødvendig.', 'Trafikklys og skilt går foran denne regelen, også overfor sporvognen. Ved en planovergang ser du likevel alltid etter tog, også når den har bom eller lys.'),
           P('Du må ikke hindre eller forstyrre gående i gruppe med en leder, et opptog eller et gravfølge.', 'Det gjelder også utenfor gangfelt, for eksempel barnehagebarn som går over veien med en voksen.')
         ] },
-      { id: 'lys', title: 'Trafikklys og politiets tegn', qs: ['v15', 'v16', 'v17', 'v18', 'v19', 'v20', 'v21'],
+      { id: 'lys', title: 'Trafikklys og politiets tegn', qs: ['v15', 'v16', 'v17', 'v18', 'v19', 'v20', 'v21', 'v50', 'v51', 'v52', 'v53', 'v54'],
         points: [
           P('Gult lys: stans, om du kan gjøre det uten fare.', '', 'light:gul'),
           P('Rødt og gult samtidig: gjør deg klar, men vent på grønt.', '', 'light:rodgul'),
           P('Gult blinklys: vær særlig oppmerksom. Skilt eller høyreregelen avgjør vikeplikten.', '', 'light:gulblink'),
           P('Politiets tegn går foran lys, skilt og regler.', 'Arm rett opp: stans for alle. Arm rettet ut til siden: de som kommer forfra eller bakfra, stanser.', 'pict:politi-opp')
         ] },
-      { id: 'feltskifte', title: 'Rundkjøring og feltskifte', qs: ['v23', 'v27', 'v28', 'v30', 'v33', 'v43'],
+      { id: 'feltskifte', title: 'Rundkjøring og feltskifte', qs: ['v23', 'v27', 'v28', 'v30', 'v33', 'v43', 'v61', 'v63'],
         points: [
           P('I rundkjøring med vikepliktskilt viker du for dem som er i rundkjøringen.', '', 'scene:rundkjoring'),
           P('Den som skifter felt, har vikeplikt.', 'Ta ett felt om gangen, med blinklys og skulderblikk.', 'scene:tre-felt'),

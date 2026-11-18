@@ -3,7 +3,13 @@
    - chunks: råsensordata i biter (én bit per sjekkpunkt, hvert 10. sekund)
    Rådata beholdes så gamle turer kan analyseres på nytt når algoritmen blir bedre. */
 
-const DB_NAME = 'kjorerapport';
+/* Demovisning for trafikkskoler (0.24.0): egen database og egne innstillinger, så eierens ekte turer, elever og
+   adresser aldri vises i en demo, og aldri blandes med eksempeleleven. Valget leses én gang når appen starter. */
+export const DEMO_FLAG = 'kjorerapport.demo';
+const demo = (() => { try { return typeof localStorage !== 'undefined' && localStorage.getItem(DEMO_FLAG) === '1'; } catch { return false; } })();
+export const isDemoMode = () => demo;
+export function setDemoMode(on) { try { if (on) localStorage.setItem(DEMO_FLAG, '1'); else localStorage.removeItem(DEMO_FLAG); } catch { /* privat modus */ } }
+const DB_NAME = demo ? 'kjorerapport-demo' : 'kjorerapport';
 const DB_VERSION = 1;
 let dbPromise = null;
 
@@ -234,7 +240,7 @@ export async function deleteAll() {
 }
 
 /* Innstillinger er små og ufarlige, så de ligger i localStorage. */
-const SETTINGS_KEY = 'kjorerapport.settings';
+const SETTINGS_KEY = demo ? 'kjorerapport.settings.demo' : 'kjorerapport.settings';
 const DEFAULTS = { sensitivity: 'normal', theme: 'auto', hideInstallHint: false, drivers: [], activeDriver: '' };
 export function getSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }

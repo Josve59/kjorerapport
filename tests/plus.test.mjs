@@ -68,3 +68,14 @@ test('0.23.0: de 10 gratis spørsmålene finnes, er ulike, har tegning og viser 
   assert.ok(qs.some(q => PUZZLE_BY_SCENE.has(String(q.img).replace(/^scene:/, ''))), 'minst ett kryss som spilles av');
   assert.ok(qs.some(q => q.pick), 'minst ett med bilder som svar');
 });
+
+test('0.24.0: antall spørsmål i Pluss-teksten og App Store-teksten stemmer med spørsmålslista', async () => {
+  const { QUESTIONS } = await import('../js/theory-b.js');
+  const { SIGNS } = await import('../js/theory-signs.js');
+  const fs = await import('node:fs');
+  const n = String(QUESTIONS.length);
+  assert.ok(PLUS_FEATURES.theory.text.includes(`Alle ${n} spørsmålene`), `Pluss-teksten skal si ${n}`);
+  const desc = fs.readFileSync(new URL('../appstore/beskrivelse.txt', import.meta.url), 'utf8');
+  assert.ok(desc.includes(`${n} spørsmål`), `beskrivelse.txt skal si ${n} spørsmål`);
+  assert.ok(desc.includes(`alle ${SIGNS.length} skiltene`), `beskrivelse.txt skal si ${SIGNS.length} skilt`);
+});

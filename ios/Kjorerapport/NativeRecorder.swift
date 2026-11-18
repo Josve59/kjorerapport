@@ -80,6 +80,13 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             return (await plus.restore(), nil)
         case "plusRedeem":
             return (await plus.redeem(in: webView?.window?.windowScene), nil)
+        case "remindAuth":   // påminnelse om dagens teori (0.24.0, Reminders.swift)
+            return (await Reminders.authorize(), nil)
+        case "remindSet":
+            return (await Reminders.set(body["items"] as? [[String: Any]] ?? []), nil)
+        case "remindClear":
+            await Reminders.clear()
+            return (["ok": true], nil)
         case "share":
             return (["completed": await share(body)], nil)
         case "takeFile":

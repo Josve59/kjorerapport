@@ -12,7 +12,9 @@
     takeFile: () => call('takeFile'),   // fil åpnet i appen fra delearket (0.18.1); appen sier fra med «kjfile»
     beep: (tones, volume) => call('beep', { tones, volume }),   // pip spilt av appen (0.12.2)
     // Kjørerapport Pluss (PlusStore.swift): engangskjøp i App Store; endringer kommer som hendelsen «kjplus»
-    plusStatus: () => call('plusStatus'), plusBuy: () => call('plusBuy'), plusRestore: () => call('plusRestore'), plusRedeem: () => call('plusRedeem') };
+    plusStatus: () => call('plusStatus'), plusBuy: () => call('plusBuy'), plusRestore: () => call('plusRestore'), plusRedeem: () => call('plusRedeem'),
+    // Påminnelse om dagens teori (Reminders.swift, 0.24.0): lokale varsler, listen regnes ut i js/remind.js
+    remindAuth: () => call('remindAuth'), remindSet: items => call('remindSet', { items }), remindClear: () => call('remindClear') };
   window.__kjFile = () => { window.dispatchEvent(new Event('kjfile')); };
   window.__kjPlus = owned => { window.dispatchEvent(new CustomEvent('kjplus', { detail: { owned } })); };
   window.__kjCamDets = r => { window.dispatchEvent(new CustomEvent('kjcamdets', { detail: r })); };

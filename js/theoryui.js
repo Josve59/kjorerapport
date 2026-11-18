@@ -8,10 +8,25 @@ import { esc } from './format.js';
 import { THEMES, QUESTIONS } from './theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from './safety-check.js';
 import { figure, crossingMovers } from './trafficsvg.js';
-import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS, SIGN_PICK_QUESTIONS } from './theory-signs.js';
+import { SIGNS, SIGN_GROUPS, SIGN_QUESTIONS, SIGN_PICK_QUESTIONS, SIGN_REF } from './theory-signs.js';
 import { playCrossing } from './crossanim.js';
 import { CROSS_PUZZLES, MOVER_NAMES, PUZZLE_BY_SCENE, crossKey, flatOrder, checkOrder, orderText, pickCross, crossSolved } from './theory-crossings.js';
 import { hasTheory, FREE_THEORY } from './plus.js';
+import { planReminders } from './remind.js';
+import { isDemoMode } from './db.js';
+
+/* Påminnelse om dagens teori (0.24.0): bare i iPhone-appen, og bare med Pluss. Kalles når oversikten tegnes, når
+   valget endres, når dagens mål nås og når appen startes (app.js). */
+const canRemind = () => !!(typeof window !== 'undefined' && window.kjNative && window.kjNative.remindSet);
+export async function syncReminders(p) {
+  if (!canRemind()) return;
+  try {
+    const r = p && p.remind;
+    if (!r || !r.on || !hasTheory()) { await window.kjNative.remindClear(); return; }
+    const plan = dailyPlan(QUESTIONS, p), day = practiceDays(p, Date.now(), plan.goal);
+    await window.kjNative.remindSet(planReminders({ time: r.time, today: day.today, goal: plan.goal, examDate: p.examDate }));
+  } catch { /* varsler er ikke viktigere enn resten av appen */ }
+}
 import { EXAM, LEARNED, READY_RULE, READY_TEXT, HARD_SHARE, level, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
   optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief, practiceDays, toggleMark, readinessPercent, dailyPlan } from './theory.js';
 import { BOOK, sectionFor, bookChapter, SURFACES, stopDistance, impactSpeed } from './theory-book.js';
@@ -28,7 +43,7 @@ const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2
 let practice = null;   // { title, filter, items: [id], orders, i, chosen, results: [bool], back: rute å gå tilbake til }
 let drill = null;      // sikkerhetskontroll: { items: [id], i, shown, results: [bool] }
 let examTimer = null;
-const EXAM_KEY = 'kj-teori-prove';
+const EXAM_KEY = isDemoMode() ? 'kj-teori-prove-demo' : 'kj-teori-prove';   // demoen (0.24.0) har sin egen prøve
 const loadExam = () => { try { return JSON.parse(localStorage.getItem(EXAM_KEY) || 'null'); } catch { return null; } };
 const saveExam = e => { try { if (e) localStorage.setItem(EXAM_KEY, JSON.stringify(e)); else localStorage.removeItem(EXAM_KEY); } catch { /* privat modus */ } };
 let lastResult = null;   // siste leverte prøve, til resultatskjermen
@@ -100,7 +115,7 @@ function renderTheoryFree(root, ctx) {
     <section class="sign-card th-sign lv-start">
       <p class="eyebrow">Teoriprøven klasse B</p>
       <h2 class="th-sign-head">${all ? `${right} av ${FREE_THEORY.length} riktige` : done ? 'Fortsett der du slapp' : 'Prøv 10 gratis spørsmål'}</h2>
-      <p>${all ? 'Det var de 10 gratis spørsmålene. Med Pluss får du alle 281, prøver som den ekte og hele teoriboka.' : 'Ti av de beste spørsmålene i appen, med tegninger, kryss som spilles av og forklaring etter hvert svar.'}</p>
+      <p>${all ? `Det var de 10 gratis spørsmålene. Med Pluss får du alle ${QUESTIONS.length}, prøver som den ekte og hele teoriboka.` : 'Ti av de beste spørsmålene i appen, med tegninger, kryss som spilles av og forklaring etter hvert svar.'}</p>
       ${done && !all ? `<span class="th-bar"><span style="width:${done / FREE_THEORY.length * 100}%"></span></span><p class="th-exam-meta">${done} av ${FREE_THEORY.length} tatt</p>` : ''}
       <button type="button" class="btn primary" id="th-free">${icon('quiz', 20)}${all ? 'Se hva du får med Pluss' : done ? 'Fortsett de gratis spørsmålene' : 'Prøv 10 gratis spørsmål'}</button>
       ${all ? `<button type="button" class="btn secondary" id="th-free-again">${icon('repeat', 20)}Ta de 10 igjen</button>` : ''}
@@ -149,6 +164,7 @@ export async function renderTheoryHub(root, ctx) {
       <p class="th-day">${dayLine(day)}${day.streak > 1 ? `<span class="th-streak">${icon('flame', 18)}${day.streak} dager på rad</span>` : ''}</p>
       <span class="goal-bar th-day-bar"><span style="width:${Math.min(100, day.today / day.goal * 100)}%"></span></span>
       <button type="button" class="th-date" id="th-date">${planLine(plan)}${plan.daysLeft !== null && plan.daysLeft >= 0 ? `<span class="th-date-d">${esc(dateFmt(p.examDate))}</span>` : ''}${icon('chev', 16)}</button>
+      ${canRemind() ? `<button type="button" class="th-date" id="th-remind">${icon('bell', 16)}<span>${p.remind && p.remind.on ? `Påminnelse hver dag kl. ${esc(p.remind.time.replace(':', '.'))}` : 'Få en påminnelse hver dag'}</span>${icon('chev', 16)}</button>` : ''}
       ${exams.length ? `<div class="th-dots" aria-label="De siste prøvene">${exams.map(e => `<span class="th-dot ${e.correct >= EXAM.solid ? 'ok' : e.passed ? 'mid' : 'no'}" title="${e.correct} av ${e.total}">${e.correct}</span>`).join('')}</div>` : ''}
       <p class="th-ready">${esc(READY_TEXT[sum.ready.level])}</p>
       <button type="button" class="btn primary" id="th-exam">${icon('clock', 20)}${ongoing ? 'Fortsett prøven' : 'Ta en prøve'}</button>
@@ -197,6 +213,24 @@ export async function renderTheoryHub(root, ctx) {
     ctx.save({ ...ctx.progress(), examDate: /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '' });
     renderTheoryHub(root, ctx);
   };
+  const rem = root.querySelector('#th-remind');
+  if (rem) rem.onclick = async () => {
+    const cur = ctx.progress().remind || { on: false, time: '18:00' };
+    const v = await formDialog({ title: 'Påminnelse om dagens teori', text: 'Telefonen minner deg på dagens spørsmål til et fast klokkeslett. Har du nådd dagens mål, kommer det ingen påminnelse den dagen. Med prøvedato sier den hvor mange dager det er igjen.',
+      body: `<label class="toggle-row"><input type="checkbox" id="th-rem-on" ${cur.on ? 'checked' : ''}> Påminnelse hver dag</label><label class="field"><span>Klokkeslett</span><input type="time" class="sheet-input" id="th-rem-time" value="${esc(cur.time)}"></label>`,
+      read: d => ({ on: d.querySelector('#th-rem-on').checked, time: d.querySelector('#th-rem-time').value || '18:00' }) });
+    if (v === null) return;
+    let on = v.on;
+    if (on) {
+      const a = await window.kjNative.remindAuth().catch(() => null);
+      if (!a || !a.granted) { on = false; toast('Varsler er slått av for Kjørerapport. Slå dem på under Innstillinger › Varslinger på iPhonen.', { ms: 6000 }); }
+    }
+    ctx.save({ ...ctx.progress(), remind: { on, time: v.time } });
+    await syncReminders(ctx.progress());
+    if (on) toast(`Påminnelse hver dag kl. ${v.time.replace(':', '.')}.`, { type: 'ok' });
+    renderTheoryHub(root, ctx);
+  };
+  syncReminders(p);
   root.querySelectorAll('.th-theme').forEach(b => b.onclick = () => startPractice(ctx, { title: theme(b.dataset.theme).title, theme: b.dataset.theme, n: 10 }));
   const reset = root.querySelector('#th-reset');
   if (reset) reset.onclick = async () => {
@@ -278,7 +312,7 @@ export function renderPractice(root, ctx) {
     ctx.vibrate(P.chosen === 0 ? 15 : [30, 40, 30]);
     // Dagsmålet nådd akkurat nå: litt feiring, som i andre øvingsapper (0.20.0)
     const d = practiceDays(ctx.progress(), Date.now(), goal);
-    if (before < d.goal && d.today >= d.goal) { toast(`Dagens mål er nådd: ${d.goal} spørsmål!`, { type: 'ok' }); if (ctx.celebrate) setTimeout(ctx.celebrate, 300); }
+    if (before < d.goal && d.today >= d.goal) { toast(`Dagens mål er nådd: ${d.goal} spørsmål!`, { type: 'ok' }); if (ctx.celebrate) setTimeout(ctx.celebrate, 300); syncReminders(ctx.progress()); }
     renderPractice(root, ctx);
     const w = root.querySelector('.q-why'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
@@ -548,7 +582,7 @@ export function renderSignHub(root, ctx) {
     const s = SIGNS.find(x => x.id === b.dataset.sign), st = signState(ctx.progress().q['sk' + s.id]);
     sheetDialog({
       body: `<div class="q-fig small">${figure(s.img)}</div><div class="q-head"><h2 class="q-text">${esc(s.name)}</h2>${speakBtn('sg-read').replace('<button', '<button value=""')}</div>
-        <p>${esc(s.meaning)}</p><p class="muted small">${icon('book', 16)} Skiltforskriften, skilt ${s.id === '306' ? '306.0' : s.id} · ${SIGN_STATE_TEXT[st]}</p>`,
+        <p>${esc(s.meaning)}</p><p class="muted small">${icon('book', 16)} Skiltforskriften, skilt ${SIGN_REF[s.id] || s.id} · ${SIGN_STATE_TEXT[st]}</p>`,
       onOpen: d => { const r = d.querySelector('#sg-read'); if (r) r.onclick = e => { e.preventDefault(); speak(`${s.name}. ${s.meaning}`); }; }
     }).then(stopSpeaking);
   });

@@ -9,7 +9,7 @@
 
 export const FREE_REPORTS = 10;
 export const PLUS_FEATURES = {
-  theory: { icon: 'quiz', title: 'Hele teorien og sikkerhetskontrollen', text: 'Alle 281 spørsmålene med tegninger og forklaring, prøver som den ekte, teoriboka, skiltprøven og skiltkortene, «Hvem kjører først?» og alle 46 oppgavene i sikkerhetskontrollen.' },
+  theory: { icon: 'quiz', title: 'Hele teorien og sikkerhetskontrollen', text: 'Alle 420 spørsmålene med tegninger og forklaring, prøver som den ekte, teoriboka, skiltprøven og skiltkortene, «Hvem kjører først?» og alle 46 oppgavene i sikkerhetskontrollen.' },
   camera: { icon: 'camera', title: 'Kameraene', text: 'Speil- og skulderblikk med frontkameraet, og bilen foran, feltlinjene og fartsskiltene med bakkameraet samtidig.' },
   plan: { icon: 'book', title: 'Opplæringsplanen', text: 'Hele læreplanen for klasse B, med det appen har sett på turene, og faresteder på kartet.' },
   teacher: { icon: 'school', title: 'Til trafikklæreren', text: 'Oppsummering av øvingen siden forrige kjøretime, klar til å vise eller dele.' },

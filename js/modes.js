@@ -55,7 +55,8 @@ export function forgetStudent(s = {}, name) {
 }
 
 /* Hvem appen viser data for: trafikklæreren ser én elev om gangen, eleven ser alle sine egne turer (null = alle) */
-export const scopeDriver = (s = {}) => (isTeacher() ? (s.activeStudent || '') : null);
+/* scopeOwn (0.24.0, demoen): i elevvisningen bare elevens egne turer, så lærervisningens andre elever ikke blandes inn */
+export const scopeDriver = (s = {}) => (isTeacher() ? (s.activeStudent || '') : s.scopeOwn ? (s.activeDriver || '') : null);
 /* Nøkkelen for det som lagres per person (opplæringsplan, kjøretimer, kalibrering). Eleven beholder sin gamle nøkkel. */
 export const personKey = (s = {}) => (isTeacher() ? (s.activeStudent || '_') : (s.activeDriver || '_'));
 /* Navnet turen merkes med når den tas opp */

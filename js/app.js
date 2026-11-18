@@ -1,13 +1,14 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, SENSITIVITY, TH } from './analysis.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
-import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage } from './db.js';
+import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
+import { seedDemo } from './demo.js';
 import { renderReport, closeMapOverlay, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel } from './report.js';
 import { enrichDrive, enrichMotorway, evaluateRoad, ROAD_V, LIMITS_V, MOTOR_V } from './enrich.js';
 import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } from './insights.js';
 import { esc, km, n0, n1, date, duration, mss } from './format.js';
 import { icon, toast, confirmDialog, infoDialog, promptDialog, formDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
-import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
+import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL, insuranceLog, INSURANCE_KM } from './log.js';
 import { teacherSummary, teacherText, teacherHtml } from './teacher.js';
 import * as cam from './facecam.js';
 import { createLiveLimit, createLiveRoad } from './livelimit.js';
@@ -21,7 +22,7 @@ import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit, overlayCamSigns } from './signs.js';
 import { createLaneEase } from './laneease.js';
 import { crestSpeed, speedScore, totalScore } from './speedfit.js';
-import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory, THEORY_HOME, renderBook, bookTitle, renderCross, renderCards } from './theoryui.js';
+import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory, THEORY_HOME, renderBook, bookTitle, renderCross, renderCards, syncReminders } from './theoryui.js';
 import { normProgress, tagsFromDrives } from './theory.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, hasTheory, hasFeature, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
@@ -33,7 +34,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.23.0';
+export const APP_VERSION = '0.24.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -216,7 +217,7 @@ async function renderHome() {
 
   // Elever (0.12.0): bare trafikklæreren bytter mellom elever. Eleven ser alle sine egne turer.
   const studs = isTeacher() ? activeStudents(settings) : [];
-  const filter = isTeacher() ? (settings.activeStudent || '') : '';
+  const filter = scopeDriver(settings) || '';   // læreren: valgt elev; demoen (0.24.0): bare elevens egne
   const chips = $('#driver-chips');
   if (isTeacher()) {
     // Med mange elever (0.18.0): bare den valgte og «Alle elever», ellers ble Hjem en vegg av knapper
@@ -228,7 +229,7 @@ async function renderHome() {
     chips.querySelectorAll('.chip[data-d]').forEach(c => c.onclick = () => { saveSettings({ ...getSettings(), activeStudent: c.dataset.d }); renderHome(); });
     $('#btn-chip-add').onclick = () => { location.hash = '#/trafikklaerer'; };
   } else chips.hidden = true;
-  const drives = isTeacher() ? allDrives.filter(d => (d.driver || '') === filter) : allDrives;
+  const drives = isTeacher() || filter ? allDrives.filter(d => (d.driver || '') === filter) : allDrives;
 
   const rows = [];
   const results = [];     // bare ekte opptak – demo og importerte turer holdes utenfor oppsummering og trend
@@ -540,7 +541,7 @@ async function renderPlus(feature = null) {
       root.innerHTML = `
         <section class="plus-hero"><span class="plus-badge">${icon('check', 18)}Pluss</span>
           <h2>Teorien er en del av Pluss i iPhone-appen</h2>
-          <p>Her kan du prøve 10 gratis spørsmål. Alle 281 spørsmålene, prøvene, teoriboka, skiltprøven og sikkerhetskontrollen finnes i iPhone-appen Kjørerapport, med Pluss.</p></section>
+          <p>Her kan du prøve 10 gratis spørsmål. Alle 420 spørsmålene, prøvene, teoriboka, skiltprøven og sikkerhetskontrollen finnes i iPhone-appen Kjørerapport, med Pluss.</p></section>
         <button type="button" class="btn secondary" id="plus-back">Tilbake</button>`;
       root.querySelector('#plus-back').onclick = () => goBack();
       return;
@@ -832,7 +833,7 @@ async function renderLog() {
   const root = $('#log-root');
   root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
   const settings = getSettings();
-  const filter = isTeacher() ? (settings.activeStudent || '') : '';
+  const filter = scopeDriver(settings) || '';   // som på Hjem
   const all = await listDrives(), plus = hasPlus();
   const drives = all.filter(d => inLog(d) && (!filter || d.driver === filter));
   const excludedDrives = all.filter(d => isOwn(d) && d.excluded && (!filter || d.driver === filter));   // 0.18.0
@@ -871,6 +872,11 @@ async function renderLog() {
 </span>
       ${scoreBadge(x.res.overall, 40)}</button></li>`;
   const moreLabel = open => (open ? 'Vis bare de siste' : `Vis alle ${real.length} turer`);
+  // Kjørelogg til forsikringen (0.24.0). Kilometerne vises bare når loggen gjelder én fører.
+  const oneDriver = new Set(rows.map(x => x.d.driver || '').filter(Boolean)).size <= 1;
+  const insKm = Math.floor(tot.total.km);
+  const insCard = `<button type="button" class="card t-cta" id="btn-log-ins"><span class="card-title">${icon('shield')}Kjørelogg til forsikringen</span>
+      <span class="muted small">${!oneDriver ? `Mange forsikringsselskap gir høyere startbonus etter ${INSURANCE_KM.toLocaleString('nb-NO')} km øvelseskjøring.` : insKm >= INSURANCE_KM ? `Over ${INSURANCE_KM.toLocaleString('nb-NO')} km øvelseskjøring. Vis loggen til forsikringsselskapet.` : `${insKm.toLocaleString('nb-NO')} av ${INSURANCE_KM.toLocaleString('nb-NO')} km. Mange forsikringsselskap gir høyere startbonus etter ${INSURANCE_KM.toLocaleString('nb-NO')} km.`}</span><span class="last-cta">Se loggen ${icon('chev', 18)}</span></button>`;
   root.innerHTML = `
     <section class="sign-card log-hero">
       <p class="eyebrow">Kjørelogg${filter ? ` · ${esc(filter)}` : ''}</p>
@@ -885,6 +891,7 @@ async function renderLog() {
     ${real.length ? `<h2 class="section-title">${real.length > SHOW ? 'Siste turer' : 'Turer'}</h2>
     <ul class="drives log-list card trip-list" id="trip-list">${real.map(tripRow).join('')}</ul>
     ${real.length > SHOW ? `<button type="button" class="btn secondary more-trips" id="btn-more-trips" aria-controls="trip-list" aria-expanded="${logShowAll}">${icon('chev', 20)}<span>${moreLabel(logShowAll)}</span></button>` : ''}` : ''}
+    ${insCard}
     ${excludedDrives.length ? `<h2 class="section-title">Holdt utenfor utregningene</h2>
     <ul class="drives log-list card">${excludedDrives.map(d => `<li><button type="button" class="drive" data-id="${esc(d.id)}">
       <span class="drive-main"><strong>${esc(shortDay(d.startedAt))}</strong><span class="muted small">${esc((d.excluded && d.excluded.reason) || 'Tatt ut')}</span></span>${icon('chev', 18)}</button></li>`).join('')}</ul>
@@ -916,6 +923,7 @@ async function renderLog() {
   const csv = () => exportLogCsv(rows, filter);
   root.querySelector('#btn-log-csv2').onclick = csv;
   $('#btn-log-spots').onclick = () => { location.hash = '#/faresteder'; };
+  $('#btn-log-ins').onclick = () => { location.hash = '#/forsikring'; };
 }
 
 async function exportLogCsv(rows, filter) {
@@ -936,6 +944,69 @@ async function exportLogCsv(rows, filter) {
   a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   toast('Loggen er lastet ned.', { type: 'ok' });
+}
+
+/* Kjørelogg til forsikringen (0.24.0). Mange forsikringsselskap gir høyere startbonus etter 2 000 km øvelseskjøring.
+   Noen godtar et skjermbilde av kilometerne fra en annen app (Tryg og Fremtind i 2026), andre vil ha turene i sin egen
+   app. Skiltkortet øverst er laget for skjermbildet; tabellen med hver tur kommer med i PDF-en. */
+let insWho = '';
+async function renderInsurance() {
+  show('insurance');
+  const root = $('#insurance-root');
+  root.innerHTML = '<div class="skeleton-row"></div><div class="skeleton-row"></div>';
+  const settings = getSettings();
+  const scope = scopeDriver(settings);
+  const all = (await listDrives()).filter(d => inLog(d) && (!scope || (d.driver || '') === scope));
+  // Flere førere i samme app (f.eks. søsken): loggen gjelder én person om gangen
+  const names = scope ? [] : [...new Set(all.map(d => d.driver || '').filter(Boolean))];
+  if (names.length > 1 && !names.includes(insWho)) insWho = names.includes(settings.activeDriver) ? settings.activeDriver : names[0];
+  const who = scope || (names.length > 1 ? insWho : names[0] || '');
+  const drives = names.length > 1 ? all.filter(d => (d.driver || '') === who) : all;
+  const rows = [];
+  for (const d of drives) { try { const res = await analyzeDrive(d); rows.push({ d, res, log: logFor(d, res) }); } catch { /* for lite data */ } }
+  const L = insuranceLog(rows.map(x => ({ at: x.d.startedAt, km: x.log.total.km, sec: x.log.total.sec })));
+  const big = v => Math.floor(v).toLocaleString('nb-NO');   // rundet ned, som i insuranceLog
+  const dec1 = v => (Math.round(v * 10) / 10).toLocaleString('nb-NO', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const day = t => new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(t));
+  const name = who || (isTeacher() ? '' : (settings.name || '').trim());
+  const whoPick = names.length > 1 ? `<div class="segment ins-who" role="radiogroup" aria-label="Hvem sin kjørelogg">${names.map(n => `<label><input type="radio" name="ins-who" value="${esc(n)}"${n === who ? ' checked' : ''}><span>${esc(n)}</span></label>`).join('')}</div>` : '';
+  const wireWho = () => root.querySelectorAll('input[name=ins-who]').forEach(r => { r.onchange = () => { insWho = r.value; renderInsurance(); }; });
+  if (!L.count) {
+    root.innerHTML = `${whoPick}<div class="empty card"><span class="empty-ico">${icon('shield', 40)}</span><strong>Ingen turer ennå</strong><span class="muted small">Kilometerne fra øvelseskjøringen samles her, tur for tur, til du har ${big(INSURANCE_KM)} km.</span></div>`;
+    wireWho(); return;
+  }
+  const plural = (n, one, many) => (n === 1 ? one : many);
+  root.innerHTML = `${whoPick}
+    <section class="sign-card log-hero ins-hero">
+      <p class="eyebrow">Øvelseskjøring${name ? ` · ${esc(name)}` : ''}</p>
+      <p class="log-big">${big(L.km)} km</p>
+      <p class="log-big-label">${L.done ? `Over ${big(INSURANCE_KM)} km øvelseskjøring` : `${big(L.left)} km igjen til ${big(INSURANCE_KM)} km`}</p>
+      <div class="goal-bar" role="img" aria-label="${big(L.km)} av ${big(INSURANCE_KM)} km"><span style="width:${(L.share * 100).toFixed(1)}%"></span></div>
+      <dl class="sign-stats">
+        <div><dt>${plural(L.count, 'tur', 'turer')}</dt><dd>${L.count}</dd></div>
+        <div><dt>kjøretid</dt><dd>${fmtHours(L.sec)}</dd></div>
+        <div><dt>${plural(L.days, 'dag', 'dager')}</dt><dd>${L.days}</dd></div>
+      </dl>
+      <p class="ins-stamp">${day(L.first)} – ${day(L.last)}. Målt med GPS i Kjørerapport, hentet ${day(Date.now())}.</p>
+    </section>
+    <section class="card ins-help">
+      <h2 class="card-title">${icon('shield')}Til forsikringsselskapet</h2>
+      <p class="muted small">Mange selskap gir høyere startbonus på den første bilforsikringen når du har øvelseskjørt ${big(INSURANCE_KM)} km. Noen godtar et skjermbilde av kilometerne fra en annen app: ta skjermbilde av kortet over. Andre vil at turene logges i deres egen app. Spør selskapet hva de godtar.</p>
+      <button type="button" class="btn primary" id="btn-ins-pdf">${icon('print', 20)}Lagre som PDF</button>
+      <button type="button" class="btn secondary" id="btn-ins-csv">${icon('share', 20)}Del som regneark</button>
+    </section>
+    <h2 class="section-title">Alle turene</h2>
+    <section class="card ins-list">
+      <table class="ins-table">
+        <thead><tr><th scope="col">Dato</th><th scope="col">Start</th><th scope="col" class="num">Tid</th><th scope="col" class="num">Km</th></tr></thead>
+        <tbody>${L.trips.map(t => { const d = new Date(t.at); return `<tr><td>${d.toLocaleDateString('nb-NO')}</td><td>${d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}</td><td class="num">${fmtHours(t.sec)}</td><td class="num">${dec1(t.km)}</td></tr>`; }).join('')}</tbody>
+        <tfoot><tr><th scope="row" colspan="2">Sum, ${L.count} ${plural(L.count, 'tur', 'turer')}</th><td class="num">${fmtHours(L.sec)}</td><td class="num">${dec1(L.km)}</td></tr></tfoot>
+      </table>
+    </section>
+    <p class="muted small pad">Kilometerne er målt med GPS på telefonen under hver tur. Turer der noen andre kjørte, er ikke med.</p>`;
+  wireWho();
+  $('#btn-ins-pdf').onclick = () => window.print();   // iPhone-appen: utskriftsarket, der PDF-en kan lagres eller deles
+  $('#btn-ins-csv').onclick = () => exportLogCsv(rows, who);
 }
 
 function hotspotItems(x) {
@@ -2921,7 +2992,8 @@ async function renderSettings() {
     if (!(await confirmDialog({ title: 'Slette alt i appen?', text: 'Alle turer, navn, elever, meldinger, lekser, teori, kalibrering, innstillinger og lagret kart slettes fra telefonen. Appen blir som ny. Det kan ikke angres.', ok: 'Slett alt', danger: true }))) return;
     if (recorder && recorder.running) { toast('Stopp turen først.', { ms: 2500 }); return; }
     await deleteAll();
-    try { for (const k of Object.keys(localStorage)) if (k.startsWith('kjorerapport.')) localStorage.removeItem(k); } catch { /* lagringen er stengt */ }
+    // I demovisningen (0.24.0) slettes bare demoens egne innstillinger, aldri de ekte
+    try { for (const k of Object.keys(localStorage)) if (k.startsWith('kjorerapport.') && (!isDemoMode() || k.endsWith('.demo'))) localStorage.removeItem(k); } catch { /* lagringen er stengt */ }
     try { await caches.delete('kjorerapport-kart'); } catch { /* ingen cache */ }
     location.hash = '#/';
     location.reload();
@@ -2967,7 +3039,8 @@ function renderDriverSettings() {
         ? { title: 'Bruke appen som trafikklærer?', text: 'Du får en elevliste i stedet for dine egne turer, meldinger med elevene, og kjøretimene du tar opp hører til eleven du velger før timen. Turene som alt ligger i appen, blir liggende. Du kan bytte tilbake her.', ok: 'Ja, trafikklærer' }
         : { title: 'Bruke appen som elev eller ledsager?', text: 'Elevlisten og meldingene med elevene blir liggende, men vises ikke før du bytter tilbake til trafikklærer.', ok: 'Ja, bytt' });
       if (!ok) { renderDriverSettings(); return; }
-      const mode = toTeacher ? 'teacher' : 'app';
+      // I demoen er eleven Pluss-elev, så teori og rapporter ikke låses når man bytter tilbake fra trafikklærer
+      const mode = toTeacher ? 'teacher' : isDemoMode() ? 'plus' : 'app';
       applyViewMode(mode);
       saveSettings({ ...getSettings(), viewMode: mode, devPlus: '' });
       toast(toTeacher ? 'Appen er nå for trafikklærer. Legg til elevene under Elever.' : 'Appen er nå for elev og ledsager.', { type: 'ok', ms: 3000 });
@@ -2989,6 +3062,17 @@ async function renderViewModes() {
   const card = $('#view-mode-card');
   if (!(await viewModesAllowed())) { card.hidden = true; return; }
   card.hidden = false;
+  // Demo for trafikkskoler (0.24.0): egen database med eksempeleleven, så ekte turer og elever aldri vises
+  const db = $('#btn-demo-mode');
+  if (db) {
+    db.textContent = isDemoMode() ? 'Avslutt demoen' : 'Start demoen';
+    db.onclick = async () => {
+      if (isDemoMode()) { setDemoMode(false); location.hash = '#/'; location.reload(); return; }
+      if (recorder && recorder.running) { toast('Stopp turen først.', { ms: 2500 }); return; }
+      if (!(await confirmDialog({ title: 'Starte demoen for trafikkskoler?', text: 'Appen viser eksempeleleven Emma med turer, rapporter, teori og trafikklærer-siden. Dine egne turer, elever og innstillinger blir ikke vist eller rørt, og alt er der igjen når du avslutter demoen.', ok: 'Start demoen' }))) return;
+      setDemoMode(true); location.hash = '#/'; location.reload();
+    };
+  }
   const box = $('#mode-list'), cur = viewMode();
   box.innerHTML = VIEW_MODES.map(([id, label, text]) => `<label class="mode-opt"><input type="radio" name="viewmode" value="${id}" ${id === cur ? 'checked' : ''}><span><strong>${esc(label)}</strong><span class="muted small">${esc(text)}</span></span></label>`).join('');
   box.querySelectorAll('input').forEach(r => r.onchange = () => {
@@ -3193,7 +3277,7 @@ function updateTabbar(h) {
   if (TAB_ROOTS[h]) lastTab = h;
   if (h.startsWith('#/elev/')) lastTab = '#/trafikklaerer';   // en rapport åpnet fra elevsiden hører til Elever (0.18.0)
   if (h.startsWith('#/opplaering/')) lastTab = h;   // underfanene i Opplæring (0.20.0)
-  const active = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') || h.startsWith('#/opplaering/') ? 'plan' : null) || (h.startsWith('#/elev/') ? 'teacher' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips' })[h] || TAB_ROOTS[lastTab];
+  const active = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') || h.startsWith('#/opplaering/') ? 'plan' : null) || (h.startsWith('#/elev/') ? 'teacher' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips', '#/forsikring': 'trips' })[h] || TAB_ROOTS[lastTab];
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -3238,7 +3322,7 @@ function goBack() {
   if (h.startsWith('#/elev/')) { location.hash = '#/trafikklaerer'; return; }   // elevsiden → elevlisten (0.18.0)
   // En rapport åpnet fra elevsiden går tilbake dit
   if (h.startsWith('#/rapport/') && reportFrom && reportFrom.startsWith('#/elev/')) { location.hash = reportFrom; return; }
-  location.hash = h === '#/faresteder' ? '#/logg' : h.startsWith('#/pluss') ? (guidesFrom || '#/') : gateFor(h) && !hasFeature(gateFor(h)) ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
+  location.hash = h === '#/faresteder' || h === '#/forsikring' ? '#/logg' : h.startsWith('#/pluss') ? (guidesFrom || '#/') : gateFor(h) && !hasFeature(gateFor(h)) ? '#/' : (h.startsWith('#/rapport/') || h === '#/demo') ? lastTab : '#/';
 }
 
 /* Overlegg som låser siden (fullskjerm kart og kamera) lukkes ved hvert skjermbytte. Før 0.10.1 kunne «Tilbake»
@@ -3290,6 +3374,7 @@ function route() {
   else if (h === '#/klar') renderReady();
   else if (h === '#/fremgang') renderProgress();
   else if (h === '#/faresteder') renderSpots();
+  else if (h === '#/forsikring') renderInsurance();
   else if (h === '#/opplaering' || h === '#/opplaering/teori' || h === '#/opplaering/laereplan') renderPlan(h);
   else if (h === '#/kamera') renderCamera();
   else if (h === '#/guider') renderGuides();
@@ -3302,7 +3387,7 @@ function route() {
 function init() {
   applyTheme();
   hydrateIcons();
-  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress', 'theory'].forEach(n => { screens[n] = document.getElementById(n); });
+  ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress', 'theory', 'insurance'].forEach(n => { screens[n] = document.getElementById(n); });
   // Bevegelsesdata (0.12.4): iPhone gir dem bare etter et trykk. «Start kjøretur» er trykket, så tilgangen bes om her;
   // sjekken før kjøring starter av seg selv uten trykk, og fikk ellers aldri data.
   $('#btn-go-precheck').onclick = () => { requestMotionPermission().catch(() => {}); location.hash = '#/sjekk'; };
@@ -3334,7 +3419,8 @@ function init() {
     // Teorien (0.23.0) ser også annerledes ut med og uten Pluss
     if (!(recorder && recorder.running) && (gateFor(h) || h.startsWith('#/rapport/') || h.startsWith('#/opplaering') || h.startsWith('#/teori') || ['#/', '#/logg', '#/innstillinger', '#/pluss'].includes(h))) route();
   });
-  refreshPlus().then(() => updatePlusMarks()).catch(() => {});
+  // Når App Store har svart, vet appen om teorien er låst opp: da legges påminnelsene for de neste dagene inn på nytt (0.24.0)
+  refreshPlus().then(() => { updatePlusMarks(); syncReminders(theoryProgress()); }).catch(() => {});
   $('#btn-update').onclick = () => { if (swUpdateReady) swUpdateReady.postMessage('skipWaiting'); };
   $('#btn-check-update').onclick = async () => {
     if (!swReg) { toast('Oppdatering virker bare i appen fra nettadressen, ikke lokalt.', { type: 'info' }); return; }
@@ -3413,4 +3499,13 @@ function registerSW() {
   }).catch(err => console.warn('Service worker feilet', err));
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// Demovisningen (0.24.0) fylles med eksempeleleven før appen tegnes første gang
+document.addEventListener('DOMContentLoaded', () => {
+  if (!isDemoMode()) { init(); return; }
+  seedDemo().catch(e => console.error('Demoen kunne ikke fylles', e)).finally(() => {
+    document.body.classList.add('is-demo');
+    init();
+    const bar = $('#demo-bar');
+    if (bar) { bar.hidden = false; $('#demo-exit').onclick = () => { setDemoMode(false); location.hash = '#/'; location.reload(); }; }
+  });
+});

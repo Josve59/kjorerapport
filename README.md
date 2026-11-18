@@ -143,6 +143,73 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.24.0 – demo for driving schools, insurance log, theory reminder, 420 questions and 123 signs
+
+The owner asked for five improvements before the meeting with the driving school (18 November). The teacher summary as PDF was dropped.
+
+**Demo for driving schools** (`js/demo.js`, `js/demo-route.js`, `db.js`)
+- Settings → Visning (test builds only) → «Start demoen». The app restarts with its own database (`kjorerapport-demo`) and its own settings key (`kjorerapport.settings.demo`), switched by `localStorage['kjorerapport.demo']`. The owner's real drives, pupils and addresses are never shown or touched.
+- The demo is filled the first time (and when `DEMO_V` goes up) with the example pupil Emma:
+  - 8 practice drives along public streets in Trondheim (the App Store screenshot route), 10–27 minutes, smoother over time;
+  - theory with 207 answers, three exams (37, 40 and 42 right) and the theory test in 12 days;
+  - Jonas and Sara as two more pupils for the teacher view.
+- In the pupil view only Emma's own drives show on Hjem and in the log (`scopeOwn`, `scopeDriver` in `modes.js`). Switching to «Trafikklærer» under Settings shows the pupil list with all three. Switching back keeps Pluss in the demo.
+- A blue bar above the tab bar says «Demo med Emma» with «Avslutt demoen». «Slett alt» in the demo only deletes the demo.
+
+**Theory in the intro:** a new first intro page, «Øv til lappen i én app», says the app has the theory test, the safety check and a report after every drive, and that 10 questions are free.
+
+**Insurance log** (`#/forsikring`, `insuranceLog` in `js/log.js`)
+- What the insurers said (their own pages, 18 November): Tryg, Gjensidige, Fremtind (SpareBank 1, DNB) and Eika give 70 % starting bonus after 2,000 km of practice driving.
+  - Tryg takes a screenshot of the kilometres from another app («Hent kilometer fra en annen app»).
+  - Fremtind took a screenshot by e-mail for up to 2,000 km (an article from 2024).
+  - SpareBank 1 only says «en øvelseskjørings-app».
+  - Gjensidige wants every drive signed by the companion in its own app.
+- So the page is made for a screenshot: a sign card with the kilometres (rounded down, never more than was driven), how far is left to 2,000 km, drives, time, days and the dates. Below: «Lagre som PDF» (the iPhone print sheet, where the PDF can be saved or shared), «Del som regneark» (the existing CSV), and a table with every drive (date, start, time, km) and the sum.
+- The text in the app names no insurer, because their terms change. It says many give a higher starting bonus, that some accept a screenshot and others want their own app, and to ask the company.
+- With more than one driver in the app (siblings), the page asks whose log it is. A drive where «Noen andre kjørte» is left out, as in the log.
+- From the Turer tab: the card «Kjørelogg til forsikringen» under the drives.
+
+**Daily theory reminder** (`js/remind.js`, `ios/Kjorerapport/Reminders.swift`)
+- In the theory overview (iPhone app only): «Påminnelse» next to the exam date. Pick a time; the first time, iPhone asks for permission to send notifications.
+- Local notifications only, no server: the app schedules one for each of the next 14 days. The list is made again each time the app opens and when today's goal is met, so today's reminder disappears once you have practised.
+- Near the exam date the text counts down («Teoriprøven om 5 dager», «i morgen», «i dag. Lykke til!»), and there are no reminders after the exam.
+
+**More theory** (the owner asked for 400–450 questions and about 150 signs, fact-checked)
+- **420 questions** (281 before): fart 66, trafikanter 55, ansvar 61, kjøretøy 56, regler 55, skilt 68, vikeplikt 59.
+  - Four writer agents drafted 140 new ones as JSON, where the existing questions were thinnest:
+    - f47–f66 and t36–t55;
+    - a42–a61 and k37–k56;
+    - r36–r55 and v44–v63;
+    - s49–s68.
+  - The writers used only the law texts, Lovdata and vegvesen.no, never a commercial question bank.
+  - `.local-test/nye-sporsmal/sjekk.mjs` checks a draft: ids, themes, sections, drawings, how often the right answer is the longest, and levels. `flett.mjs` merges it into `theory-b.js` and the theory-book sections. Both can be used again for the next batch.
+  - Four independent fact-check agents went through every new question against Lovdata and vegvesen.no.
+  - No right answer was wrong, but 19 questions were changed:
+    - **Wrong answers that could be argued true:** t36, a56, r48, v46, v52 and v47.
+    - **Unclear stems:** t52 and v53.
+    - **Statements that were too strong:** a42 (dark driving is only needed before the test from November to March), a61, k42, f48, f49, f53, r41, r55 and v63.
+    - **More answers:** f56 got a fourth answer.
+  - v55 was dropped, because it repeated the crossing in v41 and v42.
+  - The right answer is the longest in 58 of 420 (14 %).
+- **123 signs in the sign test** (57 before): fare 35, vike 7, forbud 36, påbud 4, opplysning 41.
+  - 66 are new, for example 112, 117–120, 135, 136, 149–155, 306.1–306.10, 308–326, 335, 337, 376, 378, 408, 504–514, 521.1, 528–539, 542, 550, 555, 556.2, 558, 565 and 570.
+  - Skiltforskriften only has about 130 signs in groups 1xx–5xx that matter for class B, so about 150 was not possible without counting variants twice.
+  - Names come word for word from skiltforskriften. 556 is now «Automatisk trafikkontroll – punktmåling» (556.1), with the same id, so saved progress is kept. `SIGN_REF` gives the regulation number.
+  - 503 is redrawn: the car is seen from the front, as on the real sign.
+  - An independent agent compared every drawing with the official Lovdata images, and 65 of 68 were right. These were fixed:
+    - 521.1: one line, with the bicycle to the right;
+    - 306.7: an upright pedestrian walking to the right;
+    - 570.2: the emergency-exit runner.
+  - The red diagonal on 306.x is correct.
+  - Sign seeds no longer collide: 306.1 and 306.10 used to get the same shuffle.
+- Every new question is in a theory-book section.
+- The counts in `plus.js`, the web text and `appstore/beskrivelse.txt` are checked by a test, so they cannot drift from the question list again.
+- A cached copy of three public Teoritentamen pages, saved on 13 November, was found in `.local-test/teori-kilder/tt/` and moved to the Trash. It held no questions.
+
+**Tests:** 276 pass. New: `insuranceLog` (rounding, order, empty), the reminder plan, and the counts in the texts.
+
+**Not tested:** the reminder notifications and «Lagre som PDF» on the phone (WHAT), the demo on the phone.
+
 ## What's new in 0.23.0 – theory in Pluss, 10 free questions, no trial, NOK 499
 
 The owner's decisions (18 November, ahead of a meeting with a driving school):

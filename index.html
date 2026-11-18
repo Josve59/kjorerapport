@@ -313,6 +313,17 @@
     <div id="progress-root"></div>
   </section>
 
+  <!-- Kjørelogg til forsikringen (0.24.0): kilometerne mot 2 000 km, til skjermbilde eller PDF -->
+  <section id="insurance" class="screen" hidden>
+    <header class="appbar">
+      <button type="button" class="btn-back icon-btn" aria-label="Tilbake" data-icon="back"></button>
+      <span class="brand"><img src="./icons/icon.svg" alt="" width="30" height="30">Kjørerapport</span>
+      <button type="button" class="icon-btn btn-gear" aria-label="Innstillinger" data-icon="gear"></button>
+    </header>
+    <div class="page-head"><h1 class="page-title">Kjørelogg til forsikringen</h1></div>
+    <div id="insurance-root"></div>
+  </section>
+
   <section id="guides" class="screen" hidden>
     <header class="appbar">
       <span class="brand"><img src="./icons/icon.svg" alt="" width="30" height="30">Kjørerapport</span>
@@ -336,6 +347,10 @@
       <h3>Visning (midlertidig)</h3>
       <p class="muted small">Se appen slik den blir for hver type bruker. Forsvinner før appen kommer i App Store.</p>
       <div class="mode-list" id="mode-list" role="radiogroup" aria-label="Visning"></div>
+      <div class="demo-start">
+        <p><strong>Demo for trafikkskoler</strong><br><span class="muted small">Viser hele appen med eksempeleleven Emma: turer, rapporter, teori og trafikklærer-siden. Dine egne turer og elever blir ikke vist eller rørt.</span></p>
+        <button type="button" class="btn secondary" id="btn-demo-mode">Start demoen</button>
+      </div>
     </section>
 
     <h2 class="group-title"><span data-icon="user"></span>Deg og mål</h2>
@@ -492,7 +507,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 0.23.0</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 0.24.0</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 
@@ -513,10 +528,19 @@
   <a href="#/trafikklaerer" data-tab="teacher"><span data-icon="user"></span><span>Trafikklærer</span></a>
   <a href="#/guider" data-tab="guide"><span data-icon="compass"></span><span>Guide</span></a>
 </nav>
-<!-- Intro ved første start (v0.9.18): tre korte sider, kan sveipes eller hoppes over. Tillatelser spørres først når turen startes. -->
+<!-- Demovisning (0.24.0): viser at det er eksempeleleven, og at demoen kan avsluttes -->
+<div class="demo-bar" id="demo-bar" role="status" hidden><span>Demo med Emma</span><button type="button" class="link" id="demo-exit">Avslutt demoen</button></div>
+<!-- Intro ved første start (v0.9.18): korte sider, kan sveipes eller hoppes over. Tillatelser spørres først når turen startes.
+     0.24.0: teorien først, siden den er det folk kjøper Pluss for. -->
 <div class="intro" id="intro" role="dialog" aria-modal="true" aria-label="Velkommen til Kjørerapport" hidden>
   <button type="button" class="link intro-skip" id="intro-skip">Hopp over</button>
   <div class="intro-pages" id="intro-pages">
+    <section class="intro-page" aria-labelledby="intro-t0">
+      <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="quiz"></span></div>
+      <h2 id="intro-t0">Øv til lappen i én app</h2>
+      <p>Teoriprøven med forklaring på hvert spørsmål, prøver som den ekte og teoriboka. Sikkerhetskontrollen fra oppkjøringen. Og en rapport etter hver øvingstur.</p>
+      <p class="muted small">Prøv 10 teorispørsmål gratis under Opplæring.</p>
+    </section>
     <section class="intro-page" aria-labelledby="intro-t1">
       <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="wheel"></span></div>
       <h2 id="intro-t1">Øvelseskjøring med en rapport etterpå</h2>
@@ -525,7 +549,7 @@
     <section class="intro-page" aria-labelledby="intro-t2">
       <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="speed"></span></div>
       <h2 id="intro-t2">Ledsageren styrer telefonen</h2>
-      <p>Fest telefonen i en holder. Ledsageren starter og stopper turen, og føreren rører ikke telefonen. Under kjøringen viser skjermen fart og fartsgrense, og det piper før fotobokser og når farten er for høy. Lyden kan slås av i Innstillinger.</p>
+      <p>Fest telefonen i en holder. Ledsageren starter og stopper turen, og føreren rører ikke telefonen. Under kjøringen viser skjermen fart og fartsgrense, og den lyser rødt når farten er for høy. Pip kan slås på og av i Innstillinger.</p>
     </section>
     <section class="intro-page" aria-labelledby="intro-t3">
       <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="shield"></span></div>

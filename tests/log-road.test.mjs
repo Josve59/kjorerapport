@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sunAltitude, lightClass, roadClass, driveLog, sumLogs, STILL_MAX } from '../js/log.js';
+import { sunAltitude, lightClass, roadClass, driveLog, sumLogs, STILL_MAX, insuranceLog, INSURANCE_KM } from '../js/log.js';
 import { evaluateRoad, parsePoint, matchMotorway } from '../js/enrich.js';
 import { analyze, makeDemo } from '../js/analysis.js';
 
@@ -111,4 +111,28 @@ test('stoppskilt, vikeplikt og rundkjøring vurderes mot ruten', () => {
   assert.equal(ev.giveway[0].minKmh, 8);
   assert.equal(ev.roundabouts.length, 1);
   assert.deepEqual(ev.roundabouts[0].events, [1]);
+});
+
+test('0.24.0: kjørelogg til forsikringen summerer kilometer mot 2 000 km, eldste tur først', () => {
+  const L = insuranceLog([
+    { at: '2026-11-10T17:00:00Z', km: 12.4, sec: 1500 },
+    { at: '2026-10-02T15:00:00Z', km: 30, sec: 2400 },
+    { at: '2026-11-10T19:00:00Z', km: 8, sec: 900 },
+    { at: 'ugyldig', km: 50, sec: 100 },
+    { at: '2026-11-11T12:00:00Z', km: 0, sec: 60 }
+  ]);
+  assert.equal(INSURANCE_KM, 2000);
+  assert.equal(L.count, 3, 'turer uten tid eller km telles ikke');
+  assert.deepEqual(L.trips.map(t => t.km), [30, 12.4, 8]);
+  near(L.km, 50.4, 1e-9, 'km');
+  assert.equal(L.sec, 4800);
+  assert.equal(L.days, 2);
+  assert.equal(L.first, '2026-10-02T15:00:00Z');
+  assert.equal(L.last, '2026-11-10T19:00:00Z');
+  assert.equal(L.left, 1950);
+  assert.equal(L.done, false);
+  const full = insuranceLog([{ at: '2026-01-01T10:00:00Z', km: 2100, sec: 1 }]);
+  assert.equal(full.done, true); assert.equal(full.left, 0); assert.equal(full.share, 1);
+  const none = insuranceLog([]);
+  assert.equal(none.count, 0); assert.equal(none.first, ''); assert.equal(none.left, 2000);
 });

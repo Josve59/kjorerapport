@@ -82,6 +82,20 @@ export function sumLogs(logs) {
   return out;
 }
 
+/* Kjørelogg til forsikringen (0.24.0). Flere forsikringsselskap gir høyere startbonus etter 2 000 km øvelseskjøring,
+   og noen godtar et skjermbilde av kilometerne fra en annen app. trips: [{ at: ISO-tid, km, sec }]. Eldste tur først;
+   turer uten tid eller kilometer telles ikke. */
+export const INSURANCE_KM = 2000;
+export function insuranceLog(trips = [], target = INSURANCE_KM) {
+  const list = trips.filter(t => t && Number.isFinite(Date.parse(t.at)) && t.km > 0)
+    .map(t => ({ at: t.at, km: t.km, sec: Math.max(0, t.sec || 0) }))
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const km = list.reduce((s, t) => s + t.km, 0), sec = list.reduce((s, t) => s + t.sec, 0);
+  const days = new Set(list.map(t => { const d = new Date(t.at); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; })).size;
+  return { trips: list, km, sec, count: list.length, days, first: list.length ? list[0].at : '', last: list.length ? list[list.length - 1].at : '',
+    target, left: Math.max(0, target - Math.floor(km)), done: km >= target, share: Math.min(1, km / target) };   // hele km rundes ned: aldri mer enn kjørt
+}
+
 function haversine(a, b) {
   const R = 6371000, dLat = (b.lat - a.lat) * RAD, dLon = (b.lon - a.lon) * RAD;
   const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * RAD) * Math.cos(b.lat * RAD) * Math.sin(dLon / 2) ** 2;

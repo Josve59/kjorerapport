@@ -27,7 +27,7 @@ export const LEARNED = 3;
 /* Klar for teoriprøven: bestått minst 3 av de 5 siste prøvene, og den siste */
 export const READY_RULE = { last: 5, passed: 3 };
 
-export const emptyProgress = () => ({ q: {}, exams: [], safety: {}, car: '', days: {}, marks: [], examDate: '' });
+export const emptyProgress = () => ({ q: {}, exams: [], safety: {}, car: '', days: {}, marks: [], examDate: '', remind: { on: false, time: '18:00' } });
 
 /* Fremgang fra innstillingene, alltid med alle felt */
 export function normProgress(p) {
@@ -39,7 +39,9 @@ export function normProgress(p) {
     car: typeof o.car === 'string' ? o.car : '',
     days: o.days && typeof o.days === 'object' && !Array.isArray(o.days) ? o.days : {},
     marks: Array.isArray(o.marks) ? o.marks.filter(x => typeof x === 'string').slice(0, 500) : [],
-    examDate: typeof o.examDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.examDate) ? o.examDate : ''
+    examDate: typeof o.examDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.examDate) ? o.examDate : '',
+    // Påminnelse om dagens teori (0.24.0): på eller av, og klokkeslettet
+    remind: o.remind && typeof o.remind === 'object' ? { on: !!o.remind.on, time: /^\d{1,2}:\d{2}$/.test(o.remind.time) ? o.remind.time : '18:00' } : { on: false, time: '18:00' }
   };
 }
 

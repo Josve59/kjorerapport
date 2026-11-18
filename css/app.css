@@ -368,7 +368,7 @@ details.adv summary { font-size: 1rem; }
     --brake: #c8412b; --accel: #1f5fa8; --turn: #c7741f; --good: #2f7d4f; color-scheme: light; }
   body { padding: 0; background: #fff; }
   #app { max-width: none; padding: 0; }
-  .screen:not(#report):not(#teacher), .t-controls, .t-done, .top, .quicknav, .head-actions, .lmap-toggle, .btn, .enrich-status button, .ev-chev, .leaflet-control-zoom, #btn-delete-drive, .ev-detail .btn { display: none !important; }
+  .screen:not(#report):not(#teacher):not(#insurance), .t-controls, .t-done, .top, .quicknav, .head-actions, .lmap-toggle, .btn, .enrich-status button, .ev-chev, .leaflet-control-zoom, #btn-delete-drive, .ev-detail .btn { display: none !important; }
   .card { break-inside: avoid; border-color: #ccc; }
   .lmap { height: 420px; }
   textarea { border: 0 !important; resize: none; background: none !important; padding: 0 !important; }

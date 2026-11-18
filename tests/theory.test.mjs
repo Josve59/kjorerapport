@@ -421,3 +421,24 @@ test('0.22.0: tegningene får egne id-er, så pilspissene vises selv om samme te
   assert.equal(ids(a).filter(x => ids(b).includes(x)).length, 0, 'ingen felles id-er');
   for (const s of [a, b]) for (const m of s.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids(s).includes(m[1]), `${m[1]} peker til en id i samme tegning`);
 });
+
+/* ---------- 0.24.0: påminnelse om dagens teori ---------- */
+import { planReminders } from '../js/remind.js';
+test('0.24.0: påminnelsene: de neste dagene til valgt klokkeslett, ikke i dag når målet er nådd, og stopp etter prøven', () => {
+  const now = new Date(2026, 10, 18, 12, 0).getTime();   // onsdag kl. 12
+  const r = planReminders({ time: '18:30', now, today: 0, goal: 10 });
+  assert.equal(r.length, 14);
+  assert.equal(r[0].id, '2026-11-18');
+  const first = new Date(r[0].at);
+  assert.deepEqual([first.getHours(), first.getMinutes()], [18, 30]);
+  assert.ok(r.every(x => x.title && x.body.includes('10')));
+  assert.equal(planReminders({ time: '18:30', now, today: 10, goal: 10 })[0].id, '2026-11-19', 'målet nådd: ingen i dag');
+  assert.equal(planReminders({ time: '08:00', now, today: 0, goal: 10 })[0].id, '2026-11-19', 'klokkeslettet er passert i dag');
+  const ex = planReminders({ time: '18:30', now, goal: 25, examDate: '2026-11-21' });
+  assert.deepEqual(ex.map(x => x.id), ['2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21'], 'ingen etter prøvedagen');
+  assert.match(ex[0].body, /om 3 dager/);
+  assert.match(ex[2].body, /i morgen/);
+  assert.match(ex[3].body, /i dag/);
+  assert.equal(normProgress({ remind: { on: true, time: 'x' } }).remind.time, '18:00');
+  assert.equal(normProgress({}).remind.on, false);
+});
