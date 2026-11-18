@@ -208,7 +208,7 @@ The owner asked for five improvements before the meeting with the driving school
 
 **Tests:** 276 pass. New: `insuranceLog` (rounding, order, empty), the reminder plan, and the counts in the texts.
 
-**Not tested:** the reminder notifications and «Lagre som PDF» on the phone (WHAT), the demo on the phone.
+**Not tested on the phone:** the reminder notifications, «Lagre som PDF» from the print sheet, and the demo. 0.24.0 was installed on 18 November but not opened, because the phone was locked. Everything else was checked in the browser at phone width, in light and dark mode, with the Emma demo data.
 
 ## What's new in 0.23.0 – theory in Pluss, 10 free questions, no trial, NOK 499
 
