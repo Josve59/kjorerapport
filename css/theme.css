@@ -657,6 +657,9 @@ h2.card-title, .card-title { font-size: 1.12rem; }
 .q-rule { font-weight: 800; font-size: 1.05rem; line-height: 1.4; margin: 4px 0 8px; }
 .q-more { display: flex; align-items: center; gap: 8px; width: 100%; margin: 6px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); text-align: left; font-size: 1rem; }
 .q-more span { flex: 1; }
+/* «Meld fra om feil i spørsmålet» (0.25.0): liten og rolig, under forklaringen */
+.q-report { display: flex; gap: 6px; width: fit-content; min-height: 44px; padding: 8px 0 0; font-size: .9rem; font-weight: 600; color: var(--muted); text-decoration: none; }
+.th-ico-hard { background: color-mix(in srgb, #9e2a62 14%, var(--surface)); color: #9e2a62; }
 .q-zoom { cursor: zoom-in; -webkit-tap-highlight-color: transparent; }
 .q-zoom:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 12px; }
 .q-fig-big { margin: 0; }

@@ -326,6 +326,19 @@ for (const ch of BOOK) for (const s of ch.sections) for (const q of s.qs) if (!I
 export const sectionFor = id => INDEX.get(id) || null;
 export const bookChapter = id => BOOK.find(c => c.id === id) || null;
 
+/* Delene av boka med flest av disse spørsmålene (0.25.0): feilene fra en prøve eller øverunde, så eleven kan lese
+   akkurat det som ble feil. → [{ chapter, section, title, n }], flest først */
+export function weakSections(ids, max = 3) {
+  const by = new Map();
+  for (const id of ids || []) {
+    const s = sectionFor(id); if (!s) continue;
+    const k = `${s.chapter}/${s.section}`;
+    by.set(k, { ...s, n: ((by.get(k) || {}).n || 0) + 1 });
+  }
+  return [...by.values()].sort((a, b) => b.n - a.n).slice(0, max)
+    .map(s => ({ ...s, title: bookChapter(s.chapter).sections.find(x => x.id === s.section).title }));
+}
+
 /* Stopplengde-kalkulatoren: reaksjonstid 1 sekund og vanlige friksjonstall (omtrentlig, som i teoriboka).
    Bremselengde = v² / (2 · μ · g), med v i m/s. */
 export const SURFACES = [

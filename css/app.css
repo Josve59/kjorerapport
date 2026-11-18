@@ -600,6 +600,7 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
 .sheet-actions .btn { margin: 0; }
 .sheet-actions .btn:only-child { grid-column: 1 / -1; }
+.sheet-choices { grid-template-columns: 1fr; }   /* valgarket (0.25.0): knappene under hverandre */
 
 /* Steg-liste på hjem */
 .steps-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 12px; }

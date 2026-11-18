@@ -143,6 +143,70 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.25.0 – theory: review over several days, unfinished exams, from mistakes to the theory book
+
+The owner asked for more improvements to the theory practice (18 November) and chose all six I suggested.
+
+**Review over several days** (`answer`, `dueAt`, `isDue`, `dueList`, `REVIEW_DAYS` in `js/theory.js`)
+- **Before:** a question was «lært» after three right answers in a row, even if all three came within five minutes. Practising a theory-book part three times in a row marked the whole part as learned.
+- **Now:** a right answer sends the question back later: the next day, then 2 days later, then 5, 14 and 30 days. A right answer only counts towards «lært» once the question is back (`due`, midnight local time).
+  - An early right answer still counts as a right answer, but it does not move the question on and does not reset it.
+  - A wrong answer sets the run to 0, as before.
+  - So «lært» now takes at least three days: the first day, the next day and two days after that.
+- **Older answers:** answers saved before 0.25.0 have no `due`, so it is worked out from when the question was last answered. Questions already learned stay learned.
+- **Practice rounds:** `pickPractice` takes wrong answers first, then the questions that are back for review, then new ones, and last the ones not back yet.
+- **Where it shows:** «Rask øving» says «25 å repetere i dag, så nye». The texts about what «lært» means are updated in the overview and the sign test. The end of a round says that the questions you knew come back in a few days.
+
+**Unfinished exams** (`examLapsed`, `examTimeLeft`)
+- **The bug:** the clock keeps running while the app is closed, as on the real test. An exam left half done was delivered the moment it was opened again and saved as failed. I tried it in the demo: an exam started the day before with 3 answers became «Ikke bestått, 2 av 45». It was saved among the exams, pulled the «klar» percentage down and gave a red dot.
+- **Now:** if the time ran out more than a minute before the app saw it, the app was not open when it ran out. The overview then asks «Tida gikk ut» with «Forkast prøven», «Lever de N svarene» or «Avbryt».
+  - The button says «Lever eller forkast prøven» until one of them is chosen.
+  - Hjem says «Tida gikk ut før du leverte».
+  - If the time runs out with the exam on screen, it is delivered as before.
+- The choices come from a new `choiceDialog` in `ui.js`, with the buttons one under the other.
+
+**From mistakes to the theory book** (`weakSections` in `js/theory-book.js`)
+- After an exam, «Les dette i teoriboka» lists the three parts with the most mistakes, for example «Skiltgruppene, 2 feil», with a link straight there. The back button leads back to the result.
+- Every wrong answer in the exam result has «Les mer i teoriboka».
+- After a practice round with mistakes, up to two parts are shown, but not the part that was just practised.
+
+**«Meld fra om feil i spørsmålet»**
+- A small link under the explanation in practice, in the crossings and on each wrong answer in the exam result.
+- It opens an e-mail to the same address as «Gi tilbakemelding», read from that link in `index.html`, so the address is in one place only. The question number and text are filled in.
+- The iPhone app opens such links in Mail, the same way as «Gi tilbakemelding».
+
+**The weakest themes for the teacher** (`theoryBrief` with `themes`, `teacher.js`)
+- The theory card in the teacher view shows «Klar for teoriprøven 71 %» and «Svakeste temaer: Vikeplikt 31 %, skilt og oppmerking 35 %».
+- The shared text says the same.
+- Message files from older versions have no themes, and the card then looks as before.
+
+**Small things**
+- The drawings in the exam can be enlarged, as in practice.
+- The sign cards say «Skilt 556.1», as the regulations do, from `SIGN_REF`.
+- «Vanskelige spørsmål» (129 questions at level 3, from all themes) is shown under the themes once the learner is at least 70 % ready. It has its own percentage and practice round (`pickPractice(…, { hard: true })`).
+
+**Demo:** `DEMO_V` 5. Emma's theory follows the new review days: she takes the questions again when they come back. So in the demo she has 25 to review today, 192 learned and is 72 % ready, which shows «Vanskelige spørsmål».
+
+**Tests:** 281 pass. New tests cover:
+- the review days;
+- older answers without `due`;
+- the order in a practice round, review only and hard only;
+- an exam that ran out while the app was closed;
+- `weakSections`;
+- the weakest themes for the teacher.
+
+**Checked in the browser** at phone width, in light and dark mode, in the demo:
+- the overview;
+- the unfinished exam: cancel, discard and deliver;
+- the exam result with «Les dette» and the way back;
+- «Meld fra» in practice;
+- enlarging in the exam;
+- the teacher card.
+
+The demo was set back afterwards.
+
+**Not tested on the phone:** the whole of 0.25.0, and that «Meld fra» opens Mail with the text filled in. While testing I also found that dialogs in the browser pane don't finish when the pane is hidden. That is how the browser pane behaves, not a bug in the app.
+
 ## What's new in 0.24.0 – demo for driving schools, insurance log, theory reminder, 420 questions and 123 signs
 
 The owner asked for five improvements before the meeting with the driving school (18 November). The teacher summary as PDF was dropped.

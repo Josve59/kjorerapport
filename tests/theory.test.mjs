@@ -43,6 +43,10 @@ test('tegningene: alle kan lages, og skjermleserteksten røper ikke svaret', () 
   assert.equal(figure(''), '');
 });
 
+/* Tre riktige svar spredt over dager (0.25.0): i dag, i morgen og to dager etter, midt på dagen */
+const DAY = 86400000, T0 = new Date(2026, 10, 2, 12).getTime();
+const spaced = (p, id, t0 = T0) => [0, 1, 3].reduce((acc, d) => answer(acc, id, 0, t0 + d * DAY), p);
+
 test('øving: feil først, så nye, og lært etter tre riktige på rad', () => {
   const qs = QUESTIONS.filter(q => q.t === 'vikeplikt');
   let p = emptyProgress();
@@ -50,7 +54,7 @@ test('øving: feil først, så nye, og lært etter tre riktige på rad', () => {
   assert.ok(isWrong(p.q.v01));
   const first = pickPractice(qs, p, { n: 5, rand: rng(1) });
   assert.ok(first.some(q => q.id === 'v01'), 'feilen kommer med');
-  for (let i = 0; i < 3; i++) p = answer(p, 'v02', 0, 2000 + i);
+  p = spaced(p, 'v02');
   assert.ok(isLearned(p.q.v02) && !isWrong(p.q.v02));
   assert.equal(p.q.v02.ok, 3);
   const only = pickPractice(QUESTIONS, p, { wrongOnly: true, n: 10, rand: rng(2) });
@@ -162,13 +166,14 @@ test('status til trafikklæreren: tom før eleven har øvd, ellers prøver, spø
   const opts = { questions: QUESTIONS, signQuestions: SIGN_QUESTIONS, tasks: SAFETY };
   assert.equal(theoryBrief(emptyProgress(), opts), null);
   let p = emptyProgress();
-  for (let i = 0; i < 3; i++) { p = answer(p, 'v01', 0, i); p = answer(p, 'sk100', 0, i); }
+  p = spaced(spaced(p, 'v01'), 'sk100');
   p = markSafety(p, SAFETY[0].id, true, 1);
   p = addExam(p, { correct: 39, total: 45, passed: true, byTheme: {}, wrong: [] }, { at: 5 });
   const b = theoryBrief(p, opts);
   assert.deepEqual([b.learned, b.signs, b.safety.known, b.taken, b.passed, b.last.correct], [1, 1, 1, 1, 1, 39]);
   assert.equal(b.total, QUESTIONS.length);
   assert.equal(b.signsTotal, SIGN_QUESTIONS.length);
+  assert.deepEqual(b.weak, [], 'uten temaer: ingen svake temaer');
 });
 
 test('prøven er litt vanskeligere enn den ekte: vanskelige oppgaver i hvert tema, og 40 riktige for å være klar', () => {
@@ -311,7 +316,7 @@ test('0.21.0: klar i prosent veier temaene som på prøven, og prøvene teller h
   let p = emptyProgress();
   assert.equal(readinessPercent(QUESTIONS, p, THEMES).percent, 0);
   // Alt lært: 100 %
-  for (const q of QUESTIONS) for (let i = 0; i < 3; i++) p = answer(p, q.id, 0);
+  for (const q of QUESTIONS) p = spaced(p, q.id);
   const all = readinessPercent(QUESTIONS, p, THEMES);
   assert.equal(all.percent, 100);
   for (const t of THEMES) assert.equal(all.byTheme[t.id], 100);
@@ -441,4 +446,89 @@ test('0.24.0: påminnelsene: de neste dagene til valgt klokkeslett, ikke i dag n
   assert.match(ex[3].body, /i dag/);
   assert.equal(normProgress({ remind: { on: true, time: 'x' } }).remind.time, '18:00');
   assert.equal(normProgress({}).remind.on, false);
+});
+
+import { REVIEW_DAYS, dueAt, isDue, dueList, examLapsed, examTimeLeft } from '../js/theory.js';
+import { weakSections } from '../js/theory-book.js';
+
+test('0.25.0: repetisjon over dager: tre riktige samme dag gir ikke «lært», og spørsmålet kommer tilbake', () => {
+  let p = emptyProgress();
+  for (let i = 0; i < 3; i++) p = answer(p, 'f01', 0, T0 + i * 60000);
+  assert.equal(p.q.f01.run, 1, 'samme dag: bare det første riktige teller');
+  assert.equal(p.q.f01.ok, 3);
+  assert.ok(!isLearned(p.q.f01));
+  assert.ok(!isDue(p.q.f01, T0 + 3600000), 'ikke tilbake samme dag');
+  assert.ok(isDue(p.q.f01, T0 + DAY), 'tilbake i morgen');
+  // Andre riktige: tilbake om to dager; et riktig svar før det teller ikke, men nullstiller heller ikke
+  p = answer(p, 'f01', 0, T0 + DAY);
+  assert.equal(p.q.f01.run, 2);
+  p = answer(p, 'f01', 0, T0 + 2 * DAY);
+  assert.equal(p.q.f01.run, 2, 'for tidlig');
+  assert.ok(isDue(p.q.f01, T0 + 3 * DAY));
+  p = answer(p, 'f01', 0, T0 + 3 * DAY);
+  assert.ok(isLearned(p.q.f01));
+  assert.ok(!isDue(p.q.f01, T0 + 6 * DAY) && isDue(p.q.f01, T0 + 8 * DAY), `lært: tilbake om ${REVIEW_DAYS[2]} dager`);
+  // Feil: run 0 og ingen repetisjonsdato, spørsmålet er «feil å øve på»
+  p = answer(p, 'f01', 1, T0 + 9 * DAY);
+  assert.ok(isWrong(p.q.f01) && !p.q.f01.due && !isDue(p.q.f01, T0 + 99 * DAY));
+  assert.equal(p.q.f01.miss, T0 + 9 * DAY);
+  // Rett etter en feil teller det første riktige med en gang
+  p = answer(p, 'f01', 0, T0 + 9 * DAY + 60000);
+  assert.equal(p.q.f01.run, 1);
+  assert.equal(p.q.f01.miss, T0 + 9 * DAY, 'siste feil huskes');
+});
+
+test('0.25.0: svar fra før 0.25.0 (uten due) regnes fra sist besvart, og lærte spørsmål beholdes', () => {
+  const old = { n: 3, ok: 3, run: 3, last: T0 };
+  assert.ok(isLearned(old));
+  assert.equal(dueAt(old), new Date(2026, 10, 7).getTime(), 'fem dager etter, ved midnatt');
+  const p = { ...emptyProgress(), q: { f02: { n: 1, ok: 1, run: 1, last: T0 }, f03: old } };
+  assert.deepEqual(dueList(QUESTIONS, p, T0 + DAY).map(q => q.id), ['f02']);
+  assert.equal(answer(p, 'f02', 0, T0 + DAY).q.f02.run, 2, 'gammelt svar fra i går: teller i dag');
+  assert.equal(answer(p, 'f02', 0, T0 + 60000).q.f02.run, 1, 'gammelt svar fra i dag: teller ikke');
+});
+
+test('0.25.0: øverunden tar feil først, så repetisjon, så nye; bare repetisjon og bare vanskelige', () => {
+  const qs = QUESTIONS.filter(q => q.t === 'vikeplikt');
+  let p = emptyProgress();
+  p = answer(p, qs[0].id, 1, T0);                       // feil
+  p = answer(p, qs[1].id, 0, T0);                       // tilbake i morgen
+  p = answer(p, qs[2].id, 0, T0 + DAY);                 // ikke tilbake ennå
+  const now = T0 + DAY + 3600000;
+  const round = pickPractice(qs, p, { n: qs.length, now, rand: rng(4) });
+  const order = pickPractice(qs, p, { n: 2, now, rand: rng(4) }).map(q => q.id).sort();
+  assert.deepEqual(order, [qs[0].id, qs[1].id].sort(), 'feilen og repetisjonen før alle nye');
+  assert.ok(round.some(q => q.id === qs[2].id), 'med når alle tas');
+  assert.ok(pickPractice(qs, p, { n: qs.length - 1, now, rand: rng(5) }).every(q => q.id !== qs[2].id), 'ikke tilbake ennå: sist');
+  assert.deepEqual(pickPractice(qs, p, { dueOnly: true, now, rand: rng(6) }).map(q => q.id), [qs[1].id]);
+  const hard = pickPractice(QUESTIONS, p, { hard: true, n: 500, now, rand: rng(7) });
+  assert.ok(hard.length >= 50 && hard.every(q => level(q) >= 3));
+});
+
+test('0.25.0: en prøve der tida gikk ut mens appen var lukket, leveres ikke av seg selv', () => {
+  const E = { startedAt: T0, done: false };
+  assert.equal(Math.round(examTimeLeft(E, T0 + 60000)), EXAM.minutes * 60 - 60);
+  assert.ok(!examLapsed(E, T0 + EXAM.minutes * 60000 + 30000), 'akkurat ute: leveres som før');
+  assert.ok(examLapsed(E, T0 + EXAM.minutes * 60000 + 120000));
+  assert.ok(examLapsed(E, T0 + DAY));
+  assert.ok(!examLapsed({ ...E, done: true }, T0 + DAY));
+  assert.ok(!examLapsed(null));
+});
+
+test('0.25.0: fra feilene til teoriboka, og de svakeste temaene til læreren', () => {
+  const st = BOOK[0].sections[0], other = BOOK[1].sections[0];
+  const w = weakSections([st.qs[0], other.qs[0], st.qs[1], 'sk100', 'finnes-ikke', st.qs[2]]);
+  assert.deepEqual(w.map(s => [s.chapter, s.section, s.n]), [[BOOK[0].id, st.id, 3], [BOOK[1].id, other.id, 1]]);
+  assert.equal(w[0].title, st.title);
+  assert.deepEqual(weakSections([]), []);
+  assert.equal(weakSections(BOOK.flatMap(c => c.sections.map(s => s.qs[0])), 3).length, 3, 'høyst tre');
+  // Læreren: prosent og de to svakeste temaene
+  let p = emptyProgress();
+  for (const q of QUESTIONS.filter(q => q.t !== 'vikeplikt' && q.t !== 'skilt')) p = spaced(p, q.id);
+  p = answer(p, QUESTIONS.find(q => q.t === 'skilt').id, 0, T0);
+  const b = theoryBrief(p, { questions: QUESTIONS, signQuestions: SIGN_QUESTIONS, tasks: SAFETY, themes: THEMES });
+  assert.deepEqual(b.weak.map(x => x.id), ['vikeplikt', 'skilt']);
+  assert.equal(b.weak[0].pct, 0);
+  assert.equal(b.weak[0].title, THEMES.find(t => t.id === 'vikeplikt').title);
+  assert.ok(b.percent > 50 && b.percent < 100);
 });

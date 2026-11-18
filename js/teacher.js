@@ -71,8 +71,11 @@ function theoryLine(b) {
   if (b.last) parts.push(`siste øveprøve ${b.last.correct} av ${b.last.total} (${b.last.passed ? 'bestått' : 'ikke bestått'}), ${examWord(b)}`);
   else parts.push('ingen øveprøver ennå');
   parts.push(`${b.learned} av ${b.total} spørsmål lært`, `${b.signs} av ${b.signsTotal} skilt lært`, `sikkerhetskontroll ${b.safety.known} av ${b.safety.total} oppgaver`);
-  return `Teori: ${parts.join(', ')}.`;
+  const weak = weakWord(b);
+  return `Teori: ${parts.join(', ')}.${weak ? ` Svakest: ${weak}.` : ''}`;
 }
+/* De svakeste temaene (0.25.0), så læreren vet hva timen bør ta opp. Eldre meldingsfiler har dem ikke. */
+const weakWord = b => (Array.isArray(b.weak) && b.weak.length ? b.weak.map(w => `${String(w.title || '').toLowerCase()} ${Number(w.pct) || 0} %`).join(', ') : '');
 function theoryCard(b) {
   if (!b) return '';
   return `<section class="card">
@@ -81,6 +84,8 @@ function theoryCard(b) {
         <div><dt>Siste øveprøve</dt><dd>${b.last ? `${b.last.correct} av ${b.last.total} · ${b.last.passed ? 'bestått' : 'ikke bestått'}` : '–'}</dd></div>
         ${b.taken ? `<div><dt>Øveprøver bestått</dt><dd>${b.passed} av ${b.taken >= 5 ? 'de 5 siste' : b.taken}</dd></div>` : ''}
         ${b.taken && typeof b.solid === 'number' ? `<div><dt>Med minst 40 riktige</dt><dd>${b.solid} av ${b.taken >= 5 ? 'de 5 siste' : b.taken}</dd></div>` : ''}
+        ${typeof b.percent === 'number' ? `<div><dt>Klar for teoriprøven</dt><dd>${b.percent} %</dd></div>` : ''}
+        ${weakWord(b) ? `<div><dt>Svakeste temaer</dt><dd>${esc(weakWord(b).replace(/^./, c => c.toUpperCase()))}</dd></div>` : ''}
         <div><dt>Spørsmål lært</dt><dd>${b.learned} av ${b.total}</dd></div>
         <div><dt>Skilt lært</dt><dd>${b.signs} av ${b.signsTotal}</dd></div>
         <div><dt>Sikkerhetskontroll</dt><dd>${b.safety.known} av ${b.safety.total} oppgaver</dd></div>

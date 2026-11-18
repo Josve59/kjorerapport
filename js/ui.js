@@ -180,6 +180,25 @@ export function confirmDialog({ title, text = '', ok = 'OK', cancel = 'Avbryt', 
   });
 }
 
+/* Et ark med flere valg under hverandre (0.25.0). Gir verdien til knappen som ble trykket, eller null ved Avbryt. */
+export function choiceDialog({ title, text = '', choices = [], cancel = 'Avbryt' }) {
+  return new Promise(resolve => {
+    const d = dialogShell();
+    d.innerHTML = `<form method="dialog" class="sheet-body">
+      <h2>${esc(title)}</h2>
+      ${text ? `<p class="muted">${esc(text)}</p>` : ''}
+      <div class="sheet-actions sheet-choices">
+        ${choices.map(c => `<button value="${esc(c.value)}" class="btn ${c.primary ? 'primary' : 'secondary'}">${esc(c.label)}</button>`).join('')}
+        ${cancel ? `<button type="button" value="cancel" class="btn secondary js-cancel">${esc(cancel)}</button>` : ''}
+      </div></form>`;
+    const done = () => { d.removeEventListener('close', done); const v = d.returnValue; resolve(choices.some(c => c.value === v) ? v : null); };
+    d.addEventListener('close', done);
+    d.returnValue = '';
+    wireCancel(d);
+    openDialog(d);
+  });
+}
+
 export function infoDialog({ title, text = '', ok = 'OK' }) {
   return confirmDialog({ title, text, ok, cancel: '' });
 }

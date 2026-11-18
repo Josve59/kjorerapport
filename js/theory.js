@@ -21,7 +21,7 @@ export const level = q => q.lvl || 2;
    hvert tema dekker i temalisten. */
 export const EXAM_QUOTA = { fart: 9, trafikanter: 4, ansvar: 8, kjoretoy: 6, regler: 4, skilt: 7, vikeplikt: 7 };
 
-/* Et spørsmål regnes som lært når det er besvart riktig tre ganger på rad */
+/* Et spørsmål regnes som lært når det er besvart riktig tre ganger på rad, spredt over dager (0.25.0, se answer) */
 export const LEARNED = 3;
 
 /* Klar for teoriprøven: bestått minst 3 av de 5 siste prøvene, og den siste */
@@ -66,12 +66,28 @@ export function shuffle(list, rand = Math.random) {
 /* Rekkefølgen svaralternativene vises i. I dataene står det riktige svaret alltid først (indeks 0). */
 export const optionOrder = (q, rand = Math.random) => shuffle(q.a.map((_, i) => i), rand);
 
+/* Repetisjon over flere dager (0.25.0). Før var et spørsmål lært etter tre riktige på rad, også om alle tre kom i løpet
+   av fem minutter. Det er korttidshukommelsen. Nå kommer et riktig besvart spørsmål tilbake etter noen dager, og et
+   riktig svar teller bare mot «lært» når spørsmålet er tilbake. Dager til neste gang etter 1., 2., 3. … riktige på rad: */
+export const REVIEW_DAYS = [1, 2, 5, 14, 30];
+const dayStart = (t, add = 0) => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + add); return d.getTime(); };
+const nextDue = (run, now) => dayStart(now, REVIEW_DAYS[Math.min(run, REVIEW_DAYS.length) - 1]);
+/* Når spørsmålet er tilbake (midnatt, lokal tid). Svar fra før 0.25.0 har ikke due, så den regnes fra sist besvart. */
+export const dueAt = e => (!e || !e.run ? 0 : typeof e.due === 'number' ? e.due : nextDue(e.run, e.last || 0));
+/* Til repetisjon nå: besvart riktig sist, og tida er inne */
+export const isDue = (e, now = Date.now()) => !!e && e.run > 0 && now >= dueAt(e);
+export const dueList = (questions, p, now = Date.now()) => questions.filter(q => isDue(p.q[q.id], now));
+
 /* Ett svar: ny fremgang (den gamle endres ikke). chosen = indeksen i q.a, riktig er 0. */
 export function answer(p, id, chosen, now = Date.now()) {
   const prev = p.q[id] || { n: 0, ok: 0, run: 0 };
   const right = chosen === 0;
-  const e = { n: prev.n + 1, ok: prev.ok + (right ? 1 : 0), run: right ? prev.run + 1 : 0, last: now, ...(right ? {} : { miss: now }) };
-  if (right && prev.miss) e.miss = prev.miss;
+  // Riktig før spørsmålet er tilbake: teller som riktig svar, men ikke mot «lært» (run og due står)
+  const counts = right && (!prev.run || now >= dueAt(prev));
+  const run = !right ? 0 : counts ? prev.run + 1 : prev.run;
+  const e = { n: prev.n + 1, ok: prev.ok + (right ? 1 : 0), run, last: now };
+  if (run) e.due = counts ? nextDue(run, now) : dueAt(prev);
+  if (!right) e.miss = now; else if (prev.miss) e.miss = prev.miss;
   return { ...p, q: { ...p.q, [id]: e }, days: bumpDay(p.days, now) };
 }
 
@@ -151,21 +167,23 @@ export function themeStats(questions, p, themes) {
   return out;
 }
 
-/* Spørsmål til en øverunde. Først de som ble besvart feil, så nye, så de som ikke er lært, og til slutt de lærte som
-   ikke er sett på lenge. filter: tema, merker (fra turene), bare feil eller en egen liste. */
-export function pickPractice(questions, p, { theme = null, tags = null, wrongOnly = false, ids = null, n = 10, now = Date.now(), rand = Math.random } = {}) {
+/* Spørsmål til en øverunde. Først de som ble besvart feil, så de som er tilbake til repetisjon, så nye, og til slutt
+   de som ikke er tilbake ennå (0.25.0). filter: tema, merker (fra turene), bare feil, bare til repetisjon, bare
+   vanskelige eller en egen liste. */
+export function pickPractice(questions, p, { theme = null, tags = null, wrongOnly = false, dueOnly = false, hard = false, ids = null, n = 10, now = Date.now(), rand = Math.random } = {}) {
   let pool = questions;
   if (ids) { const set = new Set(ids); pool = pool.filter(q => set.has(q.id)); }
   if (theme) pool = pool.filter(q => q.t === theme);
   if (tags && tags.length) pool = pool.filter(q => (q.tags || []).some(t => tags.includes(t)));
   if (wrongOnly) pool = pool.filter(q => isWrong(p.q[q.id]));
+  if (dueOnly) pool = pool.filter(q => isDue(p.q[q.id], now));
+  if (hard) pool = pool.filter(q => level(q) >= 3);
   const score = q => {
     const e = p.q[q.id];
     if (!e) return 3 + rand();
-    if (isWrong(e)) return 4 + rand();
-    if (!isLearned(e)) return 2 + e.run * -0.3 + rand();
-    const days = (now - (e.last || 0)) / 864e5;
-    return Math.min(1.5, days / 14) + rand() * 0.5;
+    if (isWrong(e)) return 5 + rand();
+    if (isDue(e, now)) return 4 + rand();
+    return (isLearned(e) ? 0 : 1) + rand() * 0.5;
   };
   const picked = pool.map(q => ({ q, s: score(q) })).sort((a, b) => b.s - a.s).slice(0, n).map(x => x.q);
   return shuffle(picked, rand);
@@ -230,6 +248,12 @@ export const READY_TEXT = {
   klar: 'Du har fått minst 40 riktige på flere prøver. Prøven her er litt vanskeligere enn den ekte, så du ser klar ut.'
 };
 
+/* Tida på en påbegynt prøve (sekunder igjen), og om den gikk ut mens appen var lukket (0.25.0). Før ble en slik prøve
+   levert straks appen ble åpnet, og lagret som ikke bestått med de få svarene den hadde. Nå spør appen om prøven skal
+   leveres eller forkastes. Mer enn ett minutt over tida betyr at appen ikke var åpen da tida gikk ut. */
+export const examTimeLeft = (E, now = Date.now()) => EXAM.minutes * 60 - (now - E.startedAt) / 1000;
+export const examLapsed = (E, now = Date.now()) => !!E && !E.done && examTimeLeft(E, now) < -60;
+
 /* En prøve lagres med bare det som trengs for oversikten og «øv på feilene fra prøven» (høyst 20 prøver) */
 export function addExam(p, result, { at = Date.now(), sec = null, ids = [] } = {}) {
   const e = { at, correct: result.correct, total: result.total, passed: result.passed, byTheme: result.byTheme, wrong: result.wrong, ids, ...(result.hard ? { hard: result.hard } : {}), ...(sec !== null ? { sec } : {}) };
@@ -268,16 +292,20 @@ export function safetyStats(tasks, p, car = '') {
 
 /* ---------- Til trafikklæreren (0.15.0) ---------- */
 
-/* Kort status for teori og sikkerhetskontroll. null når eleven ikke har øvd på noe av det ennå. */
-export function theoryBrief(p, { questions, signQuestions = [], tasks = [] }) {
+/* Kort status for teori og sikkerhetskontroll. null når eleven ikke har øvd på noe av det ennå.
+   0.25.0: med themes også hvor klar eleven er i prosent, og de to svakeste temaene, så læreren vet hva timen bør ta opp. */
+export function theoryBrief(p, { questions, signQuestions = [], tasks = [], themes = [] }) {
   if (!Object.keys(p.q).length && !p.exams.length && !Object.keys(p.safety).length) return null;
   const r = theoryReady(p), last = p.exams[p.exams.length - 1] || null;
+  const rd = themes.length ? readinessPercent(questions, p, themes) : null;
+  const weak = rd ? themes.filter(t => t.id in rd.byTheme).map(t => ({ id: t.id, title: t.title, pct: rd.byTheme[t.id] })).sort((a, b) => a.pct - b.pct).slice(0, 2) : [];
   return {
     level: r.level, taken: r.taken, passed: r.passed, solid: r.solid,
     last: last ? { correct: last.correct, total: last.total, passed: last.passed, at: last.at } : null,
     learned: questions.filter(q => isLearned(p.q[q.id])).length, total: questions.length,
     signs: signQuestions.filter(q => isLearned(p.q[q.id])).length, signsTotal: signQuestions.length,
-    safety: safetyStats(tasks, p, p.car)
+    safety: safetyStats(tasks, p, p.car),
+    percent: rd ? rd.percent : null, weak
   };
 }
 

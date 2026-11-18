@@ -3,7 +3,7 @@
    Rutene: #/teori (oversikt), #/teori/ov (øving), #/teori/prove (prøve), #/teori/resultat, #/sikkerhetskontroll,
    #/sikkerhetskontroll/ov. Øving og prøve holdes i minnet; en påbegynt prøve lagres også lokalt, så den overlever
    at appen lukkes. */
-import { icon, speak, stopSpeaking, confirmDialog, sheetDialog, formDialog, toast } from './ui.js';
+import { icon, speak, stopSpeaking, confirmDialog, sheetDialog, formDialog, choiceDialog, toast } from './ui.js';
 import { esc } from './format.js';
 import { THEMES, QUESTIONS } from './theory-b.js';
 import { SAFETY, SAFETY_AREAS, CAR_TYPES } from './safety-check.js';
@@ -28,8 +28,9 @@ export async function syncReminders(p) {
   } catch { /* varsler er ikke viktigere enn resten av appen */ }
 }
 import { EXAM, LEARNED, READY_RULE, READY_TEXT, HARD_SHARE, level, answer, isLearned, isWrong, themeStats, pickPractice, buildExam, scoreExam, theoryReady, addExam,
-  optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief, practiceDays, toggleMark, readinessPercent, dailyPlan } from './theory.js';
-import { BOOK, sectionFor, bookChapter, SURFACES, stopDistance, impactSpeed } from './theory-book.js';
+  optionOrder, safetyFor, pickSafety, markSafety, safetyStats, theoryBrief, practiceDays, toggleMark, readinessPercent, dailyPlan,
+  dueList, examLapsed, examTimeLeft, REVIEW_DAYS } from './theory.js';
+import { BOOK, sectionFor, bookChapter, weakSections, SURFACES, stopDistance, impactSpeed } from './theory-book.js';
 
 const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS, SIGN_PICK_QUESTIONS).map(q => [q.id, q]));
 const SIGN_POOL = SIGN_QUESTIONS.concat(SIGN_PICK_QUESTIONS);   // skiltprøven: hva betyr skiltet, og hvilket skilt er det (0.20.0)
@@ -38,6 +39,8 @@ export const THEORY_HOME = '#/opplaering/teori';
 const theme = id => THEMES.find(t => t.id === id) || { title: '', icon: 'quiz' };
 const LETTERS = 'ABCD';
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+/* Hva «lært» betyr (0.25.0) */
+const LEARNED_TEXT = `Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad, spredt over dager: første gang, dagen etter og ${REVIEW_DAYS[1]} dager etter det. Svarer du riktig før spørsmålet er tilbake, teller det ikke mot lært, for da husker du det bare fra sist.`;
 
 /* ---------- Tilstand ---------- */
 let practice = null;   // { title, filter, items: [id], orders, i, chosen, results: [bool], back: rute å gå tilbake til }
@@ -53,7 +56,40 @@ const stopPlayer = () => { if (player) { player.stop(); player = null; } };
 export function stopTheory() { if (examTimer) { clearInterval(examTimer); examTimer = null; } stopSpeaking(); stopPlayer(); }
 export const examInProgress = () => { const e = loadExam(); return e && !e.done ? e : null; };
 /* Status til trafikklærersiden (teacher.js) */
-export const teacherTheory = p => theoryBrief(p, { questions: QUESTIONS, signQuestions: SIGN_QUESTIONS, tasks: SAFETY });
+export const teacherTheory = p => theoryBrief(p, { questions: QUESTIONS, signQuestions: SIGN_QUESTIONS, tasks: SAFETY, themes: THEMES });
+
+/* «Meld fra om feil» (0.25.0): e-post til samme adresse som «Gi tilbakemelding» i Innstillinger, med spørsmålet fylt
+   inn. Ingen trafikklærer har gått gjennom spørsmålene ennå, så elever og lærere kan si fra om noe er feil eller uklart. */
+function reportLink(id, text) {
+  const a = document.getElementById('btn-feedback'), to = a ? (a.getAttribute('href') || '').split('?')[0] : '';
+  if (!to.startsWith('mailto:')) return '';
+  const href = `${to}?subject=${encodeURIComponent(`Feil i spørsmål ${id}`)}&body=${encodeURIComponent(`Spørsmål ${id}: ${text}\n\nHva er feil eller uklart?\n\n`)}`;
+  return `<a class="link q-report" href="${esc(href)}">${icon('flag', 16)}Meld fra om feil i spørsmålet</a>`;
+}
+
+/* Fra feilene til teoriboka (0.25.0): delene med flest feil, med lenke rett dit */
+const readCard = weak => (weak.length ? `<h2 class="group-title">Les dette i teoriboka</h2>
+    <section class="card th-themes"><ul class="th-list">${weak.map(s => `<li><button type="button" class="th-theme" data-path="${s.chapter}/${s.section}">
+      <span class="th-ico th-ico-${s.chapter}">${icon('book', 22)}</span>
+      <span class="th-tt"><strong>${esc(s.title)}</strong><span class="muted small">${s.n} feil · ${esc(theme(s.chapter).title)}</span></span>
+      ${icon('chev', 18)}</button></li>`).join('')}</ul></section>` : '');
+const wireRead = (root, ctx) => root.querySelectorAll('[data-path]').forEach(b => b.onclick = () => ctx.go(`#/teori/bok/${b.dataset.path}`));
+
+/* En prøve der tida gikk ut mens appen var lukket (0.25.0): eleven velger å levere den eller forkaste den.
+   askLapsed: prøveskjermen sender eleven til oversikten, som da spør med en gang. */
+let askLapsed = false;
+async function settleLapsed(ctx) {
+  const E = examInProgress();
+  if (!E) return null;
+  const n = Object.keys(E.answers).length;
+  const when = new Date(E.startedAt).toLocaleString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  const v = await choiceDialog({ title: 'Tida gikk ut',
+    text: `Prøven du startet ${when} ble ikke levert før de ${EXAM.minutes} minuttene var over. Du svarte på ${n} av ${E.ids.length}. Leverer du den, teller den som en prøve, og oppgavene uten svar teller som feil.`,
+    choices: [{ value: 'drop', label: 'Forkast prøven', primary: true }, { value: 'deliver', label: `Lever de ${n} svarene` }] });
+  if (v === 'drop') { saveExam(null); toast('Prøven er forkastet.', { type: 'ok' }); }
+  if (v === 'deliver') deliver(ctx);
+  return v;
+}
 /* Hvor tilbakeknappen fører fra en øverunde: skiltøving tilbake til skiltene */
 export const practiceBack = () => (practice && practice.back) || THEORY_HOME;
 
@@ -76,7 +112,7 @@ export function theoryMiniCards(p, ids) {
     return `<button type="button" class="card mini-card" id="${ids[0]}"><span class="card-title">${icon('quiz')}Teoriprøven</span><strong>${done >= FREE_THEORY.length ? `${done} av ${FREE_THEORY.length}` : '10 gratis'}</strong><span class="muted small">${done >= FREE_THEORY.length ? 'gratis spørsmål tatt' : 'spørsmål å prøve'}</span></button>
     <button type="button" class="card mini-card" id="${ids[1]}"><span class="card-title">${icon('wrench')}Sikkerhets&shy;kontroll</span><strong>${SAFETY.length} oppgaver</strong><span class="muted small">med Pluss</span></button>`;
   }
-  if (t.exam) { big = `${Object.keys(t.exam.answers).length} av ${t.exam.ids.length}`; small = 'Prøve påbegynt, fortsett'; }
+  if (t.exam) { big = `${Object.keys(t.exam.answers).length} av ${t.exam.ids.length}`; small = examLapsed(t.exam) ? 'Tida gikk ut før du leverte' : 'Prøve påbegynt, fortsett'; }
   else if (last) { big = `${last.correct} av ${last.total}`; small = t.ready.level === 'klar' ? 'Klar for teoriprøven' : last.passed ? 'Siste prøve bestått' : 'Siste prøve ikke bestått'; }
   else { big = `${t.learned} lært`; small = `av ${t.total} spørsmål`; }
   return `<button type="button" class="card mini-card" id="${ids[0]}"><span class="card-title">${icon('quiz')}Teoriprøven</span><strong>${esc(big)}</strong><span class="muted small">${esc(small)}</span></button>
@@ -152,6 +188,10 @@ export async function renderTheoryHub(root, ctx) {
   const rd = readinessPercent(QUESTIONS, p, THEMES);
   const head = { start: 'Øv deg til teoriprøven', ovelse: 'Øv videre', nesten: 'Nesten klar', klar: 'Klar for teoriprøven' }[sum.ready.level];
   const signsOk = signsLearned(p), wrongN = sum.wrong, marks = (p.marks || []).filter(id => byId.has(id)).length;
+  const due = dueList(QUESTIONS, p).length, lapsed = examLapsed(ongoing);
+  // Vanskelige spørsmål (0.25.0): når eleven er godt på vei, som en egen øving
+  const hardQs = QUESTIONS.filter(q => level(q) >= 3), showHard = rd.percent >= 70;
+  const hardPct = Math.round(hardQs.reduce((s, q) => { const e = p.q[q.id]; return s + (isLearned(e) ? 1 : e && e.run > 0 ? 0.5 : 0); }, 0) / Math.max(1, hardQs.length) * 100);
   const tile = (id, fig, title, sub, pct, disabled = false) => `<button type="button" class="th-tile" id="${id}" ${disabled ? 'disabled' : ''}>
       <span class="th-tile-fig" aria-hidden="true">${fig}</span><strong>${title}</strong><span class="muted small">${sub}</span>
       ${pct === null ? '' : `<span class="th-bar"><span style="width:${pct}%"></span></span>`}</button>`;
@@ -167,12 +207,12 @@ export async function renderTheoryHub(root, ctx) {
       ${canRemind() ? `<button type="button" class="th-date" id="th-remind">${icon('bell', 16)}<span>${p.remind && p.remind.on ? `Påminnelse hver dag kl. ${esc(p.remind.time.replace(':', '.'))}` : 'Få en påminnelse hver dag'}</span>${icon('chev', 16)}</button>` : ''}
       ${exams.length ? `<div class="th-dots" aria-label="De siste prøvene">${exams.map(e => `<span class="th-dot ${e.correct >= EXAM.solid ? 'ok' : e.passed ? 'mid' : 'no'}" title="${e.correct} av ${e.total}">${e.correct}</span>`).join('')}</div>` : ''}
       <p class="th-ready">${esc(READY_TEXT[sum.ready.level])}</p>
-      <button type="button" class="btn primary" id="th-exam">${icon('clock', 20)}${ongoing ? 'Fortsett prøven' : 'Ta en prøve'}</button>
-      <p class="th-exam-meta">${ongoing ? `${Object.keys(ongoing.answers).length} av ${ongoing.ids.length} oppgaver besvart` : `${EXAM.n} oppgaver · ${EXAM.minutes} minutter · ${EXAM.pass} riktige for å bestå`}</p>
+      <button type="button" class="btn primary" id="th-exam">${icon('clock', 20)}${lapsed ? 'Lever eller forkast prøven' : ongoing ? 'Fortsett prøven' : 'Ta en prøve'}</button>
+      <p class="th-exam-meta">${lapsed ? `Tida gikk ut før du leverte · ${Object.keys(ongoing.answers).length} av ${ongoing.ids.length} besvart` : ongoing ? `${Object.keys(ongoing.answers).length} av ${ongoing.ids.length} oppgaver besvart` : `${EXAM.n} oppgaver · ${EXAM.minutes} minutter · ${EXAM.pass} riktige for å bestå`}</p>
     </section>
     <h2 class="group-title">Øv nå</h2>
     <div class="th-tiles">
-      ${tile('th-mix', figure('scene:rundkjoring'), 'Rask øving', '10 blandede spørsmål', null)}
+      ${tile('th-mix', figure('scene:rundkjoring'), 'Rask øving', due ? `${due} å repetere i dag, så nye` : '10 blandede spørsmål', null)}
       ${tile('th-to-book', `<span class="th-tile-ico th-ico-book">${icon('book', 30)}</span>`, 'Teoriboka', 'Les reglene, tema for tema', null)}
       <button type="button" class="th-tile th-tile-wide" id="th-cross">
         <span class="th-tile-fig" aria-hidden="true">${figure('scene:kryss-tre')}</span>
@@ -194,9 +234,22 @@ export async function renderTheoryHub(root, ctx) {
           <span class="th-bar"><span style="width:${pct}%"></span></span><span class="muted small">${s.learned} av ${s.total} lært${s.seen ? ` · ${Math.round(s.right / Math.max(1, s.answers) * 100)} % riktige svar` : ''}</span></span>
         ${icon('chev', 18)}</button></li>`;
     }).join('')}</ul></section>
-    <p class="muted small th-note">Prøven her er laget litt vanskeligere enn den ekte: minst ${Math.round(HARD_SHARE * 10)} av 10 oppgaver er vanskelige, og du bør ha ${EXAM.solid} riktige, ikke ${EXAM.pass}, før du regner deg som klar. ${exams.length ? `Prikkene viser de siste prøvene: grønn er ${EXAM.solid} eller mer. ` : ''}Prosenten «klar» veier temaene som på prøven, og de siste prøvene teller halvparten. Et spørsmål er lært når du har svart riktig på det ${LEARNED} ganger på rad. Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
+    ${showHard ? `<section class="card th-themes"><ul class="th-list"><li><button type="button" class="th-theme" id="th-hard">
+        <span class="th-ico th-ico-hard">${icon('target', 22)}</span>
+        <span class="th-tt"><span class="th-tt-head"><strong>Vanskelige spørsmål</strong><span class="th-pct ${hardPct >= 80 ? 'ok' : hardPct >= 40 ? 'mid' : ''}">${hardPct} %</span></span><span class="muted small">Unntak, tall og regler som virker sammen, fra alle temaene</span>
+          <span class="th-bar"><span style="width:${hardPct}%"></span></span><span class="muted small">${hardQs.filter(q => isLearned(p.q[q.id])).length} av ${hardQs.length} lært</span></span>
+        ${icon('chev', 18)}</button></li></ul></section>` : ''}
+    <p class="muted small th-note">Prøven her er laget litt vanskeligere enn den ekte: minst ${Math.round(HARD_SHARE * 10)} av 10 oppgaver er vanskelige, og du bør ha ${EXAM.solid} riktige, ikke ${EXAM.pass}, før du regner deg som klar. ${exams.length ? `Prikkene viser de siste prøvene: grønn er ${EXAM.solid} eller mer. ` : ''}Prosenten «klar» veier temaene som på prøven, og de siste prøvene teller halvparten. ${LEARNED_TEXT} Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>
     ${Object.keys(p.q).length || p.exams.length ? '<button type="button" class="link th-reset" id="th-reset">Begynn på nytt</button>' : ''}`;
-  root.querySelector('#th-exam').onclick = () => { if (!examInProgress()) startExam(ctx); ctx.go('#/teori/prove'); };
+  const examBtn = root.querySelector('#th-exam');
+  examBtn.onclick = async () => {
+    if (examLapsed(examInProgress())) { if (await settleLapsed(ctx) === 'drop') renderTheoryHub(root, ctx); return; }
+    if (!examInProgress()) startExam(ctx);
+    ctx.go('#/teori/prove');
+  };
+  if (lapsed && askLapsed) { askLapsed = false; examBtn.click(); }
+  const hardBtn = root.querySelector('#th-hard');
+  if (hardBtn) hardBtn.onclick = () => startPractice(ctx, { title: 'Vanskelige spørsmål', hard: true, n: 10 });
   root.querySelector('#th-wrong').onclick = () => startPractice(ctx, { title: 'Feilene dine', wrongOnly: true, n: 15 });
   root.querySelector('#th-mix').onclick = () => startPractice(ctx, { title: 'Rask øving', n: 10 });
   root.querySelector('#th-to-book').onclick = () => ctx.go('#/teori/bok');
@@ -231,7 +284,7 @@ export async function renderTheoryHub(root, ctx) {
     renderTheoryHub(root, ctx);
   };
   syncReminders(p);
-  root.querySelectorAll('.th-theme').forEach(b => b.onclick = () => startPractice(ctx, { title: theme(b.dataset.theme).title, theme: b.dataset.theme, n: 10 }));
+  root.querySelectorAll('.th-theme[data-theme]').forEach(b => b.onclick = () => startPractice(ctx, { title: theme(b.dataset.theme).title, theme: b.dataset.theme, n: 10 }));
   const reset = root.querySelector('#th-reset');
   if (reset) reset.onclick = async () => {
     if (!await confirmDialog({ title: 'Begynne på nytt?', text: 'Svarene og prøvene dine slettes, så alle spørsmål blir nye igjen. Sikkerhetskontrollen, bokmerkene og prøvedatoen beholdes.', ok: 'Begynn på nytt', danger: true })) return;
@@ -299,6 +352,7 @@ export function renderPractice(root, ctx) {
       <p class="q-rule">${esc(rule)}</p>${rest ? `<p>${esc(rest)}</p>` : ''}
       <p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
       ${more ? `<button type="button" class="link q-more" id="q-more">${icon('book', 18)}<span>Les mer i teoriboka: ${esc(bookSection(more).title)}</span>${icon('chev', 16)}</button>` : ''}
+      ${reportLink(q.id, q.q)}
     </section>
     <div class="q-dock"><button type="button" class="btn primary" id="q-next">${P.i + 1 < P.items.length ? 'Neste spørsmål' : 'Se hvordan det gikk'}${icon('chev', 20)}</button></div>` : ''}`;
   root.querySelector('#q-close').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
@@ -371,15 +425,19 @@ function wireZoom(root) {
 function renderPracticeDone(root, ctx) {
   const P = practice, ok = P.results.filter(Boolean).length, day = practiceDays(ctx.progress(), Date.now(), planFor(ctx.progress()).goal);
   const sumFig = q => (q.sign ? `<span class="q-sum-sign">${figure(q.pick ? q.imgs[0] : q.img)}</span>` : '');
+  // Fra feilene til teoriboka (0.25.0), men ikke tilbake til delen eleven nettopp øvde på
+  const weak = hasTheory() ? weakSections(P.items.filter((_, i) => !P.results[i]), 2).filter(s => P.back !== `#/teori/bok/${s.chapter}/${s.section}`) : [];
   root.innerHTML = `
     <section class="sign-card th-sign ${ok === P.items.length ? 'lv-klar' : ok >= P.items.length * 0.85 ? 'lv-nesten' : 'lv-ovelse'}">
       <p class="eyebrow">${esc(P.title)}</p>
       <h2 class="th-sign-head">${ok} av ${P.items.length} riktige</h2>
-      <p>${ok === P.items.length ? 'Alt riktig. Bra jobbet!' : P.filter.free && !hasTheory() ? 'Forklaringen står ved hvert spørsmål når du tar dem igjen.' : 'Spørsmålene du svarte feil på, kommer igjen neste gang du øver.'}</p>
+      <p>${P.filter.free && !hasTheory() ? (ok === P.items.length ? 'Alt riktig. Bra jobbet!' : 'Forklaringen står ved hvert spørsmål når du tar dem igjen.')
+        : `${ok === P.items.length ? 'Alt riktig. Bra jobbet!' : 'Spørsmålene du svarte feil på, kommer igjen neste gang du øver.'} De du kunne, kommer tilbake om noen dager, så du husker dem til prøven.`}</p>
       ${P.filter.free && !hasTheory() ? '' : `<p class="th-day">${dayLine(day)}${day.streak > 1 ? `<span class="th-streak">${icon('flame', 18)}${day.streak} dager på rad</span>` : ''}</p>
       <span class="goal-bar th-day-bar"><span style="width:${Math.min(100, day.today / day.goal * 100)}%"></span></span>`}
     </section>
     <section class="card"><ul class="q-sum">${P.items.map((id, i) => `<li class="${P.results[i] ? 'ok' : 'no'}">${icon(P.results[i] ? 'check' : 'close', 18)}${sumFig(byId.get(id))}<span>${esc(byId.get(id).label || byId.get(id).q)}</span></li>`).join('')}</ul></section>
+    ${readCard(weak)}
     ${P.filter.free && !hasTheory() ? `<section class="card th-plus-card"><h2 class="card-title">${icon('check')}Det var de 10 gratis</h2>
       <p>Med Pluss får du alle ${QUESTIONS.length} spørsmålene, prøver som den ekte, teoriboka, skiltprøven og sikkerhetskontrollen. Ett kjøp, for hele familien.</p></section>
     <button type="button" class="btn primary" id="q-plus">Se Pluss</button>
@@ -390,6 +448,7 @@ function renderPracticeDone(root, ctx) {
   const qp = root.querySelector('#q-plus'); if (qp) qp.onclick = () => { practice = null; ctx.go(TO_PLUS); };
   root.querySelector('#q-again').onclick = () => startPractice(ctx, { title: P.title, ...P.filter });
   root.querySelector('#q-hub').onclick = () => { const back = P.back; practice = null; ctx.go(back); };
+  wireRead(root, ctx);
 }
 
 /* ---------- Teoriboka (0.21.0) ----------
@@ -554,7 +613,7 @@ export function renderSignHub(root, ctx) {
       <p class="eyebrow">Skiltprøven</p>
       <h2>Kjenn igjen skiltene</h2>
       <span class="th-bar"><span style="width:${learned / SIGNS.length * 100}%"></span></span>
-      <p class="muted small">${learned} av ${SIGNS.length} skilt lært. Et skilt er lært når du har svart riktig på det ${LEARNED} ganger på rad.</p>
+      <p class="muted small">${learned} av ${SIGNS.length} skilt lært. Et skilt er lært når du har svart riktig på det ${LEARNED} ganger på rad, spredt over dager.</p>
       <button type="button" class="btn primary" id="sg-go">${icon('quiz', 20)}Øv på skiltene</button>
       <button type="button" class="btn secondary" id="sg-cards">${icon('layers', 20)}Skiltkort: snu og lær</button>
       ${wrong ? `<button type="button" class="btn secondary" id="sg-wrong">${icon('repeat', 20)}Øv på feilene (${wrong})</button>` : ''}
@@ -614,7 +673,7 @@ export function renderCards(root, ctx) {
       <button type="button" class="fc-card ${K.flipped ? 'flipped' : ''}" id="fc-card" aria-label="${K.flipped ? `${esc(s.name)}. ${esc(s.meaning)}` : 'Skiltkort. Trykk for å snu og se hva skiltet betyr'}">
         <span class="fc-inner">
           <span class="fc-face fc-front" aria-hidden="${K.flipped}"><span class="fc-fig">${figure(s.img)}</span><span class="fc-hint">${icon('repeat', 18)}Hva betyr skiltet? Trykk for å snu</span></span>
-          <span class="fc-face fc-back" aria-hidden="${!K.flipped}"><span class="fc-fig small">${figure(s.img)}</span><strong class="fc-name">${esc(s.name)}</strong><span class="fc-mean">${esc(s.meaning)}</span><span class="muted small">Skilt ${s.id === '306' ? '306.0' : s.id}</span></span>
+          <span class="fc-face fc-back" aria-hidden="${!K.flipped}"><span class="fc-fig small">${figure(s.img)}</span><strong class="fc-name">${esc(s.name)}</strong><span class="fc-mean">${esc(s.meaning)}</span><span class="muted small">Skilt ${SIGN_REF[s.id] || s.id}</span></span>
         </span>
         <span class="fc-stamp fc-stamp-yes" aria-hidden="true">${icon('check', 22)}Kan det</span><span class="fc-stamp fc-stamp-no" aria-hidden="true">${icon('repeat', 22)}Øv mer</span>
       </button>
@@ -713,6 +772,7 @@ export function renderCross(root, ctx) {
       <p class="muted small">${icon('book', 16)} ${esc(pz.ref)}</p>
       <button type="button" class="btn secondary" id="cx-replay">${icon('repeat', 20)}Spill av igjen</button>
       ${more ? `<button type="button" class="link q-more" id="cx-more">${icon('book', 18)}<span>Les mer i teoriboka: ${esc(bookSection(more).title)}</span>${icon('chev', 16)}</button>` : ''}
+      ${reportLink(`kryss ${pz.id}`, `${pz.intro} Hvem skal først?`)}
     </section>
     <div class="q-dock"><button type="button" class="btn primary" id="cx-next">${X.i + 1 < X.items.length ? 'Neste kryss' : 'Se hvordan det gikk'}${icon('chev', 20)}</button></div>` : ''}`;
   const svg = root.querySelector('#cx-fig svg');
@@ -788,8 +848,10 @@ function startExam(ctx) {
 export function renderExam(root, ctx) {
   const E = examInProgress();
   if (!E) { ctx.go(lastResult ? '#/teori/resultat' : THEORY_HOME); return; }
+  // Tida gikk ut mens appen var lukket (0.25.0): oversikten spør om prøven skal leveres eller forkastes
+  if (examLapsed(E)) { askLapsed = true; ctx.go(THEORY_HOME); return; }
   stopSpeaking();
-  const left = () => Math.max(0, EXAM.minutes * 60 - (Date.now() - E.startedAt) / 1000);
+  const left = () => Math.max(0, examTimeLeft(E));
   const id = E.ids[E.i], q = byId.get(id), done = Object.keys(E.answers).length;
   const flagged = E.flagged.includes(id);
   root.innerHTML = `
@@ -799,7 +861,7 @@ export function renderExam(root, ctx) {
     <span class="th-bar q-prog"><span id="q-prog" style="width:${done / E.ids.length * 100}%"></span></span>
     <div class="q-grid" id="q-grid" hidden>${E.ids.map((x, k) => `<button type="button" class="q-cell ${E.answers[x] !== undefined ? 'done' : ''} ${k === E.i ? 'cur' : ''} ${E.flagged.includes(x) ? 'flag' : ''}" data-k="${k}" aria-label="Oppgave ${k + 1}${E.answers[x] !== undefined ? ', besvart' : ''}${E.flagged.includes(x) ? ', merket' : ''}">${k + 1}</button>`).join('')}</div>
     <section class="card q-card">
-      ${q.img ? `<div class="q-fig">${figure(q.img)}</div>` : ''}
+      ${q.img ? `<div class="q-fig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.img)}">${figure(q.img)}</div>` : ''}
       <div class="q-head"><h2 class="q-text">${esc(q.q)}</h2>${speakBtn('q-read')}</div>
       <div class="q-opts" role="radiogroup" aria-label="Svaralternativer">${E.orders[id].map((oi, k) => `<button type="button" role="radio" aria-checked="${E.answers[id] === oi}" class="q-opt ${E.answers[id] === oi ? 'picked' : ''}" data-oi="${oi}"><span class="q-letter">${LETTERS[k]}</span><span>${esc(q.a[oi])}</span></button>`).join('')}</div>
       <button type="button" class="link q-flag ${flagged ? 'on' : ''}" id="q-flag">${icon('flag', 18)}${flagged ? 'Merket for å se på igjen' : 'Merk for å se på igjen'}</button>
@@ -811,6 +873,7 @@ export function renderExam(root, ctx) {
     <button type="button" class="btn primary q-deliver" id="q-deliver">Lever prøven</button>
     <button type="button" class="link q-quit" id="q-quit">Avbryt prøven</button>`;
   const go = k => { E.i = k; saveExam(E); renderExam(root, ctx); window.scrollTo(0, 0); };
+  wireZoom(root);   // tegningen kan forstørres, som i øvingen (0.25.0)
   root.querySelectorAll('.q-opt').forEach(b => b.onclick = () => {
     E.answers[id] = +b.dataset.oi; saveExam(E); ctx.vibrate(10);
     root.querySelectorAll('.q-opt').forEach(x => { const on = x === b; x.classList.toggle('picked', on); x.setAttribute('aria-checked', on); });
@@ -844,7 +907,12 @@ export function renderExam(root, ctx) {
     const s = left();
     el.querySelector('span').textContent = mmss(s);
     el.classList.toggle('low', s < 300);
-    if (s <= 0) { clearInterval(examTimer); examTimer = null; toast('Tida er ute. Prøven er levert.', { type: 'ok' }); deliver(ctx); }
+    if (s <= 0) {
+      clearInterval(examTimer); examTimer = null;
+      // Appen var i bakgrunnen da tida gikk ut (0.25.0): spør i stedet for å levere en halvferdig prøve
+      if (examLapsed(E)) { askLapsed = true; ctx.go(THEORY_HOME); return; }
+      toast('Tida er ute. Prøven er levert.', { type: 'ok' }); deliver(ctx);
+    }
   }, 1000);
 }
 
@@ -879,18 +947,22 @@ export function renderExamResult(root, ctx) {
       const b = R.byTheme[t.id], v = Math.round(b.correct / b.n * 100);
       return `<div class="bar-row"><span class="bar-label">${esc(t.title)}</span><span class="bar"><span class="bar-fill ${v >= 90 ? 'good' : v >= 75 ? 'mid' : 'bad'}" style="width:${v}%"></span></span><span class="bar-val">${b.correct}/${b.n}</span></div>`;
     }).join('')}</div></section>
+    ${readCard(weakSections(R.wrong))}
     ${wrong.length ? `<button type="button" class="btn primary" id="r-wrong">${icon('repeat', 20)}Øv på feilene fra prøven (${wrong.length})</button>` : ''}
     <button type="button" class="btn ${wrong.length ? 'secondary' : 'primary'}" id="r-new">${icon('clock', 20)}Ta en ny prøve</button>
     ${wrong.length ? `<h2 class="group-title">Det du svarte feil på</h2>
     ${wrong.map(q => {
-      const a = R.answers[q.id];
+      const a = R.answers[q.id], more = sectionFor(q.id);
       return `<details class="card r-wrong"><summary><span>${esc(q.q)}</span>${icon('chev', 18)}</summary>
         ${q.img ? `<div class="q-fig small">${figure(q.img)}</div>` : ''}
         <p class="r-ans no">${icon('close', 18)}${a === undefined ? 'Ikke besvart' : esc(q.a[a])}</p>
         <p class="r-ans ok">${icon('check', 18)}${esc(q.a[0])}</p>
-        ${q.wimg ? `<div class="q-fig q-wfig small">${figure(q.wimg)}</div>` : ''}<p>${esc(q.why)}</p><p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p></details>`;
+        ${q.wimg ? `<div class="q-fig q-wfig small">${figure(q.wimg)}</div>` : ''}<p>${esc(q.why)}</p><p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
+        ${more ? `<button type="button" class="link q-more" data-path="${more.chapter}/${more.section}">${icon('book', 18)}<span>Les mer i teoriboka: ${esc(bookSection(more).title)}</span>${icon('chev', 16)}</button>` : ''}
+        ${reportLink(q.id, q.q)}</details>`;
     }).join('')}` : ''}
     <button type="button" class="btn secondary" id="r-hub">Til oversikten</button>`;
+  wireRead(root, ctx);
   const w = root.querySelector('#r-wrong');
   if (w) w.onclick = () => startPractice(ctx, { title: 'Feilene fra prøven', ids: R.wrong, n: R.wrong.length });
   root.querySelector('#r-new').onclick = () => { startExam(ctx); ctx.go('#/teori/prove'); };

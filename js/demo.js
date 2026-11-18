@@ -7,9 +7,9 @@ import { makeDemo } from './analysis.js';
 import { DEMO_ROUTE } from './demo-route.js';
 import { createTestDrives, TEST_STUDENTS } from './testdata.js';
 import { QUESTIONS } from './theory-b.js';
-import { emptyProgress, answer, addExam, buildExam, scoreExam, rng, dayKey } from './theory.js';
+import { emptyProgress, answer, addExam, buildExam, scoreExam, rng, dayKey, dueAt } from './theory.js';
 
-export const DEMO_V = 4;
+export const DEMO_V = 5;
 const DAY = 86400000;
 
 /* Emmas turer: demoturen (2–5 runder, 10–27 min) lagt langs ruta. Eldre turer brå, de nyeste mykere. */
@@ -48,12 +48,19 @@ export function emmaTheory(now = Date.now()) {
   const rand = rng(42);
   let p = emptyProgress();
   const pool = QUESTIONS.filter(() => rand() < 0.7);
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const earlier = Math.max(today.getTime() + 8 * 3600000, now - 3 * 3600000);   // tidligere i dag, om det er morgen ennå
   pool.forEach((q, i) => {
     const t = now - (14 - Math.floor(i / pool.length * 14)) * DAY + 3600000;
-    const right = rand() < 0.82;
-    p = answer(p, q.id, right ? 0 : 1, t);
-    if (right && rand() < 0.6) p = answer(p, q.id, 0, t + 60000);
-    if (right && rand() < 0.5) p = answer(p, q.id, 0, t + 120000);
+    p = answer(p, q.id, rand() < 0.82 ? 0 : 1, t);
+    // Repetisjon over dager (0.25.0): Emma tar spørsmålene igjen når de er tilbake (kl. 17 den dagen), nesten alltid.
+    // De som kom tilbake i dag, har hun tatt de fleste av tidligere i dag, så det står noen igjen til repetisjon.
+    for (let k = 0; k < 12; k++) {
+      const e = p.q[q.id], next = new Date(e.run ? dueAt(e) : e.last + DAY); next.setHours(17, 0, 0, 0);
+      const at = next.getTime() < today.getTime() ? next.getTime() : next.getTime() < today.getTime() + DAY && earlier < now && rand() < 0.7 ? earlier : null;
+      if (at === null || rand() < 0.005) break;
+      p = answer(p, q.id, rand() < 0.85 ? 0 : 1, at);
+    }
   });
   [[37, 9], [40, 5], [42, 2]].forEach(([c, ago], k) => {
     const ids = buildExam(QUESTIONS, { rand: rng(7 + k) });
