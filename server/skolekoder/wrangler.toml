@@ -1,0 +1,11 @@
+# Skolekode-serveren hos Cloudflare Workers (0.27.0). Oppsett: se server/skolekoder/README.md.
+name = "kjorerapport-skolekoder"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+# KV-navnerommet for kodene. id fylles inn etter «wrangler kv namespace create CODES».
+[[kv_namespaces]]
+binding = "CODES"
+id = "FYLL_INN_ETTER_OPPSETT"
+
+# Hemmeligheter (ligger ikke her): «wrangler secret put ADMIN_SECRET» og «wrangler secret put SIGN_KEY»

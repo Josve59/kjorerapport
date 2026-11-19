@@ -1,12 +1,12 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v0.26.6';
+const VERSION = 'v0.27.0';
 const CACHE = 'kjorerapport-' + VERSION;
 const ML_CACHE = 'kjorerapport-ml';   // ansiktsgjenkjenningen, beholdes mellom versjoner
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './manifest-vei.webmanifest',
   './css/app.css', './css/theme.css',
-  './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js', './js/camera.js', './js/facecam.js', './js/situations.js', './js/livelimit.js', './js/roadshape.js', './js/readiness.js', './js/modes.js', './js/testdata.js', './js/speedwarn.js', './js/surface.js', './js/practice.js', './js/calibcheck.js', './js/devchart.js', './js/game.js', './js/liveatk.js', './js/teacher.js', './js/messages.js', './js/sound.js',
+  './js/app.js', './js/analysis.js', './js/recorder.js', './js/db.js', './js/report.js', './js/format.js', './js/sensors.js', './js/enrich.js', './js/ui.js', './js/log.js', './js/insights.js', './js/camera.js', './js/facecam.js', './js/situations.js', './js/livelimit.js', './js/roadshape.js', './js/readiness.js', './js/modes.js', './js/testdata.js', './js/speedwarn.js', './js/surface.js', './js/practice.js', './js/skolekode.js', './js/calibcheck.js', './js/devchart.js', './js/game.js', './js/liveatk.js', './js/teacher.js', './js/messages.js', './js/sound.js',
   './js/nativecam.js', './js/guides.js', './js/plus.js', './js/road.js', './js/track.js', './js/lanes.js', './js/laneease.js', './js/facelight.js', './js/speedfit.js', './js/theory.js', './js/theory-b.js', './js/theory-signs.js', './js/theory-book.js', './js/theory-crossings.js', './js/crossanim.js', './js/remind.js', './js/demo.js', './js/demo-route.js', './js/safety-check.js', './js/trafficsvg.js', './js/theoryui.js', './js/webroad.js', './js/dfine.js', './js/dfine-worker.js', './js/flow.js', './js/signs.js', './js/sign-tpl.js',
   './fonts/overpass-latin.woff2', './fonts/overpass-latin-ext.woff2',
   './vendor/leaflet/leaflet.js', './vendor/leaflet/leaflet.css',

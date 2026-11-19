@@ -1,6 +1,7 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
 import { practiceSpans, rescore, inSpans } from './practice.js';
+import { loadSchoolPass, activateCode, codesEnabled, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
 import { seedDemo } from './demo.js';
@@ -35,7 +36,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.26.6';
+export const APP_VERSION = '0.27.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -602,6 +603,7 @@ async function gatherRows(driver = null) {
 }
 
 /* ---------- Kjørerapport Pluss (0.11.0) ---------- */
+const longDay = t => new Date(t).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' });   // «20. november 2027»
 /* Pluss-siden: hva Pluss gir (funksjonen brukeren kom fra øverst), pris, kjøp, gjenopprett og kode fra trafikkskolen */
 async function renderPlus(feature = null) {
   show('pluss');
@@ -610,28 +612,43 @@ async function renderPlus(feature = null) {
     const st = plusState(), owned = hasPlus();
     const order = feature && PLUS_FEATURES[feature] ? [feature, ...Object.keys(PLUS_FEATURES).filter(k => k !== feature)] : Object.keys(PLUS_FEATURES);
     const price = st.price ? `Kjøp for ${esc(st.price)}` : 'Kjøp Pluss';
+    // Kode fra trafikkskolen (0.27.0, skolekode.js): elevens kode låser opp Pluss, også teorien i nettversjonen.
+    // Før serveren er satt opp (codesEnabled), går «Kode fra trafikkskolen» til App Store-kodene som før.
+    const schoolCode = async btn => {
+      const v = await promptDialog({ title: 'Kode fra trafikkskolen', text: 'Har trafikkskolen gitt deg en kode? Skriv den her, med eller uten bindestreker.', placeholder: 'XXXX-XXXX-XXXX', ok: 'Bruk koden', maxLength: 20 });
+      if (v === null || !v.trim()) return;
+      if (btn) { btn.disabled = true; }
+      const r = await activateCode(v);
+      if (btn) { btn.disabled = false; }
+      if (r.ok) { vibrate([30, 60, 30]); toast(`Pluss er låst opp av ${r.skole}, til ${longDay(r.til)}.`, { type: 'ok', ms: 4000 }); if (gateFor(location.hash)) route(); else draw(); return; }
+      infoDialog({ title: 'Koden virket ikke', text: CODE_ERROR[r.error] || CODE_ERROR.server });
+    };
     // Nettversjonen (0.23.0): resten er gratis der, men teorien hører til Pluss i iPhone-appen og kan ikke kjøpes her
     if (!st.native && feature === 'theory' && !hasTheory()) {
       root.innerHTML = `
         <section class="plus-hero"><span class="plus-badge">${icon('check', 18)}Pluss</span>
           <h2>Teorien er en del av Pluss i iPhone-appen</h2>
           <p>Her kan du prøve 10 gratis spørsmål. Alle 420 spørsmålene, prøvene, teoriboka, skiltprøven og sikkerhetskontrollen finnes i iPhone-appen Kjørerapport, med Pluss.</p></section>
+        ${codesEnabled() ? '<button type="button" class="btn primary" id="plus-school">Jeg har en kode fra trafikkskolen</button>' : ''}
         <button type="button" class="btn secondary" id="plus-back">Tilbake</button>`;
       root.querySelector('#plus-back').onclick = () => goBack();
+      const sc = root.querySelector('#plus-school'); if (sc) sc.onclick = () => schoolCode(sc);
       return;
     }
+    // Tilgang fra trafikkskolen vises når den er grunnen til Pluss (nettversjonen regner seg alltid som «kjøpt»)
+    const school = st.school && (!st.native || !st.owned) ? st.school : null;
     root.innerHTML = `
       <section class="plus-hero">
         <span class="plus-badge">${icon('check', 18)}Pluss</span>
-        <h2>${owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
-        <p>${owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
+        <h2>${school ? 'Du har Pluss fra trafikkskolen' : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
+        <p>${school ? `Fra ${esc(school.skole)}, til ${esc(longDay(school.exp))}. Alt i appen er låst opp.` : owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
       </section>
       <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${owned ? `<span class="plus-ok">${icon('check', 18)}</span>` : ''}</div>`; }).join('')}</section>
       ${owned ? `<button type="button" class="btn secondary" id="plus-back">Tilbake</button>` : `
       <button type="button" class="btn primary plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
       <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse.'}</p>`}
       ${owned ? '' : `
-      <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button></div>`}
+      <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button>${codesEnabled() && st.native ? '<button type="button" class="link" id="plus-appcode">App Store-kode</button>' : ''}</div>`}
       <p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>`;
     const back = root.querySelector('#plus-back');
     if (back) back.onclick = () => goBack();
@@ -652,7 +669,9 @@ async function renderPlus(feature = null) {
     const res = root.querySelector('#plus-restore');
     if (res) res.onclick = () => act(res, restorePlus, 'Pluss er gjenopprettet.');
     const code = root.querySelector('#plus-code');
-    if (code) code.onclick = () => act(code, redeemPlus, 'Koden er brukt. Pluss er låst opp.');
+    if (code) code.onclick = () => (codesEnabled() ? schoolCode(code) : act(code, redeemPlus, 'Koden er brukt. Pluss er låst opp.'));
+    const appCode = root.querySelector('#plus-appcode');
+    if (appCode) appCode.onclick = () => act(appCode, redeemPlus, 'Koden er brukt. Pluss er låst opp.');
   };
   draw();
   await refreshPlus();
@@ -3572,6 +3591,9 @@ function init() {
   // Etter visningen, så en melding til læreren havner i lærervisningen.
   modeReady.then(() => setTimeout(openIncomingFile, 300));
   window.addEventListener('kjfile', () => modeReady.then(openIncomingFile));
+  // Kode fra trafikkskolen (0.27.0): beviset sjekkes uten nett ved start, og serveren spørres igjen etter en uke
+  loadSchoolPass().catch(() => {});
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSchoolPass().catch(() => {}); });
   // Veidata i bakgrunnen (0.26.6): når appen starter, når telefonen får nett igjen og når appen kommer fram igjen
   const prefetchSoon = ms => setTimeout(() => { prefetchRoadData().catch(() => {}); }, ms);
   modeReady.then(() => prefetchSoon(4000));

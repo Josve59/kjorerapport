@@ -23,9 +23,17 @@ let devOverride = null;   // utviklerdelen: true/false overstyrer, null = som Ap
 const listeners = new Set();
 const notify = () => { for (const fn of listeners) try { fn(hasPlus()); } catch { /* */ } };
 
+/* Kode fra trafikkskolen (0.27.0, skolekode.js): { skole, exp } når eleven har en gyldig kode, ellers null.
+   Gir hele Pluss, også teorien i nettversjonen (elever med Android bruker den). */
+let school = null;
+const schoolOk = () => !!(school && school.exp > Date.now());
+export const schoolPass = () => (schoolOk() ? { ...school } : null);
+export function setSchoolPass(p) { school = p && p.exp ? { skole: String(p.skole || ''), exp: p.exp } : null; notify(); }
+
 /* Har brukeren Pluss nå? Utenfor iPhone-appen alltid ja. */
 export function hasPlus() {
   if (devOverride !== null) return devOverride;
+  if (schoolOk()) return true;
   if (!native()) return true;
   return state.owned;
 }
@@ -34,6 +42,7 @@ export function hasPlus() {
 export const WEB_THEORY = false;
 export function hasTheory() {
   if (devOverride !== null) return devOverride;
+  if (schoolOk()) return true;
   if (!native()) return WEB_THEORY;
   return state.owned;
 }
@@ -42,7 +51,7 @@ export const hasFeature = key => (key === 'theory' ? hasTheory() : hasPlus());
 /* De 10 gratis spørsmålene (0.23.0), i rekkefølgen de vises: noe fra hvert tema, med det beste appen har (kryss som
    spilles av, førerens utsikt, bildesvar, stopplengden med kalkulatoren i teoriboka, lamper og linjer). */
 export const FREE_THEORY = ['v02', 'f05', 'sp124', 'f02', 't24', 'k08', 's34', 'r09', 'a26', 'v40'];
-export const plusState = () => ({ ...state, native: native(), dev: devOverride });
+export const plusState = () => ({ ...state, native: native(), dev: devOverride, school: schoolPass() });
 export function onPlusChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function setDevPlus(v) { devOverride = v === true || v === false ? v : null; notify(); }
 

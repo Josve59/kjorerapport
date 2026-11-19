@@ -143,6 +143,55 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.0 – access codes for driving schools, with a small server
+
+The owner (20 November): build the access codes and the server for the schools. The goal is driving-school deals: 350 kr per pupil, invoiced directly, see the owner decisions of 18 and 19 November.
+
+**How it works** (setup and use in `server/skolekoder/README.md`)
+- **The codes:**
+  - One code per pupil, for example `K7MX-29QF-H4TA`. They have 12 characters with no 0/O or 1/I/L.
+  - A code works on at most 2 phones, so the pupil can change phone. A code shared online cannot be used by others.
+  - Access lasts 12 months from first use (can be set per school).
+- **The server** (`server/skolekoder/worker.js`):
+  - A Cloudflare Worker with no dependencies. The codes are stored in KV.
+  - It answers with a signed proof (ECDSA P-256), which the app checks itself with the public key in `js/skolekode.js`. Access then works offline.
+  - The app asks the server again after a week, so a closed code stops working.
+  - No personal data: only the code, the school, when the code was first used, and a random key per app installation.
+- **In the app** (`js/skolekode.js`, `setSchoolPass` in `js/plus.js`):
+  - Pluss → «Kode fra trafikkskolen».
+  - With a valid code, the Pluss page says «Du har Pluss fra trafikkskolen. Fra [skole], til 20. november 2027.»
+  - The code gives all of Pluss, including the theory in the web version (pupils with Android).
+  - No price and no place to buy is shown, as App Store Review Guidelines 3.1.3(c) requires.
+  - Until the server address is set (`SERVER`), «Kode fra trafikkskolen» goes to Apple's offer codes as before (free pilot schools). After that, Apple's codes get their own «App Store-kode» link.
+- **The owner's tool** (`tools/skolekoder.mjs`):
+  - `nokler` makes the key pair and the admin secret, already done and kept outside git.
+  - `lag "Skole" 150` makes 150 codes and saves them as a spreadsheet in Downloads.
+  - `liste` shows how many have been used, as the basis for the invoice.
+  - `steng` and `nullstill` close a code or reset it.
+- **Local test server** (`server/skolekoder/dev.mjs`, port 8787, also in `.claude/launch.json`).
+
+**Tests:** 298 pass. The new tests cover:
+- making codes;
+- first use and the 12-month expiry;
+- two phones and then «brukt»;
+- closed, reset and unknown codes;
+- an altered or expired proof, or the wrong key;
+- CORS;
+- that a valid code unlocks the theory in the web version, and an expired one does not.
+
+**Checked in the browser** against the local server, at phone width, light and dark:
+- a code made with the tool was used under Pluss in the web version, and the theory was unlocked;
+- the access was still there after a reload, checked without the server;
+- the Pluss page showed the school and the date;
+- the code was closed with the tool, and after the next check the access was removed and the theory locked again;
+- a wrong code gave «Koden virket ikke».
+
+The test codes and the test address were removed afterwards.
+
+**Not done:**
+- The server is not set up at Cloudflare yet. That needs the owner's own Cloudflare account (steps in `server/skolekoder/README.md`).
+- The code entry has not been tried on the phone.
+
 ## What's new in 0.26.6 – road data fetched in the background, before anyone opens the report
 
 The owner (19 November): «hva er det på toppen? henter skilt, rundkjøringer og fartsgrenser – hvorfor må jeg trykke? Skal skje automatisk, og helst før noen ser det.»
