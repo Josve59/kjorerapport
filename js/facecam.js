@@ -14,6 +14,7 @@ import { createDriverPicker, createFaceMask } from './calibcheck.js';
 import { createFaceLight, meanLum } from './facelight.js';
 
 const BASE = new URL('../vendor/mediapipe/', import.meta.url).href;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 const FACE_CONF = 0.4;   // terskelen for å finne og holde fast på ansiktet (0.26.0, MediaPipe-standard er 0,5)
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) er det mørkt: bilgjenkjenningen får et lysere bilde, og baklys letes etter
 let landmarker = null, loading = null, stream = null, video = null, timer = null, roadTimer = null;
@@ -34,9 +35,9 @@ let flowPrev = null, flowPrevT = 0, flowRgba = null, signN = 0, lastSign = null,
 const tracker = createTracker();   // biler og folk mellom svarene fra bilgjenkjenningen
 const signs = signTracker();
 const freshPerf = () => ({ faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, thermalS: [0, 0, 0, 0], laneRunMs: 0, roadKnown: 0, offRoad: 0,
-  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stalls: 0, stallLog: [] });
+  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stalls: 0, stallLog: [], startLog: [] });
 const perf = { stalls: 0, faceMs: 0, faceFrames: 0, faceNone: 0, faceOther: 0, faceMasked: 0, faceDim: 0, faceDimOk: 0, faceLum: 0, roadMs: 0, laneMs: 0, flowMs: 0, signMs: 0, dfine: null, dfineMs: 0, dfineFrames: 0, dfineAny: 0, laneMl: null, laneMlMs: 0, laneMlFrames: 0, laneMlDim: 0, laneMlHot: 0, thermalS: [0, 0, 0, 0], laneRunMs: 0, roadKnown: 0, offRoad: 0,
-  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stallLog: [] };
+  flowHits: 0, flowTries: 0, signReads: 0, signs: 0, signMissed: 0, signMissLog: [], slow: false, slowSince: 0, drops: 0, stallLog: [], startLog: [] };
 
 export const state = () => ({ loaded: !!landmarker, running: !!stream || !!driver || !!road, native: !!driver,
   roadOnly: !!road && !driver,   // bare veikameraet (nettversjonen, 0.17.0)
@@ -112,21 +113,41 @@ function show(videoEl, s) {
 
 /* Starter førerkameraet (og veikameraet med road: true, bare i iPhone-appen). Må kalles fra et trykk første gang.
    roadOnly (nettversjonen, 0.17.0): bare bakkameraet, uten ansiktsgjenkjenning. videoEl viser da veien. */
-export async function startCamera(videoEl, { road: withRoad = false, roadOnly = false, home } = {}) {
+export async function startCamera(videoEl, { road: withRoad = false, roadOnly = false, home, onStatus = () => {} } = {}) {
   if (home !== undefined) driverHome = home || null;
   if (roadOnly && !native.available()) return startWebRoad(videoEl);
   if (road && road.web) stopSources();   // fra veikamera til førerkamera i nettleseren
   driverPick = createDriverPicker({ home: driverHome }); faceMask = createFaceMask(); laneTrack = createLaneTracker(); laneRaw = null; laneAnsAt = null;
   if (native.available()) {
-    const want = withRoad ? ['user', 'environment'] : ['user'];
-    if (driver && !!road === withRoad) { video = videoEl; await show(videoEl, driver.stream()); return; }
+    let want = withRoad ? ['user', 'environment'] : ['user'];
+    if (driver && !!road === withRoad && driver.stalledMs < 3000) { video = videoEl; await show(videoEl, driver.stream()); return; }
     stopSources();
     Object.assign(perf, freshPerf());   // tallene som lagres med turen gjelder denne økten
     perfSince = performance.now();
-    wantFacings = want;
-    const r = await native.start(want, { detect: withRoad });
-    // 10 bilder i sekundet (0.13.10, var 15): ansiktsmodellen ser 8, resten ble pakket og sendt til ingen nytte (varme)
-    driver = native.source('user', { fps: 10, max: 640 });
+    // 0.26.1: kameraene startet ikke hver gang. Før ga appen opp etter første forsøk, og den sjekket ikke at bildene
+    // faktisk kom. Nå prøves det tre ganger, med full omstart (stopp, vent, start) når det ikke kommer bilder innen 4 s.
+    // Klarer ikke telefonen begge kameraene samtidig, startes førerkameraet alene. Forsøkene lagres (perf.startLog).
+    let r = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const t0 = performance.now(), entry = { at: Date.now(), want: want.length };
+      if (attempt) { onStatus('Starter kameraet på nytt …'); native.stop(); await sleep(700 * attempt); }
+      try { r = await native.start(want, { detect: withRoad }); }
+      catch (e) {
+        entry.err = String(e && e.message || e).slice(0, 80); perf.startLog.push(entry);
+        if ((e && e.name === 'NotAllowedError') || attempt === 2) throw e;
+        if (want.length > 1 && /for mye/.test(entry.err)) { want = ['user']; withRoad = false; }   // bare førerkameraet
+        continue;
+      }
+      wantFacings = want;
+      // 10 bilder i sekundet (0.13.10, var 15): ansiktsmodellen ser 8, resten ble pakket og sendt til ingen nytte (varme)
+      driver = native.source('user', { fps: 10, max: 640 });
+      while (!driver.ready && performance.now() - t0 < 4000 + 700 * attempt) await sleep(100);
+      entry.ms = Math.round(performance.now() - t0);
+      if (driver.ready) { perf.startLog.push(entry); break; }
+      entry.err = 'ingen bilder'; perf.startLog.push(entry);
+      if (attempt === 2) break;   // vakten prøver videre når kameraet er i bruk
+      driver.stop(); driver = null;
+    }
     faceLight.reset(); faceBox = null; faceBias = 0; lightN = 0;
     if (r.active.includes('environment')) {
       road = native.source('environment', { fps: 10 });
@@ -243,7 +264,10 @@ function watchdog() {
   // Turen 11. nov. kl. 19.12 mistet 8 s fra begge kameraene uten at noe sa hvorfor
   const entry = { at: Date.now(), why: null };
   if (perf.stallLog.length < 8) perf.stallLog.push(entry);
-  native.start(wantFacings, { detect: wantFacings.includes('environment') }).then(r => { entry.why = (r && r.why) || null; }).catch(() => {});
+  // Full omstart (0.26.1): telefonen gjorde ingenting når den mente kameraene fortsatt gikk, selv om det ikke kom bilder.
+  // Stopp går foran start i appens kø, så økten bygges opp på nytt.
+  native.stop();
+  native.start(wantFacings, { detect: wantFacings.includes('environment') }).then(r => { entry.why = (r && r.why) || null; }).catch(e => { entry.why = 'feilet: ' + String(e && e.message || e).slice(0, 60); });
 }
 
 function faceTick() {

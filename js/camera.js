@@ -108,6 +108,15 @@ function calibrationHead(byTarget) {
   return { ...out, ok: true, ...(close.length ? { close } : {}) };
 }
 
+/* Trinnene som bør tas om igjen når kalibreringen ikke ble god nok (0.26.1). Før måtte alle fire trinnene tas på nytt
+   når ett av dem feilet. missing: trinnene der ansiktet ble sett for lite; close: speilene for nær rett fram; sides:
+   venstre og høyre ble ikke skilt. → [id] i rekkefølgen fra CALIB_STEPS */
+export function calibRedo(c) {
+  if (!c || c.ok) return [];
+  const ids = c.problem === 'missing' ? c.missing || [] : c.problem === 'close' ? c.tooClose || [] : c.problem === 'sides' ? ['left', 'right'] : [];
+  return CALIB_STEPS.map(s => s.id).filter(id => ids.includes(id));
+}
+
 /* Klassifiserer én retning mot kalibreringen. */
 export function classifyPose(pose, calib) {
   if (!pose || !Number.isFinite(pose.yaw)) return 'none';

@@ -186,6 +186,13 @@ function report(drive, input, file, exportVersion) {
     const holes = [];
     for (let i = 1; i < road.length; i++) if (road[i].t - road[i - 1].t > 3) holes.push(`${clock(road[i - 1].t)} (${n0(road[i].t - road[i - 1].t)} s)`);
     if (holes.length) more(`uten bilder fra veikameraet: ${holes.slice(0, 6).join(', ')}${holes.length > 6 ? ` og ${holes.length - 6} til` : ''}`);
+    // Kamerastarten (0.26.1): hvor mange forsøk, hvor lang tid til første bilde, og hvorfor et forsøk feilet
+    if (Array.isArray(perf.startLog) && perf.startLog.length) line('Kamerastart', perf.startLog.map((s, i) => `${i + 1}. ${s.err ? s.err : 'ok'}${Number.isFinite(s.ms) ? ` (${n0(s.ms)} ms)` : ''}${s.want === 1 ? ' · bare førerkameraet' : ''}`).join(' · '));
+  }
+  // Kalibreringen (0.26.1): forsøkene de siste 12 timene før turen, med bilder med ansikt per trinn og antall forsøk
+  if (cp && Array.isArray(cp.calibLog) && cp.calibLog.length) {
+    const T = { forward: 'rett fram', left: 'venstre', right: 'høyre', rear: 'bakspeil' };
+    line('Kalibrering', cp.calibLog.map(c => `${new Date(c.at).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })} ${c.ok ? 'ok' : `feilet (${c.problem})`}: ${Object.entries(c.n || {}).map(([k, v]) => `${T[k] || k} ${v}${c.tries && c.tries[k] > 1 ? ` (${c.tries[k]} forsøk)` : ''}`).join(', ')}`).join(' | '));
   }
 
   // Skilt kameraet leste: fulgte kartet etter (samme grense innen 15 s), eller sa kartet noe annet (midlertidig skilt

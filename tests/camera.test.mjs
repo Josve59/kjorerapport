@@ -106,3 +106,18 @@ test('hull i førerkameraet (veikameraet var på) gir «ukjent», ikke «nei»',
   assert.ok(e.frontShare > 0.85 && e.frontShare < 0.95, String(e.frontShare));
   assert.ok(e.longestGap > 70 && e.longestGap < 85, 'tiden med veikamera (12 s) teller ikke som tid uten speil: ' + e.longestGap);
 });
+
+import { calibRedo } from '../js/camera.js';
+
+test('0.26.1: bare trinnene som feilet, tas om igjen', () => {
+  const pts = (yaw, pitch, n = 10) => Array.from({ length: n }, () => ({ yaw, pitch }));
+  const good = { forward: pts(0, 0), left: pts(35, 0), right: pts(-45, 5), rear: pts(-20, 18) };
+  assert.deepEqual(calibRedo(calibrationFromSamples(good)), [], 'god kalibrering: ingenting');
+  // For få bilder med ansikt i venstre speil
+  assert.deepEqual(calibRedo(calibrationFromSamples({ ...good, left: pts(35, 0, 3) })), ['left']);
+  // Bakspeilet for nær rett fram
+  assert.deepEqual(calibRedo(calibrationFromSamples({ ...good, rear: pts(3, 2) })), ['rear']);
+  // Venstre og høyre på samme side
+  assert.deepEqual(calibRedo(calibrationFromSamples({ ...good, right: pts(30, 5) })), ['left', 'right']);
+  assert.deepEqual(calibRedo(null), []);
+});

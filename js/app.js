@@ -16,7 +16,7 @@ import { trackCurvature, aheadCurvature, kappaPrior } from './roadshape.js';
 import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { createSpeedWarn, createDropGrace } from './speedwarn.js';
 import { SURFACES, SURFACE_LABEL, surfaceFactor, suggestSurface, surfaceSplit, dayKey } from './surface.js';
-import { CLASS_LABEL, CALIB_STEPS, MIRRORS, closeMirrorText, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
+import { CLASS_LABEL, CALIB_STEPS, MIRRORS, closeMirrorText, calibrationFromSamples, calibRedo, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
 import { roadSummary } from './road.js';
 import { laneX, scaleLane } from './lanes.js';
 import { createCamLimit, overlayCamSigns } from './signs.js';
@@ -34,7 +34,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.26.0';
+export const APP_VERSION = '0.26.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -648,8 +648,9 @@ function leftDuringStart(hash) {
 const driverHome = () => { const c = getCalib(); return (c && c.pos) || null; };
 
 async function ensureCamera(videoEl, onStatus = () => {}) {
-  if (cam.state().running && cam.state().road === roadWanted() && cam.state().roadOnly === roadOnly()) { await cam.attachVideo(videoEl); return; }
-  await cam.startCamera(videoEl, { road: roadWanted(), roadOnly: roadOnly(), home: driverHome() });
+  // Et kamera som er «på», men ikke har levert bilder på 3 s, startes på nytt (0.26.1)
+  if (cam.state().running && !cam.state().stalled && cam.state().road === roadWanted() && cam.state().roadOnly === roadOnly()) { await cam.attachVideo(videoEl); return; }
+  await cam.startCamera(videoEl, { road: roadWanted(), roadOnly: roadOnly(), home: driverHome(), onStatus });
   if (!roadOnly()) await cam.loadModel(onStatus);
   cam.startLoop(8);
 }
@@ -792,26 +793,66 @@ async function runCalibration() {
   const byTarget = {};
   // Den gamle plassen brukes ikke mens det kalibreres (0.13.2): holderen kan være flyttet, og det er derfor de kalibrerer
   cam.setDriverHome(null);
-  try {
-    for (const [i, step] of CALIB_STEPS.entries()) {
-      progress.textContent = `Steg ${i + 1} av ${CALIB_STEPS.length}`;
-      stepEl.textContent = step.text;
-      speak(step.text);
-      for (let k = 3; k > 0; k--) { count.textContent = k; await wait(800); if (cancelled) break; }
+  // 0.26.1: kalibreringen tok mange forsøk. Før ble hvert blikk målt i fast 2,2 s, og fant kameraet ansiktet for lite i
+  // ett trinn, eller ble to speil for like, måtte alle fire trinnene tas på nytt. Nå måles det til kameraet har sett
+  // ansiktet nok (1,8–4,5 s), et trinn med for lite tas om igjen med en gang (høyst to ganger), og et speil som ble for
+  // likt et annet tas om igjen til slutt. Forsøkene lagres (calibLog), så eksporten viser hvor det stopper.
+  const tries = {};
+  const collect = async () => {
+    const got = [], t0 = performance.now();
+    const off = cam.onPose(p => { if (p && performance.now() - t0 > 300) got.push(p); });   // de første 0,3 s snur hodet fortsatt
+    while (!cancelled) {
+      await wait(100);
+      const el = performance.now() - t0;
+      if ((el >= 1800 && got.length >= 10) || el >= 4500) break;
+    }
+    off();
+    return got;
+  };
+  // hint: trinnet tas om igjen etter at speilene ble for like; da erstattes de gamle målingene. Ellers beholdes det
+  // forsøket som så ansiktet mest.
+  const takeStep = async (step, label, hint = '') => {
+    for (let attempt = 0; attempt < 3 && !cancelled; attempt++) {
+      tries[step.id] = (tries[step.id] || 0) + 1;
+      progress.textContent = label;
+      const say = attempt ? `En gang til: ${step.text.toLowerCase()}.${step.id === 'forward' ? '' : ' Snu hodet bare litt.'}` : `${hint}${step.text}`;
+      stepEl.textContent = attempt ? `${step.text} (en gang til)` : step.text;
+      speak(say);
+      for (let k = 3; k > 0; k--) { count.textContent = k; await wait(attempt ? 1000 : 800); if (cancelled) break; }
       if (cancelled) break;
       count.textContent = 'Hold …';
       vibrate(30);
-      const got = [];
-      const off = cam.onPose(p => { if (p) got.push(p); });
-      await wait(2200);
-      off();
+      const got = await collect();
       if (cancelled) break;
-      byTarget[step.id] = got;
+      if ((hint && !attempt) || !byTarget[step.id] || got.length > byTarget[step.id].length) byTarget[step.id] = got;
+      if (got.length >= 8) return;
+      stepEl.textContent = 'Kameraet så ikke ansiktet godt nok';
+    }
+  };
+  let c = null;
+  try {
+    for (const [i, step] of CALIB_STEPS.entries()) {
+      await takeStep(step, `Steg ${i + 1} av ${CALIB_STEPS.length}`);
+      if (cancelled) break;
+    }
+    if (!cancelled) {
+      c = calibrationFromSamples(byTarget);
+      // Speil som ble for like rett fram eller hverandre: de tas om igjen én gang, med tydelig hodebevegelse
+      const redo = calibRedo(c);
+      if (redo.length && c.problem !== 'missing') {
+        for (const id of redo) {
+          await takeStep(CALIB_STEPS.find(s => s.id === id), 'Ett trinn til', 'Snu hodet tydelig. ');
+          if (cancelled) break;
+        }
+        if (!cancelled) c = calibrationFromSamples(byTarget);
+      }
     }
   } finally { offFace(); overlay.hidden = true; calibAbort = null; }
   if (cancelled) { stopSpeaking(); cam.setDriverHome(driverHome()); return null; }
   vibrate([30, 60, 30]);
-  const c = calibrationFromSamples(byTarget);
+  // Forsøkene (0.26.1): de siste ti, med hvor mange bilder med ansikt hvert trinn fikk
+  const s0 = getSettings();
+  saveSettings({ ...s0, calibLog: [...(s0.calibLog || []), { at: new Date().toISOString(), ok: !!c.ok, problem: c.problem || null, n: Object.fromEntries(Object.entries(byTarget).map(([k, v]) => [k, v.length])), tries }].slice(-10) });
   if (c.ok) {
     const pos = facePosition(byTarget.forward || []);   // hvor ansiktet sto, så appen ser om holderen flytter seg (0.12.0)
     if (pos) c.pos = pos;
@@ -1775,7 +1816,7 @@ function renderPrecheck() {
     if (leftDuringStart('#/sjekk')) return;
     if (camWanted()) {
       try {
-        await cam.startCamera(roadOnly() ? $('#pre-road-video') : $('#pre-video'), { road: roadWanted(), roadOnly: roadOnly(), home: driverHome() });
+        await cam.startCamera(roadOnly() ? $('#pre-road-video') : $('#pre-video'), { road: roadWanted(), roadOnly: roadOnly(), home: driverHome(), onStatus: t => setCheck(roadOnly() ? roadCheck : camCheck, null, t) });
         if (!roadOnly()) await cam.loadModel(t => setCheck(camCheck, null, t));
         cam.startLoop(8);
         if (camUnsub) camUnsub();
@@ -1805,7 +1846,11 @@ function renderPrecheck() {
         camUnsub = () => { offPose(); if (offRoad) offRoad(); };
         preCalib.lastChild.textContent = getCalib() ? 'Kalibrer på nytt' : 'Kalibrer nå';
         preCalib.hidden = roadOnly();
-      } catch (err) { setCheck(roadOnly() ? roadCheck : camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : 'Kameraet startet ikke'); }
+      } catch (err) {
+        // Grunnen fra telefonen (0.26.1), så det går an å se hva som skjedde
+        const why = err && /^Kameraet /.test(err.message || '') ? err.message : 'Kameraet startet ikke';
+        setCheck(roadOnly() ? roadCheck : camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : `${why}. Gå tilbake og prøv igjen.`);
+      }
     }
     if (leftDuringStart('#/sjekk')) return;
     btnPerm.hidden = true;
@@ -2468,7 +2513,9 @@ async function finishRecording() {
   // Veikameraet: bildestørrelse, modell og hvor rask telefonen var, lagret med turen
   const cs = cam.state();
   // mode: 'begge' (iPhone-appen) eller 'vei' (bare veikameraet i nettleseren, 0.17.0)
-  const camInfo = cs.road ? { mode: cs.roadOnly ? 'vei' : 'begge', roadSize: cs.roadSize, roadBottom: cs.roadBottom, model: cs.roadModel, perf: cs.perf } : null;
+  // calibLog (0.26.1): kalibreringsforsøkene fra de siste 12 timene, så eksporten viser hvor kalibreringen stoppet
+  const calibLog = (getSettings().calibLog || []).filter(x => Date.now() - Date.parse(x.at) < 12 * 3600000);
+  const camInfo = cs.road ? { mode: cs.roadOnly ? 'vei' : 'begge', roadSize: cs.roadSize, roadBottom: cs.roadBottom, model: cs.roadModel, perf: cs.perf, ...(calibLog.length ? { calibLog } : {}) } : null;
   const drive = await rec.stop();
   if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
   if (camInfo) { await updateDrive(drive.id, { cameraPlan: camInfo }); drive.cameraPlan = camInfo; }

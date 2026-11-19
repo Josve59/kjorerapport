@@ -143,6 +143,38 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.26.1 – calibration that doesn't start over, cameras that start every time
+
+The owner (19 November): calibrating the camera takes many attempts, and the cameras must start every time.
+
+**Calibration** (`runCalibration` in `js/app.js`, `calibRedo` in `js/camera.js`)
+- **Before:**
+  - Each look (straight ahead, left, right, rear-view mirror) was measured for a fixed 2.2 s, and needed the face in at least 5 pictures.
+  - If one step got too few, or two mirrors came out too alike, the whole calibration failed and all four steps had to be done again.
+- **Now:**
+  - Each step measures until the camera has seen the face in 10 pictures: at least 1.8 s, at most 4.5 s. The first 0.3 s are skipped, while the head is still turning.
+  - A step with fewer than 8 is taken again at once, at most twice: «En gang til: se i venstre sidespeil. Snu hodet bare litt.» The attempt that saw the face most is kept.
+  - If two mirrors still come out too alike, or left and right are not told apart, only those mirrors are taken again at the end, with «Snu hodet tydelig».
+  - The dialog «Kalibreringen ble ikke god nok» only comes when that fails too.
+- **Saved for the next export:** the last ten attempts are saved (`calibLog` in the settings): faces per step, number of attempts, and the problem. Attempts from the last 12 hours go with the drive (`cameraPlan.calibLog`), and `tools/turrapport.mjs` prints them on a «Kalibrering» line.
+
+**Camera start** (`startCamera` and `watchdog` in `js/facecam.js`)
+- **Before:**
+  - The app gave up after the first try.
+  - It did not check that pictures actually came.
+  - The watchdog during the drive asked the phone to start the cameras, but the phone did nothing when it thought they were still running, even without pictures.
+- **Now:**
+  - Up to three tries. Each waits up to 4 s for the first picture. If none comes, the cameras are stopped and started again from scratch (`Starter kameraet på nytt …` in «Før du kjører»).
+  - If the phone can't run both cameras at once, the driver camera starts alone.
+  - A camera that is «on» but has had no pictures for 3 s is started again when it is needed (`ensureCamera`).
+  - The watchdog stops the cameras before starting them, so the session is rebuilt.
+  - When the start fails, «Før du kjører» shows the phone's own reason.
+- **Saved for the next export:** each try is saved (`perf.startLog`: ok or why not, time to the first picture). `tools/turrapport.mjs` prints them on a «Kamerastart» line.
+
+**Tests:** 285 pass. A new test covers which steps are taken again. The app loads 0.26.1 in the browser without errors.
+
+**Not tested:** the calibration and the camera start themselves. They need the iPhone's cameras and a face, so they are untested until the owner calibrates and drives.
+
 ## What's new in 0.26.0 – «Feil grense» counts, more in «Datakvalitet», face held longer
 
 The owner asked for better reports and correct data before an evening drive (19 November). The drives on 17 November are not used: the phone kept falling out of the holder.
