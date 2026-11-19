@@ -143,6 +143,20 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.1 – the school-code server is live
+
+The owner (20 November): set up the server at Cloudflare now. The owner made the account and the access key (API token) themselves.
+
+- **The server** answers at `https://kjorerapport-skolekoder.jo-9fc.workers.dev`. `SERVER` in `js/skolekode.js` points there, so «Kode fra trafikkskolen» in the app now asks it. Apple's offer codes keep their own «App Store-kode» link.
+- **Setup without wrangler** (`tools/skolekoder-oppsett.mjs`): npm and wrangler aren't on the Mac, so the script talks to Cloudflare's API directly with the access key in `.local-test/skolekoder/cf-token.txt` (outside git, never printed). It finds the account, makes or reuses the KV store, uploads `worker.js` with the store and both secrets, turns on the workers.dev address, waits for the server to answer, and saves the address in `url.txt`. Run it again after a change to `worker.js`; the codes are kept.
+- **Tested against the live server:**
+  - The tool made codes and listed them.
+  - Activation answered with a proof that the app's `verifyPass` accepted, valid to 20 November 2027.
+  - The browser test: Pluss → «Kode fra trafikkskolen» → «Pluss er låst opp av Test (nettleser), til 20. november 2027». The Pluss page then said «Du har Pluss fra trafikkskolen», and the theory was open.
+  - A closed code: the app kept access within the week, and after the weekly check the server answered «stengt» and the app removed access.
+  - Without the admin secret the admin routes answer 401. Both test codes are closed.
+- **Not tested:** the code on the iPhone itself.
+
 ## What's new in 0.27.0 – access codes for driving schools, with a small server
 
 The owner (20 November): build the access codes and the server for the schools. The goal is driving-school deals: 350 kr per pupil, invoiced directly, see the owner decisions of 18 and 19 November.

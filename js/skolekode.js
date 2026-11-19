@@ -8,9 +8,9 @@
 import { getSettings, saveSettings } from './db.js';
 import { setSchoolPass } from './plus.js';
 
-/* Serveren (Cloudflare Workers). Tom til den er satt opp: da vises ikke kodefeltet. Til testing kan adressen settes i
-   localStorage['kjorerapport.kodeServer'] (f.eks. http://localhost:8787, server/skolekoder/dev.mjs). */
-export const SERVER = '';
+/* Serveren (Cloudflare Workers, satt opp 20. nov. 2026 med tools/skolekoder-oppsett.mjs). Tom: kodefeltet vises ikke.
+   Til testing kan adressen settes i localStorage['kjorerapport.kodeServer'] (f.eks. http://localhost:8787). */
+export const SERVER = 'https://kjorerapport-skolekoder.jo-9fc.workers.dev';
 /* Den offentlige nøkkelen til bevisene (fra «node tools/skolekoder.mjs nokler»; den private ligger bare hos serveren) */
 export const PUBLIC_KEY = { kty: 'EC', crv: 'P-256', x: '58zGkxSV-vLrTR1A2PgoIoNg8IlLMrcC9Dx7SV7Jg50', y: 'Q6E4MODOXSX_IyK5ik24Wf_z686X9VbBhOYRyhWe63M' };
 export const RECHECK_MS = 7 * 86400000;

@@ -48,7 +48,15 @@ De ligger i `.local-test/skolekoder/`, som holdes utenfor git:
 
 **Ta vare på dem** (for eksempel i en passordbehandler). Uten den private nøkkelen kan ikke serveren lage bevis appen godtar. En ny nøkkel krever en ny versjon av appen, men elevene får nytt bevis av seg selv neste gang appen spør, så lenge koden gjelder.
 
-## Sette opp serveren hos Cloudflare (én gang)
+## Satt opp 20. november 2026
+
+Serveren svarer på `https://kjorerapport-skolekoder.jo-9fc.workers.dev`. Den ble satt opp med `node tools/skolekoder-oppsett.mjs`, som snakker direkte med Cloudflares API, fordi wrangler/npm ikke finnes på Macen.
+
+- **Første gang:** skriptet lager KV-lagringen, laster opp `worker.js` med lagringen og hemmelighetene, slår på adressen og venter til serveren svarer.
+- **Senere:** kjør det på nytt etter en endring i `worker.js`. Kodene beholdes.
+- **Tilgangsnøkkelen:** skriptet bruker tilgangsnøkkelen (API-token) fra `.local-test/skolekoder/cf-token.txt`. Den heter «Kjorerapport skolekoder», har bare Workers-rettigheter på kontoen, og går ut 20. november 2027.
+
+## Sette opp serveren med wrangler (alternativ)
 
 Gratisnivået hos Cloudflare Workers holder godt: 100 000 forespørsler og 1 000 skrivinger per dag.
 
