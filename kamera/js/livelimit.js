@@ -3,7 +3,7 @@
    hentes i bakgrunnen før bilen kommer til kanten. Krever nett og at «Veidata» er på.
    Verdien skifter først når to av de tre siste punktene er enige, så den ikke blinker i kryss.
    Det er NVDB sin fartsgrense, ikke skiltene: i Sverige og der NVDB mangler data vises «–». */
-import { fetchLimitBox, fetchAtkBox, fetchRoadInfo, matchLimits, limitDistance } from './enrich.js';
+import { fetchLimitBox, fetchAtkBox, fetchRoadInfo, matchLimits, matchDetail, limitDistance, NEAR_M } from './enrich.js';
 import { createLiveAtk } from './liveatk.js';
 import { matchRoad, laneCount, laneWidthFrom } from './roadshape.js';
 
@@ -15,6 +15,7 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
   const live = atk ? createLiveAtk() : null;
   let box = null, segs = [], loading = null, failedAt = -Infinity, current = null, status = 'venter';
   const recent = [];   // siste treff (fartsgrense eller null)
+  const nearAt = new Map();   // når hver grense sist ble funnet nær bilen (0.26.5)
   const index = list => list.map(s => {
     const lats = s.pts.map(p => p.lat), lons = s.pts.map(p => p.lon);
     return { ...s, minLat: Math.min(...lats), maxLat: Math.max(...lats), minLon: Math.min(...lons), maxLon: Math.max(...lons) };
@@ -49,7 +50,14 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
     const d = 0.003;
     const near = segs.filter(s => p.lat > s.minLat - d && p.lat < s.maxLat + d && p.lon > s.minLon - 2 * d && p.lon < s.maxLon + 2 * d);
     const pt = { lat: p.lat, lon: p.lon, heading: Number.isFinite(p.heading) ? p.heading : heading };
-    let v = matchLimits([pt], near)[0];
+    const m = matchDetail([pt], near)[0];
+    let v = m.limit;
+    // Ikke lån fra en annen veg (0.26.5, se noBorrow i enrich.js): en grense lenger unna enn NEAR_M brukes bare når den
+    // samme grensen ble funnet nær bilen de siste 10 s. Ellers er den ukjent («–»), i stedet for 50 midt på en 80-veg.
+    if (Number.isFinite(v)) {
+      if (m.d <= NEAR_M) nearAt.set(v, now());
+      else if (!(now() - (nearAt.has(v) ? nearAt.get(v) : -Infinity) <= 10000)) v = NaN;
+    }
     // Veien bilen er på, holdes (0.13.1): så lenge en strekning med samme grense går langs kjøreretningen innenfor
     // GPS-ens usikkerhet, går ikke grensen ned eller blir ukjent. Dårlig GPS (30–50 m) dro ellers punktet bort fra
     // 80-veien og over på en 30-gate på tvers (turen 6. nov. kl. 15.35: 79 km/t «i 30-sone» i 12 s). En høyere

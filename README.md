@@ -143,6 +143,27 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.26.5 – the speed limit is not borrowed from another road
+
+The drive on 19 November at 22:25 (36 min, 27 km, «Vått»): driving score about 95 with 2 events, but «72 km/t i 50-sone» for 29 s at 16:56. The owner: the limit there was 80.
+
+**What happened:**
+- The live limit went 70 → unknown → 50 (5 s) → unknown → 50 (30 s) → unknown → 70 → 90, while the car held 64–72 km/h.
+- The drive at 20:05 had the same at 13:51: 50 for 31 s between unknowns, at 65–71 km/h.
+- NVDB has no speed limit on that stretch of the road the car was on. `matchLimits` then took the nearest road within 25 m along the direction of travel: a parallel road with 50.
+
+**Now** (`matchDetail`, `noBorrow`, `NEAR_M` in `js/enrich.js`; `livelimit.js`)
+- The car's own road is almost always within 12 m: the lane from the centre line plus GPS error.
+- **In the report:** a limit farther away than that is only used if the same limit was found within 12 m of the car up to 10 s before or after. Otherwise the limit is unknown. `LIMITS_V` 4, so every drive is matched again when opened.
+- **During the drive:** the same rule, but only looking back (the last 10 s). The screen shows «–» instead of a borrowed 50, and there is no beep.
+- A car that is pulled 14 m away from its own road by the GPS for a few seconds keeps its limit, because it was found nearby just before.
+
+**Not changed:** «blikket borte fra veien» had 11 periods on this drive: the head turned 13–24° to the side or tipped 13–20° up for 2–4 s. The calibration from 21:02 fitted (8° off at speed). The owner doesn't know whether they were real glances, so they were left as they are.
+
+**Tests:** 293 pass. A new test covers a parallel 50 road 18 m away with no limit on the car's own road, both in the report and during the drive, and the GPS pulling the car away for 3 s.
+
+**Not installed on the phone yet:** waiting until the owner is not driving.
+
 ## What's new in 0.26.4 – practice in a parking lot doesn't count
 
 The owner (19 November, drive at 21:02, 59 min, 39 km): some ordinary driving, but also skid practice in parking lots. Not installed on the phone yet: the owner was going to keep driving.

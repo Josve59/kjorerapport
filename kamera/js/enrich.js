@@ -103,7 +103,12 @@ function segDist(p, a, b, cos) {
 /* Finner fartsgrense for hvert GPS-punkt: nærmeste strekning innen MATCH_M meter, ellers NaN.
    segments: [{ limit, pts: [{lat,lon}] }]. Grov forhåndsfiltrering med boksen rundt strekningen.
    parallelOnly (0.13.1): bare strekninger langs kjøreretningen, aldri nærmeste på tvers (livelimit.js). */
-export function matchLimits(points, segments, maxM = MATCH_M, { parallelOnly = false } = {}) {
+export function matchLimits(points, segments, maxM = MATCH_M, opts = {}) {
+  return matchDetail(points, segments, maxM, opts).map(x => x.limit);
+}
+
+/* Som matchLimits, men med avstanden til strekningen som ble valgt: [{ limit, d }] (d = Infinity uten treff). */
+export function matchDetail(points, segments, maxM = MATCH_M, { parallelOnly = false } = {}) {
   const segs = segments.filter(s => Number.isFinite(s.limit) && s.pts.length > 1).map(s => {
     const lats = s.pts.map(p => p.lat), lons = s.pts.map(p => p.lon);
     return { ...s, minLat: Math.min(...lats), maxLat: Math.max(...lats), minLon: Math.min(...lons), maxLon: Math.max(...lons) };
@@ -140,8 +145,25 @@ export function matchLimits(points, segments, maxM = MATCH_M, { parallelOnly = f
         if (d < best && (ang === null || ang <= CROSS_DEG)) { best = d; limit = s.limit; }
       }
     }
-    if (bestPar <= maxM) return limitPar;
-    return best <= maxM && !parallelOnly ? limit : NaN;
+    if (bestPar <= maxM) return { limit: limitPar, d: bestPar };
+    return best <= maxM && !parallelOnly ? { limit, d: best } : { limit: NaN, d: Infinity };
+  });
+}
+
+/* Ikke lån fartsgrensen fra en annen veg (0.26.5). Mangler NVDB fartsgrense på vegen bilen kjører, ble nærmeste veg
+   innen 25 m brukt, også en parallell veg 15–25 m unna. Turene 19. nov. kl. 20.05 og 22.25 fikk slik «50» i 30 s midt
+   på en 80-veg (eieren), mellom strekninger uten grense, og 70 km/t ble regnet som 20 over. Bilens egen veg ligger
+   nesten alltid innen NEAR_M (kjørefeltet fra midtlinjen pluss GPS-feil). En grense lenger unna brukes derfor bare når
+   den samme grensen ble funnet nær bilen innen sec sekunder før eller etter; ellers er grensen ukjent.
+   points: [{ t }], detail: fra matchDetail. → grense per punkt (NaN = ukjent) */
+export const NEAR_M = 12;
+export function noBorrow(points, detail, { nearM = NEAR_M, sec = 10 } = {}) {
+  return detail.map((x, i) => {
+    if (!Number.isFinite(x.limit) || x.d <= nearM) return x.limit;
+    const t = points[i].t;
+    for (let j = i - 1; j >= 0 && t - points[j].t <= sec; j--) if (detail[j].limit === x.limit && detail[j].d <= nearM) return x.limit;
+    for (let j = i + 1; j < detail.length && points[j].t - t <= sec; j++) if (detail[j].limit === x.limit && detail[j].d <= nearM) return x.limit;
+    return NaN;
   });
 }
 
@@ -680,7 +702,7 @@ export function evaluateRoad(points, road, events = [], limits = null) {
 
 /* Henter det som er slått på og mangler, og returnerer et enrich-objekt som lagres på turen. */
 export const ROAD_V = 4;
-export const LIMITS_V = 3;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet; v3 (0.22.2): aldri gater på tvers
+export const LIMITS_V = 4;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet; v3 (0.22.2): aldri gater på tvers; v4 (0.26.5): ikke lånt fra en annen veg
 export const MOTOR_V = 1;    // 0.18.0: motorvei og motortrafikkvei fra NVDB
 /* Bare motorveiene, for eldre turer som mangler dem (kjøreloggen henter dem i bakgrunnen) */
 export async function enrichMotorway(r, existing, signal) {
@@ -694,7 +716,7 @@ export async function enrichDrive(r, marks, wants, existing, onProgress = () => 
   if (wants.limits && (!enrich.limits || enrich.limitsV !== LIMITS_V)) {
     onProgress('Henter fartsgrenser fra Statens vegvesen …');
     const segs = await fetchSpeedLimitSegments(r.points, p => onProgress(`Henter fartsgrenser fra Statens vegvesen … ${Math.round(p * 100)} %`));
-    enrich.limits = stabilizeLimits(r.points, smoothBlips(fillGaps(matchLimits(r.points, segs)))).map(v => (Number.isFinite(v) ? v : null));
+    enrich.limits = stabilizeLimits(r.points, smoothBlips(fillGaps(noBorrow(r.points, matchDetail(r.points, segs))))).map(v => (Number.isFinite(v) ? v : null));
     enrich.limitsV = LIMITS_V;
     enrich.limitsFetchedAt = new Date().toISOString();
     // Skiltene kameraet leste legges over på nytt av appen (0.13.9)
