@@ -2,7 +2,8 @@
 import { CATS, rating } from './analysis.js';
 import { esc, km, kmh, gee, mss, duration, n0, n1, overTime } from './format.js';
 import { analyzeSpeeding, evaluateRoad } from './enrich.js';
-import { icon, MARK_CATS, FOCUS, isRemark } from './ui.js';
+import { icon, MARK_CATS, FOCUS, isRemark, choiceDialog } from './ui.js';
+import { SURFACES, SURFACE_LABEL, surfaceFactor, surfaceDoubt } from './surface.js';
 import { closeMirrorText } from './camera.js';
 import { driveLog, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import { buildSituations, situationSummary, SOURCE_LABEL, LEVEL_ORDER } from './situations.js';
@@ -114,6 +115,11 @@ export function speedingFor(r, enrich, marks = []) {
   const idxAt = t => { const i = r.points.findIndex(p => p.t >= t); return i < 0 ? r.points.length - 1 : i; };
   const sp = analyzeSpeeding(r.points, wrongRuns.length ? limits.map((v, i) => (inWrong(i) ? NaN : v)) : limits);
   const ignored = wrongRuns.length ? analyzeSpeeding(r.points, limits).episodes.filter(e => inWrong(idxAt(e.tPeak))) : [];
+  // Hvilke merker (tid i opptaket) som tok perioden ut, så «Angre» i rapporten fjerner akkurat dem (0.26.2)
+  for (const e of ignored) {
+    const i = idxAt(e.tPeak);
+    e.markT = (marks || []).filter(m => m && m.cat === 'grense' && wrongLimitRuns(r, limits, [m]).some(([a, b]) => i >= a && i <= b)).map(m => m.t);
+  }
   // Målt mot et skilt kameraet leste (0.13.9: midlertidig eller digitalt skilt, ikke kartets grense)
   const runs = Array.isArray(enrich.limitsCam) ? enrich.limitsCam : [];
   if (runs.length) for (const e of sp.episodes) {
@@ -238,6 +244,11 @@ export function renderReport(root, r, ctx = {}) {
   if (r.engine === 'v3' && r.alongSource !== 'acc') quality.push({ sev: 1, text: 'Akselerometeret passet dårlig med GPS (løs holder?), så bremsing og gass ble målt med GPS.' });
   // 0.26.0: mer om hvor sikre tallene er, så rapporten selv sier når grunnlaget er svakt
   quality.push(...dataChecks(r, { sp, marks: rawMarks, gaps, diag, cameraPlan: ctx.cameraPlan || null }));
+  // Føret (0.26.2): hva turen er vurdert for, og om målingene passer med det (se surfaceDoubt)
+  const surf = SURFACE_LABEL[ctx.surface] ? ctx.surface : '';
+  const doubt = surf ? surfaceDoubt(r.events, surf) : null;
+  if (doubt) quality.push({ sev: 2, text: `Føret var satt til ${SURFACE_LABEL[surf].toLowerCase()}, men bilen bremset, ga gass eller svingte med opptil ${n1(doubt.maxG)} g ${doubt.n} ganger uten å skli. Det går ikke an på ${SURFACE_LABEL[surf].toLowerCase()}, så veien var trolig mindre glatt. Velg føret som stemte, så blir vurderingen riktig.`, act: 'surface' });
+  else if (surf && surf !== 'dry') quality.push({ sev: 0, text: `Vurdert for ${SURFACE_LABEL[surf].toLowerCase()} føre: grensene for brå bremsing, gass og sving er ${n0((1 - surfaceFactor(surf)) * 100)} % lavere enn på tørr vei.` });
   const qualitySev = quality.reduce((m, q) => Math.max(m, q.sev), 0);
   const qualityCount = quality.filter(q => q.sev > 0).length;
   const reportActions = typeof document !== 'undefined' ? document.getElementById('report-actions') : null;
@@ -273,7 +284,7 @@ export function renderReport(root, r, ctx = {}) {
       <div class="hero-text">
         <p class="rating">${esc(headline(r))}</p>
         ${prevScore !== null && r.overall !== prevScore ? `<p class="delta-pill ${r.overall > prevScore ? 'up' : r.overall < prevScore ? 'down' : ''}">${r.overall > prevScore ? '▲ ' + (r.overall - prevScore) : r.overall < prevScore ? '▼ ' + (prevScore - r.overall) : '='} fra forrige tur (${n0(prevScore)})</p>` : ''}
-        ${qualitySev >= 2 ? `<p class="hero-warn">${icon('warn', 18)}<span>${esc(quality.find(q => q.sev >= 2).text)}</span></p>` : ''}
+        ${qualitySev >= 2 ? `<p class="hero-warn">${icon('warn', 18)}<span>${esc(quality.find(q => q.sev >= 2).text)}</span></p>${quality.find(q => q.sev >= 2).act === 'surface' && ctx.onSurface ? `<p class="center"><button type="button" class="btn secondary hero-act" id="btn-surface-top">Endre føret</button></p>` : ''}` : ''}
       </div>
       <dl class="stat-chips">
         <div><dt>Distanse</dt><dd>${km(r.stats.km)}</dd></div>
@@ -402,12 +413,14 @@ export function renderReport(root, r, ctx = {}) {
       </dl>
       ${sp.episodes.length ? `<ol class="episodes">${sp.episodes.map(e => `
         <li><span class="limit-pill">${e.limit}</span>
-          <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t${e.cam ? ' · skilt sett av kameraet' : ''}</span></span></li>`).join('')}</ol>`
+          <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t${e.cam ? ' · skilt sett av kameraet' : ''}</span>
+          ${ctx.onWrongLimit ? `<button type="button" class="link ep-act" data-wrong="${e.tPeak}">Grensen var feil her</button>` : ''}</span></li>`).join('')}</ol>`
         : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
       ${sp.ignored.length ? `<h3 class="mt">Teller ikke: grensen var merket som feil</h3>
       <ol class="episodes episodes-ignored">${sp.ignored.map(e => `
         <li><span class="limit-pill">${e.limit}</span>
-          <span class="ev-text"><strong>${kmh(e.maxKmh)} der kartet sa ${e.limit}</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · «Feil grense» trykket på strekningen</span></span></li>`).join('')}</ol>` : ''}
+          <span class="ev-text"><strong>${kmh(e.maxKmh)} der kartet sa ${e.limit}</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · «Feil grense» trykket på strekningen</span>
+          ${ctx.onRightLimit && e.markT.length ? `<button type="button" class="link ep-act" data-right="${e.markT.join(',')}">Angre: grensen var riktig</button>` : ''}</span></li>`).join('')}</ol>` : ''}
     </section>` : ''}
     ${r.crest && r.crest.crests.length ? `<section class="card" id="crest-section">
       <h2 class="card-title">${icon('speed')}Bakketopper</h2>
@@ -430,6 +443,7 @@ export function renderReport(root, r, ctx = {}) {
         <ul class="quality-list">
           ${quality.length ? quality.map(q => `<li class="q-${q.sev}">${icon(q.sev ? 'warn' : 'info', 18)}<span>${esc(q.text)}</span></li>`).join('') : `<li class="q-0">${icon('check', 18)}<span>Ingen problemer funnet. GPS og sensorer leverte jevnt hele turen.</span></li>`}
         </ul>
+        ${ctx.onSurface ? `<p class="center"><button type="button" class="link" id="btn-surface">Endre føret (nå: ${surf ? esc(SURFACE_LABEL[surf].toLowerCase()) : 'ikke valgt'})</button></p>` : ''}
         ${diag ? `<h3>Telefonen leverte</h3>
         <ul class="diag">
           <li>Bevegelsesdata: ${diag.motionEvents ? `${n1(diag.motionHz)} per sekund` : 'ingen'}${diag.hasGyro ? ', med gyroskop' : ', <strong>uten gyroskop</strong>'}${diag.hasLinearAcc ? ', med lineær akselerasjon' : ', <strong>uten lineær akselerasjon</strong>'}${diag.hasIncGravity ? '' : ', <strong>uten tyngdekraft</strong>'}</li>
@@ -564,6 +578,16 @@ export function renderReport(root, r, ctx = {}) {
   // Se bort fra førerkameraet på en tur som er kjørt (0.13.14), f.eks. når holderen sto feil eller kalibreringen ikke passet
   const nf = root.querySelector('#btn-noface');
   if (nf && ctx.onNoFace) nf.onclick = () => ctx.onNoFace(!ctx.noFace);
+  // «Grensen var feil» etterpå (0.26.2): som «Feil grense» under kjøring, for perioder der kartet hadde feil grense
+  if (ctx.onWrongLimit) root.querySelectorAll('[data-wrong]').forEach(b => b.onclick = () => ctx.onWrongLimit(+b.dataset.wrong));
+  if (ctx.onRightLimit) root.querySelectorAll('[data-right]').forEach(b => b.onclick = () => ctx.onRightLimit(b.dataset.right.split(',').map(Number)));
+  // Føret etterpå (0.26.2): valgt feil før turen, eller føret var annerledes enn trodd. Turen vurderes på nytt.
+  const pickSurface = async () => {
+    const v = await choiceDialog({ title: 'Hvordan var føret?', text: 'Turen vurderes på nytt med grensene for føret du velger. På glatt føre er grensene for brå bremsing, gass og sving litt lavere.',
+      choices: SURFACES.map(x => ({ value: x.id, label: x.label + (x.id === ctx.surface ? ' (valgt nå)' : ''), primary: false })) });
+    if (v && v !== ctx.surface) ctx.onSurface(v);
+  };
+  if (ctx.onSurface) for (const b of root.querySelectorAll('#btn-surface, #btn-surface-top')) b.onclick = pickSurface;
   if (onNoteChange) {
     const ta = root.querySelector('#drive-note'), status = root.querySelector('#note-status');
     let timer = null;

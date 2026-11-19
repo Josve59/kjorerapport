@@ -34,7 +34,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.26.1';
+export const APP_VERSION = '0.26.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -2673,6 +2673,33 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
         if (off) d.noFace = true; else delete d.noFace;
         await putDrive(d);
         toast(off ? 'Førerkameraet er tatt ut av vurderingen av denne turen.' : 'Førerkameraet er med i vurderingen igjen.', { type: 'ok', ms: 2500 });
+        await renderDriveReport(id, { keepScroll: true });
+      },
+      // «Grensen var feil» i rapporten (0.26.2): et «Feil grense»-merke midt i perioden (opptakets tid), og angre
+      onWrongLimit: drive.shared ? null : async tPeak => {
+        const d = await getDrive(id);
+        if (!d || !Number.isFinite(tPeak)) return;
+        d.marks = [...(d.marks || []), { cat: 'grense', t: tPeak + (r.t0 || 0), note: 'Merket i rapporten etter turen', after: true }];
+        await putDrive(d);
+        toast('Grensen er merket som feil. Farten der teller ikke i poengene.', { type: 'ok', ms: 2800 });
+        await renderDriveReport(id, { keepScroll: true });
+      },
+      onRightLimit: drive.shared ? null : async times => {
+        const d = await getDrive(id);
+        if (!d) return;
+        d.marks = (d.marks || []).filter(m => !(m.cat === 'grense' && times.includes(m.t)));
+        await putDrive(d);
+        toast('Merket er fjernet. Farten der teller igjen.', { type: 'ok', ms: 2500 });
+        await renderDriveReport(id, { keepScroll: true });
+      },
+      // Føret etterpå (0.26.2): turen analyseres på nytt med grensene for føret som stemte
+      surface: drive.surface || '',
+      onSurface: drive.shared ? null : async sid => {
+        const d = await getDrive(id);
+        if (!d || !SURFACE_LABEL[sid]) return;
+        d.surface = sid; d.resultKey = null;
+        await putDrive(d);
+        toast(`Turen er vurdert på nytt for ${SURFACE_LABEL[sid].toLowerCase()} føre.`, { type: 'ok', ms: 2500 });
         await renderDriveReport(id, { keepScroll: true });
       },
       // Tittelen er når turen var (0.12.2): «Kjørerapport» står allerede øverst

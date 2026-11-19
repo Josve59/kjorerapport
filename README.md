@@ -143,6 +143,56 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.26.2 – a good drive got a bad score: the «Is» setting, and fixing a drive afterwards
+
+The owner (19 November, drive at 20:05, 26 min, 24 km): «det vart så dårlig score med mye feil, var bra kjøring».
+
+**What happened:**
+- The drive was saved with the surface «Is». On ice the limits for harsh braking, acceleration and turns were multiplied by 0.41: braking 0.10 g instead of 0.25 g, and turns 0.15 g instead of 0.36 g.
+- Ordinary braking (typically 0.18 g) and every roundabout became events.
+- Recomputed from the export:
+
+  | Surface | Driving score | Events |
+  |---|---|---|
+  | Dry | 95 | 2 |
+  | Wet | 86 | 8 |
+  | Snow | 29 | 42 |
+  | Ice | 25 | 71 |
+
+- With the limits the app showed during the drive as the speed part, the total is about 85 on «Tørt» and about 37 with the old ice limits.
+- The same happened on 12 November (25 against 98).
+- The measurements also show that the road was not ice: the car braked and turned with up to 0.34 g eight times without skidding, and ice gives about 0.15 g.
+
+**Milder limits on slippery roads** (`surfaceFactor` in `js/surface.js`)
+- **Before:** √(μ/0.9), never below 0.4.
+- **Now:** fixed factors: dry 1, wet 0.95, snow 0.88, ice 0.85.
+- The limits in `analysis.js` are tuned on ordinary driving, and the score falls fast when they drop. Even 0.7 gave 53 and 70 points on two ordinary dry drives from 16 November.
+- Tonight's drive on «Is» now gets 86 for the driving.
+- The hill-crest check still uses the real friction for the stopping distance.
+
+**The report checks the surface** (`surfaceDoubt`)
+- If at least three events are above 1.3 × the friction of the chosen slippery surface, the road was probably less slippery than chosen.
+- The report then says so at the top, with an «Endre føret» button, and in «Datakvalitet».
+- On «Snø» or «Is» without doubt, «Datakvalitet» says how much lower the limits are.
+
+**Fixing a drive afterwards**
+- **«Endre føret»** (at the bottom of «Datakvalitet», and at the top when the surface is in doubt): pick the surface that was right, and the drive is analysed again.
+- **«Grensen var feil her»** under each speeding period: does what «Feil grense» does during the drive. The period no longer counts, and is listed under «Teller ikke».
+- **«Angre: grensen var riktig»** removes exactly the marks that took that period out. Each period remembers them (`markT`).
+
+**Tests:** 287 pass. New tests cover:
+- the new factors;
+- the surface check;
+- which mark took a period out.
+
+**Checked in the browser** in the demo at phone width, light and dark:
+- «Grensen var feil her» → the period is taken out → «Angre»;
+- «Endre føret» → «Is» gives the warning at the top with the button → back to «Tørt» (55 again).
+
+The demo drive was left as before.
+
+**Not tested on the phone.** When the app is updated, tonight's drive is analysed again when it is opened. It then gets about 86 on «Is» with the warning, and about 95 for the driving with «Tørt».
+
 ## What's new in 0.26.1 – calibration that doesn't start over, cameras that start every time
 
 The owner (19 November): calibrating the camera takes many attempts, and the cameras must start every time.

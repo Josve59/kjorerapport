@@ -17,12 +17,25 @@ export const SURFACES = [
 export const SURFACE_LABEL = Object.fromEntries(SURFACES.map(s => [s.id, s.label]));
 export const SLIPPERY = new Set(['snow', 'ice']);
 
-const MU_DRY = 0.9, FLOOR = 0.4;
-/* Faktor på grensene for brå og kraftig bremsing/gass/sving: 1 på tørt, lavere på glatt føre */
+/* Faktor på grensene for brå og kraftig bremsing/gass/sving: 1 på tørt, lavere på glatt føre.
+   0.26.2: mye mildere. Før var faktoren √(μ/0,9), aldri under 0,4, altså 0,41 på is og 0,53 på snø. Grensene i
+   analysis.js er satt etter vanlig kjøring, og poengene faller fort når de senkes: på «Is» ble vanlige nedbremsinger
+   (0,18 g) og rundkjøringer hendelser, og gode turer fikk 25 poeng (19. nov. kl. 20.05: 71 hendelser, 95 poeng med
+   tørre grenser; 12. nov. kl. 09.49: 25 mot 98). Selv faktor 0,7 ga 53 og 70 poeng på to vanlige tørre turer.
+   Nå er grensene høyst 15 % lavere: litt strengere på glatt føre, uten at vanlig kjøring blir feil. */
+const FACTOR = { dry: 1, wet: 0.95, snow: 0.88, ice: 0.85 };
 export function surfaceFactor(id) {
+  return Object.hasOwn(FACTOR, id) ? FACTOR[id] : 1;
+}
+
+/* Stemmer føret med målingene (0.26.2)? På is (μ 0,15) går det ikke an å bremse eller svinge med 0,3 g uten å skli.
+   Har minst tre hendelser mer enn 1,3 × friksjonen for føret, var veien trolig mindre glatt enn valgt.
+   events: rapportens hendelser ({ g }). → { n, maxG } eller null */
+export function surfaceDoubt(events, id) {
   const s = SURFACES.find(x => x.id === id);
-  if (!s) return 1;
-  return Math.max(FLOOR, Math.sqrt(s.mu / MU_DRY));
+  if (!s || !SLIPPERY.has(id)) return null;
+  const over = (events || []).filter(e => e && Number.isFinite(e.g) && e.g > s.mu * 1.3);
+  return over.length >= 3 ? { n: over.length, maxG: Math.max(...over.map(e => e.g)) } : null;
 }
 
 /* Forslag til føre når turen starter: det som ble valgt sist samme dag, ellers tørt fra april til oktober og ingen

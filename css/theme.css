@@ -659,6 +659,8 @@ h2.card-title, .card-title { font-size: 1.12rem; }
 .q-more span { flex: 1; }
 /* «Meld fra om feil i spørsmålet» (0.25.0): liten og rolig, under forklaringen */
 .q-report { display: flex; gap: 6px; width: fit-content; min-height: 44px; padding: 8px 0 0; font-size: .9rem; font-weight: 600; color: var(--muted); text-decoration: none; }
+/* «Grensen var feil her» og «Angre» under en fartsperiode i rapporten (0.26.2) */
+.ep-act { display: flex; min-height: 44px; padding: 4px 0 0; font-size: .92rem; text-align: left; }
 .th-ico-hard { background: color-mix(in srgb, #9e2a62 14%, var(--surface)); color: #9e2a62; }
 .q-zoom { cursor: zoom-in; -webkit-tap-highlight-color: transparent; }
 .q-zoom:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 12px; }

@@ -259,3 +259,15 @@ test('fartsvarsel: lyden venter når grensen har byttet, eller en høyere grense
   for (let t = 0; t < 12; t++) { const r = w2.step({ kmh: 72, limit: 60, t, quiet: true }); if (r.beep) b2++; if (r.level > 0) l2++; }
   assert.equal(b2, 0); assert.ok(l2 > 0);
 });
+
+import { surfaceDoubt } from '../js/surface.js';
+
+test('0.26.2: glatt føre senker grensene med høyst 15 %, og føret sjekkes mot målingene', () => {
+  assert.deepEqual(['dry', 'wet', 'snow', 'ice', ''].map(surfaceFactor), [1, 0.95, 0.88, 0.85, 1]);
+  // På is (μ 0,15) går det ikke an å bremse med 0,25 g uten å skli: tre slike gjør føret tvilsomt
+  const ev = g => ({ g });
+  assert.deepEqual(surfaceDoubt([ev(0.25), ev(0.28), ev(0.3), ev(0.1)], 'ice'), { n: 3, maxG: 0.3 });
+  assert.equal(surfaceDoubt([ev(0.25), ev(0.28)], 'ice'), null, 'to er ikke nok');
+  assert.equal(surfaceDoubt([ev(0.3), ev(0.3), ev(0.3)], 'snow'), null, 'snø (μ 0,25) tåler 0,3 g');
+  assert.equal(surfaceDoubt([ev(0.5), ev(0.5), ev(0.5)], 'dry'), null, 'bare glatt føre sjekkes');
+});

@@ -122,3 +122,12 @@ test('0.26.0: datakvalitet: dekning, merkede grenser, GPS-hull, unøyaktig GPS o
   const ok = straight(fill([60, 80]));
   assert.deepEqual(dataChecks(ok, { sp: speedingFor(ok, { limits: fill([60, 80]) }), diag: { gpsMedianAcc: 3 }, cameraPlan: { perf: { thermalS: [600, 100, 50, 0] } } }), []);
 });
+
+test('0.26.2: en uttatt periode vet hvilket merke som tok den ut, så «Angre» fjerner akkurat det', () => {
+  const limits = fill([40, 50], [40, 40], [40, 50]);
+  const r = straight(limits, i => (limits[i] === 40 ? 35 : 60));
+  // Merket trykket et annet sted på den samme 50-strekningen enn der farten var høyest
+  const sp = speedingFor(r, { limits }, [{ cat: 'grense', t: 100 + 5 }, { cat: 'grense', t: 100 + 60 }]);
+  assert.equal(sp.ignored.length, 1);
+  assert.deepEqual(sp.ignored[0].markT, [105], 'bare merket på den strekningen');
+});
