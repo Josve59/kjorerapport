@@ -121,7 +121,10 @@ function report(drive, input, file, exportVersion) {
   if (cp && cp.mode === 'vei') line('Kamera', 'bare veikameraet (nettleseren): ingen førerkamera, feltlinjer fra bildeanalysen');
   if (head.length) {
     const ok = head.filter(h => h.ok).length;
-    line('Ansikt', `funnet i ${pct(ok, head.length)} av ${n0(head.length)} bilder (${perSec(head.length, sec)} per s), ${ms(perf && perf.faceMs || 0)} per bilde`);
+    line('Ansikt', `funnet i ${pct(ok, head.length)} av ${n0(head.length)} bilder (${perSec(head.length, sec)} per s), ${ms(perf && perf.faceMs || 0)} per bilde · terskel ${perf && Number.isFinite(perf.faceConf) ? String(perf.faceConf).replace('.', ',') : '0,5 (før 0.26.0)'}`);
+    // Hvor lenge ansiktet var borte (0.26.0): korte hull er modellen som slipper taket, lange er føreren som ser bort eller mørke
+    { const holes = []; let s0 = null; for (const h of head) { if (!h.ok && s0 === null) s0 = h.t; if (h.ok && s0 !== null) { holes.push(h.t - s0); s0 = null; } }
+      if (holes.length) { holes.sort((a, b) => a - b); more(`hull uten ansikt: ${n0(holes.length)}, typisk ${String((holes[holes.length >> 1]).toFixed(1)).replace('.', ',')} s · under et halvt sekund: ${n0(holes.filter(x => x < 0.5).length)} · over 2 s: ${n0(holes.filter(x => x > 2).length)}`); } }
     // Fra 0.13.1: hvorfor bildene var uten ansikt (tellerne gjelder hele kameraøkten)
     // Ansiktet når det er mørkt ute (lys på veien under 30): der ble føreren mistet før 0.13.10 lysnet førerbildet
     const df = darkFace(head, road);

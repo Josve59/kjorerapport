@@ -143,6 +143,42 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.26.0 – «Feil grense» counts, more in «Datakvalitet», face held longer
+
+The owner asked for better reports and correct data before an evening drive (19 November). The drives on 17 November are not used: the phone kept falling out of the holder.
+
+**«Feil grense» counts in the score** (`wrongLimitRuns`, `speedingFor` in `js/report.js`)
+- **Before:** the mark was only saved. Speed over a wrong map limit still lowered «Fart» and the total.
+- **Now:** the report's limit where the mark was pressed counts as wrong on the whole stretch with that same limit around the mark, at most 1 km each way (`WRONG_M`). A map error is usually one road between two junctions, not the whole town.
+  - If there is no limit right at the mark, the nearest limit within 15 s is used.
+  - Speed over a wrong limit does not count in «Fart», in the total, in the log summaries or in the teacher view. They all get their numbers from `speedingFor`, which now takes the marks.
+  - The «Fartsgrenser» card lists those periods under «Teller ikke: grensen var merket som feil».
+  - «Ruten dekket» still counts the whole drive.
+- In the demo, on a drive with the real limits from NVDB, a mark on a 30 stretch took out three periods and the score went from 55 to 60.
+
+**More in «Datakvalitet»** (`dataChecks`, `gpsGaps`)
+- The limit was known on less than 90 % of the drive: «Fartsgrensen var kjent på X % av turen».
+- The companion marked a limit as wrong: how many times, and how many periods were taken out.
+- GPS gone for more than 8 s outside the times the app was hidden (tunnel, multi-storey car park, a phone that fell): how many times, how long and when.
+- GPS inaccurate all drive: typical accuracy worse than 15 m.
+- The phone was «varm» or hotter at least 25 % of the drive. The road camera then sees fewer pictures, so lane lines, the car ahead and signs are less certain.
+
+**Face held longer** (`FACE_CONF` in `js/facecam.js`)
+- MediaPipe's three thresholds (finding, presence and tracking) are 0.4 instead of the default 0.5.
+- On 16 November, half of the gaps without a face were shorter than half a second. The face was found in 85 % and 78 % of pictures in the dark.
+- The value is saved in the export (`perf.faceConf`). `tools/turrapport.mjs` prints it, and also how long the gaps without a face were.
+- **Lane lines are unchanged.** On the 20:01 drive on 16 November both lines were found 52–89 % of the time in motion for the first 30 minutes. In the last ten minutes it fell to 12–14 %, and no lane width was found at all. Light, frame rate and heat were as before, so those were most likely streets without markings. Real improvements need pictures from the road camera or a new model.
+
+**Tests:** 284 pass. New tests cover:
+- the wrong-limit stretch and its 1 km limit;
+- a mark with no limit nearby;
+- the periods taken out;
+- every new «Datakvalitet» line, and an ordinary drive that gives none.
+
+**Checked in the browser** in the demo at phone width, light and dark: the «Fartsgrenser» card with periods taken out, and the «Datakvalitet» line. The test mark was removed afterwards. MediaPipe accepts the new thresholds (loaded in the browser).
+
+**Not tested:** on the phone, and whether the face is found more often. Tonight's export will show it on the «Ansikt» line.
+
 ## What's new in 0.25.0 – theory: review over several days, unfinished exams, from mistakes to the theory book
 
 The owner asked for more improvements to the theory practice (18 November) and chose all six I suggested.

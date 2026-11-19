@@ -14,6 +14,7 @@ import { createDriverPicker, createFaceMask } from './calibcheck.js';
 import { createFaceLight, meanLum } from './facelight.js';
 
 const BASE = new URL('../vendor/mediapipe/', import.meta.url).href;
+const FACE_CONF = 0.4;   // terskelen for å finne og holde fast på ansiktet (0.26.0, MediaPipe-standard er 0,5)
 const NIGHT_LUM = 60;   // under dette (snittlysstyrke 0–255) er det mørkt: bilgjenkjenningen får et lysere bilde, og baklys letes etter
 let landmarker = null, loading = null, stream = null, video = null, timer = null, roadTimer = null;
 const listeners = new Set(), roadListeners = new Set();
@@ -42,7 +43,7 @@ export const state = () => ({ loaded: !!landmarker, running: !!stream || !!drive
   stalled: !!driver && driver.stalledMs > 3000,   // ingen nye bilder fra kameraene på 3 s
   road: !!road, roadModel, roadSize: road && road.ready ? `${road.width}x${road.height}` : null, roadBottom,
   fps: startedAt ? frames / ((performance.now() - startedAt) / 1000) : 0, lastPose, lastRoad, video,
-  perf: { ...perf, faceMs: Math.round(perf.faceMs), faceLum: Math.round(perf.faceLum), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10,
+  perf: { ...perf, faceConf: FACE_CONF, faceMs: Math.round(perf.faceMs), faceLum: Math.round(perf.faceLum), roadMs: Math.round(perf.roadMs), laneMs: Math.round(perf.laneMs * 10) / 10,
     flowMs: Math.round(perf.flowMs * 10) / 10, signMs: Math.round(perf.signMs * 10) / 10, dfineMs: Math.round(perf.dfineMs), laneMlMs: Math.round(perf.laneMlMs), laneRunMs: Math.round(perf.laneRunMs) } });
 
 /* Førerplassen (0.12.6): lært av kameraet, på nytt hver gang kameraet startes. Fra 0.13.2 med plassen fra
@@ -87,6 +88,10 @@ export function loadModel(onStatus = () => {}) {
       // Det tok 33 ms mot 9 ms, og i mørket mistet den føreren mye oftere (6. nov. ved likt lys: 28 % mot 88 %).
       // Førervelgeren under passer fortsatt på at ledsagerens ansikt ikke tas for førerens.
       runningMode: 'VIDEO', numFaces: 1,
+      // 0.26.0: modellen holder fast på ansiktet lenger (standard 0,5 på alle tre). På turene 16. nov. var halvparten av
+      // hullene uten ansikt kortere enn et halvt sekund, mest i mørket (85 og 78 % funnet der). Lagres i eksporten
+      // (perf.faceConf), så neste tur viser om det hjalp.
+      minFaceDetectionConfidence: FACE_CONF, minFacePresenceConfidence: FACE_CONF, minTrackingConfidence: FACE_CONF,
       outputFacialTransformationMatrixes: true, outputFaceBlendshapes: true   // øynene (k0.7.6)
     });
     try { landmarker = await FaceLandmarker.createFromOptions(fileset, opts('GPU')); }

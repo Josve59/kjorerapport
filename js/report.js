@@ -36,19 +36,91 @@ export function gWord(g) {
   return 'kraftig';
 }
 
-/* Fartsovertredelser fra lagrede fartsgrenser (null hvis ikke hentet). */
-export function speedingFor(r, enrich) {
+/* «Feil grense» (0.26.0): ledsageren trykket fordi grensen appen viste, ikke stemte med skiltet. Før ble merket bare
+   lagret, og fart over den feile grensen trakk likevel ned poengene. Nå regnes grensen i rapporten der merket ble trykket,
+   som feil på hele strekningen med den samme grensen rundt merket, høyst WRONG_M meter hver vei (en feil i kartet gjelder
+   som regel en vei mellom to kryss, ikke hele byen). → [[fra, til]] punktindekser */
+export const WRONG_M = 1000;
+const distM = (a, b) => { const R = 6371000, rad = Math.PI / 180, x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad), y = (b.lat - a.lat) * rad; return Math.hypot(x, y) * R; };
+export function wrongLimitRuns(r, limits, marks = []) {
+  const pts = r.points, runs = [];
+  const wrong = (marks || []).filter(m => m && m.cat === 'grense' && Number.isFinite(m.t));
+  if (!pts.length || !wrong.length) return runs;
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + (Number.isFinite(pts[i].lat) && Number.isFinite(pts[i - 1].lat) ? distM(pts[i - 1], pts[i]) : 0));
+  for (const m of wrong) {
+    const t = m.t - (r.t0 || 0);
+    let i = 0, best = Infinity;
+    pts.forEach((p, k) => { const d = Math.abs(p.t - t); if (d < best) { best = d; i = k; } });
+    // Ingen grense akkurat der: nærmeste punkt med grense innen 15 s
+    if (!Number.isFinite(limits[i])) {
+      let k = -1, kd = Infinity;
+      pts.forEach((p, j) => { const d = Math.abs(p.t - t); if (d <= 15 && d < kd && Number.isFinite(limits[j])) { kd = d; k = j; } });
+      if (k < 0) continue;
+      i = k;
+    }
+    const L = limits[i];
+    let a = i, b = i;
+    while (a > 0 && limits[a - 1] === L && cum[i] - cum[a - 1] <= WRONG_M) a--;
+    while (b < pts.length - 1 && limits[b + 1] === L && cum[b + 1] - cum[i] <= WRONG_M) b++;
+    runs.push([a, b]);
+  }
+  return runs;
+}
+
+/* Hull i GPS-sporet (0.26.0): mer enn GPS_GAP sekunder mellom to punkter, utenom der appen var skjult (de står for seg).
+   Typisk tunnel, parkeringshus eller en telefon som falt ned. → [{ from, to }] i rapportens tid */
+export const GPS_GAP = 8;
+export function gpsGaps(points, appGaps = []) {
+  const out = [];
+  for (let i = 1; i < (points || []).length; i++) {
+    const a = points[i - 1].t, b = points[i].t;
+    if (b - a > GPS_GAP && !appGaps.some(g => g.from < b && g.to > a)) out.push({ from: a, to: b });
+  }
+  return out;
+}
+
+/* Datakvalitet (0.26.0): det som gjør tallene i rapporten mindre sikre, med alvorlighet 0 (til orientering) eller 1.
+   sp: fra speedingFor. cameraPlan.perf.thermalS: sekunder på iOS' fire varmetrinn (normal, lunken, varm, svært varm). */
+export function dataChecks(r, { sp = null, marks = [], gaps = [], diag = null, cameraPlan = null } = {}) {
+  const out = [];
+  if (sp && sp.coverage < 0.9) out.push({ sev: sp.coverage < 0.7 ? 1 : 0, text: `Fartsgrensen var kjent på ${n0(sp.coverage * 100)} % av turen. Farten på resten er ikke vurdert.` });
+  const wrongN = (marks || []).filter(m => m && m.cat === 'grense').length;
+  if (sp && wrongN) out.push({ sev: 0, text: `Ledsageren merket fartsgrensen som feil ${wrongN === 1 ? 'én gang' : wrongN + ' ganger'}. Fart over den grensen teller ikke i poengene${sp.ignored.length ? ` (${sp.ignored.length === 1 ? 'én periode' : sp.ignored.length + ' perioder'} tatt ut)` : ''}.` });
+  const holes = gpsGaps(r.points, (gaps || []).map(g => ({ from: g.from - (r.t0 || 0), to: g.to - (r.t0 || 0) })));   // gaps er i opptakets tid
+  if (holes.length) {
+    const s = holes.reduce((a, g) => a + g.to - g.from, 0);
+    out.push({ sev: s >= 60 ? 1 : 0, text: `GPS-en var borte ${holes.length === 1 ? 'én gang' : holes.length + ' ganger'} (til sammen ${n0(s)} s, ${holes.slice(0, 3).map(g => mss(g.from)).join(', ')}${holes.length > 3 ? ' …' : ''}), for eksempel i tunnel. Den delen er ikke vurdert.` });
+  }
+  if (diag && Number.isFinite(diag.gpsMedianAcc) && diag.gpsMedianAcc > 15) out.push({ sev: 1, text: `GPS-en var unøyaktig hele turen (typisk ${n0(diag.gpsMedianAcc)} m). Fart, sted og fartsgrenser er mindre sikre.` });
+  const th = cameraPlan && cameraPlan.perf && Array.isArray(cameraPlan.perf.thermalS) ? cameraPlan.perf.thermalS : null;
+  const thSum = th ? th.reduce((a, b) => a + (b || 0), 0) : 0;
+  if (thSum > 60) {
+    const hot = ((th[2] || 0) + (th[3] || 0)) / thSum;
+    if (hot >= 0.25) out.push({ sev: 1, text: `Telefonen var varm ${n0(hot * 100)} % av turen, så veikameraet så færre bilder i sekundet. Feltlinjer, bil foran og skilt er mindre sikre i den delen. Hold telefonen unna sol og varmluft.` });
+  }
+  return out;
+}
+
+/* Fartsovertredelser fra lagrede fartsgrenser (null hvis ikke hentet). marks: ledsagerens merker (for «Feil grense»).
+   → analyzeSpeeding uten strekningene med feil grense, pluss ignored: periodene som ble tatt ut, og coverage for hele
+   turen (hvor stor del som hadde en grense i kartet). */
+export function speedingFor(r, enrich, marks = []) {
   if (!enrich || !Array.isArray(enrich.limits) || enrich.limits.length !== r.points.length) return null;
   const limits = enrich.limits.map(v => (v === null ? NaN : v));
   if (!limits.some(Number.isFinite)) return null;
-  const sp = analyzeSpeeding(r.points, limits);
+  const wrongRuns = wrongLimitRuns(r, limits, marks);
+  const inWrong = i => wrongRuns.some(([a, b]) => i >= a && i <= b);
+  const idxAt = t => { const i = r.points.findIndex(p => p.t >= t); return i < 0 ? r.points.length - 1 : i; };
+  const sp = analyzeSpeeding(r.points, wrongRuns.length ? limits.map((v, i) => (inWrong(i) ? NaN : v)) : limits);
+  const ignored = wrongRuns.length ? analyzeSpeeding(r.points, limits).episodes.filter(e => inWrong(idxAt(e.tPeak))) : [];
   // Målt mot et skilt kameraet leste (0.13.9: midlertidig eller digitalt skilt, ikke kartets grense)
   const runs = Array.isArray(enrich.limitsCam) ? enrich.limitsCam : [];
   if (runs.length) for (const e of sp.episodes) {
     const i = r.points.findIndex(p => p.t >= e.tPeak);
     e.cam = i >= 0 && runs.some(([a, b]) => i >= a && i <= b);
   }
-  return { ...sp, limits };
+  return { ...sp, coverage: limits.filter(Number.isFinite).length / limits.length, limits, ignored, wrongRuns };
 }
 
 /* Forklaringen under delpoengene: hva fartsdelen bygger på (0.13.13) */
@@ -111,10 +183,11 @@ export function buildSummary(r, ctx = {}) {
     lines.push(`Hendelser (${r.events.length}):`);
     for (const e of r.events) lines.push(`${e.n}. ${eventLabel(e)} – ${mss(e.t)}, ${kmh(e.speedKmh)}, ${gee(e.g)}${names.events[e.n] ? ' – ' + names.events[e.n] : ''}`);
   } else lines.push('Ingen brå hendelser.');
-  const sp = speedingFor(r, ctx.enrich);
+  const sp = speedingFor(r, ctx.enrich, ctx.marks);
   if (sp) {
     lines.push(`Fartsgrenser: ${sp.score} poeng, ${overTime(sp.secondsOver, true)} over grensen${sp.episodes.length ? ':' : '.'}`);
     for (const e of sp.episodes) lines.push(`– ${mss(e.tFrom)}–${mss(e.tTo)}: ${kmh(e.maxKmh)} i ${e.limit}-sone${e.cam ? ' (skilt sett av kameraet)' : ''}`);
+    if (sp.ignored.length) lines.push(`Teller ikke (ledsageren merket grensen som feil): ${sp.ignored.map(e => `${mss(e.tFrom)}–${mss(e.tTo)}, ${kmh(e.maxKmh)} i ${e.limit}-sone`).join('; ')}`);
   }
   lines.push('Tips:');
   for (const t of r.tips) lines.push(`– ${t.text}`);
@@ -144,7 +217,7 @@ export function renderReport(root, r, ctx = {}) {
   const marks = markRows(rawMarks, r);
   const short = r.stats.km < 1;
   const names = enrich && enrich.names ? enrich.names : { events: {}, marks: {} };
-  const sp = speedingFor(r, enrich);
+  const sp = speedingFor(r, enrich, rawMarks);
   const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events, enrich.limits), fromNvdb: true } : null;
   const motorArr = enrich && Array.isArray(enrich.motor) && enrich.motor.length === r.points.length ? enrich.motor : null;   // 0.18.0
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null, motorArr) : null;
@@ -163,6 +236,8 @@ export function renderReport(root, r, ctx = {}) {
   if (gaps.length) quality.push({ sev: 1, text: `Appen var skjult ${gaps.length === 1 ? 'én gang' : gaps.length + ' ganger'} (til sammen ${n0(gaps.reduce((s, g) => s + (g.to - g.from), 0))} s). Hullene er grå i fartsgrafen.` });
   if (r.droppedPoints) quality.push({ sev: 0, text: `${r.droppedPoints === 1 ? 'Ett GPS-punkt' : r.droppedPoints + ' GPS-punkter'} med umulige posisjonshopp ble sett bort fra.` });
   if (r.engine === 'v3' && r.alongSource !== 'acc') quality.push({ sev: 1, text: 'Akselerometeret passet dårlig med GPS (løs holder?), så bremsing og gass ble målt med GPS.' });
+  // 0.26.0: mer om hvor sikre tallene er, så rapporten selv sier når grunnlaget er svakt
+  quality.push(...dataChecks(r, { sp, marks: rawMarks, gaps, diag, cameraPlan: ctx.cameraPlan || null }));
   const qualitySev = quality.reduce((m, q) => Math.max(m, q.sev), 0);
   const qualityCount = quality.filter(q => q.sev > 0).length;
   const reportActions = typeof document !== 'undefined' ? document.getElementById('report-actions') : null;
@@ -329,6 +404,10 @@ export function renderReport(root, r, ctx = {}) {
         <li><span class="limit-pill">${e.limit}</span>
           <span class="ev-text"><strong>${kmh(e.maxKmh)} i ${e.limit}-sone</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · +${n0(e.over)} km/t${e.cam ? ' · skilt sett av kameraet' : ''}</span></span></li>`).join('')}</ol>`
         : '<p class="muted">Ingen fartsovertredelser registrert.</p>'}
+      ${sp.ignored.length ? `<h3 class="mt">Teller ikke: grensen var merket som feil</h3>
+      <ol class="episodes episodes-ignored">${sp.ignored.map(e => `
+        <li><span class="limit-pill">${e.limit}</span>
+          <span class="ev-text"><strong>${kmh(e.maxKmh)} der kartet sa ${e.limit}</strong><span class="muted">${mss(e.tFrom)}–${mss(e.tTo)} inn i turen · «Feil grense» trykket på strekningen</span></span></li>`).join('')}</ol>` : ''}
     </section>` : ''}
     ${r.crest && r.crest.crests.length ? `<section class="card" id="crest-section">
       <h2 class="card-title">${icon('speed')}Bakketopper</h2>

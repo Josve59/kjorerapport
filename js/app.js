@@ -34,7 +34,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.25.0';
+export const APP_VERSION = '0.26.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -129,7 +129,8 @@ function analysisOptions() {
 function finalizeScore(drive, r) {
   if (!r || !r.stats) return false;
   if (!Number.isFinite(r.overallBase)) r.overallBase = r.overall;
-  r.speed = speedScore({ speeding: speedingFor(r, drive.enrich || null), crest: r.crest || null, km: r.stats.km });
+  // «Feil grense» (0.26.0): fart over en grense ledsageren merket som feil, teller ikke
+  r.speed = speedScore({ speeding: speedingFor(r, drive.enrich || null, drive.marks || []), crest: r.crest || null, km: r.stats.km });
   const total = totalScore(r.overallBase, r.speed);
   const changed = total !== r.overall;
   r.overall = total;
@@ -520,7 +521,7 @@ async function gatherRows(driver = null) {
   for (const d of drives) {
     let res;
     try { res = await analyzeDrive(d); } catch { continue; }
-    const sp = speedingFor(res, d.enrich || null);
+    const sp = speedingFor(res, d.enrich || null, d.marks || []);
     const road = d.enrich && d.enrich.road ? { ...evaluateRoad(res.points, d.enrich.road, res.events, d.enrich.limits), fromNvdb: true } : null;
     rows.push({ d, res, sp, road, log: logFor(d, res), marks: markRows(d.marks || [], res) });
   }

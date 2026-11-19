@@ -66,3 +66,59 @@ test('speil og skulderblikk er ikke «nådd» når ingenting er målt (0.18.3)',
   const ok = evaluateFocus(['mirror'], { r: { ...base, camera: { calibrated: true, lane: [{ t: 50, mirror: true }] } } })[0];
   assert.equal(ok.state, 'ok');
 });
+
+import { speedingFor, wrongLimitRuns, dataChecks, gpsGaps, WRONG_M } from '../js/report.js';
+
+/* En rett tur i 60 km/t, ett punkt i sekundet (16,7 m), med fartsgrenser per punkt */
+const straight = (limits, kmh = () => 60) => ({ t0: 100, points: limits.map((_, i) => ({ t: i, kmh: kmh(i), lat: 63 + i * 16.67 / 111320, lon: 10 })) });
+const fill = (...parts) => parts.flatMap(([n, v]) => Array(n).fill(v));
+
+test('0.26.0: «Feil grense» tar ut farten over den grensen, på strekningen rundt merket', () => {
+  // 50, så 40 (der det kjøres 35), så 50 igjen: 60 km/t i begge 50-sonene
+  const limits = fill([40, 50], [40, 40], [40, 50]);
+  const r = straight(limits, i => (limits[i] === 40 ? 35 : 60)), enrich = { limits };
+  const all = speedingFor(r, enrich);
+  assert.equal(all.episodes.length, 2, 'uten merke: to perioder i 50-sonene');
+  assert.deepEqual(all.ignored, []);
+  // Merket trykkes 20 s inn (opptakets tid er rapportens tid + t0)
+  const sp = speedingFor(r, enrich, [{ cat: 'grense', t: 120 }, { cat: 'fart', t: 130 }]);
+  assert.equal(sp.episodes.length, 1, 'bare den andre 50-sonen teller');
+  assert.ok(sp.episodes[0].tFrom >= 80);
+  assert.equal(sp.ignored.length, 1);
+  assert.ok(sp.ignored[0].tTo < 40);
+  assert.ok(sp.secondsOver < all.secondsOver);
+  assert.equal(sp.coverage, 1, 'dekningen gjelder hele turen, også strekningen med feil grense');
+  assert.deepEqual(sp.wrongRuns, [[0, 39]]);
+});
+
+test('0.26.0: en feil grense gjelder høyst en kilometer hver vei, og et merke uten grense i nærheten gjør ingenting', () => {
+  const limits = fill([200, 50]);
+  const r = straight(limits);
+  const [[a, b]] = wrongLimitRuns(r, limits, [{ cat: 'grense', t: 100 + 100 }]);
+  assert.ok(100 - a <= WRONG_M / 16.67 + 1 && b - 100 <= WRONG_M / 16.67 + 1, `${a}–${b}`);
+  assert.ok(a > 30 && b < 170);
+  // Ingen grense der merket ble trykket: nærmeste grense innen 15 s brukes
+  const gap = fill([20, NaN], [30, 60]);
+  assert.deepEqual(wrongLimitRuns(straight(gap), gap, [{ cat: 'grense', t: 100 + 12 }]), [[20, 49]]);
+  assert.deepEqual(wrongLimitRuns(straight(gap), gap, [{ cat: 'grense', t: 100 + 2 }]), [], 'over 15 s unna: ingenting');
+});
+
+test('0.26.0: datakvalitet: dekning, merkede grenser, GPS-hull, unøyaktig GPS og varm telefon', () => {
+  const limits = fill([30, NaN], [70, 50]);
+  const r = straight(limits);
+  r.points = r.points.filter(p => p.t < 40 || p.t > 52);   // 14 s mellom to punkter
+  const lim = r.points.map(p => limits[p.t]);
+  const sp = speedingFor(r, { limits: lim }, [{ cat: 'grense', t: 100 + 70 }]);
+  const q = dataChecks(r, { sp, marks: [{ cat: 'grense', t: 170 }], gaps: [], diag: { gpsMedianAcc: 25 }, cameraPlan: { perf: { thermalS: [100, 50, 200, 0] } } });
+  const text = q.map(x => x.text).join(' | ');
+  assert.match(text, /Fartsgrensen var kjent på 66 %/);
+  assert.match(text, /merket fartsgrensen som feil én gang/);
+  assert.match(text, /GPS-en var borte én gang \(til sammen 14 s, 0:39\)/);
+  assert.match(text, /typisk 25 m/);
+  assert.match(text, /Telefonen var varm 57 %/);
+  // Når appen var skjult, er hullet allerede forklart
+  assert.deepEqual(gpsGaps(r.points, [{ from: 39, to: 53 }]), []);
+  // En vanlig tur gir ingen merknader
+  const ok = straight(fill([60, 80]));
+  assert.deepEqual(dataChecks(ok, { sp: speedingFor(ok, { limits: fill([60, 80]) }), diag: { gpsMedianAcc: 3 }, cameraPlan: { perf: { thermalS: [600, 100, 50, 0] } } }), []);
+});
