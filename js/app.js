@@ -35,7 +35,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.26.5';
+export const APP_VERSION = '0.26.6';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -193,6 +193,65 @@ async function analyzeDrive(drive) {
    f.eks. når kalibreringen var feil eller noen andre kjørte. Den ligger likevel i turlista og kan tas med igjen. */
 const isOwn = d => !d.demo && !d.imported;
 const isReal = d => isOwn(d) && !d.excluded;
+
+/* ---------- Veidata i bakgrunnen (0.26.6) ----------
+   Fartsgrenser, skilt, rundkjøringer, gangfelt, fartsdempere, motorveier og stedsnavn hentes fra Statens vegvesen og
+   Kartverket. Før skjedde det først når rapporten ble åpnet, med «Henter …» øverst, og etter en ny versjon av veidataene
+   ventet appen en time og så ut til å vente på et trykk. Eieren (19. nov.): «skal skje automatisk, og helst før noen ser
+   det». Nå hentes de rett etter turen, når appen starter og når telefonen får nett igjen, én tur om gangen, nyeste først.
+   Rapporten bruker den samme jobben (enrichJobs), så ingenting hentes to ganger. */
+const enrichWants = (s = getSettings()) => ({ limits: s.netLimits !== false, names: s.netNames !== false });   // på som standard
+function enrichMissing(drive, wants) {
+  const e = drive && drive.enrich;
+  return (wants.limits && !(e && e.limits && e.limitsV === LIMITS_V)) || (wants.limits && !(e && e.road && e.road.v === ROAD_V))   // road v2: gangfelt, fartsdempere, lyskryss, skilt
+    || (wants.names && !(e && e.names)) || (wants.limits && !(e && e.motorV === MOTOR_V));   // motorveier (0.18.0)
+}
+const enrichJobs = new Map();   // turens id → løftet om veidata
+function enrichInBackground(id, { wants = enrichWants(), onProgress = () => {} } = {}) {
+  if (enrichJobs.has(id)) { const job = enrichJobs.get(id); job.progress = onProgress; return job; }
+  const job = (async () => {
+    const drive = await getDrive(id);
+    if (!drive || drive.shared) return null;
+    const r = await analyzeDrive(drive);
+    const marksRows = (drive.marks || []).map((m, i) => { const t = m.t - (r.t0 || 0); const pt = r.points.length ? r.points.reduce((a, b) => Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a) : null; return { i, lat: pt ? pt.lat : NaN, lon: pt ? pt.lon : NaN }; });
+    try {
+      const enrich = await enrichDrive(r, marksRows, wants, drive.enrich, text => job.progress(text));
+      enrich.attemptedAt = new Date().toISOString(); enrich.error = null;
+      // Bare veidataene lagres (0.18.3): et notat, et merke eller «ta ut» skrevet mens de ble hentet, skal ikke overskrives
+      await updateDrive(id, { enrich });
+      // Poengene med fartsgrensene (finalizeScore), så turlista viser riktige tall før rapporten åpnes
+      const d2 = await getDrive(id);
+      if (d2) await analyzeDrive(d2);
+      return enrich;
+    } catch (err) {
+      await updateDrive(id, { enrich: { ...(drive.enrich || {}), attemptedAt: new Date().toISOString(), error: err.message } });
+      throw err;
+    }
+  })();
+  job.progress = onProgress;
+  enrichJobs.set(id, job);
+  job.then(() => enrichJobs.delete(id), () => enrichJobs.delete(id));
+  return job;
+}
+let prefetching = false;
+async function prefetchRoadData({ max = 25 } = {}) {
+  if (prefetching || !navigator.onLine) return;
+  prefetching = true;
+  try {
+    const wants = enrichWants();
+    if (!wants.limits && !wants.names) return;
+    const list = (await listDrives()).filter(d => isOwn(d) && !d.shared && enrichMissing(d, wants))
+      .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)).slice(0, max);
+    for (const d of list) {
+      if (!navigator.onLine || (recorder && recorder.running)) break;   // ikke under kjøring: da trengs nettet til fartsgrensen
+      // Etter en feil ventes det en time på den turen, så appen ikke maser på et Statens vegvesen som er nede
+      const failed = d.enrich && d.enrich.error && d.enrich.attemptedAt && Date.now() - Date.parse(d.enrich.attemptedAt) < 3600000;
+      if (failed) continue;
+      await enrichInBackground(d.id, { wants }).catch(() => {});
+      await new Promise(res => setTimeout(res, 400));
+    }
+  } finally { prefetching = false; }
+}
 // Kjøreloggen (0.18.3): en tur som er tatt ut fordi målingene ble feil, ble likevel kjørt. Tid og km teller da fortsatt;
 // bare når noen andre kjørte, er turen ute av loggen også.
 const OTHER_DRIVER = 'Noen andre kjørte';
@@ -2649,6 +2708,16 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     $('#btn-locked-export').onclick = () => exportDrive(id);
     return;
   }
+  // En tur som nettopp er kjørt (0.26.6): rapporten venter på veidataene (høyst 15 s), så poengene ikke endrer seg
+  // mens noen ser på dem. Tar det lenger tid, vises rapporten, og veidataene kommer inn når de er hentet.
+  const fresh = !keepScroll && isOwn(drive) && drive.endedAt && Date.now() - Date.parse(drive.endedAt) < 10 * 60000;
+  if (fresh && navigator.onLine && enrichMissing(drive, enrichWants()) && !(drive.enrich && drive.enrich.error)) {
+    root.innerHTML = '<p class="muted" id="report-wait">Lager rapporten … henter fartsgrenser og veidata</p>';
+    const job = enrichInBackground(id, { onProgress: text => { const el = document.getElementById('report-wait'); if (el) el.textContent = 'Lager rapporten … ' + text.charAt(0).toLowerCase() + text.slice(1); } });
+    await Promise.race([job.catch(() => {}), new Promise(res => setTimeout(res, 15000))]);
+    if (stale()) return;
+    return renderDriveReport(id, { keepScroll: true });
+  }
   const idx = drives.findIndex(d => d.id === id);
   let prev = null;
   // Sammenlign bare med forrige ekte opptak, og bare hvis denne turen selv er ekte.
@@ -2672,9 +2741,8 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       }
       routeRows.sort((a, b) => a.ts - b.ts);
     }
-    const wants = { limits: settings.netLimits !== false, names: settings.netNames !== false };   // på som standard
-    const missing = (wants.limits && !(drive.enrich && drive.enrich.limits && drive.enrich.limitsV === LIMITS_V)) || (wants.limits && !(drive.enrich && drive.enrich.road && drive.enrich.road.v === ROAD_V)) || (wants.names && !(drive.enrich && drive.enrich.names))   // road v2: gangfelt, fartsdempere, lyskryss, skilt
-      || (wants.limits && !(drive.enrich && drive.enrich.motorV === MOTOR_V));   // motorveier (0.18.0)
+    const wants = enrichWants(settings);
+    const missing = enrichMissing(drive, wants);
     // Nytt på denne turen (0.12.0): merker, nivå og rekorder øverst i rapporten
     const unlock = await unlockHtml(drive);
     if (stale()) return;
@@ -2773,24 +2841,21 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     let enriching = false;
     const runEnrich = async (manual) => {
       if (enriching || !missing || !navigator.onLine) return;
-      const last = drive.enrich && drive.enrich.attemptedAt ? Date.parse(drive.enrich.attemptedAt) : 0;
-      if (!manual && Date.now() - last < 3600000) return;   // ikke mas ved gjentatte feil
+      // Bare etter en feil ventes det en time før neste forsøk (0.26.6): før gjaldt det også når forrige henting gikk
+      // bra og det bare var kommet en ny versjon av veidataene, så turen sto uten og så ut til å vente på et trykk
+      const last = drive.enrich && drive.enrich.error && drive.enrich.attemptedAt ? Date.parse(drive.enrich.attemptedAt) : 0;
+      if (!manual && !enrichJobs.has(id) && Date.now() - last < 3600000) return;   // ikke mas ved gjentatte feil
       enriching = true;
       const el0 = root.querySelector('#enrich-status');
-      if (!el0) { const yy = window.scrollY; draw({ text: 'Starter …' }); window.scrollTo(0, yy); }
-      const marksRows = (drive.marks || []).map((m, i) => { const t = m.t - (r.t0 || 0); const pt = r.points.length ? r.points.reduce((a, b) => Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a) : null; return { i, lat: pt ? pt.lat : NaN, lon: pt ? pt.lon : NaN }; });
+      if (!el0) { const yy = window.scrollY; draw({ text: 'Henter veidata …' }); window.scrollTo(0, yy); }
       try {
-        const enrich = await enrichDrive(r, marksRows, wants, drive.enrich, text => {
+        // Samme jobb som i bakgrunnen (enrichInBackground): er den alt i gang, ventes det på den
+        await enrichInBackground(id, { wants, onProgress: text => {
           const el = root.querySelector('#enrich-status'); if (el) el.textContent = text.replace(/ (…|%)/g, '\u00a0$1');
-        });
-        enrich.attemptedAt = new Date().toISOString(); enrich.error = null;
-        drive.enrich = enrich;
-        // Bare veidataene lagres (0.18.3): et notat, et merke eller «ta ut» skrevet mens de ble hentet, skal ikke overskrives
-        await updateDrive(id, { enrich });
+        } });
         if (location.hash === '#/rapport/' + id) await renderDriveReport(id, { keepScroll: true });
       } catch (err) {
-        drive.enrich = { ...(drive.enrich || {}), attemptedAt: new Date().toISOString(), error: err.message };
-        await updateDrive(id, { enrich: drive.enrich });
+        // Feilen er lagret på turen av jobben
         enriching = false;
         if (location.hash !== '#/rapport/' + id) return;   // brukeren har gått videre
         const yy = window.scrollY;
@@ -3507,6 +3572,11 @@ function init() {
   // Etter visningen, så en melding til læreren havner i lærervisningen.
   modeReady.then(() => setTimeout(openIncomingFile, 300));
   window.addEventListener('kjfile', () => modeReady.then(openIncomingFile));
+  // Veidata i bakgrunnen (0.26.6): når appen starter, når telefonen får nett igjen og når appen kommer fram igjen
+  const prefetchSoon = ms => setTimeout(() => { prefetchRoadData().catch(() => {}); }, ms);
+  modeReady.then(() => prefetchSoon(4000));
+  window.addEventListener('online', () => prefetchSoon(2000));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') prefetchSoon(3000); });
   let plusWas = hasPlus();
   onPlusChange(plus => {
     updatePlusMarks();

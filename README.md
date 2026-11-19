@@ -143,6 +143,31 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.26.6 – road data fetched in the background, before anyone opens the report
+
+The owner (19 November): «hva er det på toppen? henter skilt, rundkjøringer og fartsgrenser – hvorfor må jeg trykke? Skal skje automatisk, og helst før noen ser det.»
+
+**What it was:**
+- The line at the top of the report is the app fetching speed limits, signs, roundabouts, crossings, speed bumps, motorways and place names from Statens vegvesen and Kartverket.
+- It only happened when a report was opened.
+- After a fetch, the app waited an hour before trying again, even when the last fetch went well and only the road-data version was new (as with `LIMITS_V` 4 and `ROAD_V` 4 tonight). The drive then sat without data, and looked as if it was waiting for a tap.
+
+**Now** (`enrichInBackground`, `prefetchRoadData`, `enrichMissing` in `js/app.js`)
+- **In the background:** road data is fetched when the app starts (after 4 s), when the phone is back online, and when the app comes to the front again. One drive at a time, the 25 newest first, with a short pause between drives, and not while a drive is being recorded.
+- **Scores ready in the list:** the drive is analysed again afterwards, so the drive list shows the score with the speed part before the report is opened.
+- **The report:**
+  - It uses the same job (`enrichJobs`), so nothing is fetched twice.
+  - The one-hour wait only applies after an error.
+  - A drive that has just finished (within 10 min) waits for the road data, at most 15 s, with «Lager rapporten … henter fartsgrenser og veidata». The score then doesn't change while someone is looking at it.
+
+**Checked in the browser** (demo):
+- After the reload, the background fetch got through all 21 demo drives with no errors, newest first, without a report being open.
+- A demo drive marked as just finished and without road data showed «Lager rapporten …», and then came complete with the speed limits and no line at the top. The drive was set back afterwards.
+
+**Tests:** 293 pass. The new code is in `app.js` and was tested in the browser, not in Node.
+
+**Not tested on the phone.**
+
 ## What's new in 0.26.5 – the speed limit is not borrowed from another road
 
 The drive on 19 November at 22:25 (36 min, 27 km, «Vått»): driving score about 95 with 2 events, but «72 km/t i 50-sone» for 29 s at 16:56. The owner: the limit there was 80.
