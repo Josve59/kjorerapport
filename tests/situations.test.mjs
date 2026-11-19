@@ -69,21 +69,25 @@ test('samkjøring med veikameraet: kort avstand og bremsing nær bilen foran', (
 
 test('samkjøring med veidata: gangfelt, fartsdemper, lyskryss og skiltet Barn', () => {
   const nvdb = {
-    crossings: [{ t: 60, kmh: 48 }, { t: 130, kmh: 35 }],
-    bumps: [{ t: 103, kmh: 42, approachKmh: 44, type: 'Fartshump' }],
+    // 0.26.3: gangfelt bare med folk i nærheten eller over fartsgrensen; fartsdempere fra 45 km/t
+    crossings: [{ t: 60, kmh: 48 }, { t: 130, kmh: 35 }, { t: 160, kmh: 58 }],
+    bumps: [{ t: 103, kmh: 42, approachKmh: 44, type: 'Fartshump' }, { t: 180, kmh: 50, approachKmh: 52, type: 'Fartshump' }],
     signals: [{ t: 200, tFrom: 194, tTo: 204 }],
     signs: [{ t: 230, tTo: 245, kind: 'barn', kmh: 45, maxKmh: 52, events: [] }]
   };
   const road = { close: [], follow: [], people: [129.5] };
-  const s = buildSituations(r, { camera, road, nvdb });
+  const sp = { episodes: [{ tFrom: 155, tTo: 165, tPeak: 160, maxKmh: 60, limit: 50 }] };
+  const s = buildSituations(r, { camera, road, nvdb, sp });
   const brake = s.find(x => x.event === 'brake');
   assert.match(brake.text, /rett før fartsdemper/);
   assert.match(brake.text, /Brems tidligere/);
   assert.match(s.find(x => x.event === 'turn').text, /i rundkjøring/, 'rundkjøring vinner over lyskryss');
   const cr = s.filter(x => x.kind === 'crossing');
-  assert.equal(cr.length, 2);
-  assert.equal(cr[0].level, 'low');
-  assert.equal(cr[1].level, 'high', 'folk ved gangfeltet');
-  assert.equal(s.find(x => x.kind === 'bump').level, 'low');
+  assert.equal(cr.length, 2, '48 km/t uten folk og under fartsgrensen er vanlig kjøring');
+  assert.equal(cr[0].level, 'high', 'folk ved gangfeltet');
+  assert.equal(cr[1].level, 'medium', 'over fartsgrensen ved gangfeltet');
+  assert.match(cr[1].text, /Over fartsgrensen \(50\)/);
+  const bumps = s.filter(x => x.kind === 'bump');
+  assert.deepEqual(bumps.map(b => [b.t, b.level]), [[180, 'low']], '42 km/t over en fartshump telles ikke lenger');
   assert.equal(s.find(x => x.kind === 'sign').level, 'medium');
 });

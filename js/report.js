@@ -899,7 +899,7 @@ function cameraSection(r, ctx = {}) {
   const verdict = c.perMin >= 6 ? 'Hyppige speilblikk – bra!' : c.perMin >= 3 ? 'Jevnlige speilblikk. Prøv å sjekke speilene litt oftere.' : 'Få speilblikk registrert. Øv på å sjekke speilene hvert 5.–8. sekund.';
   return `<section class="card" id="camera-section">
       <h2 class="card-title">${icon('mirror')}Speil og skulderblikk <span class="beta-tag">Ny</span></h2>
-      ${c.calibOff > 12 ? `<p class="notice">Kalibreringen passet ikke: i fart så føreren ${c.calibOff}° unna kalibreringens «rett fram». Tallene for speil og skulderblikk under er derfor usikre. Kalibrer på nytt med telefonen i holderen der den skal stå, og se rett fram på veien i første steg.</p>` : ''}
+      ${c.calibOff > 12 ? `<p class="notice">Kalibreringen passet ikke: i fart så føreren ${c.calibOff}° unna kalibreringens «rett fram»${c.shift ? '. Appen har derfor brukt der føreren faktisk så i fart som «rett fram», så blikket borte fra veien er regnet fra det. Speil og skulderblikk under er likevel usikre' : '. Tallene for speil og skulderblikk under er derfor usikre'}. Kalibrer på nytt med telefonen i holderen der den skal stå, og se rett fram på veien i første steg.</p>` : ''}
       <div class="cam-stats">
         <div><strong>${n1(c.perMin)}</strong><span class="muted small">speilblikk per minutt</span></div>
         <div><strong>${c.longestGap > 5 ? Math.round(c.longestGap) + ' s' : '–'}</strong><span class="muted small">lengste tid uten speil</span></div>

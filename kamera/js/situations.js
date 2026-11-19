@@ -123,16 +123,19 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
 
   // 5) Veidata (NVDB): gangfelt, fartsdempere og skilt, vurdert mot farten (GPS) og veikameraet
   const peopleNear = t => road && (road.people || []).some(p => Math.abs(p - t) <= 3);
+  // 0.26.3: «Gangfelt i 50 km/t» kom ved hvert gangfelt i 45 km/t eller mer, også på 50- og 60-veger der det er vanlig
+  // fart. Eieren (19. nov.): mange gangfelt og fartsdempere uten at det var farlig. Nå bare med folk i nærheten, eller
+  // når farten var over fartsgrensen der. Fartsdempere fra 45 km/t (de fleste er laget for 30, og farten er med i «Fart»).
   for (const c of nv.crossings || []) {
-    const ppl = peopleNear(c.t);
+    const ppl = peopleNear(c.t), over = overAt(c.t);
     if (ppl && c.kmh > 30) add({ t: c.t, kind: 'crossing', sources: ['road', 'gps', 'roadcam'], level: 'high', title: 'Gangfelt med folk i nærheten',
       text: `${kmh(c.kmh)} forbi gangfeltet, og veikameraet så folk i nærheten. Senk farten og vær klar til å stoppe.` });
-    else if (c.kmh >= 45) add({ t: c.t, kind: 'crossing', sources: ['road', 'gps'], level: 'low', title: `Gangfelt i ${kmh(c.kmh)}`,
-      text: 'Ha en fart der du rekker å stoppe hvis noen skal krysse.' });
+    else if (over && c.kmh >= 35) add({ t: c.t, kind: 'crossing', sources: ['road', 'gps'], level: 'medium', title: `Gangfelt i ${kmh(c.kmh)}`,
+      text: `Over fartsgrensen (${over.limit}) forbi gangfeltet. Ha en fart der du rekker å stoppe hvis noen skal krysse.` });
   }
   for (const b of nv.bumps || []) {
-    if (b.kmh <= 35) continue;
-    add({ t: b.t, kind: 'bump', sources: ['road', 'gps'], level: b.kmh > 45 ? 'medium' : 'low', title: `Fartsdemper i ${kmh(b.kmh)}`,
+    if (b.kmh <= 45) continue;
+    add({ t: b.t, kind: 'bump', sources: ['road', 'gps'], level: b.kmh > 55 ? 'medium' : 'low', title: `Fartsdemper i ${kmh(b.kmh)}`,
       text: `${b.type ? b.type + ', ' : ''}${b.approachKmh > b.kmh ? `ned fra ${kmh(b.approachKmh)}` : 'uten å senke farten'}. De fleste fartsdempere er laget for rundt 30 km/t.` });
   }
   for (const g of nv.signs || []) {

@@ -34,7 +34,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.26.2';
+export const APP_VERSION = '0.26.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -148,7 +148,8 @@ async function analyzeDrive(drive) {
   // Føre (0.12.0): på glatt føre er grensene for brå bremsing, gass og sving lavere
   const sf = surfaceFactor(drive.surface);
   if (sf !== 1) opts.factor = +(opts.factor * sf).toFixed(3);
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|17${drive.noFace ? 'n' : ''}`;
+  // 18 (0.26.3): blikket borte fra veien måles med hodet alene, og kalibreringen flyttes når den ikke passer
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|18${drive.noFace ? 'n' : ''}`;
   if (drive.result && drive.resultKey === key) { if (finalizeScore(drive, drive.result)) await putDrive(drive); return drive.result; }
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);

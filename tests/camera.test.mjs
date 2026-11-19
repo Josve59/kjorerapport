@@ -121,3 +121,30 @@ test('0.26.1: bare trinnene som feilet, tas om igjen', () => {
   assert.deepEqual(calibRedo(calibrationFromSamples({ ...good, right: pts(30, 5) })), ['left', 'right']);
   assert.deepEqual(calibRedo(null), []);
 });
+
+import { forwardShift, shiftCalib } from '../js/camera.js';
+import { evaluateRoad } from '../js/enrich.js';
+
+test('0.26.3: kalibrering som ikke passer, flyttes til der føreren så i fart', () => {
+  const calib = calibrationFromSamples({ forward: Array(10).fill({ yaw: 16, pitch: 1 }), left: Array(10).fill({ yaw: 36, pitch: 7 }), right: Array(10).fill({ yaw: -40, pitch: 11 }), rear: Array(10).fill({ yaw: -23, pitch: -12 }) });
+  const points = Array.from({ length: 200 }, (_, i) => ({ t: i, kmh: 60, lat: 63 + i * 1e-4, lon: 10 }));
+  // Føreren så i fart 10° til siden og 12° ned i forhold til kalibreringen (som turen 19. nov.)
+  const head = Array.from({ length: 1600 }, (_, i) => ({ t: 100 + i / 8, ok: true, yaw: 6 + Math.sin(i) * 3, pitch: 13 + Math.cos(i) * 3 }));
+  const s = forwardShift(head, calib, points, 100);
+  assert.ok(Math.abs(s.yaw + 10) < 1 && Math.abs(s.pitch - 12) < 1, JSON.stringify(s));
+  const moved = shiftCalib(calib, s);
+  assert.ok(Math.abs(moved.left.yaw - (36 + s.yaw)) < 1e-9 && Math.abs(moved.rear.pitch - (-12 + s.pitch)) < 1e-9, 'speilene flyttes like mye');
+  assert.equal(forwardShift(head.map(x => ({ ...x, yaw: 17, pitch: 2 })), calib, points, 100), null, 'passer kalibreringen: ingen flytting');
+  assert.equal(forwardShift(head.slice(0, 50), calib, points, 100), null, 'for få bilder i fart');
+});
+
+test('0.26.3: gangfelt over en sidevei ved et kryss telles ikke som passert', () => {
+  const pts = Array.from({ length: 60 }, (_, i) => ({ t: i, kmh: 50, lat: 63 + i * 14 / 111320, lon: 10 }));   // rett nordover
+  const at = (i, dLon) => ({ lat: pts[i].lat, lon: 10 + dLon });
+  // 0,0001° lengdegrad er rundt 5 m her
+  const road = { crossings: [{ ...at(10, 0.0001), dir: 90 }, { ...at(25, 0.00005), dir: 2 }, { ...at(40, 0.0001) }, { ...at(50, 0.0002) }],
+    bumps: [{ ...at(30, 0.0001) }, { ...at(45, 0.00018) }] };
+  const ev = evaluateRoad(pts, road, []);
+  assert.deepEqual(ev.crossings.map(c => c.t), [10, 40], 'på tvers: passert; langs kjøreretningen: sidevei; punkt 5 m unna: passert; 10 m unna: sidevei');
+  assert.deepEqual(ev.bumps.map(b => b.t), [30], 'fartsdemper 9 m unna ruta: en annen veg');
+});

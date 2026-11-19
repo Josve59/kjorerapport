@@ -282,13 +282,42 @@ export function calibOffset(samples, calib, points, t0) {
   return Math.round(Math.hypot(median(fast.map(x => x.yaw)) - calib.forward.yaw, median(fast.map(x => x.pitch)) - calib.forward.pitch));
 }
 
+/* «Rett fram» fra turen selv (0.26.3). Kalibreringen gjelder der telefonen sto da den ble laget. Er holderen flyttet,
+   ligger alt blikket i fart forskjøvet: turen 19. nov. kl. 20.05 brukte kalibreringen fra 17. nov. (telefonen falt ut
+   av holderen den dagen), og blikket i fart lå 10° til siden og 12° ned. Da ble 24 vanlige perioder regnet som
+   «blikket borte fra veien» (grensen er 15°), og forwardDrift retter bare opp til 12°.
+   Her flyttes hele kalibreringen (rett fram og speilene) til der føreren faktisk så i fart (median over 40 km/t),
+   når det er mer enn minDeg unna. Føreren ser på veien det meste av tiden i fart. → { yaw, pitch } eller null */
+export function forwardShift(samples, calib, points, t0, { minKmh = 40, min = 150, minDeg = 6 } = {}) {
+  if (!calib || !calib.ok || !calib.forward || !points || points.length < 3) return null;
+  const kmhAt = t => { let lo = 0, hi = points.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (points[m].t < t) lo = m + 1; else hi = m; } return points[lo].kmh; };
+  const fast = samples.filter(x => x.ok && Number.isFinite(x.yaw) && Number.isFinite(x.pitch) && kmhAt(x.t - t0) >= minKmh);
+  if (fast.length < min) return null;
+  const yaw = median(fast.map(x => x.yaw)) - calib.forward.yaw, pitch = median(fast.map(x => x.pitch)) - calib.forward.pitch;
+  return Math.hypot(yaw, pitch) > minDeg ? { yaw: Math.round(yaw * 10) / 10, pitch: Math.round(pitch * 10) / 10 } : null;
+}
+/* Kalibreringen flyttet like mye i alle retninger (holderen eller setet er flyttet) */
+export function shiftCalib(calib, s) {
+  const out = { ...calib };
+  for (const id of ['forward', ...MIRRORS]) if (calib[id]) out[id] = { ...calib[id], yaw: calib[id].yaw + s.yaw, pitch: calib[id].pitch + s.pitch };
+  return out;
+}
+
 /* Vurdering mot turen. points: rapportens punkter (t relativt til start), t0: start i opptakstid.
    laneChanges: rapportens feltskifter. Returnerer tall og sjekker for rapporten. */
 export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChanges = [], markedLanes = [] } = {}) {
-  // Blikket (hode + øyne) når kalibreringen er tatt med øynene (k0.7.6)
+  // «Blikket borte fra veien» måles med hodet alene (0.26.3). Øynene måles dårlig fra en telefon ved rattet i mørket:
+  // turen 19. nov. kl. 20.05 fikk 27 perioder med hode og øyne, mange der hodet sto rett fram og bare øynene «så ned».
+  // Med hodet alene: 3 (testen i tunnelen og to til), og 1 og 0 på turene 16. nov. (4 og 1 før).
+  const headOnly = samples.filter(x => Number.isFinite(x.t)), headCalib = calib;
+  // Blikket (hode + øyne) når kalibreringen er tatt med øynene (k0.7.6): til speil og skulderblikk
   if (useGaze(calib)) { samples = samples.map(x => toGaze(x, calib)); calib = gazeCalib(calib); }
   const valid = samples.filter(x => Number.isFinite(x.t));
   if (!valid.length) return null;
+  // Kalibreringen som ikke passer, flyttes til der føreren så i fart (0.26.3). calibOff er hvor langt unna den var.
+  const calibOff = calibOffset(valid, calib, points, t0);
+  const shift = forwardShift(valid, calib, points, t0);
+  if (shift) calib = shiftCalib(calib, shift);
   const coverage = valid.filter(x => x.ok).length / valid.length;
   const glances = detectGlances(valid, calib).map(g => ({ ...g, t: g.t - t0, tEnd: g.tEnd - t0 }));
   const mirrors = glances.filter(g => MIRRORS.includes(g.cls));
@@ -343,8 +372,11 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
     longestGap: longest, longestGapAt: longestAt - longest,
     lane, laneSource: marked.length ? 'marks' : 'sensors', start, calibrated: !!(calib && calib.ok),
     drift: Math.round(forwardDrift(valid, calib).max * 10) / 10,
-    calibOff: calibOffset(valid, calib, points, t0),
+    calibOff, ...(shift ? { shift } : {}),
     ...(calib && calib.close ? { closeMirrors: calib.close } : {}),
-    away: eyesOffRoad(valid, calib, { points, t0 })
+    away: (() => {
+      const hs = forwardShift(headOnly, headCalib, points, t0);
+      return eyesOffRoad(headOnly, hs ? shiftCalib(headCalib, hs) : headCalib, { points, t0 });
+    })()
   };
 }

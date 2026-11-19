@@ -511,14 +511,16 @@ export async function fetchRoadData(points, signal) {
   const sections = atkSecs.map(x => ({ name: x.props[9520] || '', ctl: ctlDir(x.props[9519]), pts: thin(x.line) }))
     .filter(x => x.pts.length > 1 && (near(x.pts[0]) || near(x.pts[x.pts.length - 1])));
   return {
-    v: 3,   // v3 (0.9.7): fotobokser og strekningsmålinger
+    v: 4,   // v3 (0.9.7): fotobokser og strekningsmålinger; v4 (0.26.3): retningen på gangfelt
     atk,
     sections,
     stops: stops.map(pt),
     giveway: giveway.map(pt),
     roundabouts: rb.map(p => ({ ...pt(p), d: Number(p.props[1791]) || 25, name: p.props[1073] || '' })),
     signs: nearRoute(points, signs.map(p => ({ ...pt(p), kind: signKind(p.props[5530]) })).filter(x => x.kind)),
-    crossings: nearRoute(points, crossings.map(pt), 25),
+    // Retningen på linjen (0.26.3): et gangfelt går på tvers av vegen det ligger på, så det skilles fra gangfelt over en
+    // sidevei ved et kryss (evaluateRoad). Fartsdempere er punkter uten retning.
+    crossings: nearRoute(points, crossings.map(p => ({ ...pt(p), ...(Number.isFinite(p.dir) ? { dir: Math.round(p.dir) } : {}) })), 25),
     bumps: nearRoute(points, bumps.map(p => ({ ...pt(p), type: p.props[1156] || '' })), 20),
     // Signalanlegg: bare lyskryss og lysregulerte gangfelt (bruksområde 1273). Uten bruksområde tas bare punkter med;
     // linjer uten bruksområde er ofte kjørefeltsignaler over motorvegen.
@@ -579,14 +581,26 @@ export function evaluateRoad(points, road, events = [], limits = null) {
   const along = (i, m) => { let b = i; while (b < points.length - 1 && cum[b + 1] - cum[i] <= m) b++; return b; };
   const before = (i, m) => { let a = i; while (a > 0 && cum[i] - cum[a - 1] <= m) a--; return a; };
   out.crossings = []; out.bumps = []; out.signals = []; out.signs = [];
+  // Gangfelt over en sidevei (0.26.3): et gangfelt ved et kryss ligger ofte under 15 m fra ruta, og ble
+  // regnet som passert («Gangfelt i 60 km/t») selv om bilen kjørte forbi på hovedvegen. Feltet går på tvers av vegen
+  // det ligger på: ligger linjen nesten langs kjøreretningen (under 45°), er det en annen veg.
+  const routeDir = i => { const p0 = points[Math.max(0, i - 2)], p1 = points[Math.min(points.length - 1, i + 2)], k = Math.cos(p0.lat * Math.PI / 180); return (Math.atan2((p1.lon - p0.lon) * k, p1.lat - p0.lat) * 180 / Math.PI + 360) % 360; };
+  const sideRoad = (o, i) => { if (!Number.isFinite(o.dir)) return false; const diff = Math.abs(((routeDir(i) - o.dir) % 180 + 180) % 180); return Math.min(diff, 180 - diff) < 45; };
+  // De fleste gangfelt er punkter uten retning. Avstanden måles da til selve ruta (linjen mellom GPS-punktene), ikke til
+  // nærmeste punkt: i 50 km/t er det 14 m mellom punktene. På demoruta lå gangfeltene på ruta 0–6 m fra linjen, og
+  // gangfelt over sideveier ved kryss 8–15 m unna.
+  const lineDist = (o, i) => {
+    const seg = (a, b) => { const kx = Math.cos(a.lat * Math.PI / 180) * 111320, ky = 110540, bx = (b.lon - a.lon) * kx, by = (b.lat - a.lat) * ky, px = (o.lon - a.lon) * kx, py = (o.lat - a.lat) * ky, L = bx * bx + by * by, u = L ? Math.max(0, Math.min(1, (px * bx + py * by) / L)) : 0; return Math.hypot(px - u * bx, py - u * by); };
+    return Math.min(i > 0 ? seg(points[i - 1], points[i]) : Infinity, i < points.length - 1 ? seg(points[i], points[i + 1]) : Infinity);
+  };
   for (const c of road.crossings || []) {
     const { i, d } = nearest(c);
-    if (d > 15 || points[i].kmh < 5) continue;
+    if (d > 15 || points[i].kmh < 5 || sideRoad(c, i) || lineDist(c, i) > 8) continue;
     out.crossings.push({ t: points[i].t, lat: c.lat, lon: c.lon, kmh: Math.round(points[i].kmh), approachKmh: Math.round(points[before(i, 40)].kmh) });
   }
   for (const b of road.bumps || []) {
     const { i, d } = nearest(b);
-    if (d > 10 || points[i].kmh < 3) continue;
+    if (d > 10 || points[i].kmh < 3 || lineDist(b, i) > 7) continue;
     out.bumps.push({ t: points[i].t, lat: b.lat, lon: b.lon, kmh: Math.round(points[i].kmh), approachKmh: Math.round(points[before(i, 50)].kmh), type: b.type || '' });
   }
   const headingAt = i => { const p0 = points[Math.max(0, i - 1)], p1 = points[Math.min(points.length - 1, i + 1)], k = Math.cos(p0.lat * Math.PI / 180); return (Math.atan2((p1.lon - p0.lon) * k, p1.lat - p0.lat) * 180 / Math.PI + 360) % 360; };
@@ -665,7 +679,7 @@ export function evaluateRoad(points, road, events = [], limits = null) {
 }
 
 /* Henter det som er slått på og mangler, og returnerer et enrich-objekt som lagres på turen. */
-export const ROAD_V = 3;
+export const ROAD_V = 4;
 export const LIMITS_V = 3;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet; v3 (0.22.2): aldri gater på tvers
 export const MOTOR_V = 1;    // 0.18.0: motorvei og motortrafikkvei fra NVDB
 /* Bare motorveiene, for eldre turer som mangler dem (kjøreloggen henter dem i bakgrunnen) */

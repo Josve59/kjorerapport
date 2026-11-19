@@ -143,6 +143,41 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.26.3 – «blikket borte fra veien», crossings and speed bumps only when they matter
+
+The owner (19 November): a lot of «syn borte fra veien», speed bumps and pedestrian crossings in the report, none of them dangerous. They looked away on purpose once in a tunnel, and that should be about the only one counted.
+
+**Eyes off the road** (`evaluateMirrors`, `forwardShift`, `shiftCalib` in `js/camera.js`)
+- **What I found:**
+  - The drive used the calibration from 17 November, the day the phone kept falling out of the holder.
+  - At speed the driver looked 10° to the side and 12° down from that calibration's «rett fram» (`calibOff` 16°). The limit is 15°, and `forwardDrift` only corrects up to 12°.
+  - The head also varied more than on 16 November: up and down 17° (p10–p90) against 9°. The eyes from MediaPipe's blendshapes added 15–22° more, in both directions.
+  - Many periods were the eyes alone «looking down», with the head straight ahead. That gave 24–27 periods, against 4 and 1 on the two drives on 16 November.
+- **Now:**
+  - When the calibration is more than 6° off, the whole calibration (straight ahead and the mirrors) moves to where the driver actually looked at speed (median over 40 km/h). The report says so under «Kalibreringen passet ikke».
+  - «Blikket borte fra veien» uses the head alone. Mirror and shoulder checks still use head and eyes.
+- **Result:**
+  - 19 November: 3 periods: 20:13, just before GPS was lost in the tunnel (probably the test, since the iPhone guesses the position for a while into a tunnel), 6:49 and 21:34.
+  - 16 November: 1 and 0.
+- The analysis version went from 17 to 18, so every drive is analysed again when opened.
+
+**Crossings and speed bumps** (`evaluateRoad` in `js/enrich.js`, `buildSituations` in `js/situations.js`)
+- **Before:** a crossing within 15 m of the nearest GPS point counted as passed, and a speed bump within 10 m. At 50 km/h there are 14 m between GPS points. So crossings over side roads at junctions were counted as passed on the main road.
+- **Now:** the distance is measured to the route itself (the line between the GPS points): at most 8 m for crossings and 7 m for speed bumps. On the demo route, crossings on the route lay 0–6 m from the line, and crossings over side roads 8–15 m away. On one demo drive, 37 of 97 crossings near the route now count as passed.
+- **Crossings with a line in NVDB** (only a few) also count as a side road when the line runs along the direction of travel. The direction is now kept in the road data (`road.v` 4, `ROAD_V` 4, so the road data is fetched again).
+- **The situations:**
+  - «Gangfelt i X km/t» only shows with people nearby (as before) or when the speed was over the limit there. Before, it came at every crossing at 45 km/h or more, also on 50 and 60 roads.
+  - «Fartsdemper i X km/t» only shows above 45 km/h (was 35), and is «middels» above 55.
+
+**Tests:** 289 pass. New tests cover:
+- the shift;
+- the crossing and speed-bump filter;
+- the situation rules.
+
+**Checked in the browser:** the demo report loads 0.26.3 with road data v4.
+
+**Not tested on the phone:** tonight's drive will show whether the rest is gone once it is opened again.
+
 ## What's new in 0.26.2 – a good drive got a bad score: the «Is» setting, and fixing a drive afterwards
 
 The owner (19 November, drive at 20:05, 26 min, 24 km): «det vart så dårlig score med mye feil, var bra kjøring».
