@@ -224,6 +224,9 @@ export function renderReport(root, r, ctx = {}) {
   const short = r.stats.km < 1;
   const names = enrich && enrich.names ? enrich.names : { events: {}, marks: {} };
   const sp = speedingFor(r, enrich, rawMarks);
+  // Øving på plass (0.26.4, practice.js): sklitrening og øvelser på en parkeringsplass, holdt utenfor poengene
+  const practice = Array.isArray(r.practice) ? r.practice : [], practiceN = (r.practiceEvents || []).length;
+  const practiceWhere = practice.map(x => `${mss(x.from)}–${mss(x.to)}`).join(', ');
   const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events, enrich.limits), fromNvdb: true } : null;
   const motorArr = enrich && Array.isArray(enrich.motor) && enrich.motor.length === r.points.length ? enrich.motor : null;   // 0.18.0
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null, motorArr) : null;
@@ -244,6 +247,9 @@ export function renderReport(root, r, ctx = {}) {
   if (r.engine === 'v3' && r.alongSource !== 'acc') quality.push({ sev: 1, text: 'Akselerometeret passet dårlig med GPS (løs holder?), så bremsing og gass ble målt med GPS.' });
   // 0.26.0: mer om hvor sikre tallene er, så rapporten selv sier når grunnlaget er svakt
   quality.push(...dataChecks(r, { sp, marks: rawMarks, gaps, diag, cameraPlan: ctx.cameraPlan || null }));
+  if (practice.length) quality.push({ sev: 0, text: practiceN || !ctx.practiceCount
+    ? `Bilen kjørte rundt på et lite område (${practiceWhere}), som øving på en parkeringsplass. Hendelsene der teller ikke i poengene${practiceN ? ` (${practiceN})` : ''}.`
+    : `Øvingen på plass (${practiceWhere}) er tatt med i poengene.` });
   // Føret (0.26.2): hva turen er vurdert for, og om målingene passer med det (se surfaceDoubt)
   const surf = SURFACE_LABEL[ctx.surface] ? ctx.surface : '';
   const doubt = surf ? surfaceDoubt(r.events, surf) : null;
@@ -271,6 +277,8 @@ export function renderReport(root, r, ctx = {}) {
         </button>
         <div class="ev-detail" id="ev-detail-${e.n}" hidden></div></li>`).join('')}</ol>
         <p class="muted small">Trykk på en hendelse for detaljer.</p>` : '<p class="muted">Ingen brå hendelser registrert på denne turen.</p>'}
+      ${practiceN ? `<h3 class="mt">Øving på plass – teller ikke</h3>
+      <ol class="episodes episodes-ignored">${r.practiceEvents.map(e => `<li><span class="ev-text"><strong>${esc(eventLabel(e))}</strong><span class="muted">${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}, ${gWord(e.g)}</span></span></li>`).join('')}</ol>` : ''}
     </section>`;
   root.innerHTML = `
     <header class="report-head">
@@ -302,6 +310,7 @@ export function renderReport(root, r, ctx = {}) {
         ${!positives.length && !tipsAll.length ? r.tips.map(t => `<li class="sum-good">${icon('check', 20)}<span>${esc(t.text)}</span></li>`).join('') : ''}
         ${sp && sp.secondsOver > 0 ? `<li class="sum-work sum-limits">${icon('speed', 20)}<span>${overTime(sp.secondsOver)} over fartsgrensen${sp.maxOver >= 4 ? `, mest ${n0(sp.maxOver)}\u00a0km/t over` : ''}.</span></li>` : ''}
         ${sitSum.high ? `<li class="sum-work sum-brake">${icon('warn', 20)}<span><strong>${sitSum.high} ${sitSum.high === 1 ? 'alvorlig situasjon' : 'alvorlige situasjoner'}</strong> <button type="button" class="link sum-goto" data-goto="situation-section">Se hvor ›</button></span></li>` : ''}
+        ${practiceN ? `<li class="sum-note">${icon('info', 20)}<span>Øving på plass (${practiceWhere}) teller ikke i poengene: ${practiceN} ${practiceN === 1 ? 'hendelse' : 'hendelser'} der er holdt utenfor.</span></li>` : ''}
         ${marks.length ? `<li class="sum-note">${icon('flag', 20)}<span>Ledsageren merket: ${Object.entries(marks.reduce((o, m) => { o[m.cat] = (o[m.cat] || 0) + 1; return o; }, {})).map(([c, n]) => `${MARK_CATS[c].label.toLowerCase()} ${n}`).join(', ')}.</span></li>` : ''}
       </ul>
     </section>
@@ -443,6 +452,7 @@ export function renderReport(root, r, ctx = {}) {
         <ul class="quality-list">
           ${quality.length ? quality.map(q => `<li class="q-${q.sev}">${icon(q.sev ? 'warn' : 'info', 18)}<span>${esc(q.text)}</span></li>`).join('') : `<li class="q-0">${icon('check', 18)}<span>Ingen problemer funnet. GPS og sensorer leverte jevnt hele turen.</span></li>`}
         </ul>
+        ${ctx.onPracticeCount && practice.length ? `<p class="center"><button type="button" class="link" id="btn-practice">${ctx.practiceCount ? 'Hold øvingen på plass utenfor poengene' : 'Tell med øvingen på plass'}</button></p>` : ''}
         ${ctx.onSurface ? `<p class="center"><button type="button" class="link" id="btn-surface">Endre føret (nå: ${surf ? esc(SURFACE_LABEL[surf].toLowerCase()) : 'ikke valgt'})</button></p>` : ''}
         ${diag ? `<h3>Telefonen leverte</h3>
         <ul class="diag">
@@ -578,6 +588,8 @@ export function renderReport(root, r, ctx = {}) {
   // Se bort fra førerkameraet på en tur som er kjørt (0.13.14), f.eks. når holderen sto feil eller kalibreringen ikke passet
   const nf = root.querySelector('#btn-noface');
   if (nf && ctx.onNoFace) nf.onclick = () => ctx.onNoFace(!ctx.noFace);
+  const pb = root.querySelector('#btn-practice');
+  if (pb && ctx.onPracticeCount) pb.onclick = () => ctx.onPracticeCount(!ctx.practiceCount);
   // «Grensen var feil» etterpå (0.26.2): som «Feil grense» under kjøring, for perioder der kartet hadde feil grense
   if (ctx.onWrongLimit) root.querySelectorAll('[data-wrong]').forEach(b => b.onclick = () => ctx.onWrongLimit(+b.dataset.wrong));
   if (ctx.onRightLimit) root.querySelectorAll('[data-right]').forEach(b => b.onclick = () => ctx.onRightLimit(b.dataset.right.split(',').map(Number)));

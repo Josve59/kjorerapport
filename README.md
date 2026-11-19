@@ -143,6 +143,47 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.26.4 – practice in a parking lot doesn't count
+
+The owner (19 November, drive at 21:02, 59 min, 39 km): some ordinary driving, but also skid practice in parking lots. Not installed on the phone yet: the owner was going to keep driving.
+
+**What the drive showed:**
+- The surface was «Is», and the driving score was 35 with 44 events.
+- The events came in clusters at low speed: hard turns of 0.35–0.49 g at around 20 km/h, and braking of 0.48 g at 22 km/h.
+- In those minutes the car went round and round in a small area.
+- In a skid the car rotates without grip, so the turn measurement (rotation × speed) shows high g that is not grip. Those events also triggered the «Is» check from 0.26.2.
+
+**Practice on the spot** (`js/practice.js`)
+- **Detection:** the car drives at least 250 m in 90 s without getting more than 120 m from where it was. The span gets 30 s on each side.
+- **Tonight's drive:** 1:18–5:37, 15:32–18:35, 42:50–46:17 and 56:38–59:02.
+- **Other drives:** the drives on 16 and 19 November at 20:05 have no such span, apart from 1.5 min out of a parking lot at the start on 16 November (with no events).
+- **Events in the spans:**
+  - They are moved to `practiceEvents`. Situations, tips, the log and the teacher view then only see the driving in traffic.
+  - They are shown on their own under «Øving på plass – teller ikke».
+  - «Blikket borte fra veien» does not count there either.
+- **The scores are recalculated without them** with the same formula as `analysis.js`. The owner's engine is unchanged, apart from `makeTips` now being exported. A test checks that the formula gives exactly the engine's scores when nothing is taken out.
+- **Tonight's drive:** the driving score goes from 35 to 51 on «Is» (22 of 44 events taken out), and from 56 to 86 on «Tørt».
+- «Kort fortalt» and «Datakvalitet» say where the practice was. «Tell med øvingen på plass» (in «Datakvalitet») counts it anyway (`drive.practiceCount`), and the button changes back.
+- The analysis version went from 18 to 19.
+
+**Face in the dark:** found in 65 % of pictures on this drive:
+- 88 % on lit roads;
+- 32 % on dark roads;
+- 10 % in a dark parking lot.
+
+The car was too dark for the driver camera. It is not a fault in the app, and it was not changed.
+
+**Other numbers:**
+- **Calibration:** worked first time (10–13 faces per step).
+- **Camera start:** the first try got no pictures, and the second did (1 s).
+- **Phone:** «varm» 97 % of the time.
+
+**Tests:** 291 pass. New tests cover:
+- the detection;
+- the formula against the engine on four demo drives.
+
+**Checked in the browser:** at phone width, light and dark, with a practice span added for the test: «Kort fortalt», «Datakvalitet», the list and the button. **Not installed on the phone.**
+
 ## What's new in 0.26.3 – «blikket borte fra veien», crossings and speed bumps only when they matter
 
 The owner (19 November): a lot of «syn borte fra veien», speed bumps and pedestrian crossings in the report, none of them dangerous. They looked away on purpose once in a tunnel, and that should be about the only one counted.

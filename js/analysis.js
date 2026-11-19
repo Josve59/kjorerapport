@@ -567,7 +567,7 @@ export function analyze(input, opts = {}) {
 
 export const CATS = { brake: 'Bremsing', accel: 'Akselerasjon', turn: 'Svinger', smooth: 'Jevn fart' };
 
-function makeTips(c, s) {
+export function makeTips(c, s) {   // eksportert (0.26.4): tipsene regnes på nytt uten øving på plass (practice.js)
   const tips = [];
   const n = o => o.harsh + o.brisk;
   if (s.brake < 95) tips.push({ cat: 'brake', p: 100 - s.brake,

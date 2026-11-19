@@ -1,5 +1,6 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
-import { analyze, makeDemo, SENSITIVITY, TH } from './analysis.js';
+import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
+import { practiceSpans, rescore, inSpans } from './practice.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
 import { seedDemo } from './demo.js';
@@ -34,7 +35,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.26.3';
+export const APP_VERSION = '0.26.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -149,13 +150,23 @@ async function analyzeDrive(drive) {
   const sf = surfaceFactor(drive.surface);
   if (sf !== 1) opts.factor = +(opts.factor * sf).toFixed(3);
   // 18 (0.26.3): blikket borte fra veien måles med hodet alene, og kalibreringen flyttes når den ikke passer
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|18${drive.noFace ? 'n' : ''}`;
+  // 19 (0.26.4): øving på plass (practice.js) holdes utenfor poengene, med mindre den skal telles (drive.practiceCount)
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|19${drive.noFace ? 'n' : ''}${drive.practiceCount ? 'p' : ''}`;
   if (drive.result && drive.resultKey === key) { if (finalizeScore(drive, drive.result)) await putDrive(drive); return drive.result; }
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
   let result;
   try {
     result = analyze(raw, opts);
+    // Øving på plass (0.26.4): sklitrening og øvelser på en parkeringsplass teller ikke i poengene for kjøringen.
+    // Hendelsene der flyttes til practiceEvents, så situasjoner, tips, logg og lærervisning bare ser kjøringen i trafikken.
+    result.practice = practiceSpans(result.points);
+    if (result.practice.length && !drive.practiceCount) {
+      const rs = rescore(result, result.practice);
+      result.practiceEvents = rs.practice;
+      result.events = result.events.filter(e => !inSpans(e.t, result.practice)).map((e, k) => ({ ...e, n: k + 1 }));
+      result.scores = rs.scores; result.overall = rs.overall; result.counts = rs.counts; result.tips = makeTips(rs.counts, rs.scores);
+    }
     result.overallBase = result.overall;
     // Bakketopper der farten var høyere enn sikten tillot (ikke demoturen: den har oppdiktede sensordata)
     try { result.crest = drive.demo ? null : crestSpeed(raw, { axes: result.gyroAxes, surface: drive.surface, t0: result.t0 }); } catch { result.crest = null; }
@@ -165,6 +176,8 @@ async function analyzeDrive(drive) {
     // noFace: førerkameraet er valgt bort for turen (før start i 0.13.13, eller i rapporten etterpå i 0.13.14)
     if (raw.head && raw.head.length > 20 && !drive.noFace) result.camera = evaluateMirrors(raw.head, drive.calib, { points: result.points, t0: result.t0, laneChanges: result.maneuvers.laneChanges,
       markedLanes: (drive.marks || []).filter(m => m.cat === 'felt').map(m => m.t - result.t0) });
+    // Under øving på plass ser føreren seg rundt hele tiden: blikket borte fra veien teller ikke der (0.26.4)
+    if (result.camera && result.practiceEvents) result.camera.away = (result.camera.away || []).filter(a => !inSpans(a.t, result.practice));
   } catch (err) {
     drive.result = null; drive.error = err.message; drive.resultKey = key;
     await putDrive(drive);
@@ -2691,6 +2704,16 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
         d.marks = (d.marks || []).filter(m => !(m.cat === 'grense' && times.includes(m.t)));
         await putDrive(d);
         toast('Merket er fjernet. Farten der teller igjen.', { type: 'ok', ms: 2500 });
+        await renderDriveReport(id, { keepScroll: true });
+      },
+      // Øving på plass (0.26.4): holdt utenfor poengene, eller tatt med
+      practiceCount: !!drive.practiceCount,
+      onPracticeCount: drive.shared ? null : async on => {
+        const d = await getDrive(id);
+        if (!d) return;
+        if (on) d.practiceCount = true; else delete d.practiceCount;
+        await putDrive(d);
+        toast(on ? 'Øvingen på plass er tatt med i poengene.' : 'Øvingen på plass er holdt utenfor poengene.', { type: 'ok', ms: 2500 });
         await renderDriveReport(id, { keepScroll: true });
       },
       // Føret etterpå (0.26.2): turen analyseres på nytt med grensene for føret som stemte
