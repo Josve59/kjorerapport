@@ -115,3 +115,13 @@ test('en felles testkode kan gjelde flere enn 5 telefoner, men høyst 50 (0.27.4
   const normal = await (await call(env, 'POST', '/admin/koder', { skole: 'Skole', antall: 1 }, { admin: true })).json();
   assert.equal(normal.maks, 2, 'elevkoder er fortsatt 2 telefoner');
 });
+
+test('en kode som ble stengt ved en feil, kan åpnes igjen (0.27.4)', async () => {
+  const { env } = await setup();
+  const [code] = (await (await call(env, 'POST', '/admin/koder', { skole: 'Testgruppe', antall: 1, maaneder: 3, maks: 25 }, { admin: true })).json()).koder;
+  assert.equal((await call(env, 'POST', '/admin/steng', { kode: code }, { admin: true })).status, 200);
+  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: code, install: 'telefon-1' }, { now: T0 })).status, 410);
+  assert.equal((await call(env, 'POST', '/admin/apne', { kode: code })).status, 401, 'bare med admin-hemmeligheten');
+  assert.equal((await call(env, 'POST', '/admin/apne', { kode: code }, { admin: true })).status, 200);
+  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: code, install: 'telefon-1' }, { now: T0 })).status, 200);
+});

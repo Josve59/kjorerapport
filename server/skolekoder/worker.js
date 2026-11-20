@@ -16,7 +16,8 @@
    POST /admin/koder       { skole, antall, maaneder, maks } → { koder: [...] }   (Authorization: Bearer ADMIN_SECRET)
    GET  /admin/koder?skole=Navn                          → { koder: [{ kode, brukt, forst, til, stengt }] }
    POST /admin/steng       { kode }                      → { ok }
-   POST /admin/nullstill   { kode }                      → { ok }   (eleven har ny telefon og har brukt opp begge) */
+   POST /admin/nullstill   { kode }                      → { ok }   (eleven har ny telefon og har brukt opp begge)
+   POST /admin/apne        { kode }                      → { ok }   (en kode som ble stengt ved en feil, virker igjen) */
 
 export const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';   // uten 0/O, 1/I/L, så kodene er lette å skrive av
 export const CODE_LEN = 12;
@@ -136,6 +137,7 @@ export default {
         if (req.method === 'GET' && url.pathname === '/admin/koder') return await listCodes(url, env);
         if (req.method === 'POST' && url.pathname === '/admin/steng') return await changeCode(req, env, r => { r.stengt = true; });
         if (req.method === 'POST' && url.pathname === '/admin/nullstill') return await changeCode(req, env, r => { r.installs = []; });
+        if (req.method === 'POST' && url.pathname === '/admin/apne') return await changeCode(req, env, r => { r.stengt = false; });   // 0.27.4: angre «steng»
       }
       if (url.pathname === '/') return json({ tjeneste: 'Kjørerapport skolekoder', ok: true });
       return json({ error: 'finnes ikke' }, 404);

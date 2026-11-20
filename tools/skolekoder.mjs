@@ -7,6 +7,7 @@
    node tools/skolekoder.mjs liste ["Skolens navn"]        hvor mange koder som er brukt (alle skoler, eller én)
    node tools/skolekoder.mjs steng KODE                    koden slutter å virke (f.eks. skolen betalte ikke)
    node tools/skolekoder.mjs nullstill KODE                eleven har brukt koden på to telefoner og har fått en ny
+   node tools/skolekoder.mjs apne KODE                     en kode som ble stengt ved en feil, virker igjen
 
    Serveren: KJ_KODE_URL (standard http://localhost:8787, den lokale serveren) eller .local-test/skolekoder/url.txt.
    Hemmelighetene ligger i .local-test/skolekoder/ (holdes utenfor git): privat.jwk.json og admin.txt. Ta vare på dem:
@@ -62,11 +63,11 @@ if (cmd === 'nokler') {
   for (const [s, n] of by) console.log(`${s}: ${n.brukt} av ${n.alle} koder brukt${n.stengt ? `, ${n.stengt} stengt` : ''}`);
   if (skole) for (const k of r.koder) console.log(`  ${k.kode}  ${k.brukt ? `brukt fra ${day(k.forst)} til ${day(k.til)} (${k.brukt} telefon${k.brukt === 1 ? '' : 'er'})` : 'ikke brukt'}${k.stengt ? ' · STENGT' : ''}`);
   if (!r.koder.length) console.log('Ingen koder ennå.');
-} else if (cmd === 'steng' || cmd === 'nullstill') {
+} else if (cmd === 'steng' || cmd === 'nullstill' || cmd === 'apne') {
   const [kode] = args;
   if (!kode) { console.log(`Bruk: node tools/skolekoder.mjs ${cmd} KODE`); process.exit(1); }
   const r = await admin('POST', `/admin/${cmd}`, { kode });
-  console.log(cmd === 'steng' ? `${r.kode} er stengt. Den slutter å virke neste gang appen sjekker (innen en uke).` : `${r.kode} er nullstilt og kan brukes på en ny telefon.`);
+  console.log(cmd === 'steng' ? `${r.kode} er stengt. Den slutter å virke neste gang appen sjekker (innen en uke).` : cmd === 'apne' ? `${r.kode} er åpnet igjen og virker som før.` : `${r.kode} er nullstilt og kan brukes på en ny telefon.`);
 } else {
   console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace('/*', '').trim());
 }

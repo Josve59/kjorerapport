@@ -155,6 +155,7 @@ The owner (20 November): a link others can use to test the app with full access,
 - **One code for a test group:** the server now accepts up to 50 phones per code (before 5). Pupil codes are still 2 by default.
   - `node tools/skolekoder.mjs lag "Testgruppe" 1 3 25` makes one code for 3 months and at most 25 phones, and prints the link.
   - `steng KODE` closes it at any time. The app then removes access at its weekly check.
+  - `apne KODE` undoes `steng`. The owner closed the test link by mistake the same day. The server got the route `POST /admin/apne`, and the code was opened again; the one phone already using it kept access. One more test, 301 in all.
   - The server was uploaded again with `tools/skolekoder-oppsett.mjs`, and the codes were kept.
 - **Tested:**
   - two new unit tests (300 in all);
