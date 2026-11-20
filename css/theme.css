@@ -883,8 +883,7 @@ input.switch { background: color-mix(in srgb, var(--muted) 70%, var(--surface-2)
 /* Smale telefoner (320 pt) og stor tekst */
 @media (max-width: 360px) { .st-actions { grid-template-columns: 1fr; } }
 .st-main span { overflow-wrap: anywhere; }
-.tabbar { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.tabbar a > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* Fanelinjen beholder repeat(5, 1fr): like kolonner kuttet «Trafikklærer» på 375 pt brede skjermer (prøvd i 0.27.2) */
 /* Sikkerhetskontrollen: «Kan denne» er en tilstand, ikke en gul hovedknapp per oppgave */
 .btn[aria-pressed="true"] { background: color-mix(in srgb, var(--good) 14%, var(--surface)); color: var(--good); box-shadow: none; }
 .sg-name.hyph-manual { -webkit-hyphens: manual; hyphens: manual; }

@@ -12,8 +12,8 @@ Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). H
 - [x] Ikon (lyst og mørkt), tillatelsestekster, personvernmanifest, eksportsvar (ingen kryptering)
 - [x] 7 App Store-bilder i [`skjermbilder/`](skjermbilder/) (6,9", riktig størrelse)
 - [x] Beskrivelse ([`beskrivelse.txt`](beskrivelse.txt)), navn, undertittel, nøkkelord, kampanjetekst (README del 2)
-- [x] Personvern: https://josve59.github.io/kjorerapport/personvern/
-- [x] Hjelp og kontakt (støtte-URL): https://josve59.github.io/kjorerapport/hjelp/
+- [x] Personvern: https://kjorerapport.jo-9fc.workers.dev/personvern/
+- [x] Hjelp og kontakt (støtte-URL): https://kjorerapport.jo-9fc.workers.dev/hjelp/
 - [x] Notat til App Review på engelsk (README del 7)
 - [x] Bilde av Pluss-siden til kjøpene: [`kjop-pluss-review.png`](kjop-pluss-review.png)
 - [x] Testkjøp i Xcode (`ios/Pluss.storekit`)
@@ -78,9 +78,9 @@ Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet. Bi
 |---|---|
 | Bilder (6,9") | De 7 bildene i `skjermbilder/`, i nummerrekkefølge |
 | Kampanjetekst, beskrivelse, nøkkelord | README del 2 og `beskrivelse.txt` |
-| Støtte-URL | https://josve59.github.io/kjorerapport/hjelp/ |
-| Markedsførings-URL | https://josve59.github.io/kjorerapport/trafikkskole/ (valgfri) |
-| Personvern-URL | https://josve59.github.io/kjorerapport/personvern/ |
+| Støtte-URL | https://kjorerapport.jo-9fc.workers.dev/hjelp/ |
+| Markedsførings-URL | https://kjorerapport.jo-9fc.workers.dev/trafikkskole/ (valgfri) |
+| Personvern-URL | https://kjorerapport.jo-9fc.workers.dev/personvern/ |
 | Kategori | Utdanning (Education), og Navigasjon som nummer to |
 | Aldersgrense | Svar «Nei/Ingen» på alt (README del 6), da blir det 4+ |
 | App Privacy | **Data Not Collected** (README del 4) |

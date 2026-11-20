@@ -25,7 +25,7 @@ const ATK_SECTION = { type: 823 };
 // meste av E6 og E39 80 eller 70 km/t, så fartsgrensen alene ga for lite motorvei i kjøreloggen.
 const MOTORWAY = { type: 595 };
 const KARTVERKET = 'https://ws.geonorge.no/adresser/v1/punktsok';
-const CLIENT = 'Kjorerapport PWA (github.com/Josve59/kjorerapport)';
+const CLIENT = 'Kjorerapport (kjorerapport.jo-9fc.workers.dev)';   // identifiserer appen overfor NVDB
 const MATCH_M = 25;            // maks avstand fra GPS-punkt til fartsgrensestrekning
 const CROSS_DEG = 60;          // strekninger mer enn 60° på tvers av kjøreretningen er en annen gate (0.22.2)
 const CHUNK_M = 1500;          // rutebiter per NVDB-kall

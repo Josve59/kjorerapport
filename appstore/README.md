@@ -50,9 +50,9 @@ The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). Its «Al
 | **Secondary category** | Navigation | |
 | **Price** | Free (with the in-app purchase «Kjørerapport Pluss», section 12) | |
 | **Availability** | Norway (speed limits and road data only cover Norway) | |
-| **Privacy policy URL** | https://josve59.github.io/kjorerapport/personvern/ (updated for the app before submission, see section 5) | |
-| **Support URL** | https://josve59.github.io/kjorerapport/hjelp/ (help page with FAQ and email, 0.11.4) | |
-| **Marketing URL** (optional) | https://josve59.github.io/kjorerapport/trafikkskole/ | |
+| **Privacy policy URL** | https://kjorerapport.jo-9fc.workers.dev/personvern/ (updated for the app before submission, see section 5) | |
+| **Support URL** | https://kjorerapport.jo-9fc.workers.dev/hjelp/ (help page with FAQ and email, 0.11.4) | |
+| **Marketing URL** (optional) | https://kjorerapport.jo-9fc.workers.dev/trafikkskole/ | |
 | **Copyright** | © 2026 Svendsen Media (or your name with a personal account) | |
 
 Notes on the text:

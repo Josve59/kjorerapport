@@ -1,22 +1,24 @@
 /* Publiserer nettversjonen av Kjørerapport hos Cloudflare (0.27.2), som en Worker med statiske filer:
-   https://kjorerapport.<underdomene>.workers.dev. GitHub Pages fortsetter som før; dette er en ekstra adresse.
+   https://kjorerapport.<underdomene>.workers.dev. Fra 0.27.3 er dette den eneste adressen (GitHub-prosjektet kan være
+   privat, og GitHub Pages trengs ikke).
    Uten Cloudflares eget verktøy (wrangler/npm finnes ikke på Macen): snakker direkte med API-et.
    1. velger filene til nettappen fra git (det som er committet, ikke arbeidsfiler eller .local-test),
    2. laster opp filene som er endret (Cloudflare husker resten),
-   3. legger ut en liten Worker som henter filer over Cloudflares grense på 25 MB fra GitHub Pages,
+   3. legger ut en liten Worker: filer over Cloudflares grense på 25 MB lastes opp gzip-komprimert og sendes med
+      Content-Encoding: gzip (nettleseren pakker dem ut), og mapper viser index.html,
    4. slår på adressen og sjekker at siden svarer med riktig versjon.
    Tilgangsnøkkelen er den samme som for skolekodene: .local-test/skolekoder/cf-token.txt. Den skrives aldri ut.
    Bruk: node tools/nettside-cloudflare.mjs   (kjør etter commit og push, så GitHub Pages har de samme filene) */
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const API = 'https://api.cloudflare.com/client/v4';
 const SCRIPT = 'kjorerapport';
-const GITHUB = 'https://josve59.github.io/kjorerapport';
 const MAX = 25 * 1024 * 1024;   // Cloudflares grense per statiske fil
 // Det som hører til nettappen. Ikke: ios/, server/, tools/, tests/, appstore/, designprofil/, README, CLAUDE.md
 const PARTS = ['index.html', 'sw.js', 'manifest.webmanifest', 'manifest-vei.webmanifest', 'css', 'js', 'fonts', 'icons', 'vendor', 'kamera', 'hjelp', 'personvern', 'trafikkskole', 'lisenser'];
@@ -39,14 +41,18 @@ async function cf(method, p, body, { auth = token, json = true } = {}) {
 const files = execFileSync('git', ['ls-files', '-z', ...PARTS], { cwd: root }).toString().split('\0').filter(Boolean);
 const big = [], manifest = {}, byHash = new Map();
 for (const f of files) {
-  const buf = fs.readFileSync(path.join(root, f));
-  if (buf.length > MAX) { big.push('/' + f); continue; }
+  let buf = fs.readFileSync(path.join(root, f)), name = f;
+  if (buf.length > MAX) {   // for stor: lastes opp komprimert som «fil.gz»
+    const gz = zlib.gzipSync(buf, { level: 9 });
+    if (gz.length > MAX) { console.log(`${f} er for stor også komprimert (${gz.length} byte). Avbryter.`); process.exit(1); }
+    big.push('/' + f); buf = gz; name = f + '.gz';
+  }
   const b64 = buf.toString('base64');
   const hash = crypto.createHash('sha256').update(b64 + path.extname(f).slice(1)).digest('hex').slice(0, 32);
-  manifest['/' + f] = { hash, size: buf.length };
-  byHash.set(hash, { f, b64 });
+  manifest['/' + name] = { hash, size: buf.length };
+  byHash.set(hash, { f: name, b64 });
 }
-console.log(`${Object.keys(manifest).length} filer${big.length ? `, ${big.length} for store for Cloudflare (hentes fra GitHub Pages): ${big.join(', ')}` : ''}.`);
+console.log(`${Object.keys(manifest).length} filer${big.length ? `, ${big.length} lastes opp komprimert: ${big.join(', ')}` : ''}.`);
 
 const [acc] = await cf('GET', '/accounts');
 if (!acc) { console.log('Fant ingen konto for nøkkelen.'); process.exit(1); }
@@ -63,17 +69,17 @@ for (const bucket of session.buckets || []) {
 }
 console.log(sent ? `${sent} filer lastet opp.` : 'Ingen filer var endret.');
 
-// 3. Workeren: statiske filer først; det som mangler (de store filene) hentes fra GitHub Pages
+// 3. Workeren: statiske filer først; de store filene sendes komprimert, slik de ble lastet opp
 const worker = `const BIG = new Set(${JSON.stringify(big)});
+const TYPE = { wasm: 'application/wasm', onnx: 'application/octet-stream', js: 'text/javascript; charset=utf-8' };
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (BIG.has(url.pathname)) {
-      const r = await fetch(${JSON.stringify(GITHUB)} + url.pathname, { cf: { cacheEverything: true, cacheTtl: 86400 } });
-      const h = new Headers(r.headers);
-      if (url.pathname.endsWith('.wasm')) h.set('content-type', 'application/wasm');
-      h.delete('set-cookie');
-      return new Response(r.body, { status: r.status, headers: h });
+      const r = await env.ASSETS.fetch(new Request(new URL(url.pathname + '.gz', url), { method: 'GET' }));
+      if (!r.ok) return r;
+      const ext = url.pathname.split('.').pop();
+      return new Response(r.body, { status: 200, encodeBody: 'manual', headers: { 'content-type': TYPE[ext] || 'application/octet-stream', 'content-encoding': 'gzip', 'cache-control': 'public, max-age=3600', 'vary': 'accept-encoding' } });
     }
     // Mapper: «/» og «/hjelp/» viser index.html. Cloudflare får ikke gjøre dette selv: da sender den «/index.html»
     // videre til «/», og service workeren kan ikke bruke en videresendt side når appen åpnes uten nett.

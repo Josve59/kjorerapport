@@ -46,7 +46,7 @@ Then open <http://localhost:8080> in Safari or Chrome. On a computer there are n
 
 Open Innstillinger and tap the version text at the bottom seven times. A «Utvikler» section appears with «Kjør demotur gjennom opptakeren». It plays the simulated Trondheim drive through the real recorder, saves it to IndexedDB in chunks like a real drive, and opens the report. The result must match the demo button exactly: 82 points, three events.
 
-## Putting it online (GitHub Pages, free HTTPS)
+## Putting it online (GitHub Pages, free HTTPS; since 0.27.3 Cloudflare instead, see «What's new in 0.27.3»)
 
 Motion sensors and GPS only work over HTTPS, so the app has to be hosted. GitHub Pages is free and needs no credit card. You do steps 1–6 once; I cannot do logins for you.
 
@@ -114,7 +114,7 @@ At the end:
 
 ## Camera test version (kamera/)
 
-A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ adds mirror and shoulder-check detection with the front camera. It installs as its own home-screen app («Kjøre Kamera») and keeps its own drives and settings, so the main app is untouched.
+A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ adds mirror and shoulder-check detection with the front camera. It installs as its own home-screen app («Kjøre Kamera») and keeps its own drives and settings, so the main app is untouched.
 
 - **How it works:** MediaPipe Face Landmarker runs on the phone (files in `kamera/vendor/mediapipe/`, about 13 MB, downloaded the first time the camera is used and then cached). Only head angles are stored, never images.
 - **Calibration:** the «Kameratest» screen records looking forward, at the left, right and rear mirror. It is saved per driver.
@@ -124,7 +124,7 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 
 ## For driving schools (trafikkskole/ and personvern/)
 
-- `trafikkskole/` – a plain web page for driving schools: what the app does, screenshots, privacy, honest status and a contact e-mail. Live at https://josve59.github.io/kjorerapport/trafikkskole/
+- `trafikkskole/` – a plain web page for driving schools: what the app does, screenshots, privacy, honest status and a contact e-mail. Live at https://kjorerapport.jo-9fc.workers.dev/trafikkskole/
 - `trafikkskole/ark.html` – the one-page A4 info sheet. `trafikkskole/Kjorerapport-infoark.pdf` is the printed version. To make a new PDF after editing the sheet, open `ark.html` in Chrome and choose Print → Save as PDF (margins: none, no headers and footers).
 - `personvern/` – the privacy statement, linked from Settings and the bottom of every report.
 - Screenshots in `trafikkskole/img/` were taken from the demo drive at 390×844. The QR codes point to the app.
@@ -142,6 +142,23 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - That is correct behaviour, not a bug.
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
+
+## What's new in 0.27.3 – ready for a private GitHub project
+
+The owner (20 November) wants to stop others from copying the app. The repository was public, with all the code, the iPhone app, the server, the theory and the prices. It was public only because free GitHub Pages needs that. The web version now runs on Cloudflare alone, so the repository can be made private.
+
+- **The large file:** ONNX Runtime (26.8 MB, over Cloudflare's 25 MB limit) was fetched from GitHub Pages. `tools/nettside-cloudflare.mjs` now uploads it gzip-compressed (6.6 MB), and the Worker sends it with `Content-Encoding: gzip`.
+  - Checked: the unpacked file is byte-identical to the original.
+  - Checked: the browser compiles it with `WebAssembly.compileStreaming`.
+- **Addresses moved to `https://kjorerapport.jo-9fc.workers.dev`:**
+  - the App Store privacy, support and marketing URLs (`appstore/`);
+  - the driving-school page and handout;
+  - the name the app gives NVDB (`CLIENT` in `js/enrich.js`);
+  - the README links.
+- **The privacy page** now names only Cloudflare for the web version.
+- **The old address:** when the app is opened on `*.github.io`, a banner says it has a new address. It explains that drives move with «Ta kopi» and «Gjenopprett», because browser storage belongs to one address. The banner never shows in the iPhone app.
+- **The tab bar fix from 0.27.2 is undone.** It gave all five tabs the same width, which cut «Trafikklærer» to «Trafikklæ…» on 375 pt screens. The old layout lets that tab take a little more room. Measured at 375 pt: all five labels fit.
+- **Not done here:** making the repository private is a setting on GitHub, and GitHub Pages then stops. Clones made earlier can't be called back. GitHub showed 0 forks.
 
 ## What's new in 0.27.2 – full review in the iPhone simulator, and the web version on Cloudflare
 
@@ -1130,7 +1147,7 @@ Checked in Safari on the iPhone simulator: when the page is added to the home sc
 
 ## What's new in 0.17.0 – the road camera in the web version, and a test link
 
-So a tester without the iPhone app can try theory and the road camera with one link: **https://josve59.github.io/kjorerapport/?kamera=vei**
+So a tester without the iPhone app can try theory and the road camera with one link: **https://kjorerapport.jo-9fc.workers.dev/?kamera=vei** (before 0.27.3 on GitHub Pages)
 
 - **Road camera in Safari** (`js/webroad.js`, `js/facecam.js`). Safari can only use one camera at a time, so the web version now has a choice under Kamera: «Førerkamera» (mirror and shoulder checks, as before) or «Veikamera» (the car ahead and its distance, lane lines and speed signs). The iPhone app is unchanged and still uses both at once.
   - The browser source looks like the iPhone app's camera sources, so lane lines, signs, the car ahead, tracking and image matching run through the same code as in the iPhone app.
