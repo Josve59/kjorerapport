@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.27.7';
+export const APP_VERSION = '0.27.8';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -624,12 +624,17 @@ async function useLinkCode() {
 /* Testere (0.27.7): samme oppsett som eierens testapp, én gang. Kameraet slås på (i nettleseren førerkameraet, siden den
    bare kan bruke ett kamera om gangen; veikameraet kan velges under Kamera), og testknappene «Feltskifte» og «Feil grense»
    vises under kjøring. Etterpå bestemmer testeren selv. → true hvis oppsettet ble gjort nå. */
+let testerNoteOpen = false;
 function applyTesterSetup() {
   const pass = plusState().school;
   const cur = getSettings();
-  if (!pass || !pass.tester || cur.testerSetup) return false;
-  saveSettings({ ...cur, cameraOn: true, ...(window.kjNative ? {} : { webCam: cur.webCam || 'face' }), devMarks: cur.devMarks ?? true, testerSetup: true });
-  infoDialog({ title: 'Du er tester', text: `Du har full tilgang til ${longDay(pass.exp)}. Kameraet og testknappene under kjøring er slått på, som i utviklerens testapp. Kalibrer kameraet under Innstillinger › Kamera før første tur.${window.kjNative ? '' : ' Nettleseren kan bare bruke ett kamera om gangen: førerkameraet er valgt, og veikameraet kan velges under Kamera.'} I rapporten kan du sende turen til utvikleren.` });
+  if (!pass || !pass.tester) return false;
+  if (!cur.testerSetup) saveSettings({ ...cur, cameraOn: true, ...(window.kjNative ? {} : { webCam: cur.webCam || 'face' }), devMarks: cur.devMarks ?? true, testerSetup: true });
+  // Meldingen regnes som vist først når den er lukket: ved første besøk laster appen seg på nytt når service workeren
+  // tar over, og da forsvant meldingen før den ble lest
+  if (getSettings().testerNoted || testerNoteOpen) return !cur.testerSetup;
+  testerNoteOpen = true;
+  infoDialog({ title: 'Du er tester', text: `Du har full tilgang til ${longDay(pass.exp)}. Kameraet og testknappene under kjøring er slått på, som i utviklerens testapp. Kalibrer kameraet under Innstillinger › Kamera før første tur.${window.kjNative ? '' : ' Nettleseren kan bare bruke ett kamera om gangen: førerkameraet er valgt, og veikameraet kan velges under Kamera.'} I rapporten kan du sende turen til utvikleren.` }).then(() => { saveSettings({ ...getSettings(), testerNoted: true }); testerNoteOpen = false; });
   return true;
 }
 /* Pluss-siden: hva Pluss gir (funksjonen brukeren kom fra øverst), pris, kjøp, gjenopprett og kode fra trafikkskolen */

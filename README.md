@@ -143,6 +143,11 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.8 – the tester note survives the first-visit reload
+
+- **The bug:** testing 0.27.7 on the live address as a new tester (Android user agent, throwaway tester code), the setup worked: camera on, driver camera, test buttons on, tester pass. But the «Du er tester» note never showed. On the first visit the app reloads when the service worker takes over, and the note was counted as shown before anyone read it.
+- **The fix:** the setup and the note now have separate flags. `testerSetup` is set once. `testerNoted` is set only when the note is closed, so it shows again after a reload until it has been read.
+
 ## What's new in 0.27.7 – testers get the same setup as the owner's test app
 
 The owner (20 November): the test link needs camera access and should be as close as possible to the owner's own test app.
