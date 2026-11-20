@@ -167,13 +167,8 @@ test('appen husker om skolebeviset er en testkode (0.27.5)', () => {
   setSchoolPass(null);
 });
 
-test('testversjonen sender turer uten kode, men bare fra testadressen (0.27.9)', async () => {
+test('turer uten kode avvises, også med testbygg-hodet fra 0.27.9 (0.28.0)', async () => {
   const { env } = await setup();
-  const send = origin => worker.fetch(new Request('https://koder.test/v1/tur', { method: 'POST', body: new TextEncoder().encode('{"app":"Kjørerapport"}'), headers: { 'X-Testbygg': '1', 'X-Install': 'telefon-testbygg-1', 'X-Tur': 'tur-9', 'Origin': origin } }), env, {}, T0);
-  assert.equal((await send('https://kjorerapport-test.jo-9fc.workers.dev')).status, 200);
-  assert.equal((await send('https://kjorerapport.jo-9fc.workers.dev')).status, 404, 'vanlig adresse må ha testkode');
-  assert.equal((await send('https://noe-annet.example')).status, 404);
-  const list = await (await call(env, 'GET', '/admin/turer', null, { admin: true })).json();
-  assert.equal(list.turer.length, 1);
-  assert.equal(list.turer[0].kode, 'TEST');
+  const r = await worker.fetch(new Request('https://koder.test/v1/tur', { method: 'POST', body: new TextEncoder().encode('{}'), headers: { 'X-Testbygg': '1', 'X-Install': 'telefon-testbygg-1', 'Origin': 'https://kjorerapport-test.jo-9fc.workers.dev' } }), env, {}, T0);
+  assert.equal(r.status, 404);
 });

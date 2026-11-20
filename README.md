@@ -143,6 +143,24 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.28.0 – one test link for the driving school, and only the road camera on the web
+
+The owner (20 November): «https://kjorerapport.jo-9fc.workers.dev/?kode=XAHN-2DV9-XFUD is sent to the driving school. Update it with what you just sent, remove the one you sent now, so we only work with the one I send. Only the road camera in the web app, but both in my Xcode test app.»
+
+- **The code link gets everything the test address had** (`isTester()` = a tester pass):
+  - Everything is open: Pluss and the theory, through the tester code.
+  - «Visning» appears in Settings, so the school can see the app as free, Pluss, school or teacher. `viewModesAllowed` now waits for the school pass (`passReady`), so a tester's choice is restored at start.
+  - The test buttons are on.
+  - «Send turen til utvikleren» works, as before.
+  - The «Du er tester» note says the app is set up like the developer's own test app.
+  - The setup is versioned (`TESTER_SETUP_V = 2`), so the phone that already used the link gets the road camera and the note once more.
+- **The test address is gone:**
+  - `kjorerapport-test.jo-9fc.workers.dev` was deleted with `node tools/nettside-cloudflare.mjs --slett-test`.
+  - `isTestBuild` was removed from the app.
+  - The server no longer accepts drives without a code. A test checks that the old `X-Testbygg` header is refused.
+- **Only the road camera in the web version:** `roadOnly()` is now true in every browser, and the choice between driver and road camera is hidden under Kamera. The driver camera (mirrors and shoulder checks) stays in the iPhone app, which runs both cameras at once, as the owner's Xcode build does.
+- **Tests:** 307 pass.
+
 ## What's new in 0.27.9 – a test version that is open like the Xcode build
 
 The owner (20 November): the test setup should be completely open, without codes, like the owner's own build in Xcode.

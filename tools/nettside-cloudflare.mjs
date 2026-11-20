@@ -18,10 +18,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const API = 'https://api.cloudflare.com/client/v4';
-// --test: samme filer til testversjonen (0.27.9), kjorerapport-test.<konto>.workers.dev, der appen oppfører seg som
-// Xcode-bygget (alt åpent uten kode). Appen kjenner den igjen på adressen (isTestBuild i js/platform.js).
-const TEST = process.argv.includes('--test');
-const SCRIPT = TEST ? 'kjorerapport-test' : 'kjorerapport';
+const SCRIPT = 'kjorerapport';
+// --slett-test (0.28.0): fjerner testadressen kjorerapport-test fra 0.27.9. Eieren bruker bare testkoden.
+const DELETE_TEST = process.argv.includes('--slett-test');
 const MAX = 25 * 1024 * 1024;   // Cloudflares grense per statiske fil
 // Det som hører til nettappen. Ikke: ios/, server/, tools/, tests/, appstore/, designprofil/, README, CLAUDE.md
 const PARTS = ['index.html', 'sw.js', 'manifest.webmanifest', 'manifest-vei.webmanifest', 'css', 'js', 'fonts', 'icons', 'vendor', 'kamera', 'hjelp', 'personvern', 'trafikkskole', 'lisenser'];
@@ -59,6 +58,12 @@ console.log(`${Object.keys(manifest).length} filer${big.length ? `, ${big.length
 
 const [acc] = await cf('GET', '/accounts');
 if (!acc) { console.log('Fant ingen konto for nøkkelen.'); process.exit(1); }
+if (DELETE_TEST) {
+  try { await cf('DELETE', `/accounts/${acc.id}/workers/scripts/kjorerapport-test`); console.log('Testadressen kjorerapport-test er fjernet.'); }
+  catch (e) { console.log(/10007|not found/i.test(e.message) ? 'Testadressen finnes ikke (allerede fjernet).' : 'Kunne ikke fjerne testadressen: ' + e.message); }
+  try { fs.unlinkSync(path.join(root, '.local-test/skolekoder/nettside-test-url.txt')); } catch { /* fantes ikke */ }
+  process.exit(0);
+}
 
 // 2. Opplasting: Cloudflare sier hvilke filer den ikke har fra før
 const session = await cf('POST', `/accounts/${acc.id}/workers/scripts/${SCRIPT}/assets-upload-session`, { manifest });
@@ -113,4 +118,4 @@ for (let i = 0; i < 24 && !ok; i++) {
   if (!ok) await new Promise(res => setTimeout(res, 5000));
 }
 console.log(ok ? `Nettversjonen ${want} svarer på ${url}` : `Lagt ut på ${url}, men svarer ikke med versjon ${want} ennå. Prøv igjen om noen minutter.`);
-fs.writeFileSync(path.join(root, `.local-test/skolekoder/${TEST ? 'nettside-test-url.txt' : 'nettside-url.txt'}`), url);
+fs.writeFileSync(path.join(root, '.local-test/skolekoder/nettside-url.txt'), url);

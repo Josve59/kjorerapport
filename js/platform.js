@@ -56,7 +56,3 @@ export function screenLockHelp() {
   if (isAndroid()) return 'Slå av strømsparing, og sett tidsavbrudd for skjermen til lengst mulig mens du kjører (Innstillinger › Skjerm).';
   return 'Hold skjermen på mens du kjører.';
 }
-
-/* Testversjonen (0.27.9): en egen adresse, kjorerapport-test.<konto>.workers.dev, med de samme filene. Der oppfører
-   nettversjonen seg som eierens Xcode-bygg: alt åpent uten kode, kamera og testknapper på, og «Visning» i Innstillinger. */
-export const isTestBuild = () => typeof location !== 'undefined' && /^kjorerapport-test\./.test(location.hostname);

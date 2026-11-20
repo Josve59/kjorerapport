@@ -1,7 +1,7 @@
 /* Telefon og nettleser (0.27.6): riktig veiledning på Android, iPhone-Safari og i iPhone-appen */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isAndroid, isIOS, browserName, permissionHelp, installHelp, screenLockHelp, isTestBuild } from '../js/platform.js';
+import { isAndroid, isIOS, browserName, permissionHelp, installHelp, screenLockHelp } from '../js/platform.js';
 
 const UA = {
   pixelChrome: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
@@ -39,14 +39,4 @@ test('veiledningen nevner ikke Safari eller Autolås på Android', () => {
 test('installeringshjelp vises ikke i iPhone-appen eller når appen alt er installert', () => {
   as(UA.iphoneSafari, () => assert.equal(installHelp(), null), { win: { webkit: { messageHandlers: { kj: {} } } } });
   as(UA.pixelChrome, () => assert.equal(installHelp(), null), { win: { matchMedia: () => ({ matches: true }) } });
-});
-
-test('testversjonen kjennes på adressen (0.27.9)', () => {
-  const loc = Object.getOwnPropertyDescriptor(globalThis, 'location');
-  const at = host => { Object.defineProperty(globalThis, 'location', { value: { hostname: host }, configurable: true }); return isTestBuild(); };
-  try {
-    assert.ok(at('kjorerapport-test.jo-9fc.workers.dev'));
-    assert.ok(!at('kjorerapport.jo-9fc.workers.dev'));
-    assert.ok(!at('localhost'));
-  } finally { if (loc) Object.defineProperty(globalThis, 'location', loc); else delete globalThis.location; }
 });

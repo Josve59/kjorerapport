@@ -2,7 +2,7 @@
 import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
 import { practiceSpans, rescore, inSpans } from './practice.js';
 import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, SEND_ERROR, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
-import { isAndroid, installHelp, permissionHelp, screenLockHelp, isTestBuild } from './platform.js';
+import { isAndroid, installHelp, permissionHelp, screenLockHelp } from './platform.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
 import { seedDemo } from './demo.js';
@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.27.9';
+export const APP_VERSION = '0.28.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -621,21 +621,24 @@ async function useLinkCode() {
   if (r.error !== 'nett' && r.error !== 'server') forget();   // uten nett prøves lenken igjen neste gang
   infoDialog({ title: 'Koden i lenken virket ikke', text: CODE_ERROR[r.error] || CODE_ERROR.server });
 }
-/* Testere (0.27.7): samme oppsett som eierens testapp, én gang. Kameraet slås på (i nettleseren førerkameraet, siden den
-   bare kan bruke ett kamera om gangen; veikameraet kan velges under Kamera), og testknappene «Feltskifte» og «Feil grense»
-   vises under kjøring. Etterpå bestemmer testeren selv. → true hvis oppsettet ble gjort nå. */
+/* Testere med testkode (0.27.7, 0.28.0): oppsatt som eierens testapp, én gang per versjon av oppsettet. Kameraet slås på
+   (i nettleseren bare veikameraet; i iPhone-appen begge), testknappene «Feltskifte» og «Feil grense» vises under kjøring,
+   og «Visning» finnes i Innstillinger. Etterpå bestemmer testeren selv. → true hvis oppsettet ble gjort nå. */
+let passReady = Promise.resolve();   // skolebeviset ved start (settes i init)
+const TESTER_SETUP_V = 2;   // 2 (0.28.0): veikamera i stedet for førerkamera på nett, og meldingen vises på nytt
+const isTester = () => !!(plusState().school && plusState().school.tester);
 let testerNoteOpen = false;
 function applyTesterSetup() {
-  const pass = plusState().school, testBuild = isTestBuild();   // testversjonen (0.27.9) trenger ingen kode
+  const pass = plusState().school;
   const cur = getSettings();
-  if (!testBuild && !(pass && pass.tester)) return false;
-  if (!cur.testerSetup) saveSettings({ ...cur, cameraOn: true, ...(window.kjNative ? {} : { webCam: cur.webCam || 'face' }), devMarks: cur.devMarks ?? true, testerSetup: true });
+  if (!isTester()) return false;
+  const fresh = cur.testerSetup !== TESTER_SETUP_V;
+  if (fresh) saveSettings({ ...cur, cameraOn: true, ...(window.kjNative ? {} : { webCam: 'road' }), devMarks: cur.devMarks ?? true, testerSetup: TESTER_SETUP_V, testerNoted: false });
   // Meldingen regnes som vist først når den er lukket: ved første besøk laster appen seg på nytt når service workeren
   // tar over, og da forsvant meldingen før den ble lest
-  if (getSettings().testerNoted || testerNoteOpen) return !cur.testerSetup;
+  if (getSettings().testerNoted || testerNoteOpen) return fresh;
   testerNoteOpen = true;
-  const intro = testBuild ? 'Dette er testversjonen, satt opp som utviklerens egen: alt er åpent, uten kode.' : `Du har full tilgang til ${longDay(pass.exp)}.`;
-  infoDialog({ title: testBuild ? 'Testversjonen' : 'Du er tester', text: `${intro} Kameraet og testknappene under kjøring er slått på, som i utviklerens testapp. Kalibrer kameraet under Innstillinger › Kamera før første tur.${window.kjNative ? '' : ' Nettleseren kan bare bruke ett kamera om gangen: førerkameraet er valgt, og veikameraet kan velges under Kamera.'}${testBuild ? ' Under Innstillinger › Visning kan du se appen som gratis, Pluss, koblet til trafikkskole eller trafikklærer.' : ''} I rapporten kan du sende turen til utvikleren.` }).then(() => { saveSettings({ ...getSettings(), testerNoted: true }); testerNoteOpen = false; });
+  infoDialog({ title: 'Du er tester', text: `Appen er satt opp som utviklerens egen testapp, og alt er åpent til ${longDay(pass.exp)}. ${window.kjNative ? 'Begge kameraene og testknappene under kjøring er slått på. Kalibrer førerkameraet under Innstillinger › Kamera før første tur.' : 'Veikameraet og testknappene under kjøring er slått på. Fest telefonen så kameraet på baksiden ser veien foran. Førerkameraet (speil og skulderblikk) finnes bare i iPhone-appen.'} Under Innstillinger › Visning kan du se appen som gratis, Pluss, koblet til trafikkskole eller trafikklærer. I rapporten kan du sende turen til utvikleren.` }).then(() => { saveSettings({ ...getSettings(), testerNoted: true }); testerNoteOpen = false; });
   return true;
 }
 /* Pluss-siden: hva Pluss gir (funksjonen brukeren kom fra øverst), pris, kjøp, gjenopprett og kode fra trafikkskolen */
@@ -763,7 +766,9 @@ let roadOk = false;
 cam.roadSupported().then(v => { roadOk = v; }).catch(() => {});
 /* Bare veikameraet (nettversjonen, 0.17.0): Safari kan bare ha ett kamera på om gangen, så der velger man førerkamera
    (speil og skulderblikk) eller veikamera (bilen foran, feltlinjene og fartsskiltene) under Kamera */
-const roadOnly = () => cam.webRoadOk() && getSettings().webCam === 'road';
+// Eieren (0.28.0): nettversjonen bruker bare veikameraet. Førerkameraet (speil og skulderblikk) finnes bare i iPhone-appen,
+// som bruker begge samtidig.
+const roadOnly = () => cam.webRoadOk();
 const roadWanted = () => roadOnly() || (roadOk && getSettings().roadCam !== false);
 
 /* Starter kameraet (og veikameraet når det er valgt) og ansiktsgjenkjenningen hvis de ikke allerede går. */
@@ -818,7 +823,7 @@ async function renderCamera() {
   }
   // Førerkamera eller veikamera i nettversjonen (0.17.0): det ene kameraet Safari kan ha på
   screens.camera.classList.toggle('road-only', roadOnly());
-  $('#cam-mode-row').hidden = !cam.webRoadOk();
+  $('#cam-mode-row').hidden = true;   // ingen valg lenger: nettversjonen har bare veikameraet (0.28.0)
   document.querySelectorAll('input[name=webCam]').forEach(r => {
     r.checked = r.value === (roadOnly() ? 'road' : 'face');
     r.onchange = async () => {
@@ -2315,7 +2320,7 @@ async function startRecording(replay = null) {
 }
 
 /* Testbygg (Xcode og TestFlight, 0.18.4): da vises testknappene under kjøring som standard. Nettversjonen og App Store: nei. */
-let devBuild = isTestBuild();   // testversjonen på nett regnes som et testbygg (0.27.9)
+let devBuild = false;
 if (window.kjNative && window.kjNative.info) window.kjNative.info().then(i => { devBuild = !!(i && i.devTools); }).catch(() => {});
 function renderMarkGrid() {
   const undo = $('#btn-undo-mark');
@@ -2906,7 +2911,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       afterLesson: afterLessonFor(drive) ? { ...afterLessonFor(drive), onOpen: () => afterLesson(drive, r) } : null,   // 0.18.4
       shared: drive.shared || null,
       // Testere (0.27.5): «Send turen til utvikleren», bare med testkode og bare egne opptak
-      devSend: ((plusState().school && plusState().school.tester) || isTestBuild()) && isOwn(drive) && !drive.demo && !isDemoMode() ? { sentAt: drive.sentToDev || null, onSend: () => sendToDev(id) } : null   // ikke Emmas oppdiktede turer
+      devSend: isTester() && isOwn(drive) && !drive.demo && !isDemoMode() ? { sentAt: drive.sentToDev || null, onSend: () => sendToDev(id) } : null   // ikke Emmas oppdiktede turer
     });
     const draw = status => {
       drawBase(status);
@@ -3298,7 +3303,8 @@ async function viewModesAllowed() {
   if (getSettings().linkSetup) return false;
   // Nettversjonen (0.27.6): bare på Macen (localhost) eller etter sju trykk på versjonsnummeret. Før kunne alle på nett
   // velge «Pluss» her og låse opp teorien, eller «Gratis» og få App Store-knapper som ikke virker.
-  if (!window.kjNative) return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || isTestBuild() || !!getSettings().devUnlocked;
+  if (!window.kjNative) await passReady;
+  if (!window.kjNative) return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || isTester() || !!getSettings().devUnlocked;   // testere med testkode også (0.28.0)
   const info = window.kjNative.info ? await window.kjNative.info().catch(() => null) : null;
   return !!(info && info.devTools);
 }
@@ -3428,7 +3434,7 @@ async function sendToDev(id) {
   if (!drive) return;
   toast('Sender turen …', { ms: 1500 });
   const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), ...(await exportPayload(drive)) };
-  const r = await sendTripToDev(toJSON(payload), { id: drive.id, start: drive.startedAt, version: APP_VERSION, testBuild: isTestBuild() });
+  const r = await sendTripToDev(toJSON(payload), { id: drive.id, start: drive.startedAt, version: APP_VERSION });
   if (r.ok) { await updateDrive(id, { sentToDev: new Date().toISOString() }); toast('Turen er sendt. Takk!', { type: 'ok' }); renderDriveReport(id, { keepScroll: true }); return; }
   infoDialog({ title: 'Turen ble ikke sendt', text: SEND_ERROR[r.error] || SEND_ERROR.server });
 }
@@ -3657,6 +3663,8 @@ function init() {
   if (/\.github\.io$/.test(location.hostname)) $('#moved-banner').hidden = false;
   // Android (0.27.6): tekster merket android-only / not-android i index.html
   document.body.classList.toggle('is-android', isAndroid());
+  // Skolebeviset sjekkes først (0.28.0): testere skal få «Visning»-valget sitt tilbake ved start
+  passReady = loadSchoolPass().catch(() => {});
   ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress', 'theory', 'insurance'].forEach(n => { screens[n] = document.getElementById(n); });
   // Bevegelsesdata (0.12.4): iPhone gir dem bare etter et trykk. «Start kjøretur» er trykket, så tilgangen bes om her;
   // sjekken før kjøring starter av seg selv uten trykk, og fikk ellers aldri data.
@@ -3670,8 +3678,7 @@ function init() {
   // Pluss: status fra App Store ved start; endres den (kjøp, Familiedeling, refusjon), tegnes skjermen på nytt
   // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke
   // låse opp Pluss i App Store-utgaven (0.11.4).
-  // Testversjonen (0.27.9) starter som Pluss, som Xcode-bygget; «Visning» kan bytte etterpå
-  const wantedMode = isTestBuild() && !getSettings().viewMode ? 'plus' : modeFromLegacy(getSettings());
+  const wantedMode = modeFromLegacy(getSettings());
   // Trafikklærer er et valg for alle (0.18.4); de andre visningene (gratis, Pluss, skole) bare i testbyggene
   const modeReady = wantedMode === 'teacher' ? Promise.resolve().then(() => { applyViewMode('teacher'); route(); })
     : wantedMode !== 'app' ? viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
@@ -3681,7 +3688,7 @@ function init() {
   window.addEventListener('kjfile', () => modeReady.then(openIncomingFile));
   // Kode fra trafikkskolen (0.27.0): beviset sjekkes uten nett ved start, og serveren spørres igjen etter en uke
   // Testere som alt har koden (0.27.7), får oppsettet også når testkoden først oppdages ved en senere sjekk
-  loadSchoolPass().catch(() => {}).then(useLinkCode).then(() => applyTesterSetup());
+  passReady.then(useLinkCode).then(() => applyTesterSetup());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSchoolPass().catch(() => {}).then(() => applyTesterSetup()); });
   // Veidata i bakgrunnen (0.26.6): når appen starter, når telefonen får nett igjen og når appen kommer fram igjen
   const prefetchSoon = ms => setTimeout(() => { prefetchRoadData().catch(() => {}); }, ms);
