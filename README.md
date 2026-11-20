@@ -143,6 +143,20 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.7 – testers get the same setup as the owner's test app
+
+The owner (20 November): the test link needs camera access and should be as close as possible to the owner's own test app.
+
+- **What was missing:**
+  - In the web version the camera is off by default, so a tester had to find Innstillinger › Kamera and turn on «Bruk kamera under kjøring».
+  - The test buttons under the drive («Feltskifte», «Feil grense») only show in the test builds (`devMarks ?? devBuild`).
+- **Now:** a tester code sets up the app once (`applyTesterSetup`, flag `testerSetup`, so testers can change it later).
+  - Camera on (`cameraOn: true`). In a browser this is the driver camera (`webCam: 'face'`): a browser can use only one camera at a time, and the road camera can be chosen under Kamera.
+  - Test buttons on (`devMarks: true`).
+  - A note, «Du er tester», says the camera and test buttons are on, asks for calibration before the first drive, explains the one-camera limit in a browser, and points to «Send turen til utvikleren». It replaces the «Pluss er låst opp» toast.
+  - The setup runs after the link activates, at start, and when the app comes back. So a phone that already has the code gets it when its pass learns it is a tester code.
+- **Not the same as the owner's app:** both cameras at once (driver and road) and recording with the screen locked exist only in the iPhone app. Testers need TestFlight to get those.
+
 ## What's new in 0.27.6 – the web version and the test link on Android
 
 The owner (20 November): make the test link work well on all phones, including Android, and make the app ready for use across phones.

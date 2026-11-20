@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.27.6';
+export const APP_VERSION = '0.27.7';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -617,9 +617,20 @@ async function useLinkCode() {
   if (cur && cur.kode === code && plusState().school) { forget(); return; }   // allerede låst opp med denne koden
   if (!codesEnabled()) return;
   const r = await activateCode(code);
-  if (r.ok) { forget(); toast(`Pluss er låst opp av ${r.skole}, til ${longDay(r.til)}.`, { type: 'ok', ms: 4000 }); route(); return; }
+  if (r.ok) { forget(); if (!applyTesterSetup()) toast(`Pluss er låst opp av ${r.skole}, til ${longDay(r.til)}.`, { type: 'ok', ms: 4000 }); route(); return; }
   if (r.error !== 'nett' && r.error !== 'server') forget();   // uten nett prøves lenken igjen neste gang
   infoDialog({ title: 'Koden i lenken virket ikke', text: CODE_ERROR[r.error] || CODE_ERROR.server });
+}
+/* Testere (0.27.7): samme oppsett som eierens testapp, én gang. Kameraet slås på (i nettleseren førerkameraet, siden den
+   bare kan bruke ett kamera om gangen; veikameraet kan velges under Kamera), og testknappene «Feltskifte» og «Feil grense»
+   vises under kjøring. Etterpå bestemmer testeren selv. → true hvis oppsettet ble gjort nå. */
+function applyTesterSetup() {
+  const pass = plusState().school;
+  const cur = getSettings();
+  if (!pass || !pass.tester || cur.testerSetup) return false;
+  saveSettings({ ...cur, cameraOn: true, ...(window.kjNative ? {} : { webCam: cur.webCam || 'face' }), devMarks: cur.devMarks ?? true, testerSetup: true });
+  infoDialog({ title: 'Du er tester', text: `Du har full tilgang til ${longDay(pass.exp)}. Kameraet og testknappene under kjøring er slått på, som i utviklerens testapp. Kalibrer kameraet under Innstillinger › Kamera før første tur.${window.kjNative ? '' : ' Nettleseren kan bare bruke ett kamera om gangen: førerkameraet er valgt, og veikameraet kan velges under Kamera.'} I rapporten kan du sende turen til utvikleren.` });
+  return true;
 }
 /* Pluss-siden: hva Pluss gir (funksjonen brukeren kom fra øverst), pris, kjøp, gjenopprett og kode fra trafikkskolen */
 async function renderPlus(feature = null) {
@@ -3662,8 +3673,9 @@ function init() {
   modeReady.then(() => setTimeout(openIncomingFile, 300));
   window.addEventListener('kjfile', () => modeReady.then(openIncomingFile));
   // Kode fra trafikkskolen (0.27.0): beviset sjekkes uten nett ved start, og serveren spørres igjen etter en uke
-  loadSchoolPass().catch(() => {}).then(useLinkCode);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSchoolPass().catch(() => {}); });
+  // Testere som alt har koden (0.27.7), får oppsettet også når testkoden først oppdages ved en senere sjekk
+  loadSchoolPass().catch(() => {}).then(useLinkCode).then(() => applyTesterSetup());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSchoolPass().catch(() => {}).then(() => applyTesterSetup()); });
   // Veidata i bakgrunnen (0.26.6): når appen starter, når telefonen får nett igjen og når appen kommer fram igjen
   const prefetchSoon = ms => setTimeout(() => { prefetchRoadData().catch(() => {}); }, ms);
   modeReady.then(() => prefetchSoon(4000));
