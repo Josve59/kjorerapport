@@ -33,6 +33,8 @@ export const CODE_LEN = 12;
 const MONTH = 30.44 * 86400000;
 const MAX_TRIP = 20 * 1024 * 1024;   // KV tar 25 MiB per verdi
 const TRIPS_PER_DAY = 30;            // per installasjon
+// Testversjonen av nettappen (0.27.9) sender turer uten kode. Bare nettlesere på den adressen sender denne Origin.
+const TEST_ORIGINS = /^https:\/\/kjorerapport-test\.[a-z0-9-]+\.workers\.dev$/;
 
 export const normalizeCode = s => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');   // mellomrom og bindestreker spiller ingen rolle
 export const formatCode = c => (c.match(/.{1,4}/g) || []).join('-');
@@ -45,7 +47,7 @@ function cors(res) {
   const h = new Headers(res.headers);
   h.set('Access-Control-Allow-Origin', '*');
   h.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  h.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Kode, X-Install, X-Tur, X-Start, X-Versjon, X-Gzip');
+  h.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Kode, X-Install, X-Tur, X-Start, X-Versjon, X-Gzip, X-Testbygg');
   h.set('Cache-Control', 'no-store');
   return new Response(res.body, { status: res.status, headers: h });
 }
@@ -141,12 +143,17 @@ async function changeCode(req, env, fn) {
 async function receiveTrip(req, env, now) {
   const h = n => req.headers.get(n) || '';
   const c = normalizeCode(h('X-Kode')), install = h('X-Install');
-  const rec = validCode(c) ? await getCode(env, c) : null;
-  if (!rec || !rec.installs.includes(install)) return json({ error: 'ukjent' }, 404);
-  if (rec.stengt) return json({ error: 'stengt' }, 410);
-  const til = until(rec);
-  if (!til || til <= now) return json({ error: 'utlopt' }, 410);
-  if (!rec.tester) return json({ error: 'ikke-tester' }, 403);
+  const testBuild = h('X-Testbygg') === '1' && TEST_ORIGINS.test(h('Origin'));
+  if (testBuild) {
+    if (install.length < 8 || install.length > 64) return json({ error: 'ukjent' }, 404);
+  } else {
+    const rec = validCode(c) ? await getCode(env, c) : null;
+    if (!rec || !rec.installs.includes(install)) return json({ error: 'ukjent' }, 404);
+    if (rec.stengt) return json({ error: 'stengt' }, 410);
+    const til = until(rec);
+    if (!til || til <= now) return json({ error: 'utlopt' }, 410);
+    if (!rec.tester) return json({ error: 'ikke-tester' }, 403);
+  }
   const len = Number(h('Content-Length') || 0);
   if (len > MAX_TRIP) return json({ error: 'stor' }, 413);
   const body = await req.arrayBuffer();
@@ -158,7 +165,7 @@ async function receiveTrip(req, env, now) {
   await env.CODES.put(countKey, String(count + 1), { expirationTtl: 2 * 86400 });
   const tripId = h('X-Tur').replace(/[^\w.-]/g, '').slice(0, 60) || String(now);
   const key = `tur:${install.slice(0, 12)}:${tripId}`;
-  const meta = { kode: c.slice(-4), install: install.slice(0, 8), tur: tripId, start: h('X-Start').slice(0, 30), bytes: body.byteLength, gz: h('X-Gzip') === '1', versjon: h('X-Versjon').slice(0, 12), sendt: now };
+  const meta = { kode: testBuild ? 'TEST' : c.slice(-4), install: install.slice(0, 8), tur: tripId, start: h('X-Start').slice(0, 30), bytes: body.byteLength, gz: h('X-Gzip') === '1', versjon: h('X-Versjon').slice(0, 12), sendt: now };
   await env.CODES.put(key, body, { metadata: meta });
   return json({ ok: true, nokkel: key });
 }

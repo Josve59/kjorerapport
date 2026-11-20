@@ -143,6 +143,23 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.9 – a test version that is open like the Xcode build
+
+The owner (20 November): the test setup should be completely open, without codes, like the owner's own build in Xcode.
+
+- **A separate test address:** `https://kjorerapport-test.jo-9fc.workers.dev`, with the same files as the normal web version. Publish it with `node tools/nettside-cloudflare.mjs --test`.
+- **How the app recognises it:** `isTestBuild()` in `js/platform.js` checks the host name (`kjorerapport-test.…`), much as the iPhone app checks `devTools` in Xcode and TestFlight builds.
+- **What it changes:**
+  - It counts as a test build (`devBuild`), so the test buttons are on.
+  - It starts in view mode «Pluss» (everything open, the theory too), with no code. «Visning» in Settings can switch to free, school or teacher.
+  - The first start turns the camera on (the driver camera, as browsers use one camera at a time) and shows a «Testversjonen» note.
+  - The Pluss page shows Pluss as owned, not «Nettversjonen».
+  - «Send turen til utvikleren» works without a code: the app sends `X-Testbygg: 1`, and the server accepts it only when the browser's `Origin` is the test address. Such drives are marked `TEST` in `turer`.
+- **The normal address and the App Store build are unchanged.** Codes still unlock Pluss there, and the theory stays locked on the web without a code.
+- **Storage:** the test address is its own origin, so testers' drives and settings are kept apart from the normal web version.
+- **Risk the owner accepts:** whoever has the test address gets everything free. Keep the address among testers. If it spreads, the Worker can be renamed.
+- **Tests:** two new (308 in all): the upload is accepted only from the test address, and `isTestBuild` matches only that host.
+
 ## What's new in 0.27.8 – the tester note survives the first-visit reload
 
 - **The bug:** testing 0.27.7 on the live address as a new tester (Android user agent, throwaway tester code), the setup worked: camera on, driver camera, test buttons on, tester pass. But the «Du er tester» note never showed. On the first visit the app reloads when the service worker takes over, and the note was counted as shown before anyone read it.

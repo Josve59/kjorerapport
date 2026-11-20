@@ -125,16 +125,18 @@ export const SEND_ERROR = {
   nett: 'Ingen nettilkobling. Prøv igjen når du er på nett.',
   server: 'Kunne ikke sende turen akkurat nå. Prøv igjen om litt.'
 };
-export async function sendTripToDev(json, { id, start, version } = {}) {
+export async function sendTripToDev(json, { id, start, version, testBuild = false } = {}) {
   const sk = getSettings().skolekode;
-  if (!sk || !sk.kode || !codesEnabled()) return { error: 'ukjent' };
+  // Testversjonen (0.27.9) sender uten kode; serveren godtar det bare fra testadressen
+  if (!testBuild && (!sk || !sk.kode)) return { error: 'ukjent' };
+  if (!codesEnabled()) return { error: 'ukjent' };
   let body = new TextEncoder().encode(json), gz = false;
   if (typeof CompressionStream === 'function') {
     try { body = new Uint8Array(await new Response(new Blob([body]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()); gz = true; } catch { /* sendes ukomprimert */ }
   }
   let r;
   try {
-    r = await fetch(serverUrl() + '/v1/tur', { method: 'POST', body, headers: { 'Content-Type': 'application/octet-stream', 'X-Kode': sk.kode, 'X-Install': installId(), 'X-Tur': String(id || ''), 'X-Start': String(start || ''), 'X-Versjon': String(version || ''), 'X-Gzip': gz ? '1' : '0' } });
+    r = await fetch(serverUrl() + '/v1/tur', { method: 'POST', body, headers: { 'Content-Type': 'application/octet-stream', ...(sk && sk.kode ? { 'X-Kode': sk.kode } : { 'X-Testbygg': '1' }), 'X-Install': installId(), 'X-Tur': String(id || ''), 'X-Start': String(start || ''), 'X-Versjon': String(version || ''), 'X-Gzip': gz ? '1' : '0' } });
   } catch { return { error: 'nett' }; }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) return { error: SEND_ERROR[data.error] ? data.error : 'server' };
