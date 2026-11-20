@@ -22,7 +22,7 @@ export const GUIDES = [
       ['Fast holder rett ved rattet', 'så nær førerens vanlige synsfelt som mulig, men uten å skjule utsynet gjennom frontruta. Det er kravet i forskriften om mobiltelefon i bil. Ikke midt på dashbordet mot passasjersiden, og ikke på kollisjonsputene.'],
       ['Stødig og stående.', 'En telefon som vipper eller ligger løst, gir falske bremser og svinger. Med kameraet på skal det se føreren.'],
       ['Lader i', 'på lange turer. GPS, skjerm og kamera bruker mye strøm.'],
-      ['Gå ut av andre apper', 'og la Kjørerapport stå åpen. I iPhone-appen fortsetter opptaket også med låst skjerm.']
+      ['Gå ut av andre apper', 'og la Kjørerapport stå åpen. I iPhone-appen fortsetter opptaket også med låst skjerm. I nettleseren (også på Android) må skjermen stå på og appen være åpen.']
     ]
   },
   {
@@ -52,7 +52,7 @@ export const GUIDES = [
     lead: 'Turene ligger bare på denne telefonen.',
     when: c => c.unbacked >= 3,
     steps: [
-      ['Ta kopi', 'under Innstillinger › Sikkerhetskopi. Lagre filen i Filer, iCloud Drive eller send den til deg selv.'],
+      ['Ta kopi', 'under Innstillinger › Sikkerhetskopi. Lagre filen i Filer eller iCloud Drive (iPhone), i Google Disk (Android), eller send den til deg selv.'],
       ['Ny telefon?', 'Velg «Gjenopprett» og filen, så kommer turene og innstillingene tilbake.']
     ]
   },

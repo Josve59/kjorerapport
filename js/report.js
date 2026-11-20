@@ -458,7 +458,7 @@ export function renderReport(root, r, ctx = {}) {
         <ul class="diag">
           <li>Bevegelsesdata: ${diag.motionEvents ? `${n1(diag.motionHz)} per sekund` : 'ingen'}${diag.hasGyro ? ', med gyroskop' : ', <strong>uten gyroskop</strong>'}${diag.hasLinearAcc ? ', med lineær akselerasjon' : ', <strong>uten lineær akselerasjon</strong>'}${diag.hasIncGravity ? '' : ', <strong>uten tyngdekraft</strong>'}</li>
           <li>GPS: ${diag.gpsFixes} posisjoner (${n1(diag.gpsHz)} per sekund)${Number.isFinite(diag.gpsMedianAcc) ? `, typisk nøyaktighet ${diag.gpsMedianAcc} m` : ''}</li>
-          <li>Skjermen holdes på (Wake Lock): ${esc(diag.wakeLock)} · Hjem-skjerm: ${diag.standalone ? 'ja' : 'nei'}${diag.replay ? ' · avspilt demo' : ''}</li>
+          <li>Skjermen holdes på (Wake Lock): ${esc(diag.wakeLock)} · Installert: ${diag.standalone ? 'ja' : 'nei'}${diag.replay ? ' · avspilt demo' : ''}</li>
           ${diag.appVersion ? `<li>Appversjon ved opptak: ${esc(diag.appVersion)}</li>` : ''}
           <li class="muted small">${esc(diag.userAgent || '')}</li>
         </ul>` : ''}

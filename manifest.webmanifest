@@ -1,4 +1,5 @@
 {
+  "id": "./",
   "name": "Kjørerapport",
   "short_name": "Kjørerapport",
   "description": "Tar opp en kjøretur med telefonens sensorer og gir føreren en tilbakemeldingsrapport.",

@@ -2,6 +2,7 @@
 import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
 import { practiceSpans, rescore, inSpans } from './practice.js';
 import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, SEND_ERROR, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
+import { isAndroid, installHelp, permissionHelp, screenLockHelp } from './platform.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
 import { seedDemo } from './demo.js';
@@ -9,7 +10,7 @@ import { renderReport, closeMapOverlay, trendChart, categoryTrendChart, eventsPe
 import { enrichDrive, enrichMotorway, evaluateRoad, ROAD_V, LIMITS_V, MOTOR_V } from './enrich.js';
 import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } from './insights.js';
 import { esc, km, n0, n1, date, duration, mss } from './format.js';
-import { icon, toast, confirmDialog, infoDialog, promptDialog, formDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking } from './ui.js';
+import { icon, toast, confirmDialog, infoDialog, promptDialog, formDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking, hasNorwegianVoice } from './ui.js';
 import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL, insuranceLog, INSURANCE_KM } from './log.js';
 import { teacherSummary, teacherText, teacherHtml } from './teacher.js';
 import * as cam from './facecam.js';
@@ -36,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.27.5';
+export const APP_VERSION = '0.27.6';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -643,8 +644,8 @@ async function renderPlus(feature = null) {
     if (!st.native && feature === 'theory' && !hasTheory()) {
       root.innerHTML = `
         <section class="plus-hero"><span class="plus-badge">${icon('check', 18)}Pluss</span>
-          <h2>Teorien er en del av Pluss i iPhone-appen</h2>
-          <p>Her kan du prøve 10 gratis spørsmål. Alle 420 spørsmålene, prøvene, teoriboka, skiltprøven og sikkerhetskontrollen finnes i iPhone-appen Kjørerapport, med Pluss.</p></section>
+          <h2>Hele teorien låses opp med en kode</h2>
+          <p>Her kan du prøve 10 gratis spørsmål. Alle 420 spørsmålene, prøvene, teoriboka, skiltprøven og sikkerhetskontrollen låses opp med en kode fra trafikkskolen.${isAndroid() ? '' : ' På iPhone finnes de også i appen Kjørerapport, med Pluss.'}</p></section>
         ${codesEnabled() ? '<button type="button" class="btn primary" id="plus-school">Jeg har en kode fra trafikkskolen</button>' : ''}
         <button type="button" class="btn secondary" id="plus-back">Tilbake</button>`;
       root.querySelector('#plus-back').onclick = () => goBack();
@@ -653,21 +654,27 @@ async function renderPlus(feature = null) {
     }
     // Tilgang fra trafikkskolen vises når den er grunnen til Pluss (nettversjonen regner seg alltid som «kjøpt»)
     const school = st.school && (!st.native || !st.owned) ? st.school : null;
+    // Nettversjonen uten kode (0.27.6): alt er gratis der unntatt teorien. Før sto det «Du har Pluss. Takk! … for hele
+    // familien med Familiedeling», som ikke stemmer på Android eller i en nettleser.
+    const webFree = !st.native && !school;
+    const hasIt = k => owned && !(webFree && k === 'theory');
     root.innerHTML = `
       <section class="plus-hero">
         <span class="plus-badge">${icon('check', 18)}Pluss</span>
-        <h2>${school ? 'Du har Pluss fra trafikkskolen' : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
-        <p>${school ? `Fra ${esc(school.skole)}, til ${esc(longDay(school.exp))}. Alt i appen er låst opp.` : owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
+        <h2>${school ? (school.tester ? 'Du tester Kjørerapport' : 'Du har Pluss fra trafikkskolen') : webFree ? 'Nettversjonen' : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
+        <p>${school ? (school.tester ? `Full tilgang til ${esc(longDay(school.exp))}. Takk for at du tester!` : `Fra ${esc(school.skole)}, til ${esc(longDay(school.exp))}. Alt i appen er låst opp.`) : webFree ? 'Her er alt gratis, unntatt teorien. Teorien får du i iPhone-appen med Pluss, eller med en kode fra trafikkskolen.' : owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
       </section>
-      <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${owned ? `<span class="plus-ok">${icon('check', 18)}</span>` : ''}</div>`; }).join('')}</section>
+      <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${hasIt(k) ? `<span class="plus-ok">${icon('check', 18)}</span>` : owned ? `<span class="lock-tag">${icon('lock', 14)}Kode</span>` : ''}</div>`; }).join('')}</section>
+      ${webFree && codesEnabled() ? '<button type="button" class="btn secondary" id="plus-school">Jeg har en kode fra trafikkskolen</button>' : ''}
       ${owned ? `<button type="button" class="btn secondary" id="plus-back">Tilbake</button>` : `
       <button type="button" class="btn primary plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
       <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse.'}</p>`}
       ${owned ? '' : `
       <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button>${codesEnabled() && st.native ? '<button type="button" class="link" id="plus-appcode">App Store-kode</button>' : ''}</div>`}
-      <p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>`;
+      ${st.native ? `<p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>` : ''}`;
     const back = root.querySelector('#plus-back');
     if (back) back.onclick = () => goBack();
+    const sc = root.querySelector('#plus-school'); if (sc) sc.onclick = () => schoolCode(sc);
     const act = async (btn, fn, okText) => {
       btn.disabled = true; const old = btn.textContent; btn.textContent = 'Venter på App Store …';
       const r = await fn();
@@ -862,7 +869,7 @@ async function renderCamera() {
       return true;
     } catch (err) {
       status.textContent = '';
-      infoDialog({ title: 'Kameraet startet ikke', text: err && err.name === 'NotAllowedError' ? 'Tilgang til kameraet ble avslått. Tillat kamera i iPhone-innstillingene (Innstillinger › Kjørerapport › Kamera, eller Safari › Kamera i nettleseren), og prøv igjen.' : String(err && err.message || err) });
+      infoDialog({ title: 'Kameraet startet ikke', text: err && err.name === 'NotAllowedError' ? `Tilgang til kameraet ble avslått. ${permissionHelp('camera')} Prøv så igjen.` : String(err && err.message || err) });
       return false;
     }
   };
@@ -891,6 +898,11 @@ function unlockSpeech() { if ('speechSynthesis' in window) speak(' '); }
    fordi føreren ser i speilene og ikke på skjermen. Returnerer kalibreringen, eller null. */
 let calibAbort = null;   // releaseOverlays avbryter kalibreringen når brukeren går til en annen side (0.11.3)
 async function runCalibration() {
+  // Kalibreringen leser opp hvor man skal se (0.27.6): mange Android-telefoner har ingen norsk stemme. Si det før, én gang.
+  if (hasNorwegianVoice() === false && !getSettings().voiceWarned) {
+    saveSettings({ ...getSettings(), voiceWarned: true });
+    await infoDialog({ title: 'Telefonen har ingen norsk stemme', text: `Kalibreringen leser opp hvor føreren skal se. Uten norsk stemme blir det engelsk tale eller ingenting, så følg teksten på skjermen. ${isAndroid() ? 'Slik får du norsk: Innstillinger › Tilgjengelighet › Tekst-til-tale › velg Google som motor, og last ned norsk.' : 'Slik får du norsk: Innstillinger › Tilgjengelighet › Opplest innhold › Stemmer › Norsk.'}` });
+  }
   const overlay = $('#calib-overlay'), stepEl = $('#calib-step'), count = $('#calib-count'), progress = $('#calib-progress'), face = $('#calib-face');
   const wait = ms => new Promise(r => setTimeout(r, ms));
   let cancelled = false;
@@ -1239,6 +1251,9 @@ async function sendMessages(key) {
   const pkg = buildPackage({ from: { role: me(), name: myName() || (isTeacher() ? 'Trafikklæreren' : 'Eleven'), id: myId }, to: isTeacher() ? key : '', messages: pending, drives, homework, theory, appVersion: APP_VERSION });
   const ok = await shareFile(toJSON(pkg), packageName(isTeacher() ? key : myName() || 'til-laereren'));
   if (!ok) { toast('Meldingen er lagret, men ikke sendt. Trykk «Send nå» når du vil sende den.', { ms: 3500 }); return false; }
+  if (ok === 'downloaded' && !(await confirmDialog({ title: 'Filen er lagret', text: `Nettleseren kunne ikke dele filen direkte, så den ligger i ${DOWNLOAD_PLACE()}. Send den som vedlegg på e-post, SMS eller Messenger til ${isTeacher() ? key : 'læreren'}. Har du sendt den?`, ok: 'Ja, den er sendt', cancel: 'Ikke ennå' }))) {
+    toast('Meldingen står som ikke sendt. Trykk «Send nå» når du vil prøve igjen.', { ms: 3500 }); return false;
+  }
   const done = new Set(pending.map(m => m.id));
   saveThread(key, threadOf(getSettings(), key).map(m => (done.has(m.id) ? { ...m, sent: true } : m)));
   toast(isTeacher() ? `Sendt. ${key} åpner filen i Kjørerapport.` : 'Sendt. Læreren åpner filen i Kjørerapport.', { type: 'ok', ms: 3000 });
@@ -1324,8 +1339,8 @@ function threadCardHtml(thread, { title, mine, empty, all = false }) {
           <button type="button" class="btn ${mine === 'elev' ? 'primary' : 'secondary'} small-btn" id="btn-msg-send">Send</button>
         </div>
       </div>
-      <label class="btn secondary file-btn small-btn">${icon('upload', 18)}${mine === 'laerer' ? 'Åpne melding fra fil' : 'Åpne svar fra fil'}<input type="file" id="msg-file" accept="application/json,.json"></label>
-      <p class="muted small">Meldingen sendes som en fil med Meldinger, AirDrop eller e-post. ${window.kjNative ? 'Mottakeren trykker på filen, velger Del og så Kjørerapport, så havner den her.' : 'Mottakeren åpner filen i Kjørerapport: i iPhone-appen med Del og Kjørerapport, i nettleseren med knappen over.'} Turen sendes med posisjoner og hendelser, men uten bilder.</p>
+      <label class="btn secondary file-btn small-btn">${icon('upload', 18)}${mine === 'laerer' ? 'Åpne melding fra fil' : 'Åpne svar fra fil'}<input type="file" id="msg-file" accept=".json,application/json,text/plain,application/octet-stream"></label>
+      <p class="muted small">${isAndroid() ? 'Meldingen sendes som en fil på e-post, SMS eller Messenger.' : 'Meldingen sendes som en fil med Meldinger, AirDrop eller e-post.'} ${window.kjNative ? 'Mottakeren trykker på filen, velger Del og så Kjørerapport, så havner den her.' : 'Mottakeren åpner filen i Kjørerapport: i iPhone-appen med Del og Kjørerapport, i nettleseren med knappen over.'} Turen sendes med posisjoner og hendelser, men uten bilder.</p>
     </section>`;
 }
 /* Kobler skrivefeltet, vedlegg, send og åpne fil. key: samtalen, rerender: tegn siden på nytt */
@@ -1367,7 +1382,7 @@ function periodHtml(mode, lesson) {
         <label><input type="radio" name="tperiod" value="30" ${mode === '30' ? 'checked' : ''}><span>30 dager</span></label>
         <label><input type="radio" name="tperiod" value="all" ${mode === 'all' ? 'checked' : ''}><span>Alt</span></label>
       </div>
-      <label class="field">Forrige kjøretime<span class="date-wrap${lesson ? ' has-value' : ''}" id="t-lesson-wrap"><input type="date" id="t-lesson" value="${esc(lesson.slice(0, 10))}"><span class="date-ph" aria-hidden="true">Velg dato</span></span></label>
+      <label class="field">Forrige kjøretime<span class="date-wrap${lesson ? ' has-value' : ''}" id="t-lesson-wrap"><input type="date" id="t-lesson" value="${esc(lesson.slice(0, 10))}">${isIOS() ? '<span class="date-ph" aria-hidden="true">Velg dato</span>' : ''}</span></label>
     </section>`;
 }
 /* Oppsummeringen av øvingen i perioden, med utskrift, deling og «Timen er ferdig». Svarer radene (turene). */
@@ -1454,7 +1469,7 @@ async function renderStudentList() {
     ${newMsgs ? `<p class="notice small">${icon('mail', 16)} ${newMsgs === 1 ? 'Én ny melding' : `${newMsgs} nye meldinger`} fra elever. De står øverst med «Trenger oppfølging».</p>` : ''}
     <div class="st-actions">
       <button type="button" class="btn primary small-btn" id="btn-st-add">${icon('plus', 18)}Legg til elev</button>
-      <label class="btn secondary file-btn small-btn">${icon('upload', 18)}Åpne melding<input type="file" id="st-file" accept="application/json,.json"></label>
+      <label class="btn secondary file-btn small-btn">${icon('upload', 18)}Åpne melding<input type="file" id="st-file" accept=".json,application/json,text/plain,application/octet-stream"></label>
     </div>`;
   const draw = () => {
     const list = filterStudents(sortStudents(act, sort), studentQuery);
@@ -1825,6 +1840,12 @@ function renderInstallHint() {
       <button type="button" class="btn secondary" id="btn-install">Installer Kjørerapport</button>
       <button type="button" class="link" id="btn-hide-install">Ikke nå</button>`;
     $('#btn-install').onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; el.hidden = true; };
+  } else if (isAndroid()) {
+    // Android uten installer-knapp (0.27.6): Samsung Internet, Firefox, eller Chrome før den tilbyr installering
+    const help = installHelp();
+    if (!help) { el.hidden = true; return; }
+    el.innerHTML = `<p><strong>${esc(help.title)}</strong> for eget ikon og bruk uten nett: ${esc(help.how)}.</p>
+      <button type="button" class="link" id="btn-hide-install">Skjul dette</button>`;
   } else if (isIOS()) {
     el.innerHTML = `<p><strong>Legg til på Hjem-skjerm</strong> for eget ikon og bruk uten nett: trykk Del-knappen <span class="share-glyph" aria-hidden="true">⎙</span> nederst i Safari, og velg «Legg til på Hjem-skjerm».</p>
       <p class="small"><strong>Viktig:</strong> Safari kan slette lagrede turer etter 7 dager uten bruk hvis appen ikke ligger på Hjem-skjermen. Ta en sikkerhetskopi i Innstillinger.</p>
@@ -1904,7 +1925,7 @@ function renderPrecheck() {
     let motion = await requestMotionPermission();
     // Startet av appen selv (uten trykk) kan ikke spørsmålet stilles på nytt: da avgjør sensordataene om det virker
     if (ev && ev.auto && motion === 'denied') motion = 'unknown';
-    if (motion === 'denied') setCheck(mot, false, 'Tilgang avslått. Slå på «Bevegelse og retning» i Safari-innstillingene.');
+    if (motion === 'denied') setCheck(mot, false, `Tilgang avslått. ${permissionHelp('motion')}`);
     else if (motion === 'unsupported') setCheck(mot, false, 'Ingen bevegelsessensorer på denne enheten');
     else setCheck(mot, null, 'Venter på data …');
     if (motion !== 'denied' && motion !== 'unsupported' && !getSettings().permOk) saveSettings({ ...getSettings(), permOk: true });
@@ -1912,7 +1933,7 @@ function renderPrecheck() {
       await requestLocationOnce();
       setCheck(gps, null, 'Venter på god nok nøyaktighet …');
     } catch (err) {
-      setCheck(gps, false, err.code === 1 ? 'Posisjonstilgang avslått. Tillat posisjon for denne appen i Innstillinger.' : 'Fikk ikke posisjon. Prøv der telefonen ser himmelen.');
+      setCheck(gps, false, err.code === 1 ? `Posisjonstilgang avslått. ${permissionHelp('location')}` : isAndroid() ? 'Fikk ikke posisjon. Er Posisjon slått på? Dra ned fra toppen av skjermen og slå på Posisjon.' : 'Fikk ikke posisjon. Prøv der telefonen ser himmelen.');
     }
     if (leftDuringStart('#/sjekk')) return;
     if (camWanted()) {
@@ -1962,16 +1983,22 @@ function renderPrecheck() {
     const since = performance.now();
     const fixMotion = $('#btn-motion-fix');
     fixMotion.hidden = true;
-    fixMotion.onclick = async () => { const r = await requestMotionPermission(); if (r === 'granted') { motion = 'granted'; fixMotion.hidden = true; setCheck(mot, null, 'Venter på data …'); } else setCheck(mot, false, 'Tilgang avslått. Slå på «Bevegelse og retning» for appen i Innstillinger.'); };
+    fixMotion.onclick = async () => { const r = await requestMotionPermission(); if (r === 'granted') { motion = 'granted'; fixMotion.hidden = true; setCheck(mot, null, 'Venter på data …'); } else setCheck(mot, false, `Tilgang avslått. ${permissionHelp('motion')}`); };
     stopPrecheck = startPrecheck(st => {
       const waited = (performance.now() - since) / 1000;
       if (st.gpsError) setCheck(gps, false, st.gpsError.code === 1 ? 'Posisjonstilgang avslått' : 'Ingen GPS-signal');
       else if (Number.isFinite(st.acc)) setCheck(gps, st.gpsOk, `${n0(st.acc)} m nøyaktighet${st.gpsOk ? '' : ' (må være 20 m eller bedre' + (waited > 10 ? ' – blir ofte bedre når bilen står stille ute)' : ')')}`);
       // Ingen data etter 3 s (f.eks. når siden ble åpnet uten trykk): én knapp som ber om tilgangen i et trykk
       const noMotion = !st.motionSeen && waited > 3 && motion !== 'unsupported';
-      fixMotion.hidden = !noMotion;
-      if (noMotion) setCheck(mot, null, 'Får ingen bevegelsesdata. Trykk på knappen under.');
-      else if (motion !== 'denied' && motion !== 'unsupported') setCheck(mot, st.motionOk, st.motionOk ? 'Bevegelsesdata mottas' : 'Ingen bevegelsesdata ennå – beveg telefonen litt');
+      // Knappen hjelper bare der nettleseren kan spørre (iPhone). Uten slik spørsmål (Android) er sensorene blokkert i
+      // nettleseren, og knappen ville bare komme tilbake igjen og igjen (0.27.6): da står veiledningen der i stedet.
+      const canAsk = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && !isAndroid();
+      fixMotion.hidden = !noMotion || !canAsk;
+      if (noMotion) setCheck(mot, canAsk ? null : false, canAsk ? 'Får ingen bevegelsesdata. Trykk på knappen under.' : `Får ingen bevegelsesdata. ${permissionHelp('motion')} Last så siden på nytt.`);
+      // Kommer dataene, er alt i orden, uansett hva nettleseren svarte på spørsmålet om tilgang (0.27.6: enkelte
+      // nettlesere svarer «avslått» selv om sensorene sender)
+      else if (st.motionOk) setCheck(mot, true, 'Bevegelsesdata mottas');
+      else if (motion !== 'denied' && motion !== 'unsupported') setCheck(mot, false, 'Ingen bevegelsesdata ennå – beveg telefonen litt');
       if (st.steady === null) setCheck(hold, null, 'Venter på bevegelsesdata');
       else setCheck(hold, st.steady, st.steady ? 'Telefonen står stødig' : 'Telefonen beveger seg – fest den i holderen og slipp den');
       btnStart.disabled = !(st.gpsOk && st.motionOk);
@@ -2199,7 +2226,7 @@ async function startRecording(replay = null) {
       if (gapShown && recorder && !recorder.gaps.includes(gapShown)) { gapShown = null; gapMsg = ''; }   // iPhone-appen fylte inn hullet
       const msgs = [];
       if (replay) msgs.push(`Demotur: en tenkt tur i Trondheim spilles av i ${replay.speed || 60} ganger fart. Den stopper av seg selv, eller hold inne Stopp.`);
-      if (st.wakeLockFailed && !replay && !window.kjNative) msgs.push('Sett Autolås til Aldri mens du kjører.');   // iPhone-appen holder skjermen på selv
+      if (st.wakeLockFailed && !replay && !window.kjNative) msgs.push(screenLockHelp());   // iPhone-appen holder skjermen på selv; Android har et annet ord enn Autolås
       if (!(st.kmh >= 3) && st.gpsFresh) { if (stillSince === null) stillSince = st.elapsed; } else if (st.kmh >= 3) stillSince = null;
       if (stillSince !== null && st.elapsed - stillSince >= 600) msgs.push(`Dere har stått stille i ${Math.round((st.elapsed - stillSince) / 60)} minutter. Er dere framme eller tar pause? Hold inne Stopp for å avslutte turen, og start en ny etterpå. Da blir rapportene ryddigere.`);
       if (gapMsg) msgs.push(gapMsg);
@@ -3144,7 +3171,7 @@ async function renderSettings() {
   $('#btn-export').onclick = () => exportDrive(sel.value);
   $('#persist-status').textContent = window.kjNative ? 'Turene lagres i appen på denne telefonen. De slettes bare hvis du sletter dem selv eller fjerner appen. Ta kopi før du bytter telefon.'
     : persistState === true ? 'Varig lagring er på. Nettleseren skal ikke slette turene dine.'
-    : persistState === false ? 'Varig lagring: nettleseren sa nei. Legg appen på Hjem-skjermen og ta sikkerhetskopi.'
+    : persistState === false ? (isAndroid() ? 'Varig lagring: nettleseren sa nei. Installer appen (nettleserens meny ⋮ › Installer app) og ta sikkerhetskopi.' : 'Varig lagring: nettleseren sa nei. Legg appen på Hjem-skjermen og ta sikkerhetskopi.')
     : 'Varig lagring: ukjent i denne nettleseren. Ta sikkerhetskopi jevnlig.';
   $('#btn-backup').disabled = !drives.length;
   $('#btn-backup').onclick = () => backupAll(drives);
@@ -3205,6 +3232,7 @@ async function renderSettings() {
     taps = 0;
     if (window.kjNative) { const info = window.kjNative.info ? await window.kjNative.info() : null; if (!info || !info.devTools) return; }
     $('#dev-section').hidden = false;
+    if (!window.kjNative && !getSettings().devUnlocked) { saveSettings({ ...getSettings(), devUnlocked: true }); renderViewModes(); }   // Visning-kortet på nett (0.27.6)
   };
   // Demoen spilles av med telefonen «montert» skrått, så akselerometerdata og v3-motoren også testes.
   $('#btn-play-demo').onclick = () => { startRecording({ data: makeDemo(7, { yaw: 0.7, pitch: 0.35 }), speed: 10 }); location.hash = '#/opptak'; };
@@ -3251,7 +3279,9 @@ function renderDriverSettings() {
 async function viewModesAllowed() {
   // Ikke for testere som kom via testlenken (0.17.1): valget er et verktøy for eieren, og «Gratis» ville skjult Pluss
   if (getSettings().linkSetup) return false;
-  if (!window.kjNative) return true;
+  // Nettversjonen (0.27.6): bare på Macen (localhost) eller etter sju trykk på versjonsnummeret. Før kunne alle på nett
+  // velge «Pluss» her og låse opp teorien, eller «Gratis» og få App Store-knapper som ikke virker.
+  if (!window.kjNative) return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || !!getSettings().devUnlocked;
   const info = window.kjNative.info ? await window.kjNative.info().catch(() => null) : null;
   return !!(info && info.devTools);
 }
@@ -3390,7 +3420,7 @@ async function exportDrive(id) {
   if (!id) return;
   const drive = await getDrive(id);
   const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), ...(await exportPayload(drive)) };
-  await shareFile(toJSON(payload), `kjorerapport-${drive.startedAt.slice(0, 16).replace(/[:T]/g, '-')}.json`);
+  if ((await shareFile(toJSON(payload), `kjorerapport-${drive.startedAt.slice(0, 16).replace(/[:T]/g, '-')}.json`)) === 'downloaded') toast(`Turen er lagret i ${DOWNLOAD_PLACE()}.`, { type: 'ok', ms: 3500 });
 }
 
 async function backupAll(drives) {
@@ -3398,9 +3428,10 @@ async function backupAll(drives) {
   for (const d of drives) items.push(await exportPayload(d));
   const { lastBackupAt, backupSnoozeUntil, ...settings } = getSettings();
   const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), settings, drives: items };
-  if (!(await shareFile(toJSON(payload), `kjorerapport-sikkerhetskopi-${new Date().toISOString().slice(0, 10)}.json`))) { toast('Sikkerhetskopien ble ikke lagret.', { type: 'info' }); return; }
+  const saved = await shareFile(toJSON(payload), `kjorerapport-sikkerhetskopi-${new Date().toISOString().slice(0, 10)}.json`);
+  if (!saved) { toast('Sikkerhetskopien ble ikke lagret.', { type: 'info' }); return; }
   saveSettings({ ...getSettings(), lastBackupAt: new Date().toISOString() });
-  toast(`Sikkerhetskopi med ${items.length} ${items.length === 1 ? 'tur' : 'turer'} og innstillinger er laget.`, { type: 'ok' });
+  toast(`Sikkerhetskopi med ${items.length} ${items.length === 1 ? 'tur' : 'turer'} og innstillinger er laget${saved === 'downloaded' ? `. Den ligger i ${DOWNLOAD_PLACE()}; ta vare på den, for eksempel i Google Disk` : ''}.`, { type: 'ok', ms: saved === 'downloaded' ? 5000 : 2500 });
 }
 
 /* Deler filen (delearket: Filer, AirDrop, e-post), ellers lastes den ned. Svarer false hvis delingen ble avbrutt. */
@@ -3410,11 +3441,13 @@ async function shareFile(json, name) {
     try { await navigator.share({ files: [file], title: 'Kjørerapport' }); return true; }
     catch (e) { if (e && e.name === 'AbortError') return false; }
   }
+  // Uten deling (Android deler ikke JSON-filer, 0.27.6): filen lastes ned. Svaret sier det, så ingen tror den er sendt.
   const a = document.createElement('a');
   a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  return true;
+  return 'downloaded';
 }
+const DOWNLOAD_PLACE = () => (isAndroid() ? 'Nedlastinger (Filer-appen)' : 'Nedlastinger');
 
 /* ---------- Intro ved første start ---------- */
 /* Vises én gang, før første tur. Sidene ligger side om side og sveipes (scroll-snap); knappen og prikkene
@@ -3605,6 +3638,8 @@ function init() {
   // Den gamle adressen på GitHub Pages stenges (0.27.3). Turene ligger i nettleseren per adresse, så de må tas med
   // som sikkerhetskopi.
   if (/\.github\.io$/.test(location.hostname)) $('#moved-banner').hidden = false;
+  // Android (0.27.6): tekster merket android-only / not-android i index.html
+  document.body.classList.toggle('is-android', isAndroid());
   ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress', 'theory', 'insurance'].forEach(n => { screens[n] = document.getElementById(n); });
   // Bevegelsesdata (0.12.4): iPhone gir dem bare etter et trykk. «Start kjøretur» er trykket, så tilgangen bes om her;
   // sjekken før kjøring starter av seg selv uten trykk, og fikk ellers aldri data.

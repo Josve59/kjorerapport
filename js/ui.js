@@ -71,14 +71,26 @@ const P = {
   wrench: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z'
 };
 
+/* Stemmene (0.27.6): Chrome (Android) gir en tom liste første gang; resten kommer med «voiceschanged». */
+let voiceCache = [];
+const loadVoices = () => { try { voiceCache = window.speechSynthesis.getVoices() || []; } catch { voiceCache = []; } return voiceCache; };
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) { loadVoices(); try { window.speechSynthesis.addEventListener('voiceschanged', loadVoices); } catch { /* eldre nettlesere */ } }
+const nordicVoice = vs => vs.find(x => /^(nb|no)/i.test(x.lang)) || vs.find(x => /^(nn|da|sv)/i.test(x.lang));
+/* Har telefonen en norsk (eller nordisk) stemme? true/false, eller null når listen ikke er lastet ennå */
+export function hasNorwegianVoice() {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return false;
+  const vs = voiceCache.length ? voiceCache : loadVoices();
+  return vs.length ? !!nordicVoice(vs) : null;
+}
+
 /* Leser opp tekst med norsk stemme hvis telefonen har en. Returnerer false hvis tale ikke støttes. */
 export function speak(text) {
   if (!('speechSynthesis' in window)) return false;
   const synth = window.speechSynthesis;
   synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  const voices = synth.getVoices();
-  const v = voices.find(x => /^nb|^no/i.test(x.lang)) || voices.find(x => /nn|da|sv/i.test(x.lang));
+  const voices = voiceCache.length ? voiceCache : loadVoices();
+  const v = nordicVoice(voices);
   if (v) u.voice = v;
   u.lang = v ? v.lang : 'nb-NO';
   u.rate = 1;

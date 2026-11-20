@@ -891,3 +891,14 @@ input.switch { background: color-mix(in srgb, var(--muted) 70%, var(--surface-2)
 .axis { font-size: 22px; }
 .axis.big { font-size: 24px; }
 .dev-svg .axis { font-size: 15px; }
+/* Kartkildene i hjørnet (0.27.6): lesbare også i mørk modus (Leaflets egne farger ga 3,2:1) */
+.leaflet-container .leaflet-control-attribution { background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--muted); }
+.leaflet-container .leaflet-control-attribution a { color: var(--link); }
+/* Android (0.27.6): tekster som bare gjelder den ene telefonen (body.is-android settes i init) */
+body:not(.is-android) .android-only, body.is-android .not-android { display: none !important; }
+/* Eldre nettlesere uten color-mix() (Chrome < 111, Samsung Internet < 22): heldekkende bakgrunn i stedet for gjennomsiktig */
+@supports not (background: color-mix(in srgb, red, blue)) {
+  .tabbar, .appbar, .start-bar, .quicknav, .q-dock { background: var(--surface); }
+  .stop-face { background: var(--sign); }
+  .delta-pill.up, .delta-pill.down, .th-pct.ok, .q-timer.low { background: var(--surface-2); }
+}

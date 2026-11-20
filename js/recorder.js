@@ -230,8 +230,13 @@ export class Recorder {
     if (this.lastFix && Number.isFinite(c.accuracy) && c.accuracy <= 50) {
       this.distance += haversine(this.lastFix, sample);
     }
+    const prev = this.lastFix;
     if (Number.isFinite(c.accuracy) && c.accuracy <= 50) this.lastFix = sample;
-    this.speed = sample.speed;
+    // Nettlesere uten fart fra GPS (enkelte Android-nettlesere gir null, 0.27.6): farten på skjermen regnes fra de to
+    // siste gode posisjonene, så fartsmåleren og fartsvarselet virker. Analysen etterpå har sin egen reserve.
+    const dt = prev ? sample.t - prev.t : NaN;
+    this.speed = Number.isFinite(sample.speed) ? sample.speed
+      : prev && Number.isFinite(c.accuracy) && c.accuracy <= 30 && dt >= 0.5 && dt <= 10 ? haversine(prev, sample) / dt : NaN;
     this.lastFixWall = performance.now();
   }
 

@@ -143,6 +143,57 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.6 – the web version and the test link on Android
+
+The owner (20 November): make the test link work well on all phones, including Android, and make the app ready for use across phones.
+
+**How it was tested**
+- **Every screen:** 20 screens in the browser pane with an Android Chrome user agent, at 320, 360 and 412 pt, in light and dark mode. The same automatic checks as the 0.27.2 review ran on each: overflow, clipped text, contrast, tiny text, «undefined/NaN».
+  - Nothing overflowed, and all five tab labels fit at 320 pt.
+  - The only finding was the map credits in dark mode (3.2:1), now fixed.
+- **A new Android user on the live address:** the test link unlocked Pluss and the theory, and the code left the address. Then the check before driving, a recording, «Stopp» and the report all worked. GPS and motion were simulated.
+- **iPhone Safari** (simulator): the test link unlocked the whole theory.
+- **A review agent** read the code for iPhone-only assumptions.
+- **Not tested:** a real Android phone (none here), real Android sensors, Samsung Internet and Firefox.
+
+**Fixed for Android and other browsers**
+- **Files:** Android browsers can't share JSON files, so messages, backups and exports fall back to a download.
+  - Before, a message was then marked «Sendt» although it only sat in Downloads.
+  - Now `shareFile` returns `'downloaded'`. The message flow asks «Har du sendt den?» before marking it sent, and exports and backups say where the file is.
+  - File pickers accept `.json` saved as text or octet-stream.
+- **«Visning (midlertidig)» on the web:** the card showed for every web user, and «Pluss» there unlocked the theory. On the web it now shows only on localhost or after seven taps on the version number.
+- **Pluss page on the web without a code:** it said «Du har Pluss. Takk! … Familiedeling» while the theory was locked.
+  - Now it says «Nettversjonen», marks the theory with «Kode», and offers the code button.
+  - Testers see «Du tester Kjørerapport».
+  - The theory texts on the web say «Låses opp med en kode fra trafikkskolen» instead of «Ett kjøp … for hele familien».
+- **Help that names the right phone** (`js/platform.js`, new): `permissionHelp(camera|location|motion)`, `installHelp()` and `screenLockHelp()` cover the iPhone app, iPhone Safari, and Android Chrome, Samsung Internet and Firefox.
+  - Used for denied camera, location and motion, and for the install hint. Android had no hint unless Chrome fired `beforeinstallprompt`; Samsung Internet and Firefox never got one.
+  - «Sett Autolås til Aldri» is now iPhone only; Android gets «slå av strømsparing, tidsavbrudd for skjermen».
+  - On Android, «fikk ikke posisjon» now asks whether Posisjon is switched on.
+- **Motion check:** if motion data arrives, the check passes whatever the browser said about permission.
+  - On browsers without a permission prompt, the «Slå på bevegelse» button no longer loops; the help text shows instead.
+- **Calibration voice:** voices are loaded through `voiceschanged` (Chrome's list is empty at first).
+  - If the phone has no Norwegian (or Nordic) voice, a one-time note before calibrating says how to get one: Android, Google text-to-speech plus Norwegian; iPhone, Opplest innhold.
+- **Live speed:** when the browser gives no GPS speed, the speed on screen is computed from the last two good fixes, so the speed warning works.
+- **Android-only and iPhone-only texts** (`android-only` / `not-android`):
+  - the sound note: «Lyden følger medievolumet» on Android;
+  - «Påminnelse i bilen» (iPhone Shortcuts) is hidden on Android;
+  - the message text says «e-post, SMS eller Messenger»;
+  - the guides mention Google Disk, and that the screen must stay on in a browser;
+  - the «Velg dato» overlay only on iPhone;
+  - «Installert» instead of «Hjem-skjerm» in diagnostics.
+- **The help page** has a new «Jeg har Android eller bruker nettleseren» section.
+- **Manifests and head:**
+  - `"id": "./"` in both manifests, so Android doesn't treat the two start URLs as two apps;
+  - `<meta name="color-scheme" content="light dark">`;
+  - solid fallbacks for the tab bar, app bar, docks and the stop button in browsers without `color-mix()` (Chrome < 111, Samsung Internet < 22).
+- **Tests:** `tests/platform.test.mjs` checks recognition and help texts for Pixel Chrome, Samsung Internet, Firefox Android, iPhone Safari and the app (306 tests in all).
+
+**Not changed:**
+- Pinch-zoom stays off (`user-scalable=no`): turning it on would also let the iPhone app's web view zoom.
+- The road camera assumes the iPhone lens (about 66°). On Android, `facingMode: environment` can pick the wide-angle lens, so distances in the road-camera test can be off. Tell Android testers.
+- Vibration has never run before (the iPhone ignores it) and now will on Android. Worth a feel on a real phone.
+
 ## What's new in 0.27.5 – testers can send a drive to the developer
 
 The owner (20 November) asked whether they can get the reports of the people who use the app. They can't: drives stay on the user's phone, and neither GitHub nor Cloudflare receives anything. The owner chose a send button for testers only.
