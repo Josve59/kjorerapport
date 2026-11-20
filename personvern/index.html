@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Personvern – Kjørerapport</title>
-  <meta name="description" content="Hvordan Kjørerapport behandler data: alt lagres på telefonen, uten konto og uten server.">
+  <meta name="description" content="Hvordan Kjørerapport behandler data: turene lagres på telefonen, uten konto og uten sporing.">
   <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../css/side.css">
 </head>
@@ -16,8 +16,8 @@
 
   <main class="doc">
     <h1>Personvern</h1>
-    <p class="lead">Kort fortalt: Kjørerapport har ingen konto, ingen server og ingen sporing. Turene dine blir liggende på din egen telefon.</p>
-    <p class="muted small">Sist oppdatert 14. november 2026. Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
+    <p class="lead">Kort fortalt: Kjørerapport har ingen konto og ingen sporing, og turene dine sendes ikke til oss. De blir liggende på din egen telefon.</p>
+    <p class="muted small">Sist oppdatert 20. november 2026. Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
 
     <h2>Hva appen lagrer</h2>
     <p>Når ledsageren starter et opptak, lagrer appen dette på telefonen:</p>
@@ -38,7 +38,8 @@
         <tr><td>Kart fra Kartverket</td><td>Hvilke kartruter som vises, altså omtrent hvor turen gikk</td><td>Når en rapport med kart åpnes. Kan slås av.</td></tr>
         <tr><td>Veidata fra Statens vegvesen (NVDB)</td><td>Rutens posisjoner, for å hente fartsgrenser, motorveier, vikeplikt, stoppskilt, rundkjøringer, gangfelt, fartsdempere, lyskryss, fotobokser, strekningsmålinger og enkelte skilt. Under kjøring også et område på rundt 4,5 × 4,5 km rundt bilen, for å vise fartsgrensen på skjermen (og fotobokser og strekningsmåling, hvis «Varsel om fotobokser» er slått på). Med veikameraet på spør appen i tillegg om et lite område på rundt 130 × 130 m rundt bilen, hver 100. meter eller hvert minutt, for å vite hvor mange felt veien har. Spørsmålene har ingen navn eller ID, men området viser omtrent hvor bilen er.</td><td>Når «Fartsgrense og veidata» er på. På som standard, kan slås av under Innstillinger.</td></tr>
         <tr><td>Stedsnavn fra Kartverket</td><td>Posisjonen til hendelser og merker, for å finne gatenavn</td><td>Når «Stedsnavn» er på. På som standard, kan slås av under Innstillinger.</td></tr>
-        <tr><td>GitHub Pages (bare nettversjonen)</td><td>Vanlige tekniske opplysninger når nettversjonen lastes ned, som IP-adresse. iPhone-appen lastes ned fra App Store.</td><td>Når nettversjonen åpnes første gang og ved oppdateringer</td></tr>
+        <tr><td>Skolekode-serveren hos Cloudflare (bare med kode fra trafikkskolen)</td><td>Koden og en tilfeldig nøkkel for denne installasjonen av appen. Serveren lagrer koden, skolens navn, når koden ble tatt i bruk og nøkkelen, ikke navn eller turer. Som alle nettjenester ser Cloudflare vanlige tekniske opplysninger, som IP-adresse.</td><td>Når koden skrives inn, og så omtrent én gang i uka for å sjekke at den fortsatt gjelder</td></tr>
+        <tr><td>GitHub Pages eller Cloudflare (bare nettversjonen)</td><td>Vanlige tekniske opplysninger når nettversjonen lastes ned, som IP-adresse. Nettversjonen ligger begge steder. iPhone-appen lastes ned fra App Store.</td><td>Når nettversjonen åpnes første gang og ved oppdateringer</td></tr>
       </tbody>
     </table>
     </div>
@@ -53,16 +54,17 @@
 
     <h2>Kjøp i appen (Kjørerapport Pluss)</h2>
     <p>Kjøp i iPhone-appen går gjennom App Store, med Apple-ID-en din. Apple tar seg av betalingen, og appen får bare vite om Pluss er kjøpt. Vi ser ikke hvem som har kjøpt, og får ingen betalingsopplysninger. Apples egne vilkår og personvernregler gjelder for kjøpet.</p>
+    <p><strong>Kode fra trafikkskolen.</strong> Har trafikkskolen gitt deg en kode, sjekkes den mot vår server hos Cloudflare (se tabellen over). Serveren vet hvilken skole koden hører til, men ikke hvem du er. Vi ser hvor mange av skolens koder som er tatt i bruk, som grunnlag for fakturaen til skolen, men ikke hvem som bruker dem eller turene deres.</p>
 
     <h2>Deling er ditt valg</h2>
     <p>Du kan dele en rapport, skrive den ut som PDF, eksportere en tur eller ta sikkerhetskopi. Da bestemmer du selv hvem som får filen, for eksempel trafikklæreren. Fra da av gjelder mottakerens egne regler.</p>
-    <p><strong>Meldinger til og fra trafikklæreren</strong> sendes også som en fil du selv deler (Meldinger, AirDrop eller e-post). Det går ikke via oss, og det finnes ingen server. Legger du ved en tur, får læreren turens posisjoner, fart, hendelser og poeng, og det ledsageren har merket og skrevet. Bilder og rådata fra sensorene sendes ikke. En melding fra eleven har også med hvor langt eleven har kommet i teorien, og en tilfeldig kode som telefonen lager, så læreren kjenner eleven igjen. Koden sier ingenting om hvem eleven er. Meldingene ligger på begge telefonene til de slettes. Filene som er sendt, ligger også i Meldinger, Mail eller Filer til dere sletter dem der. Når læreren merker at eleven har fått lappen eller er ferdig med opplæringen, slettes alt om eleven fra lærerens telefon med en gang: turene, meldingene, leksene, timene og notatene.</p>
+    <p><strong>Meldinger til og fra trafikklæreren</strong> sendes også som en fil du selv deler (Meldinger, AirDrop eller e-post). Det går ikke via oss, og det finnes ingen server for meldingene. Legger du ved en tur, får læreren turens posisjoner, fart, hendelser og poeng, og det ledsageren har merket og skrevet. Bilder og rådata fra sensorene sendes ikke. En melding fra eleven har også med hvor langt eleven har kommet i teorien, og en tilfeldig kode som telefonen lager, så læreren kjenner eleven igjen. Koden sier ingenting om hvem eleven er. Meldingene ligger på begge telefonene til de slettes. Filene som er sendt, ligger også i Meldinger, Mail eller Filer til dere sletter dem der. Når læreren merker at eleven har fått lappen eller er ferdig med opplæringen, slettes alt om eleven fra lærerens telefon med en gang: turene, meldingene, leksene, timene og notatene.</p>
 
     <h2>Sletting</h2>
     <ul>
       <li>Slett én tur fra rapporten.</li>
-      <li>Slett alle turer under Innstillinger → Data → «Slett alle turer». Navn, innstillinger, teori og meldinger blir liggende.</li>
-      <li>Slett alt under Innstillinger → Data → «Slett alt i appen»: turer, navn, elever, meldinger, teori, kalibrering, innstillinger og lagret kart.</li>
+      <li>Slett alle turer under Innstillinger → Avansert → Data → «Slett alle turer». Navn, innstillinger, teori og meldinger blir liggende.</li>
+      <li>Slett alt under Innstillinger → Avansert → Data → «Slett alt i appen»: turer, navn, elever, meldinger, teori, kalibrering, innstillinger og lagret kart.</li>
       <li>Trafikklæreren: «har fått lappen» eller «Slett eleven» på elevsiden sletter alt om eleven med en gang.</li>
       <li>iPhone-appen: sletter du appen, forsvinner alle turene med den.</li>
       <li>Nettversjonen: fjerner du appen fra Hjem-skjermen og nettstedsdata i nettleseren, forsvinner alt.</li>

@@ -838,3 +838,57 @@ body.has-tabbar.is-demo #app { padding-bottom: calc(132px + env(safe-area-inset-
   .ins-list { break-inside: auto; }
   .ins-table tr { break-inside: avoid; }
 }
+
+/* ---- 0.27.2: kontrast og størrelser fra full gjennomgang (simulator og målt kontrast, lys og mørk modus) ---- */
+/* Nedtonet innhold: bare grafikken tones ned, teksten beholder kontrasten (før 2,5:1 med opacity .55) */
+.drive.locked, .merke.locked { opacity: 1; }
+.drive.locked .badge, .merke.locked .badge-ico { opacity: .45; }
+.drive.locked .drive-main strong { color: var(--muted); }
+.drive.locked .drive-main strong::after { content: none; }
+.drive.locked .drive-main::after { content: 'Krever Pluss'; font-size: .8rem; font-weight: 700; color: var(--muted); }   /* før kuttet av ellipsen på smale skjermer */
+.flow-step[data-state="todo"] .flow-body { opacity: 1; color: var(--muted); }
+.th-tile:disabled { opacity: 1; }
+.th-tile:disabled .th-tile-fig { opacity: .5; }
+.q-opt.dim { opacity: .72; }   /* de andre svarene kan fortsatt leses etter svaret */
+.btn:disabled { opacity: 1; background: var(--surface-2); color: var(--muted); box-shadow: none; }
+/* Hvitt på de lyse signalfargene i mørk modus ga 2,1–2,7:1 */
+.rd-ok, .beta-tag, .cam-label[data-cls="left"], .cam-label[data-cls="right"], .cam-label[data-cls="rear"],
+.cam-label[data-cls="shoulderL"], .cam-label[data-cls="shoulderR"], .cam-label[data-cls="none"] { color: var(--on-color); }
+[data-state="fail"] .check-icon::before, [data-state="fail"] .check-icon::after { background: var(--on-color); }
+.beta-tag { font-size: .8rem; }
+:root { --toast-ok: #56b37c; --toast-err: #e3654e; }
+:root[data-theme="dark"] { --toast-ok: #23784a; --toast-err: #c0392b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --toast-ok: #23784a; --toast-err: #c0392b; } }
+.toast-ok .ico { color: var(--toast-ok); } .toast-error .ico { color: var(--toast-err); }
+.stop { --sign: #c8102e; }   /* samme rød som et ekte stoppskilt også i mørk modus: hvitt gir 5,9:1 */
+.stop-hint { opacity: 1; }
+/* Lyse pastellmerker i lys modus: litt mindre farge bak, så teksten når 4,5:1 */
+.delta-pill.up { background: color-mix(in srgb, var(--good) 10%, var(--surface)); }
+.delta-pill.down { background: color-mix(in srgb, var(--brake) 10%, var(--surface)); }
+.th-pct.ok { background: color-mix(in srgb, var(--good) 10%, var(--surface)); }
+.st-flag.warn { background: color-mix(in srgb, var(--turn) 10%, transparent); }
+.q-hard { background: color-mix(in srgb, var(--brake) 9%, transparent); }
+.q-timer.low { background: color-mix(in srgb, var(--brake) 10%, var(--surface)); }
+/* Skjemafelt og brytere som synes (3:1 mot kortet) */
+::placeholder { color: var(--muted); opacity: 1; }
+input.switch { background: color-mix(in srgb, var(--muted) 70%, var(--surface-2)); }
+/* Lenkefarge for «Endre» og guidene (fiolett betyr akselerasjon i rapporten) */
+.focus-box .focus-edit, .guide-steps summary { color: var(--link); }
+.q-bm.on { color: #8a6200; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .q-bm.on { color: #f5c518; } }
+:root[data-theme="dark"] .q-bm.on { color: #f5c518; }
+.cam-full-info .muted { color: #c9d1dc; opacity: 1; }
+/* Trykkflater på minst 44 pt */
+.chips.wrap .chip, .lmap-toggle, .mini-seg button, .guide-more, .msg-ref, .bk-toc-link, .q-cell { min-height: 44px; }
+/* Smale telefoner (320 pt) og stor tekst */
+@media (max-width: 360px) { .st-actions { grid-template-columns: 1fr; } }
+.st-main span { overflow-wrap: anywhere; }
+.tabbar { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tabbar a > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* Sikkerhetskontrollen: «Kan denne» er en tilstand, ikke en gul hovedknapp per oppgave */
+.btn[aria-pressed="true"] { background: color-mix(in srgb, var(--good) 14%, var(--surface)); color: var(--good); box-shadow: none; }
+.sg-name.hyph-manual { -webkit-hyphens: manual; hyphens: manual; }
+/* Grafene tegnes 600 enheter brede og vises rundt 340 pt brede: 14 enheter ble 8 pt. Nå rundt 12–13 pt. */
+.axis { font-size: 22px; }
+.axis.big { font-size: 24px; }
+.dev-svg .axis { font-size: 15px; }

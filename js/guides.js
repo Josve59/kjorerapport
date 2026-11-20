@@ -10,8 +10,8 @@ export const GUIDES = [
     when: c => c.real === 0,
     steps: [
       ['Fest telefonen', 'i en holder med skjermen mot ledsageren. Føreren rører ikke telefonen under kjøring.'],
-      ['Ledsageren trykker «Start»', 'når sjekkene er grønne. Under turen vises bare fartsgrensen, og det piper før fotobokser.'],
-      ['Hold «Stopp» inne', 'i ett sekund når dere er framme. Rapporten med neste øvingstur kommer med én gang.']
+      ['Ledsageren trykker «Start kjøretur»', 'når sjekkene er grønne. Under turen vises farten og fartsgrensen.'],
+      ['Hold «Stopp» inne', 'i ett sekund når dere er framme. Rapporten, med forslag til neste tur, kommer med én gang.']
     ]
   },
   {
@@ -20,7 +20,7 @@ export const GUIDES = [
     when: c => c.real < 3,
     steps: [
       ['Fast holder rett ved rattet', 'så nær førerens vanlige synsfelt som mulig, men uten å skjule utsynet gjennom frontruta. Det er kravet i forskriften om mobiltelefon i bil. Ikke midt på dashbordet mot passasjersiden, og ikke på kollisjonsputene.'],
-      ['Stødig og stående', 'En telefon som vipper eller ligger løst, gir falske bremser og svinger. Med kameraet på skal det se føreren.'],
+      ['Stødig og stående.', 'En telefon som vipper eller ligger løst, gir falske bremser og svinger. Med kameraet på skal det se føreren.'],
       ['Lader i', 'på lange turer. GPS, skjerm og kamera bruker mye strøm.'],
       ['Gå ut av andre apper', 'og la Kjørerapport stå åpen. I iPhone-appen fortsetter opptaket også med låst skjerm.']
     ]
@@ -31,9 +31,9 @@ export const GUIDES = [
     when: c => c.cameraOn,
     steps: [
       ['Kalibrer i holderen', 'med føreren i førersetet. Flyttes holderen eller setet, sier appen fra før turen (kalibrering tar 30 sekunder).'],
-      ['Ansiktet godt synlig', 'og ikke for mye motlys. Solbriller er greit, men kapse langt ned i pannen gjør det vanskeligere.'],
+      ['Ansiktet godt synlig', 'og ikke for mye motlys. Solbriller er greit, men en caps langt ned i pannen gjør det vanskeligere.'],
       ['Veikameraet ser best', 'når telefonen står nær frontruta. Demp skjermen om kvelden, så den ikke speiler seg i ruta.'],
-      ['Ingen bilder lagres', 'bare vinkler og tall. Rapporten får «Speil og skulderblikk» og «Veien foran».']
+      ['Ingen bilder lagres,', 'bare vinkler og tall. Rapporten får «Speil og skulderblikk» og «Veien foran».']
     ]
   },
   {
@@ -42,7 +42,7 @@ export const GUIDES = [
     when: c => c.real >= 1,
     steps: [
       ['Kort fortalt', 'øverst sier hva som gikk bra og hva dere kan øve på neste gang.'],
-      ['Situasjoner', 'er steder der noe skjedde: fartshumper, gangfelt, kryss og fart over grensen. Trykk for å se hvor.'],
+      ['Situasjoner', 'er steder der noe skjedde: fartsdempere, gangfelt, kryss og fart over grensen. Trykk for å se hvor.'],
       ['Kartet', 'viser ruten. Trykk på det for å utforske i full skjerm, og trykk på et nummer for å se hendelsen.'],
       ['Spill av turen', 'og snakk sammen om situasjonene mens dere husker dem.']
     ]

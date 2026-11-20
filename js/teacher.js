@@ -75,7 +75,7 @@ function theoryLine(b) {
   return `Teori: ${parts.join(', ')}.${weak ? ` Svakest: ${weak}.` : ''}`;
 }
 /* De svakeste temaene (0.25.0), så læreren vet hva timen bør ta opp. Eldre meldingsfiler har dem ikke. */
-const weakWord = b => (Array.isArray(b.weak) && b.weak.length ? b.weak.map(w => `${String(w.title || '').toLowerCase()} ${Number(w.pct) || 0} %`).join(', ') : '');
+const weakWord = b => (Array.isArray(b.weak) && b.weak.length ? b.weak.map(w => `${String(w.title || '').toLowerCase()} ${Number(w.pct) || 0}\u00a0%`).join(', ') : '');
 function theoryCard(b) {
   if (!b) return '';
   return `<section class="card">
@@ -84,20 +84,20 @@ function theoryCard(b) {
         <div><dt>Siste øveprøve</dt><dd>${b.last ? `${b.last.correct} av ${b.last.total} · ${b.last.passed ? 'bestått' : 'ikke bestått'}` : '–'}</dd></div>
         ${b.taken ? `<div><dt>Øveprøver bestått</dt><dd>${b.passed} av ${b.taken >= 5 ? 'de 5 siste' : b.taken}</dd></div>` : ''}
         ${b.taken && typeof b.solid === 'number' ? `<div><dt>Med minst 40 riktige</dt><dd>${b.solid} av ${b.taken >= 5 ? 'de 5 siste' : b.taken}</dd></div>` : ''}
-        ${typeof b.percent === 'number' ? `<div><dt>Klar for teoriprøven</dt><dd>${b.percent} %</dd></div>` : ''}
+        ${typeof b.percent === 'number' ? `<div><dt>Klar for teoriprøven</dt><dd>${b.percent}\u00a0%</dd></div>` : ''}
         ${weakWord(b) ? `<div><dt>Svakeste temaer</dt><dd>${esc(weakWord(b).replace(/^./, c => c.toUpperCase()))}</dd></div>` : ''}
         <div><dt>Spørsmål lært</dt><dd>${b.learned} av ${b.total}</dd></div>
         <div><dt>Skilt lært</dt><dd>${b.signs} av ${b.signsTotal}</dd></div>
         <div><dt>Sikkerhetskontroll</dt><dd>${b.safety.known} av ${b.safety.total} oppgaver</dd></div>
       </dl>
-      <p class="muted small">Øveprøvene er bygget som teoriprøven, med 45 oppgaver og 38 riktige for å bestå, men er litt vanskeligere. Eleven regnes som klar ved minst 40 riktige på 3 av 5. Spørsmålene er appens egne. Sikkerhetskontrollen teller oppgavene eleven selv har merket som kan.</p>
+      <p class="muted small">Øveprøvene er bygget som teoriprøven, med 45 oppgaver og 38 riktige for å bestå, men er litt vanskeligere. Eleven regnes som klar ved minst 40 riktige på 3 av 5. Spørsmålene er appens egne. Sikkerhetskontrollen teller oppgavene eleven selv mener å kunne.</p>
     </section>`;
 }
 
 /* Teksten som deles (melding eller e-post til trafikklæreren). theory: fra theoryBrief, eller null. */
 export function teacherText(s, { note = '', theory = null } = {}) {
   const L = [];
-  L.push(`Øvingskjøring${s.driver ? ' – ' + s.driver : ''} (${period(s)})`);
+  L.push(`Øvelseskjøring${s.driver ? ' – ' + s.driver : ''} (${period(s)})`);
   if (!s.count) { L.push('Ingen turer i perioden.'); if (theory) L.push(theoryLine(theory)); return L.join('\n'); }
   L.push(`${s.count} ${s.count === 1 ? 'tur' : 'turer'}, ${fmtHours(s.time)}, ${km(s.km)}. By ${fmtHours(s.road.by)}, landevei ${fmtHours(s.road.land)}, motorvei ${fmtHours(s.road.motor)}. Mørke ${fmtHours(s.light.dark)}.`);
   const m = s.maneuvers;
@@ -174,7 +174,7 @@ export function teacherHtml(s, { note = '', theory = null, teacher = false } = {
       <h2 class="card-title">${icon('school')}Opplæringsplanen</h2>
       ${s.plan.filter(st => st.items.some(it => it.done || it.evidence)).map(st => `<h3 class="t-stage">${esc(st.stage)}</h3>
         <ul class="t-plan">${st.items.filter(it => it.done || it.evidence).map(it => `<li class="${it.done ? 'done' : ''}">${it.done ? icon('check', 16) : '<span class="t-dot"></span>'}<span>${esc(it.label)}${it.evidence ? ` <span class="muted small">· ${esc(it.evidence)}</span>` : ''}</span></li>`).join('')}</ul>`).join('') || '<p class="muted">Ingen punkter krysset av eller øvd ennå.</p>'}
-      <p class="muted small">${teacher ? 'Hakene er satt av deg.' : 'Haken er satt av eleven eller ledsageren.'} Grå tekst er hva appen har sett på turene i perioden.</p>
+      <p class="muted small">${teacher ? 'Hakene er satt av deg.' : 'Hakene er satt av eleven eller ledsageren.'} Grå tekst er hva appen har sett på turene i perioden.</p>
     </section>
 
     ${theoryCard(theory)}

@@ -10,8 +10,8 @@ test('tid over fartsgrensen: sekunder når det er lite, minutter ellers', () => 
   assert.equal(overTime(37.4), '37 sekunder');
   assert.equal(overTime(89), '89 sekunder');
   assert.equal(overTime(376), '6 minutter');
-  assert.equal(overTime(37, true), '37 s');
-  assert.equal(overTime(376, true), '6 min');
+  assert.equal(overTime(37, true), '37\u00a0s');   // hardt mellomrom (0.27.2)
+  assert.equal(overTime(376, true), '6\u00a0min');
   assert.equal(overTime(-5), '0 sekunder');
 });
 

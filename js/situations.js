@@ -8,8 +8,8 @@ export const SOURCE_LABEL = { gps: 'GPS', motion: 'Bevegelse', camera: 'Førerka
 export const LEVEL_ORDER = { high: 0, medium: 1, low: 2, ok: 3 };
 const EVENT_TITLE = {
   brake: { brisk: 'Brå nedbremsing', harsh: 'Kraftig nedbremsing' },
-  accel: { brisk: 'Brå akselerasjon', harsh: 'Kraftig akselerasjon' },
-  turn: { brisk: 'Brå sving', harsh: 'Svært skarp sving' }
+  accel: { brisk: 'Rask akselerasjon', harsh: 'Kraftig akselerasjon' },   // samme ord som i rapporten
+  turn: { brisk: 'Skarp sving', harsh: 'Svært skarp sving' }
 };
 const AWAY_TITLE = { left: 'Langt blikk i venstre speil', right: 'Langt blikk i høyre speil', rear: 'Langt blikk i bakspeilet', shoulderL: 'Langt skulderblikk', shoulderR: 'Langt skulderblikk', other: 'Blikket borte fra veien' };
 
@@ -92,6 +92,7 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
   if (camera && camera.calibrated) {
     // true = sett, false = ikke gjort (kameraet så føreren), null = ukjent (kameraet så veien da)
     const word = (v, yes, no) => v === true ? yes : v === false ? no : `${yes.toLowerCase()} ukjent`;
+    const cap = s => s.charAt(0).toUpperCase() + s.slice(1);   // «speil ukjent» først i en setning
     const lvl = (m, s) => m === false ? 'medium' : s === false || m === null || s === null ? 'low' : 'ok';
     for (const l of camera.lane || []) {
       const ok = l.mirror && l.shoulder;
@@ -102,13 +103,13 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
         title: `Feltskifte${l.dir ? ' til ' + l.dir : ''}`,
         text: ok ? 'Speil og skulderblikk før feltskiftet.'
           : l.mirror === false && l.shoulder === false ? 'Verken speil eller skulderblikk før feltskiftet.'
-          : `${word(l.mirror, 'Speil', 'Ikke speil')}, ${word(l.shoulder, 'skulderblikk', 'ikke skulderblikk').toLowerCase()} før feltskiftet.${unknown ? ' Førerkameraet så veien akkurat da.' : ''}`
+          : `${cap(word(l.mirror, 'Speil', 'Ikke speil'))}, ${word(l.shoulder, 'skulderblikk', 'ikke skulderblikk').toLowerCase()} før feltskiftet.${unknown ? ' Førerkameraet så veien akkurat da.' : ''}`
       });
     }
     if (camera.start) {
       const s = camera.start;
       add({ t: s.t, kind: 'start', sources: ['camera', 'gps'], level: lvl(s.mirror, s.shoulder), title: 'Igangkjøring',
-        text: s.mirror && s.shoulder ? 'Speil og skulderblikk før dere kjørte ut.' : `${word(s.mirror, 'Speil', 'Ikke speil')} og ${word(s.shoulder, 'skulderblikk', 'ikke skulderblikk').toLowerCase()} før dere kjørte ut.` });
+        text: s.mirror && s.shoulder ? 'Speil og skulderblikk før dere kjørte ut.' : `${cap(word(s.mirror, 'Speil', 'Ikke speil'))} og ${word(s.shoulder, 'skulderblikk', 'ikke skulderblikk').toLowerCase()} før dere kjørte ut.` });
     }
   }
 
@@ -140,7 +141,7 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
   }
   for (const g of nv.signs || []) {
     if (g.kind === 'barn' && g.maxKmh > 40) add({ t: g.t, kind: 'sign', sources: ['road', 'gps'], level: g.maxKmh > 50 ? 'medium' : 'low', title: 'Skiltet Barn',
-      text: `Opptil ${kmh(g.maxKmh)} de neste 150 m etter skiltet. Barn kan komme ut i vegen – ta det rolig.` });
+      text: `Opptil ${kmh(g.maxKmh)} de neste 150 m etter skiltet. Barn kan komme ut i veien – ta det rolig.` });
     if (g.kind !== 'barn' && g.events.length) add({ t: g.t, kind: 'sign', sources: ['road', 'gps', 'motion'], level: 'medium', title: 'Farlig sving',
       text: `Brå hendelse etter skiltet Farlig sving (${kmh(g.kmh)} ved skiltet). Senk farten før svingen.` });
   }

@@ -6,7 +6,7 @@
 import { rng, shuffle } from './theory.js';
 
 export const SIGN_GROUPS = [
-  { id: 'fare', title: 'Fareskilt', blurb: 'Røde trekanter. Varsler om særlig fare: senk farten og vær klar.' },
+  { id: 'fare', title: 'Fareskilt', blurb: 'Trekanter med rød kant. Varsler om særlig fare: senk farten og vær klar.' },
   { id: 'vike', title: 'Vikeplikt- og forkjørsskilt', blurb: 'Hvem som skal vike i krysset.' },
   { id: 'forbud', title: 'Forbudsskilt', blurb: 'Runde skilt med rød kant. De fleste gjelder fram til nærmeste kryss.' },
   { id: 'pabud', title: 'Påbudsskilt', blurb: 'Runde blå skilt: det du skal gjøre.' },
@@ -86,7 +86,7 @@ export const SIGNS = [
   S('330', 'forbud', 'Svingeforbud', 'Forbudt å svinge den veien pilen viser. Gjelder i krysset skiltet står i eller ved.'),
   S('332', 'forbud', 'Vendingsforbud', 'Forbudt å vende (snu). Gjelder til og med første kryss.'),
   S('334', 'forbud', 'Forbikjøringsforbud', 'Forbudt å kjøre forbi motorvogn med flere enn to hjul. Gjelder til skilt 336, eller så langt underskiltet sier.'),
-  S('335', 'forbud', 'Forbikjøringsforbud for lastebil', 'Forbudt for lastebil med tillatt totalvekt over 3500 kg å kjøre forbi motorvogn med flere enn to hjul. Personbil kan kjøre forbi.'),
+  S('335', 'forbud', 'Forbikjøringsforbud for lastebil', 'Forbudt for lastebil med tillatt totalvekt over 3\u00a0500 kg å kjøre forbi motorvogn med flere enn to hjul. Personbil kan kjøre forbi.'),
   S('336', 'forbud', 'Slutt på forbikjøringsforbud', 'Forbikjøringsforbudet slutter. Forbikjøring er igjen lov der det ellers er trygt og tillatt.'),
   S('337', 'forbud', 'Slutt på forbikjøringsforbud for lastebil', 'Forbikjøringsforbudet for lastebil slutter. Lastebil kan igjen kjøre forbi der det ellers er trygt og tillatt.'),
   S('362', 'forbud', 'Fartsgrense', 'Forbudt å kjøre fortere enn tallet. Gjelder til ny fartsgrense, skilt 364, fartsgrensesone, gatetun eller gågate. Gul bunn betyr midlertidig fartsgrense.', 'sign:362:60'),

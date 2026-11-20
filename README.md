@@ -143,6 +143,86 @@ A separate copy of the app at https://josve59.github.io/kjorerapport/kamera/ add
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.2 – full review in the iPhone simulator, and the web version on Cloudflare
+
+The owner (20 November): a detailed full test of everything in the app, from start to finish (texts, colours, placement, the theory and so on), in a phone simulator, then publish on Cloudflare once everything is fixed.
+
+**How it was tested**
+- **The simulator:** the app ran on the iPhone 17e (390 pt wide, the narrowest current iPhone) with the Emma demo.
+- **Remote control:** a small test tool ran JavaScript inside the app from the Mac (through `KJ_EVAL`; it is not part of the app). It went through every screen in light and dark mode.
+- **Checks on every screen:** horizontal overflow, text cut off, text below 11 pt, contrast measured against the real background, tap targets, broken images and «undefined/NaN». Screenshots of every screen were read one by one.
+- **Flows tested:**
+  - practice questions and wrong answers;
+  - a full exam with hand-in and the result;
+  - sign cards, «Hvem kjører først?» and the safety-check practice;
+  - the teacher view and the free version with Pluss locked.
+- **Three review agents (they read only, and changed nothing):**
+  - all UI text: spelling, wrong claims, inconsistent words;
+  - all theory content, checked against Lovdata: no wrong answer key and no broken reference were found;
+  - colours and contrast, calculated with the WCAG formula.
+
+**Fixed**
+- **Wrong claims:**
+  - The privacy page said «ingen server». It now describes the school-code server at Cloudflare: what it gets, what it stores and when the app asks. The new date is 20 November.
+  - The page and handout for driving schools had the same claim, plus «deler den som PDF», «ingen lyder» and «Start».
+  - The help page had wrong settings paths («Data» is under Avansert, backup is under Sikkerhetskopi), and said App Store approves school codes.
+  - The report said 100 measurements per second (it is 20). It also said the camera «ser ikke øynene», which is out of date.
+  - The guide said the phone beeps before speed cameras. That warning is off by default.
+- **The same drive had two names:** Home said «Ujevn kjøring», while the report said «Rolig og jevn kjøring, men for høy fart». Home now uses the report's headline.
+- **Numbers and units on separate lines:** «29» and «%», «20» and «m», «44» and «min». The number formatting now uses a non-breaking space for km, km/t, min, s and %.
+- **Small inconsistencies:**
+  - «1 925» against «1 926 km igjen»: both now round up, as the insurance log does.
+  - «291 s per 10 km» now shows as minutes and seconds.
+  - The week record no longer shows «00:00».
+  - «Rundkjøringer, Speil og skulderblikk» now has a lower-case «speil».
+  - The stopping-distance calculator now shows parts that add up to the total.
+  - The free home card no longer breaks «46 oppgaver» over two lines.
+- **Wrong tab lit:** after Guide → Innstillinger → … → a report, the tab bar lit «Guide». Sub-pages now move «the tab you came from».
+- **Word splitting:** «særskilt» was split as «særs-kilt» on the sign cards. That card now sets the split points itself.
+- **Theory:**
+  - Fact: the explanation in f53 said an e-scooter is not a motor vehicle. It now names the e-scooter separately.
+  - Wording:
+    - v13 had a wrong option that could be defended. It now says «Buss fra holdeplass, uansett fartsgrense».
+    - v25 had two options with the same meaning.
+    - f31's three wrong options all started with «Bare», which gave the answer away. They are rewritten.
+  - Words used the same way in all 420 questions: «vei» (sign names in «» keep «veg»), «førerett» (the form the law uses) and «øvelseskjøring».
+  - Language fixes in f04, t09, t42, k18, the book and the sign texts.
+  - Safety check:
+    - The seat-belt task moved to «Sikkerhetsutstyr». Its id is unchanged, so progress is kept.
+    - «Pæren må byttes før du kjører i mørket» became «så snart som mulig».
+    - Two language fixes.
+- **About 30 language fixes** in the app, for example «ennå», «trafikklærersiden», «Brems før svingen», «Ingen nettilkobling», «for føret: is», «1 feltskifte» and «Langs veien». The same event now has the same name everywhere: «Rask akselerasjon» and «Skarp sving».
+- **Colours and contrast** (`css/theme.css`, block «0.27.2»):
+  - Dimmed text (locked drives and badges, locked tiles, the other options after an answer, disabled buttons) is readable again. Only the graphics are dimmed.
+  - In dark mode, white on the light signal colours now uses dark text (map numbers, labels, the camera's labels, the fail cross, toasts). The stop button keeps the real stop-sign red.
+  - The pastel pills now reach 4.5:1 in light mode.
+  - Placeholders and the off switch are now visible.
+  - «Endre» and the guide links use the link colour, not the violet that means acceleration.
+  - The chart text was about 8 pt on the phone and is now about 12–13 pt.
+  - Score colours follow one scale (75 / 55) in the ring, the bars and the trend dots. Before, 72 was orange in the ring but red in the bar.
+  - Tap targets are at least 44 pt.
+  - «Krever Pluss» on locked drives is no longer cut off at 320 pt.
+- **One yellow main button per screen:**
+  - On the teacher's pupil page, «Send» is now secondary.
+  - On the last exam question, «Lever prøven» is secondary next to «Lever».
+  - The «Se Pluss» button and the update banner are secondary.
+  - «Kan denne» in the safety check is a state (green when known), not a yellow button per task.
+
+**Not changed (design choices for the owner):**
+- the two field styles;
+- the three styles for «selected»;
+- yellow used as decoration (level, avatar);
+- the dot on the sign tiles, which carries meaning by colour alone;
+- small text in the theory drawings.
+
+**The web version on Cloudflare** (`tools/nettside-cloudflare.mjs`):
+- **What it does:** it publishes the committed web files (not `ios/`, `server/`, `tools/`, `tests/` or anything git-ignored) as a Cloudflare Worker with static files, at `https://kjorerapport.jo-9fc.workers.dev`. It uses the same access key as the school codes.
+- **The one large file:** one file, ONNX Runtime at 26.8 MB, is over Cloudflare's 25 MB limit per file. The Worker fetches it from GitHub Pages, so the browser sees one address.
+- **GitHub Pages:** it carries on as before.
+- **When to run it:** after commit and push.
+
+**Tests:** 298 unit tests pass. Two tests now expect the non-breaking space.
+
 ## What's new in 0.27.1 – the school-code server is live
 
 The owner (20 November): set up the server at Cloudflare now. The owner made the account and the access key (API token) themselves.

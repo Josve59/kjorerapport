@@ -83,7 +83,7 @@ export function openDevChart(data, { goal = null, mode = 'total', onOpen = null 
       const trend = rolling(data.map(p => p.overall));
       series = `<path d="${path(trend, data)}" fill="none" stroke="var(--link)" stroke-width="5" stroke-opacity=".35" stroke-linejoin="round" stroke-linecap="round"/>
         <path d="${path(data.map(p => p.overall), data)}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>
-        ${data.map((p, i) => `<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p.overall).toFixed(1)}" r="${sel === i ? 8 : 5.5}" fill="${p.overall >= 90 ? 'var(--good)' : p.overall >= 75 ? 'var(--turn)' : 'var(--brake)'}" stroke="${sel === i ? 'var(--ink)' : 'var(--surface)'}" stroke-width="2"/>`).join('')}`;
+        ${data.map((p, i) => `<circle cx="${X(p.t).toFixed(1)}" cy="${Y(p.overall).toFixed(1)}" r="${sel === i ? 8 : 5.5}" fill="${p.overall >= 75 ? 'var(--good)' : p.overall >= 55 ? 'var(--turn)' : 'var(--brake)'}" stroke="${sel === i ? 'var(--ink)' : 'var(--surface)'}" stroke-width="2"/>`).join('')}`;
     }
     const goalLine = Number.isFinite(goal) && mode !== 'cats' ? `<line x1="${pl}" x2="${W - pr}" y1="${Y(goal)}" y2="${Y(goal)}" class="goal-line"/><text x="${W - pr}" y="${Y(goal) - 5}" text-anchor="end" class="axis goal-text">Mål ${goal}</text>` : '';
     return { vis, svg: `<svg class="chart dev-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poeng over tid, ${vis.length} turer i utsnittet">

@@ -73,6 +73,12 @@ const readCard = weak => (weak.length ? `<h2 class="group-title">Les dette i teo
       <span class="th-ico th-ico-${s.chapter}">${icon('book', 22)}</span>
       <span class="th-tt"><strong>${esc(s.title)}</strong><span class="muted small">${s.n} feil · ${esc(theme(s.chapter).title)}</span></span>
       ${icon('chev', 18)}</button></li>`).join('')}</ul></section>` : '');
+/* Skiltnavn i rutenettet: iPhones automatiske orddeling delte «særskilt» som «særs-kilt». Der styrer vi delingen selv. */
+const MANUAL_HYPH = [['særskilt', 'sær\u00adskilt'], ['fartsgrense', 'farts\u00adgrense']];
+function signName(name) {
+  if (!/særskilt/.test(name)) return `<span class="sg-name">${esc(name)}</span>`;
+  return `<span class="sg-name hyph-manual">${MANUAL_HYPH.reduce((t, [a, b]) => t.replaceAll(a, b), esc(name))}</span>`;
+}
 const wireRead = (root, ctx) => root.querySelectorAll('[data-path]').forEach(b => b.onclick = () => ctx.go(`#/teori/bok/${b.dataset.path}`));
 
 /* En prøve der tida gikk ut mens appen var lukket (0.25.0): eleven velger å levere den eller forkaste den.
@@ -110,7 +116,7 @@ export function theoryMiniCards(p, ids) {
   if (!hasTheory()) {
     const done = freeDone(p);
     return `<button type="button" class="card mini-card" id="${ids[0]}"><span class="card-title">${icon('quiz')}Teoriprøven</span><strong>${done >= FREE_THEORY.length ? `${done} av ${FREE_THEORY.length}` : '10 gratis'}</strong><span class="muted small">${done >= FREE_THEORY.length ? 'gratis spørsmål tatt' : 'spørsmål å prøve'}</span></button>
-    <button type="button" class="card mini-card" id="${ids[1]}"><span class="card-title">${icon('wrench')}Sikkerhets&shy;kontroll</span><strong>${SAFETY.length} oppgaver</strong><span class="muted small">med Pluss</span></button>`;
+    <button type="button" class="card mini-card" id="${ids[1]}"><span class="card-title">${icon('wrench')}Sikkerhets&shy;kontroll</span><strong>${SAFETY.length}</strong><span class="muted small">oppgaver med Pluss</span></button>`;   // tallet alene, som i Pluss-kortet ved siden av
   }
   if (t.exam) { big = `${Object.keys(t.exam.answers).length} av ${t.exam.ids.length}`; small = examLapsed(t.exam) ? 'Tida gikk ut før du leverte' : 'Prøve påbegynt, fortsett'; }
   else if (last) { big = `${last.correct} av ${last.total}`; small = t.ready.level === 'klar' ? 'Klar for teoriprøven' : last.passed ? 'Siste prøve bestått' : 'Siste prøve ikke bestått'; }
@@ -496,7 +502,7 @@ function wireCalc(root) {
     const d = stopDistance(v, f.mu), max = stopDistance(120, f.mu).total;
     el.querySelector('#calc-v').textContent = v;
     el.querySelector('#calc-out').innerHTML = `<div class="calc-bar"><span class="calc-r" style="width:${d.reaction / max * 100}%"></span><span class="calc-b" style="width:${d.braking / max * 100}%"></span></div>
-      <dl class="calc-nums"><div><dt>Reaksjon</dt><dd>${Math.round(d.reaction)} m</dd></div><div><dt>Bremsing</dt><dd>${Math.round(d.braking)} m</dd></div><div class="calc-sum"><dt>Stopplengde</dt><dd>${Math.round(d.total)} m</dd></div></dl>`;
+      <dl class="calc-nums"><div><dt>Reaksjon</dt><dd>${Math.round(d.reaction)} m</dd></div><div><dt>Bremsing</dt><dd>${Math.round(d.braking)} m</dd></div><div class="calc-sum"><dt>Stopplengde</dt><dd>${Math.round(d.reaction) + Math.round(d.braking)} m</dd></div></dl>`;
     sim = simSvg(v, f.mu);
     el.querySelector('#sim-fig').innerHTML = sim.svg;
     el.querySelector('#sim-res').textContent = '';
@@ -624,7 +630,7 @@ export function renderSignHub(root, ctx) {
       return `<h2 class="group-title">${esc(g.title)}</h2>
       <section class="card sg-card"><p class="muted small sg-blurb">${esc(g.blurb)}</p>
         <ul class="sg-grid">${list.map(s => { const st = signState(p.q['sk' + s.id]); return `<li><button type="button" class="sg-tile" data-sign="${s.id}" aria-label="${esc(s.name)}: ${SIGN_STATE_TEXT[st]}">
-          <span class="sg-fig">${figure(s.img)}</span><span class="sg-name">${esc(s.name)}</span><span class="sg-dot ${st}" aria-hidden="true"></span></button></li>`; }).join('')}</ul>
+          <span class="sg-fig">${figure(s.img)}</span>${signName(s.name)}<span class="sg-dot ${st}" aria-hidden="true"></span></button></li>`; }).join('')}</ul>
         <button type="button" class="btn secondary sg-group-go" data-group="${g.id}">${icon('quiz', 20)}Øv på ${esc(g.title.toLowerCase())}</button>
       </section>`;
     }).join('')}
@@ -870,7 +876,7 @@ export function renderExam(root, ctx) {
       <button type="button" class="btn secondary" id="q-prev" ${E.i ? '' : 'disabled'}>${icon('back', 20)}Forrige</button>
       ${E.i + 1 < E.ids.length ? `<button type="button" class="btn secondary" id="q-nextx">Neste${icon('chev', 20)}</button>` : `<button type="button" class="btn primary" id="q-last">Lever</button>`}
     </div>
-    <button type="button" class="btn primary q-deliver" id="q-deliver">Lever prøven</button>
+    <button type="button" class="btn ${E.i + 1 < E.ids.length ? 'primary' : 'secondary'} q-deliver" id="q-deliver">Lever prøven</button>
     <button type="button" class="link q-quit" id="q-quit">Avbryt prøven</button>`;
   const go = k => { E.i = k; saveExam(E); renderExam(root, ctx); window.scrollTo(0, 0); };
   wireZoom(root);   // tegningen kan forstørres, som i øvingen (0.25.0)
@@ -996,7 +1002,7 @@ export function renderSafetyHub(root, ctx) {
         <details class="s-task" data-id="${t.id}"><summary><span class="s-state ${known(t.id) ? 'ok' : ''}">${known(t.id) ? icon('check', 16) : ''}</span><span>${esc(t.task)}</span>${icon('chev', 18)}</summary>
           ${t.img ? `<div class="s-lamp">${figure(t.img)}</div>` : ''}<ol class="s-how">${t.how.map(h => `<li>${esc(h)}</li>`).join('')}</ol>
           <p class="s-fault"><strong>Hvis noe er feil:</strong> ${esc(t.fault)}</p>
-          <div class="btn-row"><button type="button" class="btn small-btn ${known(t.id) ? 'primary' : 'secondary'}" data-know="1">${icon('check', 18)}Kan denne</button><button type="button" class="btn small-btn secondary" data-know="0">Øv mer</button></div>
+          <div class="btn-row"><button type="button" class="btn small-btn secondary" data-know="1" aria-pressed="${known(t.id)}">${icon('check', 18)}Kan denne</button><button type="button" class="btn small-btn secondary" data-know="0">Øv mer</button></div>
         </details>`).join('')}</section>`;
     }).join('')}`;
   root.querySelector('#s-drill').onclick = () => {

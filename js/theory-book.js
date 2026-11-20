@@ -114,14 +114,14 @@ export const BOOK = [
           P('Fra 1. november til 15. mars må mørkekjøringen være tatt før du kan øvelseskjøre.'),
           P('Første førerkort for bil har 2 års prøveperiode.')
         ] },
-      { id: 'prikker', title: 'Rus, prikker og førerretten', qs: ['a01', 'a09', 'a10', 'a11', 'a12', 'a25', 'a26', 'a27', 'a35', 'a37', 'a38', 'a39', 'a40', 'r05', 'a51', 'a52', 'a53', 'a54', 'a55'],
+      { id: 'prikker', title: 'Rus, prikker og føreretten', qs: ['a01', 'a09', 'a10', 'a11', 'a12', 'a25', 'a26', 'a27', 'a35', 'a37', 'a38', 'a39', 'a40', 'r05', 'a51', 'a52', 'a53', 'a54', 'a55'],
         points: [
           P('Promillegrensen er 0,2.', 'Over den regnes du alltid som påvirket, men du kan være påvirket under den også. Bare tid får alkoholen ut av kroppen.'),
           P('Medisin med rød varseltrekant kan svekke evnen til å kjøre.', 'Spør legen eller apoteket før du kjører.', 'pict:medisin'),
-          P('Åtte prikker på tre år gir tap av førerretten i seks måneder.', 'Blant annet brudd på vikeplikten, kjøring mot rødt lys, håndholdt mobil og for kort avstand gir tre prikker. I prøveperioden dobles prikkene, og mister du førerretten da, må du ta ny full førerprøve.'),
-          P('Promille i prøveperioden gir tap av førerretten.', 'Mellom 0,2 og 0,5 promille mister du førerretten i inntil ett år i tillegg til boten. Over 0,5 promille mister du den som hovedregel i minst ett år, uansett prøveperiode.'),
+          P('Åtte prikker på tre år gir tap av føreretten i seks måneder.', 'Blant annet brudd på vikeplikten, kjøring mot rødt lys, håndholdt mobil og for kort avstand gir tre prikker. I prøveperioden dobles prikkene, og mister du føreretten da, må du ta ny full førerprøve.'),
+          P('Promille i prøveperioden gir tap av føreretten.', 'Mellom 0,2 og 0,5 promille mister du føreretten i inntil ett år i tillegg til boten. Over 0,5 promille mister du den som hovedregel i minst ett år, uansett prøveperiode.'),
           P('Forstår du at politiet kan komme til å etterforske kjøringen, må du ikke drikke alkohol de første seks timene.', 'Det gjelder for eksempel etter et uhell, og også andre rusmidler. Forbudet faller bort når politiet har tatt prøve eller bestemt at det ikke skal tas.'),
-          P('Den som har voldt et uhell og blir straffet for ikke å ha hjulpet de skadde, mister førerretten for alltid.'),
+          P('Den som har voldt et uhell og blir straffet for ikke å ha hjulpet de skadde, mister føreretten for alltid.'),
           P('Kjør ikke når du er trøtt eller syk.', 'Bare hvile hjelper mot trøtthet. Stans på et trygt sted og ta en kort lur.')
         ] },
       { id: 'uhell', title: 'Uhell og førstehjelp', qs: ['a16', 'a17', 'a18', 'a19', 'a20', 'a21', 'a22', 'a23', 'a24', 'a58'],
@@ -155,7 +155,7 @@ export const BOOK = [
         points: [
           P('Minste mønsterdybde for personbil er 1,6 mm om sommeren og 3 mm om vinteren.', 'Mål i hovedrillene. Vinterkravet gjelder fra 1. november til første søndag etter 2. påskedag, og i Nordland, Troms og Finnmark fra 16. oktober til 30. april.', 'diagram:monster'),
           P('Piggdekk er forbudt fra første mandag etter 2. påskedag til 31. oktober.', 'Unntaket er når føret gjør det nødvendig. I Nordland, Troms og Finnmark gjelder forbudet fra 1. mai til 15. oktober.'),
-          P('Har bilen piggdekk, skal alle hjulene ha det.', 'Loven tillater ett unntak: piggdekk på én aksel og kjetting ellers. Pigger er bare lov i vinterdekk, og alle piggdekkene skal ha omtrent like mange.'),
+          P('Har bilen piggdekk, skal alle hjulene ha det.', 'Forskriften tillater ett unntak: piggdekk på én aksel og kjetting ellers. Pigger er bare lov i vinterdekk, og alle piggdekkene skal ha omtrent like mange.'),
           P('Kjettingen legger du på drivhjulene, der den gir trekkraft.', 'På en forhjulsdrevet bil er det forhjulene.'),
           P('Dekkene på samme aksel skal ha omtrent samme egenskaper.', 'Ulike dekk kan få bilen til å trekke skjevt eller skli når du bremser eller svinger.'),
           P('Etter en punktering kan du kortvarig bruke reservehjulet, selv om dekktypene da blir blandet.', 'Et lite, plass-sparende reservehjul er bare for kjøring til nærmeste reparasjonssted. Hold deg under farten som står på hjulet.'),

@@ -8,9 +8,10 @@ const dfShort = new Intl.DateTimeFormat('nb-NO', { day: 'numeric', month: 'short
 export const n0 = v => nf0.format(v);
 export const n1 = v => nf1.format(v);
 export const n2 = v => nf2.format(v);
-export const km = v => `${nf1.format(v)} km`;
-export const kmh = v => `${nf0.format(v)} km/t`;
-export const gee = v => `${nf2.format(v)} g`;
+/* Hardt mellomrom mellom tall og enhet, så «11,5» og «km» aldri havner på hver sin linje */
+export const km = v => `${nf1.format(v)}\u00a0km`;
+export const kmh = v => `${nf0.format(v)}\u00a0km/t`;
+export const gee = v => `${nf2.format(v)}\u00a0g`;
 
 export function mss(sec) {
   const s = Math.max(0, Math.round(sec));
@@ -27,17 +28,17 @@ export function hms(sec) {
 
 export function duration(sec) {
   const m = Math.round(sec / 60);
-  if (m < 60) return `${m} min`;
+  if (m < 60) return `${m}\u00a0min`;
   const h = Math.floor(m / 60);
-  return `${h} t ${String(m % 60).padStart(2, '0')} min`;
+  return `${h}\u00a0t ${String(m % 60).padStart(2, '0')}\u00a0min`;
 }
 
 /* Tid over fartsgrensen (0.13.4): sekunder når det er lite, ellers minutter. «376 s» er vanskelig å se for seg. */
 export function overTime(sec, short = false) {
   const s = Math.max(0, Math.round(sec));
-  if (s < 90) return short ? `${s} s` : `${s} ${s === 1 ? 'sekund' : 'sekunder'}`;
+  if (s < 90) return short ? `${s}\u00a0s` : `${s} ${s === 1 ? 'sekund' : 'sekunder'}`;
   const m = Math.round(s / 60);
-  return `${m} ${short ? 'min' : 'minutter'}`;
+  return `${m}${short ? '\u00a0min' : ' minutter'}`;
 }
 
 export const date = iso => df.format(new Date(iso));

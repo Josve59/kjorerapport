@@ -9,7 +9,7 @@ export const VIEW_MODES = [
   ['free', 'Gratis', 'Uten Pluss'],
   ['plus', 'Pluss', 'Kjøpt Pluss, ikke koblet til en trafikkskole'],
   ['school', 'Koblet til trafikkskole', 'Skolen ser turene, gir lekser, og Pluss er inkludert'],
-  ['teacher', 'Trafikklærer', 'Elevliste, elevprofiler og kjøretimer på en valgt elev']
+  ['teacher', 'Trafikklærer', 'Elevliste, elevprofiler og kjøretimer med eleven du velger']
 ];
 
 let mode = 'app';
@@ -27,7 +27,7 @@ export function schoolInfo(s = {}, now = new Date()) {
   if (s.school && s.school.name) return s.school;
   if (!isSchool()) return null;
   const next = new Date(now); next.setDate(next.getDate() + ((4 - next.getDay() + 7) % 7 || 7)); next.setHours(15, 0, 0, 0);   // neste torsdag kl. 15
-  return { name: 'Eksempel trafikkskole', teacher: 'Kari Nilsen',   // oppdiktet navn (0.18.3; før et navn som kan finnes)
+  return { name: 'Eksempeltrafikkskolen', teacher: 'Kari Nilsen',   // oppdiktet navn (0.18.3; før et navn som kan finnes)
     nextLesson: next.toISOString(), test: true };
 }
 

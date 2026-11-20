@@ -31,7 +31,7 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
   // 1. Mengde
   const km = sum(x => x.res.stats.km);
   items.push({ id: 'km', group: 'Øving', label: 'Mengde øvelseskjøring', ok: km >= READY.km, have: `${nf(km)} km`, need: `${nf(READY.km)} km`,
-    progress: Math.min(1, km / READY.km), tip: `${nf(Math.max(0, READY.km - km))} km igjen til ${nf(READY.km)} km.` });
+    progress: Math.min(1, km / READY.km), tip: `${nf(Math.max(0, Math.ceil(READY.km - km)))} km igjen til ${nf(READY.km)} km.` });   // rundes opp, som i forsikringsloggen
 
   // 2. Variasjon: by, landevei, motorvei
   const sec = k => sum(x => (x.log ? x.log.sec[k] : 0));
@@ -63,7 +63,7 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
     const per10 = kmSp > 0 ? over / kmSp * 10 : 0;
     const serious = withSp.reduce((s, x) => s + (x.sp.episodes || []).filter(e => e.over >= 10).length, 0);
     items.push({ id: 'speed', group: 'Kjøringen', label: 'Holder fartsgrensen', ok: per10 < READY.speedSecPer10km && serious === 0,
-      have: `${Math.round(per10)} s over grensen per 10 km${serious ? ` · ${serious} ganger 10 km/t eller mer over` : ''}`, need: `under ${READY.speedSecPer10km} s per 10 km`,
+      have: `${per10 >= 90 ? `${Math.floor(Math.round(per10) / 60)} min ${Math.round(per10) % 60} s` : `${Math.round(per10)} s`} over grensen per 10 km${serious ? ` · ${serious} ganger 10 km/t eller mer over` : ''}`, need: `under ${READY.speedSecPer10km} s per 10 km`,
       progress: per10 <= READY.speedSecPer10km ? 1 : READY.speedSecPer10km / per10, tip: 'Følg med på skiltene og fartsmåleren, særlig der grensen går ned.' });
   } else items.push({ id: 'speed', group: 'Kjøringen', label: 'Holder fartsgrensen', ok: null, have: 'ingen fartsgrenser hentet', need: '', progress: 0, tip: 'Slå på «Fartsgrense og veidata» i Innstillinger, så sammenligner appen farten med fartsgrensen.' });
 
@@ -72,7 +72,7 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
   const lc = sum(x => ((x.res.maneuvers && x.res.maneuvers.laneChanges) || []).length);
   const hasRoad = rows.some(x => x.road);
   const jn = sum(x => ((x.road && x.road.giveway) || []).length + ((x.road && x.road.stops) || []).length);
-  const sitMissing = [rb < READY.roundabouts ? 'rundkjøringer' : null, lc < READY.laneChanges ? 'to felt i samme retning, så dere kan øve på feltskifte' : null, hasRoad && jn < READY.junctions ? 'kryss med vikeplikt' : null].filter(Boolean);
+  const sitMissing = [rb < READY.roundabouts ? 'rundkjøringer' : null, lc < READY.laneChanges ? 'strekninger med to felt i samme retning' : null, hasRoad && jn < READY.junctions ? 'kryss med vikeplikt' : null].filter(Boolean);
   items.push({ id: 'situations', group: 'Kjøringen', label: 'Rundkjøringer, feltskifte og kryss', ok: !sitMissing.length,
     have: `${rb} ${rb === 1 ? 'rundkjøring' : 'rundkjøringer'} · ${lc} ${lc === 1 ? 'feltskifte' : 'feltskifter'}${hasRoad ? ` · ${jn} kryss` : ''}`, need: `${READY.roundabouts} rundkjøringer · ${READY.laneChanges} feltskifter${hasRoad ? ` · ${READY.junctions} kryss` : ''}`,
     progress: (Math.min(1, rb / READY.roundabouts) + Math.min(1, lc / READY.laneChanges) + (hasRoad ? Math.min(1, jn / READY.junctions) : 1)) / 3,
@@ -103,7 +103,7 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
     const passedReal = !!(plan.teori && plan.teori.done);
     items.push({ id: 'theory', group: 'Teori og oppkjøring', label: 'Teoriprøven', ok: passedReal || theory.level === 'klar',
       have: passedReal ? 'bestått (krysset av i Opplæring)' : theory.taken >= 5 ? `minst 40 riktige på ${solidOf(theory)} av de siste 5 øveprøvene` : theory.taken ? `minst 40 riktige på ${solidOf(theory)} av ${theory.taken} ${theory.taken === 1 ? 'øveprøve' : 'øveprøver'}` : 'ingen øveprøver ennå',
-      need: '40 riktige på 3 av 5 øveprøver', progress: passedReal ? 1 : Math.min(1, solidOf(theory) / 3), tip: 'Øv på temaene i Teori og ta øveprøver til du får minst 40 riktige flere ganger. Prøven i appen er litt vanskeligere enn den ekte.' });
+      need: '40 riktige på 3 av 5 øveprøver', progress: passedReal ? 1 : Math.min(1, solidOf(theory) / 3), tip: 'Øv på temaene under Opplæring › Teori og sikkerhet, og ta øveprøver til du får minst 40 riktige flere ganger. Prøven i appen er litt vanskeligere enn den ekte.' });
     const share = theory.safetyTotal ? theory.safetyKnown / theory.safetyTotal : 0;
     items.push({ id: 'safety', group: 'Teori og oppkjøring', label: 'Sikkerhetskontrollen', ok: share >= 0.9,
       have: `${theory.safetyKnown} av ${theory.safetyTotal} oppgaver`, need: 'nesten alle', progress: Math.min(1, share / 0.9),

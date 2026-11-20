@@ -5,7 +5,7 @@ import { loadSchoolPass, activateCode, codesEnabled, ERROR_TEXT as CODE_ERROR } 
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
 import { seedDemo } from './demo.js';
-import { renderReport, closeMapOverlay, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel } from './report.js';
+import { renderReport, closeMapOverlay, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel, headline } from './report.js';
 import { enrichDrive, enrichMotorway, evaluateRoad, ROAD_V, LIMITS_V, MOTOR_V } from './enrich.js';
 import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } from './insights.js';
 import { esc, km, n0, n1, date, duration, mss } from './format.js';
@@ -36,7 +36,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.27.1';
+export const APP_VERSION = '0.27.2';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -340,7 +340,7 @@ async function renderHome() {
       </button>
     </li>`;
   }
-  list.innerHTML = rows.length ? html : `<li class="empty"><span class="empty-ico">${icon('wheel', 40)}</span><strong>${isTeacher() ? (filter ? `Ingen kjøretimer med ${esc(filter)} enda` : 'Velg eller legg til en elev') : 'Ingen turer enda'}</strong><span class="muted small">Første rapport kommer når dere har kjørt en tur.</span></li>`;
+  list.innerHTML = rows.length ? html : `<li class="empty"><span class="empty-ico">${icon('wheel', 40)}</span><strong>${isTeacher() ? (filter ? `Ingen kjøretimer med ${esc(filter)} ennå` : 'Velg eller legg til en elev') : 'Ingen turer ennå'}</strong><span class="muted small">Første rapport kommer når dere har kjørt en tur.</span></li>`;
   list.querySelectorAll('.drive').forEach(b => b.addEventListener('click', () => { location.hash = '#/rapport/' + b.dataset.id; }));
   $('#drive-section').hidden = false;
 
@@ -353,7 +353,7 @@ async function renderHome() {
     lastCard.innerHTML = `<button type="button" class="card last-card" data-id="${lastReal.d.id}">
       <span class="last-head"><span class="eyebrow">Siste tur</span><span class="muted small">${esc(shortDay(lastReal.d.startedAt))}</span></span>
       <span class="last-body">${scoreBadge(r.overall, 76)}
-        <span class="last-text"><strong>${esc(ratingShort(r.overall))}</strong>
+        <span class="last-text"><strong>${esc(headline(r))}</strong>
           <span class="muted">${[km(r.stats.km), duration(r.stats.duration), `${r.events.length} ${r.events.length === 1 ? 'hendelse' : 'hendelser'}`].join(SEP)}</span>
           ${diff ? `<span class="delta-pill ${diff > 0 ? 'up' : diff < 0 ? 'down' : ''}">${diff > 0 ? '▲ ' + diff : diff < 0 ? '▼ ' + -diff : '='} fra forrige</span>` : ''}</span></span>
       ${tip ? `<span class="last-tip">${icon('info', 18)}<span>${esc(tip)}</span></span>` : ''}
@@ -846,7 +846,7 @@ async function renderCamera() {
       return true;
     } catch (err) {
       status.textContent = '';
-      infoDialog({ title: 'Kameraet startet ikke', text: err && err.name === 'NotAllowedError' ? 'Tilgang til kameraet ble avslått. Tillat kamera for appen i iPhone-innstillingene (Safari → Kamera), og prøv igjen.' : String(err && err.message || err) });
+      infoDialog({ title: 'Kameraet startet ikke', text: err && err.name === 'NotAllowedError' ? 'Tilgang til kameraet ble avslått. Tillat kamera i iPhone-innstillingene (Innstillinger › Kjørerapport › Kamera, eller Safari › Kamera i nettleseren), og prøv igjen.' : String(err && err.message || err) });
       return false;
     }
   };
@@ -974,7 +974,7 @@ async function renderLog() {
   const lockedIds = new Set(drives.filter(d => reportLocked(all, d.id, plus)).map(d => d.id));   // rapporter som krever Pluss
   const rows = [];
   for (const d of drives) { try { const res = await analyzeDrive(d); rows.push({ d, res, log: logFor(d, res) }); } catch { /* for lite data */ } }
-  if (!rows.length) { root.innerHTML = `<div class="empty card"><span class="empty-ico">${icon('book', 40)}</span><strong>Ingen turer i loggen enda</strong><span class="muted small">Ekte opptak legges inn her automatisk.</span></div>`; return; }
+  if (!rows.length) { root.innerHTML = `<div class="empty card"><span class="empty-ico">${icon('book', 40)}</span><strong>Ingen turer i loggen ennå</strong><span class="muted small">Ekte opptak legges inn her automatisk.</span></div>`; return; }
   const tot = sumLogs(rows.map(x => x.log));
   const bar = (obj, keys, labels, cls) => {
     const sum = keys.reduce((s, k) => s + obj[k], 0) || 1;
@@ -1305,7 +1305,7 @@ function threadCardHtml(thread, { title, mine, empty, all = false }) {
         <p class="msg-attach" id="msg-attach" hidden></p>
         <div class="composer-row">
           <button type="button" class="btn secondary small-btn" id="btn-msg-attach">${icon('map', 18)}<span>Legg ved en tur</span></button>
-          <button type="button" class="btn primary small-btn" id="btn-msg-send">Send</button>
+          <button type="button" class="btn ${mine === 'elev' ? 'primary' : 'secondary'} small-btn" id="btn-msg-send">Send</button>
         </div>
       </div>
       <label class="btn secondary file-btn small-btn">${icon('upload', 18)}${mine === 'laerer' ? 'Åpne melding fra fil' : 'Åpne svar fra fil'}<input type="file" id="msg-file" accept="application/json,.json"></label>
@@ -1407,7 +1407,7 @@ async function renderTeacher(opts = {}) {
     $('#teacher .page-actions').hidden = true;
     $('#teacher-root').innerHTML = `<section class="card plus-locked"><span class="plus-ico">${icon('school', 24)}</span>
       <h2>Oppsummering til timen</h2><p class="muted">Med Pluss får du det du har øvd siden forrige kjøretime samlet her, klart til å vise fram eller dele.</p>
-      <button type="button" class="btn primary" id="btn-teacher-plus">Se Pluss</button></section>`;
+      <button type="button" class="btn secondary" id="btn-teacher-plus">Se Pluss</button></section>`;   // «Send» i meldingene er hovedknappen her
     $('#btn-teacher-plus').onclick = () => { location.hash = '#/pluss'; };
     return;
   }
@@ -1621,7 +1621,7 @@ async function renderProgress() {
       <div class="rings-big">${ringsSvg(g.rings, 132)}<ul class="ring-list">${g.rings.map(r => `<li><span class="dot" style="background:${RING_COLOR[r.id]}"></span><span><strong>${esc(r.label)}</strong> ${r.value}${r.id === 'minutes' ? ' min' : ''} av ${r.goal}${r.id === 'minutes' ? ' min' : r.id === 'smooth' ? ' i snitt' : ''}
         <span class="muted small">${r.id === 'minutes' ? 'Minutter øvelseskjøring' : r.id === 'variety' ? (r.have.length ? `Har kjørt: ${esc(r.have.join(', '))}` : 'By, landevei, motorvei, mørke, rundkjøring eller glatt føre') : 'Snittpoeng på ukas turer'}</span></span></li>`).join('')}</ul></div>
       <p class="streak big">${icon('flame', 22)}<span><strong>${g.streak} ${g.streak === 1 ? 'uke' : 'uker'} på rad</strong><span class="muted small">${g.streak ? 'Kjør minst én tur i uka for å holde rekka.' : 'Kjør en tur denne uka for å starte en rekke.'}</span></span></p></section>
-    ${g.records.length ? `<section class="card"><h2 class="card-title">${icon('star')}Rekorder</h2><ul class="record-list">${g.records.map(r => `<li${r.driveId ? ` data-id="${r.driveId}" class="tap"` : ''}><span>${esc(r.label)}<span class="muted small">${esc(date(r.at))}</span></span><strong>${esc(r.value)}</strong></li>`).join('')}</ul></section>` : ''}
+    ${g.records.length ? `<section class="card"><h2 class="card-title">${icon('star')}Rekorder</h2><ul class="record-list">${g.records.map(r => `<li${r.driveId ? ` data-id="${r.driveId}" class="tap"` : ''}><span>${esc(r.label)}<span class="muted small">${esc(r.id === 'week' ? `uka fra ${new Date(r.at).toLocaleDateString('nb-NO', { weekday: 'short', day: 'numeric', month: 'short' })}` : date(r.at))}</span></span><strong>${esc(r.value)}</strong></li>`).join('')}</ul></section>` : ''}
     <h2 class="group-title">${icon('award', 18)}Merker · ${got.length} av ${g.badges.length}</h2>
     <ul class="badge-grid">${got.map(badgeHtml).join('')}${locked.map(badgeHtml).join('')}</ul>
     <p class="muted small center">Du får 1 XP per minutt øving og 25 XP per merke.</p>`;
@@ -1800,13 +1800,6 @@ async function renderPlan(h = '#/opplaering') {
   });
 }
 
-function ratingShort(score) {
-  if (score >= 90) return 'Rolig og trygg kjøring';
-  if (score >= 75) return 'Bra, noen ting å jobbe med';
-  if (score >= 55) return 'Ujevn kjøring';
-  return 'Mye brå kjøring';
-}
-
 function renderInstallHint() {
   const el = $('#install-hint');
   const s = getSettings();
@@ -1903,7 +1896,7 @@ function renderPrecheck() {
       await requestLocationOnce();
       setCheck(gps, null, 'Venter på god nok nøyaktighet …');
     } catch (err) {
-      setCheck(gps, false, err.code === 1 ? 'Posisjonstilgang avslått. Tillat posisjon for denne appen i Innstillinger.' : 'Fikk ikke posisjon. Gå ut i friluft og prøv igjen.');
+      setCheck(gps, false, err.code === 1 ? 'Posisjonstilgang avslått. Tillat posisjon for denne appen i Innstillinger.' : 'Fikk ikke posisjon. Prøv der telefonen ser himmelen.');
     }
     if (leftDuringStart('#/sjekk')) return;
     if (camWanted()) {
@@ -1957,12 +1950,12 @@ function renderPrecheck() {
     stopPrecheck = startPrecheck(st => {
       const waited = (performance.now() - since) / 1000;
       if (st.gpsError) setCheck(gps, false, st.gpsError.code === 1 ? 'Posisjonstilgang avslått' : 'Ingen GPS-signal');
-      else if (Number.isFinite(st.acc)) setCheck(gps, st.gpsOk, `${n0(st.acc)} m nøyaktighet${st.gpsOk ? '' : ' (må være 20 m eller bedre' + (waited > 10 ? ' – blir ofte bedre når bilen står ute og står stille)' : ')')}`);
+      else if (Number.isFinite(st.acc)) setCheck(gps, st.gpsOk, `${n0(st.acc)} m nøyaktighet${st.gpsOk ? '' : ' (må være 20 m eller bedre' + (waited > 10 ? ' – blir ofte bedre når bilen står stille ute)' : ')')}`);
       // Ingen data etter 3 s (f.eks. når siden ble åpnet uten trykk): én knapp som ber om tilgangen i et trykk
       const noMotion = !st.motionSeen && waited > 3 && motion !== 'unsupported';
       fixMotion.hidden = !noMotion;
       if (noMotion) setCheck(mot, null, 'Får ingen bevegelsesdata. Trykk på knappen under.');
-      else if (motion !== 'denied' && motion !== 'unsupported') setCheck(mot, st.motionOk, st.motionOk ? 'Bevegelsesdata mottas' : 'Ingen bevegelsesdata enda – beveg telefonen litt');
+      else if (motion !== 'denied' && motion !== 'unsupported') setCheck(mot, st.motionOk, st.motionOk ? 'Bevegelsesdata mottas' : 'Ingen bevegelsesdata ennå – beveg telefonen litt');
       if (st.steady === null) setCheck(hold, null, 'Venter på bevegelsesdata');
       else setCheck(hold, st.steady, st.steady ? 'Telefonen står stødig' : 'Telefonen beveger seg – fest den i holderen og slipp den');
       btnStart.disabled = !(st.gpsOk && st.motionOk);
@@ -1992,7 +1985,7 @@ async function renderFocusSuggestions() {
   if (!sug.length) { el.hidden = true; return; }
   const label = id => (FOCUS.find(f => f.id === id) || {}).label || id;
   const sum = $('#focus-summary');
-  if (sum && !(getSettings().focus || []).length) sum.textContent = `Forslag: ${sug.map(x => label(x.id)).join(', ')}`;
+  if (sum && !(getSettings().focus || []).length) sum.textContent = `Forslag: ${listLower(sug.map(x => label(x.id)), true)}`;
   el.innerHTML = `<p class="sug-title">${icon('target', 18)}Forslag ut fra de siste turene</p>
     <ul class="sug-list">${sug.map(x => `<li><strong>${esc(label(x.id))}</strong><span class="muted small">${esc(x.reason)}</span></li>`).join('')}</ul>
     <button type="button" class="btn secondary small-btn" id="btn-use-sug">Bruk forslagene</button>`;
@@ -2000,12 +1993,15 @@ async function renderFocusSuggestions() {
   $('#btn-use-sug').onclick = () => { saveSettings({ ...getSettings(), focus: sug.map(x => x.id) }); renderFocusChips(); toast('Dagens mål er satt.', { type: 'ok', ms: 1800 }); };
 }
 
+/* «Rundkjøringer, speil og skulderblikk»: bare første ord med stor bokstav (all = også det første med liten) */
+const listLower = (labels, all = false) => labels.map((s, i) => (i || all ? s.charAt(0).toLowerCase() + s.slice(1) : s)).join(', ');
+
 function renderFocusChips() {
   const box = $('#focus-chips');
   const sel = new Set((getSettings().focus || []).filter(id => FOCUS.some(f => f.id === id)));
   // Sammendraget i den lukkede boksen (0.11.5): valgene står der, listen åpnes bare når man vil endre
   const sum = $('#focus-summary');
-  if (sum) sum.textContent = sel.size ? FOCUS.filter(f => sel.has(f.id)).map(f => f.label).join(', ') : 'Valgfritt';
+  if (sum) sum.textContent = sel.size ? listLower(FOCUS.filter(f => sel.has(f.id)).map(f => f.label)) : 'Valgfritt';
   box.innerHTML = FOCUS.map(f => `<button type="button" class="chip ${sel.has(f.id) ? 'on' : ''}" data-f="${f.id}" aria-pressed="${sel.has(f.id)}">${esc(f.label)}</button>`).join('');
   box.querySelectorAll('.chip').forEach(c => c.onclick = () => {
     const cur = new Set(getSettings().focus || []);
@@ -2022,7 +2018,7 @@ function renderSurfacePicker() {
   const seg = $('#surface-seg'), cur = currentSurface();
   seg.innerHTML = SURFACES.map(x => `<label><input type="radio" name="surface" value="${x.id}" ${x.id === cur ? 'checked' : ''}><span>${esc(x.short)}</span></label>`).join('');
   seg.classList.toggle('need', !cur);
-  $('#surface-note').textContent = !cur ? 'Velg føret, så blir vurderingen riktig på glatt vei.' : cur === 'snow' || cur === 'ice' ? 'Glatt føre: grensene for brå bremsing og svinger er lavere i dag.' : '';
+  $('#surface-note').textContent = !cur ? 'Velg føret, så blir vurderingen riktig på glatt vei.' : cur === 'snow' || cur === 'ice' ? 'Glatt føre: grensene for brå bremsing, gass og sving er lavere i dag.' : '';
   seg.querySelectorAll('input').forEach(r => r.onchange = () => { saveSettings({ ...getSettings(), lastSurface: { id: r.value, day: dayKey(new Date()) } }); renderSurfacePicker(); });
 }
 
@@ -2810,7 +2806,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
         if (!d || !SURFACE_LABEL[sid]) return;
         d.surface = sid; d.resultKey = null;
         await putDrive(d);
-        toast(`Turen er vurdert på nytt for ${SURFACE_LABEL[sid].toLowerCase()} føre.`, { type: 'ok', ms: 2500 });
+        toast(`Turen er vurdert på nytt for føret: ${SURFACE_LABEL[sid].toLowerCase()}.`, { type: 'ok', ms: 2500 });
         await renderDriveReport(id, { keepScroll: true });
       },
       // Tittelen er når turen var (0.12.2): «Kjørerapport» står allerede øverst
@@ -2881,7 +2877,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
         // Vanlige feil sagt med vanlige ord (0.10.1): 5xx er Statens vegvesen, ellers som regel nettet
         const m = String(err && err.message || err);
         const why = /svarte 5\d\d/.test(m) ? 'Statens vegvesen svarer ikke akkurat nå. Prøv igjen om litt.'
-          : /Failed to fetch|NetworkError|Load failed|network|offline/i.test(m) || !navigator.onLine ? 'Fant ikke nettet. Fartsgrensene hentes når du er på nett igjen.'
+          : /Failed to fetch|NetworkError|Load failed|network|offline/i.test(m) || !navigator.onLine ? 'Ingen nettilkobling. Fartsgrensene hentes når du er på nett igjen.'
           : 'Kunne ikke hente fartsgrensene (' + m + ').';
         draw({ text: why, error: true });
         window.scrollTo(0, yy);
@@ -3074,7 +3070,7 @@ async function renderSettings() {
   pr.hidden = !plusState().native;
   if (!pr.hidden) {
     pr.innerHTML = hasPlus() ? `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Låst opp. Takk!</span></span>`
-      : `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Hele teorien, kameraene, opplæringsplanen, trafikklæreren, klar for oppkjøring og alle rapportene</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Se Pluss</button>`;
+      : `<span class="plus-ico">${icon('check', 22)}</span><span><strong>Kjørerapport Pluss</strong><span class="muted small">Hele teorien, kameraene, opplæringsplanen, oppsummeringen til trafikklæreren, «Hva må du øve mer på?» og alle rapportene</span></span><button type="button" class="btn small-btn primary" id="btn-plus-row">Se Pluss</button>`;
     const b = pr.querySelector('#btn-plus-row');
     if (b) b.onclick = () => { location.hash = '#/pluss'; };
   }
@@ -3168,7 +3164,7 @@ async function renderSettings() {
     toast('Alle turer analyseres på nytt når de åpnes.', { type: 'ok' });
   };
   $('#btn-delete-all').onclick = async () => {
-    if (await confirmDialog({ title: 'Slette alle turer?', text: 'Alle turer og rådata slettes fra telefonen. Ta en sikkerhetskopi først hvis du vil beholde dem.', ok: 'Slett alt', danger: true })) { await deleteAll(); toast('Alle turer er slettet.', { type: 'ok' }); location.hash = '#/'; }
+    if (await confirmDialog({ title: 'Slette alle turer?', text: 'Alle turer og rådata slettes fra telefonen. Ta en sikkerhetskopi først hvis du vil beholde dem.', ok: 'Slett alle turer', danger: true })) { await deleteAll(); toast('Alle turer er slettet.', { type: 'ok' }); location.hash = '#/'; }
   };
   // Slett alt (0.18.3): «Slett alle turer» lot navn, elever, meldinger, teori, kalibrering og kartbitene ligge igjen
   $('#btn-wipe-all').onclick = async () => {
@@ -3252,7 +3248,7 @@ async function renderViewModes() {
     db.onclick = async () => {
       if (isDemoMode()) { setDemoMode(false); location.hash = '#/'; location.reload(); return; }
       if (recorder && recorder.running) { toast('Stopp turen først.', { ms: 2500 }); return; }
-      if (!(await confirmDialog({ title: 'Starte demoen for trafikkskoler?', text: 'Appen viser eksempeleleven Emma med turer, rapporter, teori og trafikklærer-siden. Dine egne turer, elever og innstillinger blir ikke vist eller rørt, og alt er der igjen når du avslutter demoen.', ok: 'Start demoen' }))) return;
+      if (!(await confirmDialog({ title: 'Starte demoen for trafikkskoler?', text: 'Appen viser eksempeleleven Emma med turer, rapporter, teori og trafikklærersiden. Dine egne turer, elever og innstillinger blir ikke vist eller rørt, og alt er der igjen når du avslutter demoen.', ok: 'Start demoen' }))) return;
       setDemoMode(true); location.hash = '#/'; location.reload();
     };
   }
@@ -3460,7 +3456,12 @@ function updateTabbar(h) {
   if (TAB_ROOTS[h]) lastTab = h;
   if (h.startsWith('#/elev/')) lastTab = '#/trafikklaerer';   // en rapport åpnet fra elevsiden hører til Elever (0.18.0)
   if (h.startsWith('#/opplaering/')) lastTab = h;   // underfanene i Opplæring (0.20.0)
-  const active = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') || h.startsWith('#/opplaering/') ? 'plan' : null) || (h.startsWith('#/elev/') ? 'teacher' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips', '#/forsikring': 'trips' })[h] || TAB_ROOTS[lastTab];
+  const tabOf = x => TAB_ROOTS[x] || (x.startsWith('#/opplaering/') ? 'plan' : null);
+  const own = TAB_ROOTS[h] || (h.startsWith('#/teori') || h.startsWith('#/sikkerhetskontroll') || h.startsWith('#/opplaering/') ? 'plan' : null) || (h.startsWith('#/elev/') ? 'teacher' : null) || ({ '#/demo': 'home', '#/innstillinger': 'home', '#/pluss': 'home', '#/fremgang': 'home', '#/klar': 'home', '#/faresteder': 'trips', '#/forsikring': 'trips' })[h];
+  // En side under en annen fane (f.eks. Faresteder under Turer) flytter også «fanen du kom fra», så en rapport som
+  // åpnes derfra lyser riktig fane (før kunne Guide lyse etter Guide → Innstillinger → … → rapport).
+  if (own && tabOf(lastTab) !== own) lastTab = Object.keys(TAB_ROOTS).find(k => TAB_ROOTS[k] === own);
+  const active = own || tabOf(lastTab);
   bar.querySelectorAll('a').forEach(a => {
     const on = a.dataset.tab === active;
     a.classList.toggle('on', on);
@@ -3617,7 +3618,7 @@ function init() {
     if (!swReg) { toast('Oppdatering virker bare i appen fra nettadressen, ikke lokalt.', { type: 'info' }); return; }
     if (swUpdateReady) { $('#update-banner').hidden = false; toast('Ny versjon er klar. Trykk «Oppdater nå».', { type: 'ok' }); return; }
     toast('Ser etter ny versjon …', { ms: 1500 });
-    try { await swReg.update(); } catch { toast('Fant ikke nettet. Prøv igjen med nett.', { type: 'error' }); return; }
+    try { await swReg.update(); } catch { toast('Ingen nettilkobling. Prøv igjen når du er på nett.', { type: 'error' }); return; }
     if (swReg.waiting || swUpdateReady) { swUpdateReady = swUpdateReady || swReg.waiting; $('#update-banner').hidden = false; toast('Ny versjon er klar. Trykk «Oppdater nå».', { type: 'ok' }); }
     else if (swReg.installing) toast('Laster ned ny versjon … «Oppdater nå» kommer om noen sekunder.', { type: 'ok', ms: 4000 });
     else toast(`Du har siste versjon (${APP_VERSION}).`, { type: 'ok' });

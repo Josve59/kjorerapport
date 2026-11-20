@@ -36,7 +36,7 @@ const LIST = [
   /* ---------- Lys ---------- */
   T('lys-naer', 'lys', 'alle', 'Vis hvordan du slår på nærlyset, og kontroller at det virker.',
     ['Slå på nærlyset med lysbryteren (eller sjekk at automatisk lys står på).', 'Se at symbolet for nærlys lyser i instrumentpanelet.', 'Gå rundt bilen, eller se refleksen i en vegg eller i bilen foran, og sjekk at begge lyktene lyser.'],
-    'En lykt som ikke lyser, gjør at du ser kortere og kan forveksles med en motorsykkel. Pæren eller lykten må byttes før du kjører i mørket.'),
+    'En lykt som ikke lyser, gjør at du ser kortere og kan forveksles med en motorsykkel. Pæren eller lykten må byttes så snart som mulig: bilen er ikke i forskriftsmessig stand før det er gjort.'),
   T('lys-fjern', 'lys', 'alle', 'Vis hvordan du slår på fjernlyset, og hvordan du ser at det er på.',
     ['Skyv eller trekk lysspaken som instruksjonsboka viser.', 'Det blå fjernlyssymbolet tennes i instrumentpanelet.', 'Vis også hvordan du blinker med fjernlyset (lyshornet).'],
     'Uten fjernlys ser du kort i mørket. Står fjernlyset på uten at du merker det, blender du andre: følg med på det blå symbolet.'),
@@ -129,7 +129,7 @@ const LIST = [
     ['Sjekk først at parkeringsbremsen er helt løst ut.', 'Lyser lampen fortsatt, stans der det er trygt.', 'Kjør ikke videre: kontroller bremsevæsken og ring veihjelp eller verksted.'],
     'Lampen kan bety lav bremsevæske eller feil i bremsesystemet. Bremsene kan svikte.'),
   T('varsel-lading', 'varsel', 'alle', 'Varsellampen for batteri eller lading lyser. Hva betyr det?',
-    ['Bilen lader ikke 12-voltsbatteriet som den skal.', 'Slå av det strømmen du ikke trenger, og kjør til verksted.', 'Bilen kan stoppe når batteriet er tomt.', 'På bensin- og dieselbiler kan en røket reim være årsaken, og den kan også drive vannpumpen. Følg med på temperaturen, og stans hvis den stiger.'],
+    ['Bilen lader ikke 12-voltsbatteriet som den skal.', 'Slå av alt som bruker strøm og som du ikke trenger, og kjør til verksted.', 'Bilen kan stoppe når batteriet er tomt.', 'På bensin- og dieselbiler kan en røket reim være årsaken, og den kan også drive vannpumpen. Følg med på temperaturen, og stans hvis den stiger.'],
     'Uten lading går 12-voltsbatteriet tomt. Da kan bilen stoppe, og lys og vindusviskere kan slutte å virke.'),
   T('varsel-dekk', 'varsel', 'alle', 'Varsellampen for dekktrykk lyser. Hva gjør du?',
     ['Stans der det er trygt og se over dekkene.', 'Mål lufttrykket og fyll til riktig trykk.', 'Synker trykket igjen, kan dekket være punktert.'],
@@ -145,7 +145,8 @@ const LIST = [
   T('sikt-speil', 'sikt', 'alle', 'Vis hvordan du stiller inn speilene.',
     ['Innvendig speil: hele bakruta skal synes.', 'Utvendige speil: så vidt litt av egen bil i kanten, resten veien bak og til siden.', 'Still dem inn før du kjører, ikke mens du kjører.'],
     'Feil innstilte speil gir større blindsoner. Skulderblikk trengs uansett før feltskifte.'),
-  T('sikt-belte', 'sikt', 'alle', 'Kontroller bilbeltene.',
+  T('sikt-belte', 'utstyr', 'alle',   // beltene er sikkerhetsutstyr (id-en beholdes, så framgangen ikke mistes)
+    'Kontroller bilbeltene.',
     ['Trekk beltet ut og se at det ikke er skadet.', 'Lås det og sjekk at låsen holder.', 'Rykk raskt i beltet: det skal låse seg.'],
     'Et belte som ikke låser seg, beskytter deg ikke i et sammenstøt.'),
 
@@ -185,7 +186,7 @@ const LIST = [
     ['Vis knappen eller menyen der den slås av og på.', 'Den leser linjene i veien og kan styre litt eller varsle hvis du er på vei ut av feltet.', 'Den virker dårlig der linjene er slitte, mangler eller er dekket av snø.'],
     'Du har ansvaret for å holde bilen i feltet. Systemet kan svikte uten forvarsel.'),
   T('stotte-esc', 'stotte', 'alle', 'Hvor ser du at antiskrens (ESC) griper inn, og hvordan slår du den av?',
-    ['En lampe blinker i instrumentpanelet når systemet jobber.', 'Vis knappen der den kan slås av. Den skal normalt alltid være på.', 'Den kan være lurt å slå av bare når du står fast i snø og må få hjulene til å spinne.'],
+    ['En lampe blinker i instrumentpanelet når systemet jobber.', 'Vis knappen der den kan slås av. Den skal normalt alltid være på.', 'Det kan være lurt å slå den av bare når du står fast i snø og må få hjulene til å spinne.'],
     'Lyser lampen hele tiden, er systemet slått av eller har en feil. Da sklir bilen lettere ut i svinger på glatt vei.'),
   T('stotte-nodbrems', 'stotte', 'alle', 'Bilen piper og varsler kollisjon foran. Hva gjør du?',
     ['Se fram med en gang, og brems kraftig hvis det trengs.', 'Systemet kan bremse selv, men stol ikke på det.', 'Vis i menyen hvor varselet kan stilles inn.'],

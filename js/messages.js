@@ -130,7 +130,7 @@ export function studentOverview(drives, students, threads = {}, now = Date.now()
     const idle = last === null ? null : Math.floor((now - last) / DAY);
     const flags = [];
     if (newMsgs) flags.push({ id: 'msg', text: `${newMsgs} ${newMsgs === 1 ? 'ny melding' : 'nye meldinger'}`, tone: 'info' });
-    else if (awaiting) flags.push({ id: 'reply', text: 'Venter på svar', tone: 'info' });
+    else if (awaiting) flags.push({ id: 'reply', text: 'Eleven venter på svar', tone: 'info' });
     if (avgNow !== null && avgNow < 70) flags.push({ id: 'score', text: `Snitt ${avgNow} poeng`, tone: 'warn' });
     if (avgNow !== null && avgBefore !== null && avgBefore - avgNow >= 5) flags.push({ id: 'down', text: `Ned ${avgBefore - avgNow} poeng`, tone: 'warn' });
     if (idle !== null && idle >= 14) flags.push({ id: 'idle', text: `Ikke kjørt på ${idle} dager`, tone: 'warn' });

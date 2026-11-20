@@ -137,7 +137,7 @@ export function speedLine(r) {
   if (s.over === null) parts.push('fartsgrensene er ikke hentet ennå');
   else parts.push(s.over ? `over fartsgrensen ${s.over} ${s.over === 1 ? 'gang' : 'ganger'}` : 'aldri over fartsgrensen');
   if (s.crests !== null) parts.push(s.crests ? `for høy fart over ${s.crests} ${s.crests === 1 ? 'bakketopp' : 'bakketopper'}` : 'rolig nok over bakketoppene');
-  return `Fart: ${parts.join(', ')}. I totalpoengene teller kjøringen (de fire øverste) 60 % og farten 40 %.`;
+  return `Fart: ${parts.join(', ')}. I totalpoengene teller kjøringen (de fire øverste) 60\u00a0% og farten 40\u00a0%.`;
 }
 
 const MARK_LETTER = i => String.fromCharCode(65 + (i % 26));
@@ -254,7 +254,7 @@ export function renderReport(root, r, ctx = {}) {
   const surf = SURFACE_LABEL[ctx.surface] ? ctx.surface : '';
   const doubt = surf ? surfaceDoubt(r.events, surf) : null;
   if (doubt) quality.push({ sev: 2, text: `Føret var satt til ${SURFACE_LABEL[surf].toLowerCase()}, men bilen bremset, ga gass eller svingte med opptil ${n1(doubt.maxG)} g ${doubt.n} ganger uten å skli. Det går ikke an på ${SURFACE_LABEL[surf].toLowerCase()}, så veien var trolig mindre glatt. Velg føret som stemte, så blir vurderingen riktig.`, act: 'surface' });
-  else if (surf && surf !== 'dry') quality.push({ sev: 0, text: `Vurdert for ${SURFACE_LABEL[surf].toLowerCase()} føre: grensene for brå bremsing, gass og sving er ${n0((1 - surfaceFactor(surf)) * 100)} % lavere enn på tørr vei.` });
+  else if (surf && surf !== 'dry') quality.push({ sev: 0, text: `Vurdert for føret «${SURFACE_LABEL[surf]}»: grensene for brå bremsing, gass og sving er ${n0((1 - surfaceFactor(surf)) * 100)}\u00a0% lavere enn på tørr vei.` });
   const qualitySev = quality.reduce((m, q) => Math.max(m, q.sev), 0);
   const qualityCount = quality.filter(q => q.sev > 0).length;
   const reportActions = typeof document !== 'undefined' ? document.getElementById('report-actions') : null;
@@ -433,7 +433,7 @@ export function renderReport(root, r, ctx = {}) {
     </section>` : ''}
     ${r.crest && r.crest.crests.length ? `<section class="card" id="crest-section">
       <h2 class="card-title">${icon('speed')}Bakketopper</h2>
-      <p class="muted small">Over en bakketopp ser du bare et stykke fram. Her var farten høyere enn at bilen rakk å stoppe på den strekningen. På vei uten midtlinje regnes halve strekningen, fordi en møtende bil også må stoppe. Målt med telefonens bevegelsessensor, så tallene er omtrentlige.</p>
+      <p class="muted small">Over en bakketopp ser du bare et stykke fram. Her var farten så høy at bilen ikke ville rukket å stoppe på den strekningen. På vei uten midtlinje regnes halve strekningen, fordi en møtende bil også må stoppe. Målt med telefonens bevegelsessensor, så tallene er omtrentlige.</p>
       <ol class="episodes">${r.crest.crests.slice(0, 12).map(c => `
         <li><span class="ev-text"><strong>${c.kmh} km/t over en bakketopp</strong><span class="muted">${mss(c.t)} inn i turen · sikt rundt ${c.sight} m · ${c.safeKmh} km/t hadde holdt${c.narrow ? ' · vei uten midtlinje' : ''}</span></span></li>`).join('')}</ol>
       ${r.crest.crests.length > 12 ? `<p class="muted small">… og ${r.crest.crests.length - 12} til.</p>` : ''}
@@ -458,7 +458,7 @@ export function renderReport(root, r, ctx = {}) {
         <ul class="diag">
           <li>Bevegelsesdata: ${diag.motionEvents ? `${n1(diag.motionHz)} per sekund` : 'ingen'}${diag.hasGyro ? ', med gyroskop' : ', <strong>uten gyroskop</strong>'}${diag.hasLinearAcc ? ', med lineær akselerasjon' : ', <strong>uten lineær akselerasjon</strong>'}${diag.hasIncGravity ? '' : ', <strong>uten tyngdekraft</strong>'}</li>
           <li>GPS: ${diag.gpsFixes} posisjoner (${n1(diag.gpsHz)} per sekund)${Number.isFinite(diag.gpsMedianAcc) ? `, typisk nøyaktighet ${diag.gpsMedianAcc} m` : ''}</li>
-          <li>Skjermlås (Wake Lock): ${esc(diag.wakeLock)} · Hjem-skjerm: ${diag.standalone ? 'ja' : 'nei'}${diag.replay ? ' · avspilt demo' : ''}</li>
+          <li>Skjermen holdes på (Wake Lock): ${esc(diag.wakeLock)} · Hjem-skjerm: ${diag.standalone ? 'ja' : 'nei'}${diag.replay ? ' · avspilt demo' : ''}</li>
           ${diag.appVersion ? `<li>Appversjon ved opptak: ${esc(diag.appVersion)}</li>` : ''}
           <li class="muted small">${esc(diag.userAgent || '')}</li>
         </ul>` : ''}
@@ -474,11 +474,11 @@ export function renderReport(root, r, ctx = {}) {
           <p><strong>Svinger</strong> måles som sidekraft: fart ganger hvor raskt bilen roterer. ${r.source === 'gyro'
             ? 'Rotasjonen kom fra gyroskopet, projisert på tyngdekraften, så det spiller ingen rolle hvordan telefonen står i holderen.'
             : 'Gyroskopdata manglet på denne turen, så rotasjonen ble beregnet fra GPS-retningen i stedet. Det er grovere og kan gå glipp av korte svinger.'}</p>
-          <p><strong>Jevn fart</strong> ser på hvor mye farten varierer mens bilen er i bevegelse.${r.cityAware ? ' De siste og første 10 sekundene rundt hvert stopp telles ikke med, så kryss og lyskryss ikke trekker ned.' : ''}</p>
-          <p><strong>Holder-sjekk:</strong> ${r.holder && r.holder.episodes.length ? `telefonen ble flyttet ${r.holder.episodes.length === 1 ? 'én gang' : r.holder.episodes.length + ' ganger'} underveis.` : 'telefonen sto stødig hele turen.'} Måles ved at tyngdekraftens retning i telefonen endrer seg brått.</p>
+          <p><strong>Jevn fart</strong> ser på hvor mye farten varierer mens bilen er i bevegelse.${r.cityAware ? ' De 10 sekundene før og etter hvert stopp telles ikke med, så kryss og lyskryss ikke trekker ned.' : ''}</p>
+          <p><strong>Holdersjekk:</strong> ${r.holder && r.holder.episodes.length ? `telefonen ble flyttet ${r.holder.episodes.length === 1 ? 'én gang' : r.holder.episodes.length + ' ganger'} underveis.` : 'telefonen sto stødig hele turen.'} Måles ved at tyngdekraftens retning i telefonen endrer seg brått.</p>
           <p><strong>Hendelser per 10 km</strong> gjør det lettere å sammenligne korte og lange turer.</p>
           <p><strong>Motor:</strong> ${r.alongSource === 'acc'
-            ? `v3 – bremsing og gass ble målt med akselerometeret (100 ganger i sekundet) og kalibrert mot GPS (samsvar ${Math.round((r.accFit ? r.accFit.corr : 0) * 100)} %). Det fanger korte, harde bremser som GPS glatter bort.`
+            ? `v3 – bremsing og gass ble målt med akselerometeret (20 ganger i sekundet) og kalibrert mot GPS (samsvar ${Math.round((r.accFit ? r.accFit.corr : 0) * 100)} %). Det fanger korte, harde bremser som GPS glatter bort.`
             : (r.engine === 'v3' ? 'v3 var valgt, men akselerometerdata manglet eller passet dårlig med GPS (løs holder?), så GPS-fart ble brukt.' : 'v1 – bremsing og gass fra GPS-fart.')}</p>
           <p><strong>Feltskifter</strong> finnes i GPS-sporet (sideforflytning på 2,5–5 m) og bekreftes med gyroskopet. Under 45 km/t og der veien svinger ujevnt telles de ikke, så noen kan mangle.</p>
           ${r.perKm ? `<p><strong>Poengene er justert for distanse:</strong> trekk regnes per 10 km${r.kmFactor > 1.01 ? ', og turer under 5 km regnes som 5 km' : ''}.</p>` : ''}
@@ -673,7 +673,7 @@ function talkCard(talk) {
 const PRACTICE = {
   brake: { title: 'Myk bremsing', how: 'Se langt fram og slipp gassen tidlig. Velg en strekning med flere lyskryss, og prøv å stoppe så mykt at passasjeren ikke merker det.' },
   accel: { title: 'Rolig igangkjøring', how: 'Trykk gassen gradvis inn fra stillestående, som om det ligger et egg under pedalen. Øv ut fra kryss og rundkjøringer.' },
-  turn: { title: 'Fart inn i svinger', how: 'Bremse før svingen, ikke i den, og hold jevn fart gjennom. En rolig vei med flere svinger er fin å øve på.' },
+  turn: { title: 'Fart inn i svinger', how: 'Brems før svingen, ikke i den, og hold jevn fart gjennom. En rolig vei med flere svinger er fin å øve på.' },
   smooth: { title: 'Jevn fart', how: 'Velg en landevei og hold samme fart. Kast et blikk på speedometeret omtrent hvert femte sekund.' },
   limits: { title: 'Fartsgrensene', how: 'Si fartsgrensen høyt hver gang du ser et nytt skilt. Ledsageren kan spørre «hva er grensen her?» innimellom.' },
   mirror: { title: 'Speil og skulderblikk', how: 'Si «speil» høyt hver gang du sjekker speilet, før feltskifte, sving og nedbremsing. Ledsageren følger med.' },
@@ -723,7 +723,7 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
       res.state = r.scores.smooth >= 85 ? 'ok' : 'no';
       res.text = `${r.scores.smooth} poeng`;
     } else if (id === 'limits') {
-      if (!sp) res.text = 'Slå på «Fartsgrense og veidata» i innstillinger for å måle fartsgrenser';
+      if (!sp) res.text = 'Slå på «Fartsgrense og veidata» i Innstillinger for å måle fartsgrenser';
       else { res.state = sp.secondsOver <= 10 ? 'ok' : 'no'; res.text = sp.secondsOver ? `${overTime(sp.secondsOver, true)} over grensen` : 'Aldri over grensen'; }
     } else if (id === 'roundabout') {
       if (!rbs.length) res.text = 'Ingen rundkjøringer på ruten';
@@ -744,7 +744,7 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
       }
     } else if (id === 'junction') {
       const stops = road ? road.stops : [], gw = road ? road.giveway : [];
-      if (!road) res.text = 'Slå på «Fartsgrense og veidata» i innstillinger for å finne kryss';
+      if (!road) res.text = 'Slå på «Fartsgrense og veidata» i Innstillinger for å finne kryss';
       else if (!stops.length && !gw.length) res.text = 'Ingen stopp- eller vikepliktkryss funnet';
       else {
         const rolled = stops.filter(x => !x.full).length;
@@ -810,7 +810,7 @@ function alongRoad(road) {
     g.filter(x => x.kind === 'barn').length ? `<li><strong>Skiltet Barn:</strong> ${g.filter(x => x.kind === 'barn').map(x => `høyst ${x.maxKmh} km/t etter skiltet`).join(', ')}.</li>` : '',
     g.filter(x => x.kind !== 'barn').length ? `<li><strong>Farlig sving:</strong> ${g.filter(x => x.kind !== 'barn').map(x => `${x.kmh} km/t ved skiltet${x.events.length ? ', brå hendelse etterpå' : ''}`).join(', ')}.</li>` : ''
   ].join('');
-  return `<h3 class="mt">Langs vegen</h3><ul class="along-list">${rows}</ul><p class="muted small">Fra Statens vegvesen (NVDB). Skilt teller bare når de sto på høyre side av bilen.${atk.length || sec.length ? ' Fotobokser og strekningsmåling teller bare i kjøreretningen deres. Fart fra GPS, så den kan avvike litt fra speedometeret.' : ''}</p>`;
+  return `<h3 class="mt">Langs veien</h3><ul class="along-list">${rows}</ul><p class="muted small">Fra Statens vegvesen (NVDB). Skilt teller bare når de sto på høyre side av bilen.${atk.length || sec.length ? ' Fotobokser og strekningsmåling teller bare i kjøreretningen deres. Fart fra GPS, så den kan avvike litt fra speedometeret.' : ''}</p>`;
 }
 
 function maneuverSection(r, road, log, marks, hasRoadData) {
@@ -855,7 +855,7 @@ function maneuverSection(r, road, log, marks, hasRoadData) {
       ${gw.length ? `<details class="gw"><summary><span><strong>Vikeplikt:</strong> ${gw.length} ${gw.length === 1 ? 'kryss' : 'kryss'} der dere bremset ned · snitt ${kmh(avgIn)} inn</span></summary>
         <ul class="gw-list">${gw.map(g => `<li><button type="button" class="man-item small" data-lat="${g.lat}" data-lon="${g.lon}"><span>${mss(g.t)}</span><span>${kmh(g.approachKmh)} → ${kmh(g.minKmh)}</span>${icon('chev', 16)}</button></li>`).join('')}</ul>
         <p class="muted small">Om dere måtte vike for trafikk, kan ikke appen vite. Lav fart inn mot krysset gir tid til å se.</p></details>` : ''}
-      ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Fartsgrense og veidata</strong> i innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
+      ${hasRoadData ? '' : '<p class="muted small">Slå på <strong>Fartsgrense og veidata</strong> i Innstillinger for stoppskilt, vikeplikt og rundkjøringer fra Statens vegvesen. Feltskifter og rundkjøringer måles ellers med sensorene.</p>'}
     </section>`;
 }
 
@@ -873,7 +873,7 @@ function roadSection(r, ctx = {}) {
   return `<section class="card" id="road-section">
       <h2 class="card-title">${icon('layers')}Veien foran <span class="beta-tag">Ny</span></h2>
       ${blindRoad ? `<p class="notice">Veikameraet fant verken biler eller feltlinjer i ${rd.samples} bilder.${rd.darkShare === null || rd.darkShare >= 0.5 ? `${rd.darkShare === null ? ' Var det mørkt?' : ' Bildene var mørke.'} Sett telefonen så nær frontruta som mulig og demp skjermen i bilen: refleks i ruta er det største problemet om kvelden.` : ' Sjekk at bakkameraet ser fram gjennom frontruta og ikke er dekket.'}</p>` : ''}
-      ${!blindRoad && rd.darkShare !== null && rd.darkShare >= 0.5 ? `<p class="muted small">Kjørt i mørket (${pc(rd.darkShare)} av veibildene). Baklys-par ble funnet i ${rd.tailLeads || 0} bilder. De brukes ikke til avstand ennå: de må først sjekkes mot testbilder.</p>` : ''}
+      ${!blindRoad && rd.darkShare !== null && rd.darkShare >= 0.5 ? `<p class="muted small">Kjørt i mørket (${pc(rd.darkShare)} av veibildene). Baklys-par ble funnet i ${rd.tailLeads || 0} bilder. De brukes ikke til avstand ennå.</p>` : ''}
       <div class="road-stats">
         <div><strong>${rd.medianHeadway !== null ? n1(rd.medianHeadway) + ' s' : '–'}</strong><span class="muted small">vanlig avstand i tid</span></div>
         <div><strong>${rd.medianDist !== null ? rd.medianDist + ' m' : '–'}</strong><span class="muted small">vanlig avstand</span></div>
@@ -925,7 +925,7 @@ function cameraSection(r, ctx = {}) {
       <p class="muted small">${['left', 'right', 'rear', 'shoulderL', 'shoulderR'].filter(k => c.counts[k]).map(k => `${GLANCE_LABEL[k]} ${c.counts[k]}`).join(' · ') || 'Ingen blikk registrert'}</p>
       ${c.start ? `<h3 class="mt">Igangkjøring</h3><p>${yes(c.start.mirror, 'Speil før start')} ${yes(c.start.shoulder, 'Skulderblikk venstre')}</p>` : ''}
       ${c.lane.length ? `<h3 class="mt">Feltskifter</h3>${c.laneSource === 'marks' ? '<p class="muted small">Feltskiftene ledsageren merket. Speil 15–1 s før merket og skulderblikk 12–0 s før.</p>' : ''}<ul class="cam-lanes">${c.lane.map(l => `<li><span>${mss(l.t)} · ${l.dir ? 'til ' + esc(l.dir) : 'merket'}</span><span>${yes(l.mirror, 'Speil')} ${yes(l.shoulder, 'Skulder')}</span></li>`).join('')}</ul>` : ''}
-      <p class="muted small">Kameraet så ansiktet ${cov} % av tiden${cov < 70 ? ' – flytt holderen så ansiktet er bedre synlig' : ''}. Dette er en test: kameraet ser hodet, ikke øynene, så korte blikk med bare øynene blir ikke med. Bruk tallene som en pekepinn og snakk med ledsageren om dem.</p>
+      <p class="muted small">Kameraet så ansiktet ${cov} % av tiden${cov < 70 ? ' – flytt holderen så ansiktet er bedre synlig' : ''}. Dette er en test: svært korte blikk kan bli borte. Bruk tallene som en pekepinn og snakk med ledsageren om dem.</p>
       ${c.closeMirrors ? `<p class="muted small">${esc(closeMirrorText(c.closeMirrors))} i kalibreringen, så appen kan blande dem. Snu hodet tydeligere mot hvert speil neste gang dere kalibrerer.</p>` : ''}
       ${c.calibOff > 12 ? '' : c.drift > 6 ? `<p class="notice">«Rett fram» flyttet seg ${Math.round(c.drift)}° i forhold til kalibreringen. Appen justerer for det, men kalibrer på nytt hvis holderen er flyttet.</p>` : ''}
       ${ctx.onCalibrate ? '<button type="button" class="link" id="btn-calib-drive">Stemmer ikke speilene? Kalibrer på nytt for denne turen</button>' : ''}
@@ -1129,7 +1129,7 @@ export function eventDetail(r, e, { marks = [], names = { events: {} }, sp = nul
     </dl>
     ${nearMarks.length ? `<p class="ev-marks">${nearMarks.map(m => `Ledsager merket <strong>${m.letter}</strong> ${Math.abs(Math.round(m.t - e.t))} s ${m.t >= e.t ? 'etter' : 'før'}${m.note ? `: «${esc(m.note)}»` : '.'}`).join(' ')}</p>` : ''}
     <p class="ev-advice"><strong>Tips:</strong> ${advice}</p>
-    <button type="button" class="btn secondary btn-show-map">Vis i kartet</button>`;
+    <button type="button" class="btn secondary btn-show-map">Vis på kartet</button>`;
 }
 
 function delta(now, before, words = false) {
@@ -1213,7 +1213,7 @@ function routeMap(r, marks = []) {
     return `<g class="marker" data-n="${e.n}" transform="translate(${mx.toFixed(1)} ${my.toFixed(1)})" role="button" tabindex="0" aria-label="Hendelse ${e.n}">
       <circle r="22" class="halo"/>
       <circle r="17" fill="${KIND_COLOR[e.kind]}" stroke="#fff" stroke-width="3"/>
-      <text text-anchor="middle" dominant-baseline="central" font-size="17" font-weight="800" fill="#fff">${e.n}</text>
+      <text text-anchor="middle" dominant-baseline="central" font-size="17" font-weight="800" style="fill:var(--on-color)">${e.n}</text>
     </g>`;
   }).join('');
   // Målestokk: 1 enhet i x = 1 grad ≈ 111 320 m
@@ -1253,7 +1253,7 @@ function label(x, y, text, W) {
 }
 
 function scoreBar(k, v, prevV) {
-  const cls = v >= 90 ? 'good' : v >= 75 ? 'mid' : 'bad';
+  const cls = v >= 75 ? 'good' : v >= 55 ? 'mid' : 'bad';   // samme skala som poengringen og ordene (0.27.2)
   return `<div class="bar-row">
     <span class="bar-label">${k === 'limits' ? 'Fartsgrense' : k === 'speed' ? 'Fart' : CATS[k]}</span>
     <span class="bar"><span class="bar-fill ${cls}" style="width:${v}%"></span></span>
@@ -1351,7 +1351,7 @@ export function trendChart(scores, goal = null) {
   const X = i => pl + (i / (scores.length - 1)) * (W - pl - pr);
   const Y = v => pt + (1 - v / 100) * (H - pt - pb);
   const line = scores.map((s, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(s).toFixed(1)}`).join('');
-  const dots = scores.map((s, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(s).toFixed(1)}" r="7" fill="${s >= 90 ? 'var(--good)' : s >= 75 ? 'var(--turn)' : 'var(--brake)'}" stroke="var(--surface)" stroke-width="2"/>`).join('');
+  const dots = scores.map((s, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(s).toFixed(1)}" r="7" fill="${s >= 75 ? 'var(--good)' : s >= 55 ? 'var(--turn)' : 'var(--brake)'}" stroke="var(--surface)" stroke-width="2"/>`).join('');
   return `<svg class="chart trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Poengtrend over ${scores.length} turer">
     ${[0, 25, 50, 75, 100].map(l => `<line x1="${pl}" x2="${W - pr}" y1="${Y(l).toFixed(1)}" y2="${Y(l).toFixed(1)}" class="grid"/><text x="${pl - 6}" y="${(Y(l) + 4).toFixed(1)}" text-anchor="end" class="axis big">${l}</text>`).join('')}
     ${Number.isFinite(goal) ? `<line x1="${pl}" x2="${W - pr}" y1="${Y(goal).toFixed(1)}" y2="${Y(goal).toFixed(1)}" class="goal-line"/><text x="${W - pr}" y="${(Y(goal) - 6).toFixed(1)}" text-anchor="end" class="axis big goal-text">Mål ${goal}</text>` : ''}

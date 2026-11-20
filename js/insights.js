@@ -149,7 +149,7 @@ export function curriculumEvidence(rows) {
   const rb = sum(x => ((x.road && x.road.roundabouts) || x.res.maneuvers?.roundabouts || []).length);
   ev.roundabout = rb ? { text: `${rb} ${rb === 1 ? 'rundkjøring' : 'rundkjøringer'}`, good: rb >= 10 } : null;
   const lc = sum(x => (x.res.maneuvers?.laneChanges || []).length);
-  ev.lane = lc ? { text: `${lc} feltskifter`, good: lc >= 10 } : null;
+  ev.lane = lc ? { text: `${lc} ${lc === 1 ? 'feltskifte' : 'feltskifter'}`, good: lc >= 10 } : null;
   const gw = sum(x => ((x.road && x.road.giveway) || []).length + ((x.road && x.road.stops) || []).length);
   ev.junction = gw ? { text: `${gw} kryss med vikeplikt eller stopp`, good: gw >= 20 } : null;
   const withSp = rows.filter(x => x.sp);

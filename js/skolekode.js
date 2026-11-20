@@ -55,10 +55,10 @@ export function installId() {
 
 export const ERROR_TEXT = {
   ukjent: 'Koden finnes ikke. Sjekk at du har skrevet den riktig.',
-  brukt: 'Koden er allerede brukt på to telefoner. Spør trafikkskolen din.',
+  brukt: 'Koden er allerede brukt på så mange telefoner som den gjelder for. Spør trafikkskolen din.',
   stengt: 'Koden virker ikke lenger. Spør trafikkskolen din.',
   utlopt: 'Koden har gått ut. Spør trafikkskolen din.',
-  nett: 'Fant ikke nettet. Prøv igjen når du er på nett.',
+  nett: 'Ingen nettilkobling. Prøv igjen når du er på nett.',
   server: 'Kunne ikke sjekke koden akkurat nå. Prøv igjen om litt.'
 };
 
