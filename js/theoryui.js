@@ -15,6 +15,7 @@ import { hasTheory, FREE_THEORY } from './plus.js';
 import { planReminders } from './remind.js';
 import { isDemoMode } from './db.js';
 import { isNativeApp } from './platform.js';
+import { SAFETY_QUIZ } from './safety-quiz.js';
 
 /* Påminnelse om dagens teori (0.24.0): bare i iPhone-appen, og bare med Pluss. Kalles når oversikten tegnes, når
    valget endres, når dagens mål nås og når appen startes (app.js). */
@@ -33,7 +34,7 @@ import { EXAM, LEARNED, READY_RULE, READY_TEXT, HARD_SHARE, level, answer, isLea
   dueList, examLapsed, examTimeLeft, REVIEW_DAYS } from './theory.js';
 import { BOOK, sectionFor, bookChapter, weakSections, SURFACES, stopDistance, impactSpeed } from './theory-book.js';
 
-const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS, SIGN_PICK_QUESTIONS).map(q => [q.id, q]));
+const byId = new Map(QUESTIONS.concat(SIGN_QUESTIONS, SIGN_PICK_QUESTIONS, SAFETY_QUIZ).map(q => [q.id, q]));
 const SIGN_POOL = SIGN_QUESTIONS.concat(SIGN_PICK_QUESTIONS);   // skiltprøven: hva betyr skiltet, og hvilket skilt er det (0.20.0)
 /* Teorien ligger i Opplæring-fanen (0.20.0), som egen underfane */
 export const THEORY_HOME = '#/opplaering/teori';
@@ -317,7 +318,7 @@ export async function renderTheoryHub(root, ctx) {
 function startPractice(ctx, { title, n = 10, pool = 'teori', back = THEORY_HOME, ...filter }) {
   // De gratis spørsmålene (0.23.0) kommer alltid i samme rekkefølge, det beste først
   const items = filter.free ? FREE_THEORY.map(id => byId.get(id)).filter(Boolean)
-    : pickPractice(pool === 'skilt' ? SIGN_POOL : pool === 'alle' ? QUESTIONS.concat(SIGN_POOL) : QUESTIONS, ctx.progress(), { n, ...filter });
+    : pickPractice(pool === 'skilt' ? SIGN_POOL : pool === 'sikkerhet' ? safetyFor(SAFETY_QUIZ, ctx.progress().car) : pool === 'alle' ? QUESTIONS.concat(SIGN_POOL) : QUESTIONS, ctx.progress(), { n, ...filter });
   if (!items.length) { toast('Ingen spørsmål å øve på her akkurat nå.', { type: 'ok' }); return; }
   practice = { title, back, filter: { n, pool, back, ...filter }, items: items.map(q => q.id), orders: Object.fromEntries(items.map(q => [q.id, optionOrder(q)])), i: 0, chosen: null, results: [] };
   ctx.go('#/teori/ov');
@@ -977,6 +978,20 @@ export function renderExamResult(root, ctx) {
 }
 
 /* ---------- Sikkerhetskontrollen ---------- */
+/* Quizen om sikkerhetskontrollen (0.28.1): flervalg med tegninger, øvd som teorien. Følger biltypen. */
+function quizCard(p) {
+  const qs = safetyFor(SAFETY_QUIZ, p.car);
+  if (!qs.length) return '';
+  const learned = qs.filter(q => isLearned(p.q[q.id])).length, wrong = qs.filter(q => isWrong(p.q[q.id])).length;
+  return `<section class="card s-quiz">
+      <h2 class="card-title">${icon('quiz')}Quiz om sikkerhetskontrollen</h2>
+      <p class="muted small">${qs.length} spørsmål med tegninger og forklaring, som i teorien. Et spørsmål er lært når du har svart riktig tre ganger, spredt over dager.</p>
+      <p class="plan-prog"><strong>${learned}</strong> av ${qs.length} lært${wrong ? ` · ${wrong} å rette opp` : ''}</p>
+      <span class="goal-bar"><span style="width:${Math.round(learned / qs.length * 100)}%"></span></span>
+      <div class="btn-row${wrong ? '' : ' one'}"><button type="button" class="btn secondary" id="s-quiz">${icon('quiz', 20)}Ta quizen</button>${wrong ? `<button type="button" class="btn secondary" id="s-quiz-wrong">${icon('repeat', 20)}Øv på feilene</button>` : ''}</div>
+    </section>`;
+}
+
 export function renderSafetyHub(root, ctx) {
   stopSpeaking();
   const p = ctx.progress();
@@ -991,6 +1006,7 @@ export function renderSafetyHub(root, ctx) {
       <span class="goal-bar"><span style="width:${stats.total ? Math.round(stats.known / stats.total * 100) : 0}%"></span></span>
       <button type="button" class="btn primary" id="s-drill">${icon('wrench', 20)}Øv som på oppkjøringen</button>
     </section>
+    ${quizCard(p)}
     <section class="card">
       <p class="sug-title">Bilen du kjører opp med</p>
       <div class="chips wrap" role="group" aria-label="Biltype">${CAR_TYPES.map(c => `<button type="button" class="chip ${p.car === c.id ? 'on' : ''}" data-car="${c.id}" aria-pressed="${p.car === c.id}">${esc(c.label)}</button>`).join('')}</div>
@@ -1006,6 +1022,8 @@ export function renderSafetyHub(root, ctx) {
           <div class="btn-row"><button type="button" class="btn small-btn secondary" data-know="1" aria-pressed="${known(t.id)}">${icon('check', 18)}Kan denne</button><button type="button" class="btn small-btn secondary" data-know="0">Øv mer</button></div>
         </details>`).join('')}</section>`;
     }).join('')}`;
+  const qz = root.querySelector('#s-quiz'); if (qz) qz.onclick = () => startPractice(ctx, { title: 'Quiz: sikkerhetskontrollen', pool: 'sikkerhet', n: 10, back: '#/sikkerhetskontroll' });
+  const qw = root.querySelector('#s-quiz-wrong'); if (qw) qw.onclick = () => startPractice(ctx, { title: 'Quiz: feilene', pool: 'sikkerhet', wrongOnly: true, n: 10, back: '#/sikkerhetskontroll' });
   root.querySelector('#s-drill').onclick = () => {
     const items = pickSafety(SAFETY, ctx.progress(), { car: ctx.progress().car, n: 5 });
     drill = { items: items.map(t => t.id), i: 0, shown: false, results: [] };

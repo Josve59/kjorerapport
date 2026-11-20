@@ -29,8 +29,11 @@ const T = (id, area, car, task, how, fault) => ({ id, area, car, task, how, faul
 const LAMP_FOR = { 'lys-naer': 'lamp:naerlys', 'lys-fjern': 'lamp:fjernlys', 'brems-abs': 'lamp:abs', 'varsel-brems': 'lamp:brems', 'varsel-lading': 'lamp:lading', 'varsel-dekk': 'lamp:dekk', 'styr-servo': 'lamp:styring',
   // 0.20.0: flere tegninger. Væskene viser symbolet på lokket i stedet for lampen, fordi oppgaven er å finne og sjekke væsken.
   'lys-blink': 'lamp:blink', 'lys-bak': 'lamp:takebak', 'vaeske-olje': 'cap:olje', 'vaeske-kjole': 'cap:kjole', 'brems-vaeske': 'cap:brems', 'vaeske-spyler': 'cap:spyler',
-  'dekk-monster': 'diagram:monster', 'dekk-type': 'pict:vinterdekk', 'varsel-farger': 'pict:dash', 'varsel-start': 'pict:dash', 'sikt-speil': 'diagram:blindsone',
-  'sikt-belte': 'lamp:belte', 'utstyr-trekant': 'diagram:trekant', 'stotte-esc': 'lamp:esc' };
+  'dekk-monster': 'bil:dybdemaler', 'dekk-type': 'pict:vinterdekk', 'varsel-farger': 'pict:dash', 'varsel-start': 'pict:dash', 'sikt-speil': 'diagram:blindsone',
+  'sikt-belte': 'lamp:belte', 'utstyr-trekant': 'diagram:trekant', 'stotte-esc': 'lamp:esc',
+  // 0.28.1: tegninger av selve delen på bilen (bil: i trafficsvg.js)
+  'lys-brems': 'bil:bremselys', 'lys-andre': 'bil:lysbryter', 'dekk-trykk': 'bil:lufttrykk', 'dekk-skader': 'bil:hjul-skade', 'styr-slark': 'bil:ratt-slark',
+  'vaeske-panser': 'bil:panser', 'sikt-viskere': 'bil:viskere', 'el-lading': 'bil:lader', 'stotte-fil': 'bil:kamera-radar', 'stotte-nodbrems': 'bil:kamera-radar' };
 
 const LIST = [
   /* ---------- Lys ---------- */

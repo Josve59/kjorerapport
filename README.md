@@ -143,6 +143,32 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.28.1 – a quiz about the safety check, and drawings for theory and the car
+
+The owner (20 November): «Work on and expand the theory and safety questions with graphics, and make a quiz like the theory for the safety questions.»
+
+- **Quiz om sikkerhetskontrollen** (`js/safety-quiz.js`, 59 questions, sk01–sk59):
+  - Every question belongs to one of the 46 tasks in `safety-check.js`, with the same area and car type. All 46 tasks have at least one question.
+  - It follows the car the learner picked (electric, petrol/diesel, hybrid). Petrol/diesel gives 55 questions.
+  - It runs on the theory practice engine (`startPractice`, pool `sikkerhet`): explanation after the answer, «learned» after three right answers spread over days, «Øv på feilene», «Meld fra om feil».
+  - A card on the safety check page shows how many are learned and has «Ta quizen» and, when needed, «Øv på feilene».
+  - A fact-check agent checked the questions against Forskrift om bruk av kjøretøy §§ 1-3 to 1-6, Trafikkreglene § 15, Vegtrafikkloven § 23, Statens vegvesen's inspection instructions and DSB on charging. Fixes:
+    - a dipstick picture that contradicted its question;
+    - a tyre label that gave away the answer;
+    - wrong options that could be defended;
+    - a pattern where «stans» was always right;
+    - answers that were longer than the rest;
+    - grammar;
+    - sources that pointed to the Vegvesen topic list or to the exact rule.
+- **New drawings** (`js/trafficsvg.js`):
+  - 15 car parts of a new kind `bil:`, each on a fixed-colour tile so it looks the same in light and dark: dipstick, coolant, brake fluid, tread-depth gauge, tyre-pressure label, light switch, hazard button, wipers, seat belt, steering play, bonnet catch, charging socket, camera and radar, brake lights, tyre bulge.
+  - 12 theory figures: recovery position, child seat and airbag, tired driver, glare, fog, children by the road, turn placement, braking distance on five surfaces, passing a cyclist, no-stopping distances, lorry turning right, penalty points.
+- **Where they are used:**
+  - 64 theory questions got a drawing. Questions with a drawing per theme: ansvar 20/61 (was 5), trafikanter 19/55, fart 33/66, regler 27/55, kjøretøy 29/56.
+  - Safety tasks with a drawing went from 21 to 31 of 46.
+  - A drawing that would give the answer is shown only after the answer (`wimg`). The tread-depth task now shows the gauge, not the diagram that printed «1,6 mm» and «3 mm» before «Vis svaret».
+- `tests/safety-quiz.test.mjs`: every quiz question has a task with the same area and car, four different options, a source, and drawings that exist; the car filter works.
+
 ## What's new in 0.28.0 – one test link for the driving school, and only the road camera on the web
 
 The owner (20 November): «https://kjorerapport.jo-9fc.workers.dev/?kode=XAHN-2DV9-XFUD is sent to the driving school. Update it with what you just sent, remove the one you sent now, so we only work with the one I send. Only the road camera in the web app, but both in my Xcode test app.»

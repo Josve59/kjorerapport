@@ -1,7 +1,7 @@
 /* Tegninger til teorispørsmålene (0.14.0): skilt, oppmerking, trafikklys og kryss, som SVG laget i koden. Skiltene er
    forenklet etter skiltforskriften (formen, fargene og symbolet), nok til å kjenne dem igjen. Skiltforskriften er en
    forskrift, så skiltene kan brukes fritt (åndsverkloven § 14).
-   figure(key) → SVG-tekst. key: 'sign:362:60', 'sign:362:50:gul', 'line:sperre', 'light:gul', 'scene:hoyre'.
+   figure(key) → SVG-tekst. key: 'sign:362:60', 'sign:362:50:gul', 'line:sperre', 'light:gul', 'scene:hoyre', 'bil:peilepinne' (deler av bilen, 0.28.1).
    Skjermleserteksten (aria-label) avslører ikke svaret. Ren funksjon, testes i Node. */
 
 const RED = '#c8102e', BLUE = '#0b5aa6', YEL = '#f5c400', BLK = '#141414', WH = '#ffffff';
@@ -667,6 +667,262 @@ Object.assign(LINES, {
     ${car(40, 132, '#2e7dd1')}`, 'To felt i samme retning før et kryss. Du er i venstre felt, der det er malt en pil rett fram. En heltrukken hvit linje skiller det fra feltet til høyre, som har pil til høyre.')
 });
 
+/* ==================== Bilen (0.28.1): deler sensor kan spørre om i sikkerhetskontrollen ====================
+   Hver tegning står på en egen flis med faste farger: mørk som motorrommet og dashbordet, ellers lys. Da ser den lik ut
+   i lys og mørk modus. Skjermleserteksten sier hva du ser, ikke hva som er riktig; 'bil:<navn>:anon' gir en nøytral tekst. */
+const BAY = '#2b3138', TILE = '#e8eef7', METAL = '#c9ced3', BODY = '#6c84a6', BODY2 = '#5a6f8c', GLASS = '#cfe0ee', INK = '#14181b', W2 = '#e9eef6';
+const tileBg = (fill = TILE) => `<rect width="120" height="120" rx="18" fill="${fill}"/>`;
+const clipTile = (id, body, fill = TILE) => `<clipPath id="${id}"><rect width="120" height="120" rx="18"/></clipPath><g clip-path="url(#${id})"><rect width="120" height="120" fill="${fill}"/>${body}</g>`;
+/* Vifte fra (cx, cy), vinkler i grader med 0 = opp og med klokka */
+const sector = (cx, cy, r, a0, a1) => { const P = a => `${(cx + r * Math.sin(a * Math.PI / 180)).toFixed(1)} ${(cy - r * Math.cos(a * Math.PI / 180)).toFixed(1)}`; return `M${cx} ${cy} L${P(a0)} A${r} ${r} 0 0 1 ${P(a1)} Z`; };
+/* Gjennomsiktig beholder med væske og merkene MAX og MIN til høyre */
+const tank = (id, x, y, w, h, rx, lvl, fluid, maxY, minY, wall = '#ebe8de') => `<clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/></clipPath><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${wall}" stroke="#b9b5a6" stroke-width="1.5"/><g clip-path="url(#${id})"><rect x="${x}" y="${lvl}" width="${w}" height="${h}" fill="${fluid}" opacity=".85"/><line x1="${x}" y1="${lvl}" x2="${x + w}" y2="${lvl}" stroke="#fff" stroke-opacity=".6" stroke-width="1.5"/></g>${[[maxY, 'MAX'], [minY, 'MIN']].map(([yy, t]) => `<line x1="${x + w - 22}" y1="${yy}" x2="${x + w - 5}" y2="${yy}" stroke="${INK}" stroke-width="2"/>${tx(x + w - 34, yy, t, 8, INK)}`).join('')}`;
+const numBadge = (x, y, n) => `<circle cx="${x}" cy="${y}" r="7" fill="${YEL}" stroke="${INK}" stroke-width="1"/>${tx(x, y + 0.5, n, 9, INK)}`;
+/* Liten person til dekktrykkmerket */
+const miniPerson = (x, y) => `<circle cx="${x}" cy="${y - 3}" r="2" fill="${INK}"/><path d="M${x - 3} ${y + 4} Q${x} ${y - 1.5} ${x + 3} ${y + 4} Z" fill="${INK}"/>`;
+const BIL = {
+  peilepinne: () => pict(`${tileBg(BAY)}<circle cx="19" cy="24" r="8" fill="none" stroke="#f2c230" stroke-width="4"/><rect x="26" y="21" width="9" height="6" rx="2" fill="#f2c230"/>
+    <rect x="34" y="22.6" width="72" height="2.8" rx="1.4" fill="${METAL}"/><rect x="94" y="22.6" width="12" height="2.8" rx="1.4" fill="#b07a1a"/>
+    <path d="M100 29 L87 42" stroke="#9aa1a7" stroke-width="1.4" stroke-dasharray="3 3"/>
+    <clipPath id="cpeil"><circle cx="60" cy="76" r="35"/></clipPath><circle cx="60" cy="76" r="36" fill="#1c2126" stroke="#9aa1a7" stroke-width="2"/>
+    <g clip-path="url(#cpeil)"><path d="M14 68 H82 Q90 68 90 76 Q90 84 82 84 H14 Z" fill="${METAL}"/>
+      <g stroke="#7c848c" stroke-width="1.2">${[44, 50, 56, 62, 68].map(x => `<line x1="${x}" y1="68" x2="${x + 6}" y2="84"/>`).join('')}</g>
+      <path d="M58 68 H82 Q90 68 90 76 Q90 84 82 84 H58 Z" fill="#b07a1a" opacity=".9"/>
+      <rect x="39.5" y="64" width="3" height="24" fill="${INK}"/><rect x="72.5" y="64" width="3" height="24" fill="${INK}"/></g>
+    ${tx(43, 58, 'MAX', 8.5, WH)}${tx(74, 58, 'MIN', 8.5, WH)}`, 'Peilepinnen for motorolje. Nederst på pinnen, vist forstørret, er merkene MAX og MIN.'),
+  kjolevaeske: () => pict(`${tileBg(BAY)}<path d="M30 92 Q14 96 8 116" stroke="#15191c" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M92 46 Q108 46 112 28" stroke="#15191c" stroke-width="5" fill="none" stroke-linecap="round"/>
+    ${tank('ckjol', 28, 34, 64, 66, 10, 64, '#e0609a', 52, 82)}
+    <rect x="49" y="25" width="22" height="10" fill="#ebe8de"/><rect x="42" y="12" width="36" height="15" rx="4" fill="#1f2328"/><path d="M48 14 V25 M54 14 V25 M60 14 V25 M66 14 V25 M72 14 V25" stroke="#3a4148" stroke-width="2"/>`,
+    'Ekspansjonstanken for kjølevæske med svart lokk. På siden av tanken er merkene MAX og MIN.'),
+  bremsevaeske: () => pict(`${tileBg(BAY)}<rect x="20" y="94" width="80" height="14" rx="4" fill="#8a9097"/><path d="M34 108 V120 M86 108 V120" stroke="#b9895a" stroke-width="3"/>
+    ${tank('cbrem', 32, 46, 56, 48, 7, 68, '#e3b341', 58, 82, '#efeadb')}
+    <rect x="50" y="38" width="20" height="9" fill="#efeadb"/><rect x="38" y="22" width="44" height="18" rx="6" fill="#f2c230"/>
+    <g fill="none" stroke="${INK}" stroke-width="2"><circle cx="60" cy="31" r="4.5"/><path d="M53 26.5 A8 8 0 0 0 53 35.5 M67 26.5 A8 8 0 0 1 67 35.5"/></g>`,
+    'Beholderen for bremsevæske med gult lokk og bremsesymbolet. På siden er merkene MAX og MIN.'),
+  dybdemaler: () => pict(clipTile('cdyb', `<rect x="0" y="88" width="120" height="32" fill="#2a2f33"/><g fill="#2a2f33"><rect x="0" y="70" width="36" height="19"/><rect x="50" y="70" width="26" height="19"/><rect x="90" y="70" width="30" height="19"/></g>
+    <rect x="22" y="64" width="42" height="6" rx="1.5" fill="#8a9097"/><rect x="41.8" y="70" width="2.4" height="17.5" fill="#6b7177"/>
+    <rect x="31" y="9" width="24" height="55" rx="3" fill="#e3e7ec" stroke="#6b7177" stroke-width="1.2"/>
+    <g stroke="${INK}" stroke-width="1">${Array.from({ length: 11 }, (_, i) => `<line x1="31" y1="${(58 - i * 3.6).toFixed(1)}" x2="${i % 5 ? 36 : 40}" y2="${(58 - i * 3.6).toFixed(1)}"/>`).join('')}</g>
+    ${tx(47, 58, '0', 7, INK)}${tx(47, 40, '5', 7, INK)}${tx(48, 22, '10', 7, INK)}${tx(43, 14, 'mm', 6.5, INK)}<rect x="31" y="39" width="12" height="2" fill="${RED}"/>`),
+    'Mønsterdybdemåler satt ned i en rille i dekket, med skala i millimeter'),
+  lufttrykk: () => pict(clipTile('cluft', `<rect x="18" y="0" width="102" height="120" fill="#9fb0c3"/><rect x="0" y="0" width="20" height="120" fill="#2a2f33"/><rect x="18" y="0" width="5" height="120" fill="#3a4148"/><rect x="100" y="86" width="10" height="16" rx="2" fill="#6b7177"/>
+    <rect x="30" y="14" width="70" height="82" rx="4" fill="#fff" stroke="#6b7177" stroke-width="1"/>
+    ${tx(65, 23, 'Dekktrykk', 8.5, INK)}${tx(65, 31.5, '205/55 R16', 6, '#4b586b')}
+    <path d="M33 36 H97 M33 46 H97 M33 62 H97 M33 78 H97 M58 36 V78" stroke="#c4cad1" stroke-width="1"/>
+    ${tx(71, 41, 'Foran', 6.5, INK)}${tx(89, 41, 'Bak', 6.5, INK)}
+    ${miniPerson(42, 54)}${miniPerson(49, 54)}${miniPerson(38, 70)}${miniPerson(44, 70)}${miniPerson(50, 70)}<rect x="53" y="66" width="4" height="7" rx="1" fill="${INK}"/>
+    ${tx(71, 54, '2,3', 8, INK)}${tx(89, 54, '2,3', 8, INK)}${tx(71, 70, '2,5', 8, INK)}${tx(89, 70, '2,9', 8, INK)}${tx(65, 87, 'bar, kalde dekk', 6.5, '#4b586b')}`),
+    'Et merke i dørkarmen med en tabell over lufttrykket i dekkene foran og bak, med lite og mye last'),
+  lysbryter: () => {
+    const cx = 50, cy = 68, pos = (a, r = 37) => [cx + r * Math.sin(a * Math.PI / 180), cy - r * Math.cos(a * Math.PI / 180)];
+    const park = ([x, y]) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})" fill="none" stroke="${W2}" stroke-width="1.6" stroke-linecap="round"><path d="M-2.5 -5 A5 5 0 0 0 -2.5 5 Z M2.5 -5 A5 5 0 0 1 2.5 5 Z"/><path d="M-8 -4.5 L-11 -6 M-8.5 0 H-12 M-8 4.5 L-11 6 M8 -4.5 L11 -6 M8.5 0 H12 M8 4.5 L11 6"/></g>`;
+    const sym = (k, [x, y], s) => `<g transform="translate(${(x - 50 * s).toFixed(1)} ${(y - 50 * s).toFixed(1)}) scale(${s})">${LAMPS[k][2](W2)}</g>`;
+    const A = [-70, -24, 22, 66], [p0, pA, pP, pN] = A.map(a => pos(a));
+    return pict(`${tileBg(BAY)}${A.map(a => { const [x, y] = pos(a, 27.5); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.6" fill="${W2}"/>`; }).join('')}
+      ${tx(p0[0], p0[1], '0', 10, W2)}${tx(pA[0], pA[1], 'AUTO', 8, W2)}${park(pP)}${sym('naerlys', pN, .22)}
+      <circle cx="${cx}" cy="${cy}" r="23" fill="#3a4148"/><circle cx="${cx}" cy="${cy}" r="19" fill="#20252b"/>
+      <g transform="translate(${cx} ${cy}) rotate(-24)"><rect x="-5.5" y="-19" width="11" height="38" rx="5.5" fill="#4a525a"/><circle cx="0" cy="-13" r="2" fill="${W2}"/></g>
+      <rect x="84" y="86" width="28" height="22" rx="5" fill="#3a4148"/>${sym('takebak', [98, 97], .2)}`,
+      'En dreiebryter for lys i dashbordet med fire stillinger, og en knapp ved siden av');
+  },
+  nodblink: () => pict(`${tileBg(BAY)}<rect x="8" y="46" width="104" height="28" rx="6" fill="#20252b"/>
+    <rect x="24" y="28" width="72" height="64" rx="14" fill="#111417" stroke="#4a525a" stroke-width="2"/><rect x="29" y="33" width="62" height="54" rx="11" fill="#2a2f35"/>
+    <polygon points="60,43 82,80 38,80" fill="none" stroke="#ff453a" stroke-width="6" stroke-linejoin="round"/><polygon points="60,57 70,74 50,74" fill="none" stroke="#ff453a" stroke-width="3" stroke-linejoin="round"/>`,
+    'En knapp med en rød trekant midt i dashbordet'),
+  viskere: () => {
+    const glass = 'M17 80 L32 18 Q60 12 88 18 L103 80 Z', arm = (px, a, L = 40) => {
+      const t = f => [px + f * L * Math.sin(a * Math.PI / 180), 86 - f * L * Math.cos(a * Math.PI / 180)].map(v => v.toFixed(1));
+      const [x0, y0] = t(0.3), [x1, y1] = t(1);
+      return `<line x1="${px}" y1="86" x2="${x1}" y2="${y1}" stroke="${INK}" stroke-width="2.4" stroke-linecap="round"/><line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`;
+    };
+    const drops = [[38, 26], [46, 22], [56, 27], [64, 21], [74, 26], [84, 23], [92, 34], [96, 46], [30, 33], [52, 36], [80, 36], [98, 62], [70, 31]];
+    return pict(clipTile('cvisk', `<rect width="120" height="120" fill="#dbe5ef"/><path d="M0 98 L14 80 H106 L120 98 V120 H0 Z" fill="${BODY}"/>
+      <clipPath id="cglas"><path d="${glass}"/></clipPath><path d="${glass}" fill="${GLASS}"/>
+      <g clip-path="url(#cglas)"><g fill="#fff" opacity=".55"><path d="${sector(46, 86, 42, -70, 22)}"/><path d="${sector(84, 86, 42, -70, 22)}"/></g>
+        <g fill="#7fa3c6">${drops.map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="1.4" ry="2"/>`).join('')}</g></g>
+      <path d="${glass}" fill="none" stroke="#4a5d78" stroke-width="3" stroke-linejoin="round"/><rect x="14" y="80" width="92" height="7" fill="#2a2f33"/>
+      ${arm(46, -25)}${arm(84, -25)}`), 'Frontruta sett utenfra, med to vindusviskere');
+  },
+  belte: () => pict(clipTile('cbelt', `<path d="M-6 -8 L52 50" stroke="#4b5560" stroke-width="13"/><path d="M-6 -8 L52 50" stroke="#6a7682" stroke-width="1.2" stroke-dasharray="3 3"/>
+    <g transform="translate(54 52) rotate(-45)"><rect x="-10" y="-7" width="20" height="11" rx="3" fill="#3a4148"/><path d="M-7 3 H7 V18 Q7 22 3 22 H-3 Q-7 22 -7 18 Z" fill="${METAL}" stroke="#8a9097" stroke-width="1"/><rect x="-3" y="11" width="6" height="5" rx="1" fill="${TILE}"/></g>
+    <g transform="translate(86 84) rotate(-45)"><rect x="-5" y="22" width="10" height="30" fill="#4b5560"/><rect x="-12" y="-4" width="24" height="32" rx="6" fill="#1f2328"/><rect x="-8" y="-3" width="16" height="4" rx="1" fill="#000"/><rect x="-7" y="6" width="14" height="9" rx="2" fill="#d9472b"/></g>
+    ${arrowTo(52, 80, 66, 94, 3, '#2e7dd1')}`), 'Et bilbelte: låsetungen på beltet og beltelåsen den festes i'),
+  'ratt-slark': () => pict(`${tileBg()}<g transform="translate(60 68)">
+    <circle r="38" fill="none" stroke="#2a2f33" stroke-width="9"/><path d="M-34 4 H-14 M14 4 H34 M0 16 V34" stroke="#2a2f33" stroke-width="8"/>
+    <rect x="-16" y="-12" width="32" height="28" rx="9" fill="#3a4148"/><rect x="-2" y="-43" width="4" height="9" rx="1" fill="#f2c230"/>
+    ${curveArrow('M0 -50 A50 50 0 0 0 -20.3 -45.7', -20.3, -45.7, -114, 3, '#d9472b')}${curveArrow('M0 -50 A50 50 0 0 1 20.3 -45.7', 20.3, -45.7, 114, 3, '#d9472b')}</g>`,
+    'Et ratt med små piler øverst som viser en liten bevegelse fram og tilbake'),
+  panser: () => pict(`${tileBg()}<rect x="6" y="6" width="108" height="51" rx="10" fill="#2b3138"/><path d="M6 47 H114" stroke="#3a4148" stroke-width="2"/>
+    <g transform="translate(54 30) rotate(-8)"><rect x="-27" y="-10" width="54" height="20" rx="10" fill="#9aa1a7"/>
+      <g fill="none" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"><path d="M-12 5 V1 L-7 -2 H3 L6 1 H12 V5 Z"/><path d="M6 1 L13 -7"/></g></g>
+    ${curveArrow('M86 22 Q94 30 88 41', 88, 41, -149, 2.4, YEL)}${numBadge(16, 16, 1)}
+    <clipPath id="cpan"><rect x="6" y="62" width="108" height="52" rx="10"/></clipPath><g clip-path="url(#cpan)"><rect x="6" y="62" width="108" height="52" fill="#dbe5ef"/>
+      <path d="M2 84 L18 68 H102 L118 84 Z" fill="${BODY}"/><rect x="2" y="84" width="116" height="7" fill="#15191c"/><rect x="57" y="84" width="10" height="5" rx="1" fill="${METAL}"/>
+      <rect x="2" y="91" width="116" height="24" fill="${BODY2}"/><rect x="34" y="94" width="52" height="16" rx="4" fill="#2a2f33"/><path d="M38 99 H82 M38 104 H82" stroke="#3a4148" stroke-width="2"/>
+      <path d="M10 94 H30 L28 101 H12 Z M110 94 H90 L92 101 H108 Z" fill="#eef3f8"/></g>
+    <circle cx="62" cy="86.5" r="8.5" fill="none" stroke="${YEL}" stroke-width="2.4" stroke-dasharray="4 3"/>${numBadge(16, 72, 2)}`,
+    'Øverst et håndtak inne i bilen med symbol av en bil med åpent panser. Nederst fronten på bilen med panseret litt åpent og en liten sperre under kanten.'),
+  lader: () => pict(clipTile('clad', `<path d="M0 100 Q60 92 120 100" stroke="${BODY2}" stroke-width="2" fill="none"/>
+    <rect x="16" y="24" width="56" height="56" rx="13" fill="#1f2328"/><path d="M6 22 Q0 52 6 82 L16 80 V24 Z" fill="${BODY2}"/>
+    <path d="M28 40 H60 A20 20 0 1 1 28 40 Z" fill="#2f353b" stroke="#4a525a" stroke-width="2"/>
+    <g fill="#15191c" stroke="#9aa1a7" stroke-width="1.4">${[[39, 44, 2.2], [49, 44, 2.2], [34, 53, 3.4], [44, 53, 3.4], [54, 53, 3.4], [39, 62, 3.4], [49, 62, 3.4]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join('')}</g>
+    <g transform="translate(86 84) rotate(35)"><path d="M24 0 Q42 0 52 18" stroke="#1f2328" stroke-width="7" fill="none"/><rect x="-10" y="-12" width="36" height="24" rx="8" fill="#2a2f35"/><rect x="-15" y="-10" width="7" height="20" rx="2" fill="#3a4148"/><rect x="-2" y="-12" width="5" height="24" fill="#3a4148"/></g>`, BODY),
+    'Ladeluken på en elbil står åpen og viser ladekontakten. En ladeplugg av type 2 er på vei inn.'),
+  'kamera-radar': () => pict(clipTile('ckam', `<path d="M4 120 V70 Q4 56 18 54 H102 Q116 56 116 70 V120 Z" fill="${BODY}"/>
+    <path d="M22 56 L34 16 Q60 11 86 16 L98 56 Z" fill="${GLASS}" stroke="#4a5d78" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="58.5" y="15" width="3" height="8" fill="#2a2f33"/><rect x="47" y="22" width="26" height="9" rx="3" fill="#2a2f33"/>
+    <rect x="52" y="13" width="16" height="11" rx="2.5" fill="${INK}"/><circle cx="60" cy="18.5" r="3" fill="#4a9dff"/><circle cx="60" cy="18.5" r="1.2" fill="#dbe9f5"/>
+    <path d="M30 54 L56 47 M64 54 L90 47" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>
+    <path d="M10 66 H34 L30 76 H13 Z M110 66 H86 L90 76 H107 Z" fill="#eef3f8"/>
+    <rect x="34" y="72" width="52" height="26" rx="6" fill="#2a2f33"/><path d="M38 78 H82 M38 85 H82 M38 92 H82" stroke="#3a4148" stroke-width="2"/>
+    <rect x="52" y="78" width="16" height="14" rx="3" fill="#8a9097" stroke="${METAL}" stroke-width="1.2"/>
+    <g fill="none" stroke="${YEL}" stroke-width="2" stroke-linecap="round"><path d="M46 78 Q42 85 46 92 M74 78 Q78 85 74 92 M40 74 Q34 85 40 96 M80 74 Q86 85 80 96 M47 13 Q44 18.5 47 24 M73 13 Q76 18.5 73 24"/></g>
+    <rect x="6" y="100" width="108" height="10" rx="4" fill="${BODY2}"/>`, '#dbe5ef'),
+    'Fronten på en bil: et kamera øverst på frontruta ved innerspeilet, og en radar midt i grillen'),
+  bremselys: () => pict(clipTile('cbl', `<rect y="104" width="120" height="16" fill="#9aa1a7"/>
+    <path d="M22 58 L32 30 H88 L98 58 Z" fill="${BODY2}"/><path d="M34 37 H86 L93 55 H27 Z" fill="${GLASS}"/>
+    <rect x="14" y="56" width="92" height="38" rx="8" fill="${BODY}"/><rect x="18" y="94" width="16" height="10" rx="3" fill="#2a2f33"/><rect x="86" y="94" width="16" height="10" rx="3" fill="#2a2f33"/>
+    <rect x="45" y="76" width="30" height="10" rx="1.5" fill="#fff" stroke="#2a2f33"/>
+    <g fill="#ff3b30" opacity=".35"><ellipse cx="25" cy="66" rx="16" ry="11"/><ellipse cx="95" cy="66" rx="16" ry="11"/><ellipse cx="60" cy="33" rx="22" ry="6"/></g>
+    <g fill="#ff3b30"><rect x="16" y="61" width="19" height="10" rx="2.5"/><rect x="85" y="61" width="19" height="10" rx="2.5"/><rect x="47" y="31" width="26" height="4" rx="2"/></g>
+    <g fill="#ffd2cc" opacity=".8"><rect x="19" y="63" width="8" height="2.5" rx="1"/><rect x="88" y="63" width="8" height="2.5" rx="1"/></g>`, '#dfe6ee'),
+    'Bil sett bakfra der bremselysene lyser: ett på hver side og ett høyt oppe midt bak'),
+  'hjul-skade': () => {
+    const at = (r, i, n) => { const a = i * 2 * Math.PI / n; return [(58 + r * Math.sin(a)).toFixed(1), (62 - r * Math.cos(a)).toFixed(1)]; };
+    const notches = Array.from({ length: 30 }, (_, i) => { const [x1, y1] = at(43.5, i, 30), [x2, y2] = at(48, i, 30); return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`; }).join('');
+    return pict(`${tileBg()}<defs><radialGradient id="gbule" cx=".38" cy=".38" r=".7"><stop offset="0" stop-color="#7a828b"/><stop offset=".55" stop-color="#3f464e"/><stop offset="1" stop-color="#23282d"/></radialGradient></defs>
+      <circle cx="58" cy="62" r="48" fill="#2a2f33"/><g stroke="#16191c" stroke-width="2">${notches}</g><circle cx="58" cy="62" r="37" fill="none" stroke="#3a4148" stroke-width="1.2"/>
+      <g transform="translate(58 62)"><circle r="27" fill="#aeb5bc"/><circle r="25" fill="#5a626b"/><g fill="${METAL}">${Array.from({ length: 5 }, (_, i) => `<rect x="-3.5" y="-25" width="7" height="18" rx="2" transform="rotate(${i * 72})"/>`).join('')}</g><circle r="8" fill="${METAL}"/><circle r="3" fill="#8a9097"/></g>
+      <ellipse cx="87" cy="38" rx="9.5" ry="7" transform="rotate(45 87 38)" fill="#111417"/><ellipse cx="85" cy="36" rx="9.5" ry="7" transform="rotate(45 85 36)" fill="url(#gbule)"/>
+      <circle cx="85" cy="36" r="14" fill="none" stroke="${ORANGE}" stroke-width="2.4" stroke-dasharray="4 3"/>`, 'Et dekk sett fra siden, med en bule på dekksiden');
+  }
+};
+
+/* ==================== Flere tegninger til teorien (0.28.1) ====================
+   Til temaer som går igjen i flere spørsmål: førstehjelp, barnesete, trøtthet, lys i mørket og tåke, barn ved veien,
+   syklister, vogntog i sving, plassering i kryss, veggrep, stansforbud og prikker. */
+const SKIN = '#e8c4a0';
+Object.assign(PICTS, {
+  sideleie: () => pict(`<rect x="6" y="6" width="108" height="108" rx="16" fill="${TILE}"/><g transform="translate(2 -20)">
+    <rect x="6" y="94" width="108" height="5" rx="2.5" fill="#c4cdd8"/>
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M34 86 L20 92 L9 90" stroke="#1f5aa0" stroke-width="6"/><path d="M70 87 L88 91 L108 91" stroke="#14213d" stroke-width="8"/>
+      <path d="M32 80 L70 84" stroke="#2a6fc0" stroke-width="14"/><path d="M68 80 L82 92 L101 88" stroke="#5b78b3" stroke-width="8.5"/><path d="M40 77 L47 89 L27 87" stroke="#4a8fe0" stroke-width="6"/>
+      <path d="M11 78 q-3 -3 0 -6 M7 79 q-3.5 -4.5 0 -9" stroke="#6b7177" stroke-width="1.6"/></g>
+    <circle cx="22" cy="76" r="9.5" fill="${SKIN}"/><path d="M15 69 A9.5 9.5 0 0 1 31.5 74 Q24 67 15 69 Z" fill="#5b3a29"/><circle cx="26" cy="87" r="3.4" fill="${SKIN}"/><circle cx="9" cy="90" r="3.2" fill="${SKIN}"/></g>`,
+    'En person som ligger i stabilt sideleie: på siden, med hånden under kinnet og det øverste beinet bøyd'),
+  barnesete: () => pict(`<rect x="6" y="6" width="108" height="108" rx="16" fill="${TILE}"/>
+    <path d="M8 54 L36 16 H112" fill="none" stroke="#9fb0c3" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M8 54 H30 Q38 54 38 62 V66 Q38 72 30 72 H8 Z" fill="#6b7280"/><rect x="8" y="102" width="104" height="6" rx="3" fill="#9aa1a7"/>
+    <path d="M50 86 H100 Q104 86 104 92 V98 H50 Q46 98 46 92 Z" fill="#4b5560"/><rect x="70" y="98" width="10" height="5" fill="#3a4148"/>
+    <path d="M96 90 L103 44 Q104 38 109 39 Q114 40 113 46 L106 94 Z" fill="#4b5560"/><rect x="104" y="27" width="11" height="12" rx="4" fill="#4b5560" transform="rotate(10 109 33)"/>
+    <path d="M48 86 L54 52 Q56 44 64 46 L68 48 Q66 62 76 68 L96 72 Q100 74 98 80 L94 86 Z" fill="#d9472b"/>
+    <path d="M58 52 Q76 28 96 70" fill="none" stroke="#a8321b" stroke-width="3"/>
+    <circle cx="64" cy="56" r="7" fill="${SKIN}"/><path d="M69 62 L86 72" stroke="#f2c230" stroke-width="9" stroke-linecap="round"/>
+    <path d="M42 38 L37 58" stroke="#6b7177" stroke-width="1"/><rect x="35" y="24" width="68" height="16" rx="5" fill="#15191c"/>
+    <g fill="none" stroke="#ffb020" stroke-width="1.5" stroke-linecap="round"><circle cx="43" cy="29" r="1.8" fill="#ffb020"/><path d="M43 31.5 L44 36 H48"/><circle cx="51" cy="31" r="3"/><path d="M41 38 L54 26"/></g>
+    ${tx(79, 32.5, 'AIRBAG OFF', 6.5, '#ffb020')}`,
+    'Et bakovervendt barnesete i forsetet. Lampen på dashbordet viser at kollisjonsputen er slått av.'),
+  trott: () => pict(`<rect x="6" y="6" width="108" height="108" rx="16" fill="${TILE}"/><clipPath id="ctrott"><rect x="6" y="6" width="108" height="108" rx="16"/></clipPath><g clip-path="url(#ctrott)">
+    <path d="M22 118 Q24 84 60 82 Q96 84 98 118 Z" fill="#2a6fc0"/><rect x="53" y="68" width="14" height="16" fill="${SKIN}"/>
+    <circle cx="60" cy="52" r="20" fill="${SKIN}"/><path d="M40 48 Q42 30 60 30 Q78 30 80 48 Q72 38 60 39 Q48 38 40 48 Z" fill="#5b3a29"/>
+    <path d="M47 50 H57 M63 50 H73" stroke="${INK}" stroke-width="1.8" stroke-linecap="round"/><path d="M48 52 Q52 55 56 52 M64 52 Q68 55 72 52" stroke="${INK}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <ellipse cx="60" cy="63" rx="4.5" ry="5.5" fill="#7a2e2e"/>
+    <path d="M14 122 Q60 92 106 122" stroke="#2a2f33" stroke-width="9" fill="none"/></g>
+    ${tx(88, 32, 'Z', 13, '#4b586b')}${tx(97, 21, 'z', 10, '#4b586b')}${tx(104, 13, 'z', 8, '#4b586b')}`,
+    'En trøtt fører som gjesper bak rattet')
+});
+
+Object.assign(VIEWS, {
+  motlys: () => svg(`<defs><radialGradient id="vglare" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fffbe6" stop-opacity="1"/><stop offset=".25" stop-color="#fff3c4" stop-opacity=".75"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></radialGradient>
+    <linearGradient id="vbeam2" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff3c4" stop-opacity=".45"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></linearGradient></defs>
+    <rect width="200" height="130" fill="#0b1020"/><rect y="62" width="200" height="68" fill="#121722"/><polygon points="16,130 184,130 104,62 96,62" fill="#20252c"/>
+    <polygon points="40,130 168,130 114,90 86,90" fill="url(#vbeam2)"/>
+    <polygon points="176,130 182,130 104.6,62 103.8,62" fill="#d6dbe0" opacity=".75"/><polygon points="18,130 22,130 96.2,62 95.6,62" fill="#d6dbe0" opacity=".25"/>
+    <g fill="#e8d36a" opacity=".55">${[[124, 112, 3], [98, 92, 2], [84, 76, 1.4]].map(([y0, y1, w]) => `<polygon points="${100 - w},${y0} ${100 + w},${y0} ${100 + w * .7},${y1} ${100 - w * .7},${y1}"/>`).join('')}</g>
+    <circle cx="88" cy="72" r="42" fill="url(#vglare)"/><g stroke="#fffbe6" stroke-opacity=".35" stroke-width="1"><path d="M58 72 H118 M88 50 V94 M70 58 L106 86 M70 86 L106 58"/></g>
+    <circle cx="82" cy="72" r="3" fill="#fff"/><circle cx="94" cy="72" r="3" fill="#fff"/>`,
+    'Mørk vei. En bil kommer imot med sterke lys som stråler mot deg.', '0 0 200 130', 'tsvg-view'),
+  take: () => svg(`<defs><radialGradient id="vfog" cx=".5" cy=".8" r=".75"><stop offset="0" stop-color="#b9c0c7"/><stop offset=".6" stop-color="#7d858e"/><stop offset="1" stop-color="#3a4149"/></radialGradient>
+    <linearGradient id="vfog2" x1="0" y1="0" x2="0" y2="1"><stop offset=".45" stop-color="#aab2ba" stop-opacity=".95"/><stop offset=".72" stop-color="#aab2ba" stop-opacity=".55"/><stop offset="1" stop-color="#aab2ba" stop-opacity="0"/></linearGradient>
+    <radialGradient id="vred" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ff5a4a" stop-opacity=".9"/><stop offset="1" stop-color="#ff5a4a" stop-opacity="0"/></radialGradient></defs>
+    <rect width="200" height="130" fill="url(#vfog)"/><polygon points="14,130 186,130 116,78 84,78" fill="#4d545b"/>
+    <polygon points="172,130 178,130 115,78 114,78" fill="#e6e9ec" opacity=".6"/><g fill="#e8d36a" opacity=".6">${[[126, 110, 3], [100, 90, 2]].map(([y0, y1, w]) => `<polygon points="${100 - w},${y0} ${100 + w},${y0} ${100 + w * .7},${y1} ${100 - w * .7},${y1}"/>`).join('')}</g>
+    <rect x="89" y="70" width="22" height="11" rx="3" fill="#59616a" opacity=".55"/>
+    <rect width="200" height="130" fill="url(#vfog2)"/>
+    <g opacity=".75"><circle cx="92" cy="77" r="10" fill="url(#vred)"/><circle cx="108" cy="77" r="6.5" fill="url(#vred)"/><circle cx="92" cy="77" r="1.8" fill="#ff8a7a"/><circle cx="108" cy="77" r="1.4" fill="#ff8a7a"/></g>`,
+    'Tett tåke i mørket. Du ser bare et kort stykke av veien, og lysene på en bil foran synes så vidt.', '0 0 200 130', 'tsvg-view')
+});
+
+Object.assign(SCENES, {
+  'barn-veikant': () => scene(`<rect x="52" y="0" width="14" height="200" fill="${SIDE}"/><rect x="134" y="0" width="14" height="200" fill="${SIDE}"/>${vroad(66, 134, false)}
+    ${house(8, 30, 34, 26)}${house(10, 130, 32, 24, '#5f6b76')}${house(158, 40, 34, 26, '#5f6b76')}${house(160, 140, 32, 24)}
+    ${car(124, 40, GREY_CAR)}${kid(139, 96)}${kid(146, 108)}<circle cx="152" cy="118" r="3.6" fill="#e8423a" stroke="#fff" stroke-width="1"/>${kid(60, 70)}
+    ${car(104, 172, '#2e7dd1', 'A')}${arrow('M104 155 V120', '#2e7dd1')}`,
+    'Gate i et boligområde. Noen barn leker på fortauet ved veien foran deg, og et barn står ved kanten på den andre siden. Du er bil A.')
+});
+
+const turnPanel = (x0, id, kind) => {
+  const two = kind !== 'en', cx = kind === 'v' ? 47 : kind === 'h' ? 54 : 23;
+  const path = kind === 'h' ? `M${cx} 57 V48 Q${cx} 36 66 36 H76` : `M${cx} 57 V32 Q${cx} 19 ${cx - 13} 19 H-4`;
+  return `<g transform="translate(${x0} 0)"><clipPath id="${id}"><rect width="76" height="96" rx="10"/></clipPath><g clip-path="url(#${id})"><rect width="76" height="96" fill="${GRASS}"/>
+    <rect x="14" y="0" width="48" height="96" fill="${ASP}"/><rect x="0" y="10" width="76" height="34" fill="${ASP}"/>
+    <line x1="0" y1="27" x2="14" y2="27" stroke="${LINE}" stroke-width="1.6" stroke-dasharray="5 5"/><line x1="62" y1="27" x2="76" y2="27" stroke="${LINE}" stroke-width="1.6" stroke-dasharray="5 5"/>
+    ${two ? `<line x1="38" y1="44" x2="38" y2="96" stroke="${LINE}" stroke-width="1.6" stroke-dasharray="6 6"/>` : `<path d="M50 90 V78 H46 L52 70 L58 78 H54 V90 Z" fill="${WL}" opacity=".8"/>`}
+    ${car(cx, 74, '#2e7dd1')}${arrow(path, '#2e7dd1')}</g></g>`;
+};
+
+Object.assign(DIAGRAMS, {
+  'plassering-sving': () => diagram(`${turnPanel(0, 'ctpv', 'v')}${turnPanel(82, 'ctph', 'h')}${turnPanel(164, 'ctpe', 'en')}
+    ${[[38, 'Til venstre', 'nær midten'], [120, 'Til høyre', 'nær høyre kant'], [202, 'Enveiskjørt', 'langt til venstre']].map(([x, a, b]) => `<text x="${x}" y="108" text-anchor="middle" ${DT} font-weight="700">${a}</text><text x="${x}" y="120" text-anchor="middle" ${DM}>${b}</text>`).join('')}`,
+    'Plassering før sving. Til venstre på en vei med møtende trafikk: så nær midten som mulig. Til høyre: så nær høyre kant som mulig. Til venstre fra en enveiskjørt gate: så langt til venstre som det er trygt.', '0 0 240 124'),
+  veggrep: () => {
+    const rows = [['Tørr asfalt', 20], ['Våt asfalt', 32], ['Hardpakket snø', 64], ['Is i sterk kulde', 92], ['Våt is, rundt 0 °C', 236]];
+    return diagram(`<text x="0" y="10" ${DT} font-weight="700">Bremselengde i samme fart, omtrent</text>
+      ${rows.map(([t, w], i) => { const y = 26 + i * 21; return `<text x="0" y="${y}" ${DM}>${t}</text><rect x="0" y="${y + 4}" width="${w}" height="9" rx="2" fill="var(--brake, #c0392b)" opacity="${(.6 + i * .1).toFixed(2)}"/>`; }).join('')}
+      <text x="0" y="132" ${DM}>Glattest når det ligger vann på isen</text>`,
+      'Bremselengden i samme fart på ulikt føre. Tørr asfalt gir kortest, så våt asfalt, hardpakket snø og is i sterk kulde. Våt is rundt null grader gir den klart lengste, mange ganger så lang som på tørr asfalt.', '0 0 240 138');
+  },
+  'syklist-avstand': () => diagram(`<rect x="0" y="6" width="240" height="80" rx="6" fill="${ASP}"/><g stroke="${WL}" stroke-width="1.6"><line x1="0" y1="9" x2="240" y2="9"/><line x1="0" y1="83" x2="240" y2="83"/></g>
+    <line x1="0" y1="46" x2="240" y2="46" stroke="${LINE}" stroke-width="2" stroke-dasharray="10 10"/>
+    <path d="M118 76 q7 -5 14 0 t14 0 t14 0 t14 0" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="1.6" stroke-dasharray="3 3"/>
+    ${bike(184, 76, 90)}${sideCar(150, 49, '#2e7dd1')}${arrow('M172 49 H200', '#2e7dd1')}
+    <path d="M182 59 V70 M179 59 H185 M179 70 H185" stroke="#fff" stroke-width="1.6"/>
+    <text x="120" y="100" text-anchor="middle" ${DT} font-weight="700">God sideavstand, også om du må vente bak</text>
+    <text x="120" y="113" text-anchor="middle" ${DM}>Syklisten kan vingle: vind, hull og glatte partier</text>`,
+    'En bil kjører forbi en syklist og ligger delvis over midtlinjen for å gi god sideavstand. Syklisten kan vingle, så vent bak til det er plass og trygt.', '0 0 240 118'),
+  'stans-avstand': () => {
+    const ico = {
+      kryss: `<rect width="20" height="20" rx="4" fill="${GRASS}"/><rect x="7" width="6" height="20" fill="${ASP}"/><rect y="7" width="20" height="6" fill="${ASP}"/>`,
+      gang: `<rect width="20" height="20" rx="4" fill="${ASP}"/>${[3, 8.5, 14].map(x => `<rect x="${x}" y="3" width="3" height="14" fill="${WL}"/>`).join('')}`,
+      plan: `<g transform="scale(.2)">${SIGNS[138]()}</g>`,
+      buss: `<g transform="translate(0 1) scale(.2)">${SIGNS[512]()}</g>`
+    };
+    const rows = [['kryss', 'Kryss', 'fra der kanten begynner å runde', '5 m'], ['gang', 'Gangfelt og sykkelkryssing', 'foran kryssingen', '5 m'], ['plan', 'Planovergang', 'fra sporet', '5 m'], ['buss', 'Holdeplass for buss', 'regnet fra holdeplasskiltet', '20 m']];
+    return diagram(`<text x="0" y="10" ${DT} font-weight="700">Ikke stans nærmere enn</text>
+      ${rows.map(([k, a, b, m], i) => { const y = 22 + i * 26; return `<g transform="translate(0 ${y})">${ico[k]}</g><text x="28" y="${y + 8}" ${DT} font-weight="700">${a}</text><text x="28" y="${y + 19}" ${DM}>${b}</text>
+        <rect x="198" y="${y + 1}" width="42" height="18" rx="9" fill="var(--brake, #c0392b)" opacity=".16"/><text x="219" y="${y + 14}" text-anchor="middle" font-size="11" font-weight="800" fill="var(--brake, #c0392b)">${m}</text>`; }).join('')}`,
+      'Her er det forbudt å stanse: i kryss og nærmere enn 5 meter, på og 5 meter foran gangfelt og sykkelkryssing, nærmere en planovergang enn 5 meter, og nærmere enn 20 meter fra skiltet for bussholdeplass.', '0 0 240 124');
+  },
+  'vogntog-sving': () => diagram(`<g clip-path="url(#scl)">${roads('nesw')}
+    <path d="M101 124 C99 96 104 88 130 90 H200 V120 H142 Q121 124 119 146 V124 Z" fill="#ffb300" opacity=".35"/>
+    <polygon points="120,128 182,152 182,200 120,200" fill="#ff453a" opacity=".38"/>
+    <path d="M101 124 C99 96 104 88 130 90 H200" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="5 4"/>
+    <path d="M119 186 V146 Q121 124 142 120 H200" fill="none" stroke="#d9472b" stroke-width="2.4" stroke-dasharray="5 4"/>
+    ${truck(110, 156, 0)}${carBlink(110, 156, 0, 1)}
+    <text x="196" y="22" text-anchor="end" font-size="10" font-weight="700" fill="#14181b">Bakhjulene kutter</text><text x="196" y="34" text-anchor="end" font-size="10" font-weight="700" fill="#14181b">hjørnet</text>
+    <path d="M168 38 L138 116" stroke="#14181b" stroke-width="1.2"/>
+    <text x="8" y="22" font-size="10" font-weight="700" fill="#14181b">Fronten svinger</text><text x="8" y="34" font-size="10" font-weight="700" fill="#14181b">vidt ut</text>
+    <path d="M40 38 L98 100" stroke="#14181b" stroke-width="1.2"/>
+    <text x="194" y="180" text-anchor="end" font-size="10" font-weight="700" fill="#14181b">Blindsone</text></g>`,
+    'Et vogntog som skal svinge til høyre. Fronten går vidt ut mot midten av krysset, og bakhjulene kutter hjørnet. Langs høyre side og rett bak ser ikke sjåføren deg.', '0 0 200 200'),
+  prikker: () => diagram(`<text x="0" y="10" ${DT} font-weight="700">Prikker i løpet av tre år</text>
+    ${Array.from({ length: 8 }, (_, i) => { const x = 14 + i * 27; return `<circle cx="${x}" cy="32" r="10" fill="${i === 7 ? 'var(--brake, #c0392b)' : 'var(--muted, #4b586b)'}" opacity="${i === 7 ? 1 : .3}"/><text x="${x}" y="35.5" text-anchor="middle" font-size="10" font-weight="800" fill="${i === 7 ? 'var(--on-color, #fff)' : 'var(--ink, #14181b)'}">${i + 1}</text>`; }).join('')}
+    <text x="240" y="60" text-anchor="end" font-size="10" font-weight="700" fill="var(--brake, #c0392b)">8 prikker: du mister føreretten i 6 måneder</text>
+    <text x="0" y="78" ${DM}>Hver prikk teller i tre år</text>
+    <text x="0" y="98" ${DT} font-weight="700">I prøveperioden blir prikkene doblet</text>`,
+    'Får du 8 prikker i løpet av tre år, mister du føreretten i seks måneder. Hver prikk teller i tre år. I prøveperioden gir et brudd dobbelt så mange prikker.', '0 0 240 104')
+});
+
 /* Hver tegning får egne id-er (0.22.0). Pilspisser og utsnitt pekes til med id, og når samme id finnes i en skjult
    skjerm lenger opp i dokumentet, viser nettleseren ikke pilspissen. */
 let uid = 0;
@@ -690,6 +946,7 @@ function figureRaw(key) {
   if (kind === 'pict' && PICTS[a]) return PICTS[a]();
   if (kind === 'cap' && CAPS[a]) return CAPS[a]();
   if (kind === 'diagram' && DIAGRAMS[a]) return DIAGRAMS[a]();
+  if (kind === 'bil' && BIL[a]) return b === 'anon' ? BIL[a]().replace(/aria-label="[^"]*"/, 'aria-label="Tegning av en del av bilen"') : BIL[a]();
   return '';
 }
 
@@ -697,5 +954,5 @@ export const FIGURE_KEYS = [
   ...Object.keys(SIGNS).map(k => 'sign:' + k), ...Object.keys(LINES).map(k => 'line:' + k),
   ...Object.keys(LIGHTS).map(k => 'light:' + k), ...Object.keys(SCENES).map(k => 'scene:' + k), ...Object.keys(LAMPS).map(k => 'lamp:' + k),
   ...Object.keys(VIEWS).map(k => 'view:' + k), ...Object.keys(PICTS).map(k => 'pict:' + k), ...Object.keys(CAPS).map(k => 'cap:' + k),
-  ...Object.keys(DIAGRAMS).map(k => 'diagram:' + k)
+  ...Object.keys(DIAGRAMS).map(k => 'diagram:' + k), ...Object.keys(BIL).map(k => 'bil:' + k)
 ];
