@@ -79,7 +79,10 @@ node tools/skolekoder.mjs lag "Trafikkskolen AS" 150        # 150 koder, regnear
 node tools/skolekoder.mjs liste "Trafikkskolen AS"          # hvor mange som er brukt (grunnlag for faktura)
 node tools/skolekoder.mjs steng K7MX-29QF-H4TA              # koden slutter å virke innen en uke
 node tools/skolekoder.mjs nullstill K7MX-29QF-H4TA          # eleven har brukt begge telefonene og har fått ny
+node tools/skolekoder.mjs lag "Testgruppe" 1 3 25            # én felles testlenke: 3 måneder, høyst 25 telefoner
 ```
+
+**Testlenke (0.27.4):** `https://kjorerapport.jo-9fc.workers.dev/?kode=KODE` låser opp Pluss av seg selv i nettversjonen. En kode kan gjelde høyst 50 telefoner; elevkoder er 2 som før.
 
 ## Teste lokalt
 

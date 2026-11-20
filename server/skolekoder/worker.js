@@ -88,7 +88,7 @@ async function createCodes(req, env, now) {
   const n = Math.floor(Number(antall));
   if (!name || !(n >= 1 && n <= 1000)) return json({ error: 'Oppgi skole og antall (1–1000).' }, 400);
   const m = Math.max(1, Math.min(36, Math.floor(Number(maaneder) || 12)));
-  const mx = Math.max(1, Math.min(5, Math.floor(Number(maks))));
+  const mx = Math.max(1, Math.min(50, Math.floor(Number(maks))));   // 2 for elever; opptil 50 for en felles testlenke (0.27.4)
   const koder = [];
   while (koder.length < n) {
     const c = randomCode();

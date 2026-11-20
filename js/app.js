@@ -1,7 +1,7 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
 import { practiceSpans, rescore, inSpans } from './practice.js';
-import { loadSchoolPass, activateCode, codesEnabled, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
+import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
 import { seedDemo } from './demo.js';
@@ -36,7 +36,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.27.3';
+export const APP_VERSION = '0.27.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -604,6 +604,22 @@ async function gatherRows(driver = null) {
 
 /* ---------- Kjørerapport Pluss (0.11.0) ---------- */
 const longDay = t => new Date(t).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' });   // «20. november 2027»
+/* Testlenke (0.27.4): «…/?kode=XXXX-XXXX-XXXX» låser opp Pluss av seg selv, så testere slipper å skrive koden. Koden
+   tas ut av adressen med en gang, så den ikke blir liggende i bokmerker eller på Hjem-skjermen. */
+async function useLinkCode() {
+  const code = codeFromUrl(location.href);
+  if (!code) return;
+  // Koden tas ut av adressen først når serveren har svart: ved første besøk laster appen seg på nytt når service
+  // workeren tar over, og da må koden fortsatt stå i adressen (før forsvant den, og lenken virket ikke første gang).
+  const forget = () => { const u = new URL(location.href); u.searchParams.delete('kode'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); };
+  const cur = getSettings().skolekode;
+  if (cur && cur.kode === code && plusState().school) { forget(); return; }   // allerede låst opp med denne koden
+  if (!codesEnabled()) return;
+  const r = await activateCode(code);
+  if (r.ok) { forget(); toast(`Pluss er låst opp av ${r.skole}, til ${longDay(r.til)}.`, { type: 'ok', ms: 4000 }); route(); return; }
+  if (r.error !== 'nett' && r.error !== 'server') forget();   // uten nett prøves lenken igjen neste gang
+  infoDialog({ title: 'Koden i lenken virket ikke', text: CODE_ERROR[r.error] || CODE_ERROR.server });
+}
 /* Pluss-siden: hva Pluss gir (funksjonen brukeren kom fra øverst), pris, kjøp, gjenopprett og kode fra trafikkskolen */
 async function renderPlus(feature = null) {
   show('pluss');
@@ -3596,7 +3612,7 @@ function init() {
   modeReady.then(() => setTimeout(openIncomingFile, 300));
   window.addEventListener('kjfile', () => modeReady.then(openIncomingFile));
   // Kode fra trafikkskolen (0.27.0): beviset sjekkes uten nett ved start, og serveren spørres igjen etter en uke
-  loadSchoolPass().catch(() => {});
+  loadSchoolPass().catch(() => {}).then(useLinkCode);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSchoolPass().catch(() => {}); });
   // Veidata i bakgrunnen (0.26.6): når appen starter, når telefonen får nett igjen og når appen kommer fram igjen
   const prefetchSoon = ms => setTimeout(() => { prefetchRoadData().catch(() => {}); }, ms);

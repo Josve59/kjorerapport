@@ -1,8 +1,9 @@
 /* Skolekoder (0.27.0): eierens verktøy for kodene trafikkskolene kjøper til elevene sine. Se server/skolekoder/README.md.
 
    node tools/skolekoder.mjs nokler                        lager nøkkelparet og admin-hemmeligheten (bare én gang)
-   node tools/skolekoder.mjs lag "Skolens navn" 150 [mnd]   lager 150 koder (12 måneder om ikke annet er sagt), og
-                                                           lagrer dem som regneark i Nedlastinger
+   node tools/skolekoder.mjs lag "Skolens navn" 150 [mnd] [maks]   lager 150 koder (12 måneder og 2 telefoner per kode om
+                                                           ikke annet er sagt), og lagrer dem som regneark i Nedlastinger
+   node tools/skolekoder.mjs lag "Testgruppe" 1 3 25           én felles testlenke: 3 måneder, høyst 25 telefoner
    node tools/skolekoder.mjs liste ["Skolens navn"]        hvor mange koder som er brukt (alle skoler, eller én)
    node tools/skolekoder.mjs steng KODE                    koden slutter å virke (f.eks. skolen betalte ikke)
    node tools/skolekoder.mjs nullstill KODE                eleven har brukt koden på to telefoner og har fått en ny
@@ -44,13 +45,15 @@ if (cmd === 'nokler') {
   console.log('Den offentlige nøkkelen (til js/skolekode.js):');
   console.log(JSON.stringify({ kty: pub.kty, crv: pub.crv, x: pub.x, y: pub.y }));
 } else if (cmd === 'lag') {
-  const [skole, antall, maaneder = '12'] = args;
-  if (!skole || !antall) { console.log('Bruk: node tools/skolekoder.mjs lag "Skolens navn" 150 [måneder]'); process.exit(1); }
-  const r = await admin('POST', '/admin/koder', { skole, antall: Number(antall), maaneder: Number(maaneder) });
+  const [skole, antall, maaneder = '12', maks = '2'] = args;
+  if (!skole || !antall) { console.log('Bruk: node tools/skolekoder.mjs lag "Skolens navn" 150 [måneder] [telefoner per kode]'); process.exit(1); }
+  const r = await admin('POST', '/admin/koder', { skole, antall: Number(antall), maaneder: Number(maaneder), maks: Number(maks) });
   const file = path.join(os.homedir(), 'Downloads', `skolekoder-${skole.replace(/[^\wæøåÆØÅ-]+/g, '-')}-${new Date().toLocaleDateString('sv-SE')}.csv`);
   fs.writeFileSync(file, '﻿Kode;Skole;Gyldig i måneder fra første bruk\n' + r.koder.map(k => `${k};${r.skole};${r.maaneder}`).join('\n') + '\n');
   console.log(`${r.koder.length} koder til ${r.skole} (${r.maaneder} måneder fra eleven tar koden i bruk, høyst ${r.maks} telefoner per kode).`);
   console.log(`Lagret som regneark: ${file}`);
+  const web = read('nettside-url.txt');
+  if (web && r.koder.length <= 3) for (const k of r.koder) console.log(`Lenke som låser opp av seg selv: ${web}/?kode=${k}`);
 } else if (cmd === 'liste') {
   const [skole] = args;
   const r = await admin('GET', '/admin/koder' + (skole ? '?skole=' + encodeURIComponent(skole) : ''));

@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { normalizeCode, formatCode, signPass } from '../server/skolekoder/worker.js';
-import { verifyPass, looksLikeCode, normalizeCode as appNormalize, PUBLIC_KEY } from '../js/skolekode.js';
+import { verifyPass, looksLikeCode, normalizeCode as appNormalize, PUBLIC_KEY, codeFromUrl } from '../js/skolekode.js';
 import { setSchoolPass, hasPlus, hasTheory, schoolPass } from '../js/plus.js';
 
 const memKV = () => { const m = new Map(); return {
@@ -95,4 +95,23 @@ test('serveren signerer slik appen venter', async () => {
   const { env, pub } = await setup();
   const t = await signPass(env, { v: 1, s: 'X', i: 'inst-12345678', exp: T0 + 1000 });
   assert.equal((await verifyPass(t, { install: 'inst-12345678', now: T0, key: pub })).s, 'X');
+});
+
+test('testlenke: koden leses fra «?kode=», med eller uten bindestreker (0.27.4)', () => {
+  assert.equal(codeFromUrl('https://x.dev/?kode=K7MX-29QF-H4TA'), 'K7MX29QFH4TA');
+  assert.equal(codeFromUrl('https://x.dev/?kamera=vei&kode=k7mx29qfh4ta#/opplaering'), 'K7MX29QFH4TA');
+  assert.equal(codeFromUrl('https://x.dev/?kode=ikke-en-kode'), null);
+  assert.equal(codeFromUrl('https://x.dev/'), null);
+  assert.equal(codeFromUrl('ikke en adresse'), null);
+});
+
+test('en felles testkode kan gjelde flere enn 5 telefoner, men høyst 50 (0.27.4)', async () => {
+  const { env } = await setup();
+  const many = await (await call(env, 'POST', '/admin/koder', { skole: 'Testgruppe', antall: 1, maaneder: 3, maks: 25 }, { admin: true })).json();
+  assert.equal(many.maks, 25);
+  const capped = await (await call(env, 'POST', '/admin/koder', { skole: 'Testgruppe', antall: 1, maaneder: 3, maks: 500 }, { admin: true })).json();
+  assert.equal(capped.maks, 50);
+  for (let i = 0; i < 6; i++) assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: many.koder[0], install: 'telefon-' + i }, { now: T0 })).status, 200);
+  const normal = await (await call(env, 'POST', '/admin/koder', { skole: 'Skole', antall: 1 }, { admin: true })).json();
+  assert.equal(normal.maks, 2, 'elevkoder er fortsatt 2 telefoner');
 });

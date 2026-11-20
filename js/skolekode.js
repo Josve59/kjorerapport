@@ -25,6 +25,10 @@ export const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const normalizeCode = s => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
 export const formatCode = c => (normalizeCode(c).match(/.{1,4}/g) || []).join('-');
 export const looksLikeCode = s => { const c = normalizeCode(s); return c.length === 12 && [...c].every(ch => ALPHABET.includes(ch)); };
+/* Lenke med kode (0.27.4): «…/?kode=XXXX-XXXX-XXXX» låser opp av seg selv, så testere slipper å skrive koden. → koden eller null */
+export function codeFromUrl(href) {
+  try { const v = new URL(href).searchParams.get('kode'); return v && looksLikeCode(v) ? normalizeCode(v) : null; } catch { return null; }
+}
 
 const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
 let keyP = null;

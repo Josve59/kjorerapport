@@ -143,6 +143,26 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.4 – a test link with full access
+
+The owner (20 November): a link others can use to test the app with full access, just like the owner's app, without seeing the code.
+
+- **The link:** `https://kjorerapport.jo-9fc.workers.dev/?kode=XXXX-XXXX-XXXX` unlocks all of Pluss by itself, including the theory in the web version. It uses the same school-code server and signed proof as the driving-school codes.
+  - The code is taken out of the address once the server has answered, so it isn't left in bookmarks or on the Home screen.
+  - The first try failed: on the first visit the app reloads when the service worker takes over, and the code was already gone from the address. That is fixed and tested.
+  - Without a network connection, the link tries again next time.
+  - `codeFromUrl` is in `js/skolekode.js`.
+- **One code for a test group:** the server now accepts up to 50 phones per code (before 5). Pupil codes are still 2 by default.
+  - `node tools/skolekoder.mjs lag "Testgruppe" 1 3 25` makes one code for 3 months and at most 25 phones, and prints the link.
+  - `steng KODE` closes it at any time. The app then removes access at its weekly check.
+  - The server was uploaded again with `tools/skolekoder-oppsett.mjs`, and the codes were kept.
+- **Tested:**
+  - two new unit tests (300 in all);
+  - in the browser, a first visit with a throwaway code: Pluss unlocked, the code removed from the address;
+  - the throwaway code is closed.
+- **Not the same as the iPhone app:** the web version has the same reports, theory, map and teacher view. But it uses one camera at a time, and it has no daily theory reminder. The real iPhone app for testers needs TestFlight, which needs the paid Apple developer account.
+- **The code can be seen:** a web app's code can always be read in the browser by someone who knows how. The test link hides nothing there. What a private GitHub project hides is the whole project: history, server, tools, the iPhone app and the notes.
+
 ## What's new in 0.27.3 – ready for a private GitHub project
 
 The owner (20 November) wants to stop others from copying the app. The repository was public, with all the code, the iPhone app, the server, the theory and the prices. It was public only because free GitHub Pages needs that. The web version now runs on Cloudflare alone, so the repository can be made private.
