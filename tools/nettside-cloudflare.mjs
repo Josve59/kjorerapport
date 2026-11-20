@@ -75,6 +75,10 @@ export default {
       h.delete('set-cookie');
       return new Response(r.body, { status: r.status, headers: h });
     }
+    // Mapper: «/» og «/hjelp/» viser index.html. Cloudflare får ikke gjøre dette selv: da sender den «/index.html»
+    // videre til «/», og service workeren kan ikke bruke en videresendt side når appen åpnes uten nett.
+    if (url.pathname.endsWith('/')) return env.ASSETS.fetch(new Request(new URL(url.pathname + 'index.html' + url.search, url), request));
+    if (!/\\.[a-z0-9]+$/i.test(url.pathname)) return Response.redirect(url.origin + url.pathname + '/' + url.search, 301);
     return env.ASSETS.fetch(request);
   }
 };
@@ -82,7 +86,7 @@ export default {
 const form = new FormData();
 form.append('metadata', new Blob([JSON.stringify({
   main_module: 'worker.js', compatibility_date: '2026-11-01',
-  assets: { jwt: done, config: { html_handling: 'auto-trailing-slash', not_found_handling: 'none' } },
+  assets: { jwt: done, config: { html_handling: 'none', not_found_handling: 'none' } },   // filene svarer på sin egen sti, uten videresending
   bindings: [{ type: 'assets', name: 'ASSETS' }]
 })], { type: 'application/json' }));
 form.append('worker.js', new Blob([worker], { type: 'application/javascript+module' }), 'worker.js');
