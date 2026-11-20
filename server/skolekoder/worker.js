@@ -17,11 +17,22 @@
    GET  /admin/koder?skole=Navn                          → { koder: [{ kode, brukt, forst, til, stengt }] }
    POST /admin/steng       { kode }                      → { ok }
    POST /admin/nullstill   { kode }                      → { ok }   (eleven har ny telefon og har brukt opp begge)
-   POST /admin/apne        { kode }                      → { ok }   (en kode som ble stengt ved en feil, virker igjen) */
+   POST /admin/apne        { kode }                      → { ok }   (en kode som ble stengt ved en feil, virker igjen)
+
+   Testere (0.27.5): en kode kan merkes som testkode (`tester: true`). Beviset får da `t: 1`, og appen viser knappen
+   «Send turen til utvikleren». Turen sendes bare når testeren trykker, og bare fra en installasjon som har brukt koden.
+   POST /v1/tur            body: turen (gzip-JSON), hoder X-Kode, X-Install, X-Tur, X-Start, X-Versjon, X-Gzip
+                                                         → { ok, nokkel }   (403 ikke tester, 410 stengt/utløpt, 413 for stor)
+   POST /admin/tester      { kode, tester }              → { ok }
+   GET  /admin/turer                                     → { turer: [{ nokkel, kode, install, tur, start, bytes, gz, versjon, sendt }] }
+   GET  /admin/tur?nokkel=…                              → selve turen (som den ble sendt)
+   POST /admin/slett-tur   { nokkel } eller { alle: true } → { ok, slettet } */
 
 export const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';   // uten 0/O, 1/I/L, så kodene er lette å skrive av
 export const CODE_LEN = 12;
 const MONTH = 30.44 * 86400000;
+const MAX_TRIP = 20 * 1024 * 1024;   // KV tar 25 MiB per verdi
+const TRIPS_PER_DAY = 30;            // per installasjon
 
 export const normalizeCode = s => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');   // mellomrom og bindestreker spiller ingen rolle
 export const formatCode = c => (c.match(/.{1,4}/g) || []).join('-');
@@ -34,7 +45,7 @@ function cors(res) {
   const h = new Headers(res.headers);
   h.set('Access-Control-Allow-Origin', '*');
   h.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  h.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  h.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Kode, X-Install, X-Tur, X-Start, X-Versjon, X-Gzip');
   h.set('Cache-Control', 'no-store');
   return new Response(res.body, { status: res.status, headers: h });
 }
@@ -79,12 +90,12 @@ async function activate(req, env, now) {
   }
   const til = until(rec);
   if (til <= now) return json({ error: 'utlopt', til }, 410);
-  const bevis = await signPass(env, { v: 1, s: rec.skole, k: c.slice(-4), i: install, iat: now, exp: til });
+  const bevis = await signPass(env, { v: 1, s: rec.skole, k: c.slice(-4), i: install, iat: now, exp: til, t: rec.tester ? 1 : 0 });
   return json({ bevis, skole: rec.skole, til });
 }
 
 async function createCodes(req, env, now) {
-  const { skole, antall, maaneder = 12, maks = 2 } = await readJson(req);
+  const { skole, antall, maaneder = 12, maks = 2, tester = false } = await readJson(req);
   const name = String(skole || '').trim().slice(0, 80);
   const n = Math.floor(Number(antall));
   if (!name || !(n >= 1 && n <= 1000)) return json({ error: 'Oppgi skole og antall (1–1000).' }, 400);
@@ -94,10 +105,10 @@ async function createCodes(req, env, now) {
   while (koder.length < n) {
     const c = randomCode();
     if (koder.includes(c) || await getCode(env, c)) continue;
-    await putCode(env, c, { skole: name, maaneder: m, maks: mx, laget: now, forst: null, installs: [], stengt: false });
+    await putCode(env, c, { skole: name, maaneder: m, maks: mx, laget: now, forst: null, installs: [], stengt: false, tester: !!tester });
     koder.push(formatCode(c));
   }
-  return json({ skole: name, maaneder: m, maks: mx, koder });
+  return json({ skole: name, maaneder: m, maks: mx, tester: !!tester, koder });
 }
 
 async function listCodes(url, env) {
@@ -109,7 +120,7 @@ async function listCodes(url, env) {
     for (const k of page.keys) {
       if (skole && (!k.metadata || k.metadata.skole !== skole)) continue;
       const rec = await getCode(env, k.name.slice(5));
-      if (rec) out.push({ kode: formatCode(k.name.slice(5)), skole: rec.skole, brukt: rec.installs.length, forst: rec.forst, til: until(rec), stengt: !!rec.stengt });
+      if (rec) out.push({ kode: formatCode(k.name.slice(5)), skole: rec.skole, brukt: rec.installs.length, forst: rec.forst, til: until(rec), stengt: !!rec.stengt, tester: !!rec.tester });
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
@@ -125,12 +136,71 @@ async function changeCode(req, env, fn) {
   return json({ ok: true, kode: formatCode(c) });
 }
 
+/* En tur fra en tester (0.27.5). Lagres under «tur:<installasjon>:<turens id>», så samme tur sendt på nytt erstatter
+   den gamle. Bare det som trengs for å finne igjen turen, står i metadata; selve turen er det testeren sendte. */
+async function receiveTrip(req, env, now) {
+  const h = n => req.headers.get(n) || '';
+  const c = normalizeCode(h('X-Kode')), install = h('X-Install');
+  const rec = validCode(c) ? await getCode(env, c) : null;
+  if (!rec || !rec.installs.includes(install)) return json({ error: 'ukjent' }, 404);
+  if (rec.stengt) return json({ error: 'stengt' }, 410);
+  const til = until(rec);
+  if (!til || til <= now) return json({ error: 'utlopt' }, 410);
+  if (!rec.tester) return json({ error: 'ikke-tester' }, 403);
+  const len = Number(h('Content-Length') || 0);
+  if (len > MAX_TRIP) return json({ error: 'stor' }, 413);
+  const body = await req.arrayBuffer();
+  if (!body.byteLength) return json({ error: 'tom' }, 400);
+  if (body.byteLength > MAX_TRIP) return json({ error: 'stor' }, 413);
+  const day = new Date(now).toISOString().slice(0, 10), countKey = `teller:${install}:${day}`;
+  const count = Number(await env.CODES.get(countKey) || 0);
+  if (count >= TRIPS_PER_DAY) return json({ error: 'mange' }, 429);
+  await env.CODES.put(countKey, String(count + 1), { expirationTtl: 2 * 86400 });
+  const tripId = h('X-Tur').replace(/[^\w.-]/g, '').slice(0, 60) || String(now);
+  const key = `tur:${install.slice(0, 12)}:${tripId}`;
+  const meta = { kode: c.slice(-4), install: install.slice(0, 8), tur: tripId, start: h('X-Start').slice(0, 30), bytes: body.byteLength, gz: h('X-Gzip') === '1', versjon: h('X-Versjon').slice(0, 12), sendt: now };
+  await env.CODES.put(key, body, { metadata: meta });
+  return json({ ok: true, nokkel: key });
+}
+
+async function listTrips(env) {
+  const turer = [];
+  let cursor;
+  do {
+    const page = await env.CODES.list({ prefix: 'tur:', cursor });
+    for (const k of page.keys) turer.push({ nokkel: k.name, ...(k.metadata || {}) });
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  turer.sort((a, b) => (b.sendt || 0) - (a.sendt || 0));
+  return json({ turer });
+}
+
+async function getTrip(url, env) {
+  const key = url.searchParams.get('nokkel') || '';
+  if (!key.startsWith('tur:')) return json({ error: 'ukjent' }, 404);
+  const v = await env.CODES.getWithMetadata(key, { type: 'arrayBuffer' });
+  if (!v || !v.value) return json({ error: 'ukjent' }, 404);
+  return cors(new Response(v.value, { headers: { 'Content-Type': v.metadata && v.metadata.gz ? 'application/gzip' : 'application/json' } }));
+}
+
+async function deleteTrips(req, env) {
+  const { nokkel, alle } = await readJson(req);
+  const keys = [];
+  if (alle === true) {
+    let cursor;
+    do { const page = await env.CODES.list({ prefix: 'tur:', cursor }); keys.push(...page.keys.map(k => k.name)); cursor = page.list_complete ? null : page.cursor; } while (cursor);
+  } else if (typeof nokkel === 'string' && nokkel.startsWith('tur:')) keys.push(nokkel);
+  for (const k of keys) await env.CODES.delete(k);
+  return json({ ok: true, slettet: keys.length });
+}
+
 export default {
   async fetch(req, env, ctx, now = Date.now()) {
     const url = new URL(req.url);
     if (req.method === 'OPTIONS') return cors(new Response(null, { status: 204 }));
     try {
       if (req.method === 'POST' && url.pathname === '/v1/aktiver') return await activate(req, env, now);
+      if (req.method === 'POST' && url.pathname === '/v1/tur') return await receiveTrip(req, env, now);
       if (url.pathname.startsWith('/admin/')) {
         if (!isAdmin(req, env)) return json({ error: 'nei' }, 401);
         if (req.method === 'POST' && url.pathname === '/admin/koder') return await createCodes(req, env, now);
@@ -138,6 +208,10 @@ export default {
         if (req.method === 'POST' && url.pathname === '/admin/steng') return await changeCode(req, env, r => { r.stengt = true; });
         if (req.method === 'POST' && url.pathname === '/admin/nullstill') return await changeCode(req, env, r => { r.installs = []; });
         if (req.method === 'POST' && url.pathname === '/admin/apne') return await changeCode(req, env, r => { r.stengt = false; });   // 0.27.4: angre «steng»
+        if (req.method === 'POST' && url.pathname === '/admin/tester') { const b = await req.clone().json().catch(() => ({})); return await changeCode(req, env, r => { r.tester = b.tester !== false; }); }
+        if (req.method === 'GET' && url.pathname === '/admin/turer') return await listTrips(env);
+        if (req.method === 'GET' && url.pathname === '/admin/tur') return await getTrip(url, env);
+        if (req.method === 'POST' && url.pathname === '/admin/slett-tur') return await deleteTrips(req, env);
       }
       if (url.pathname === '/') return json({ tjeneste: 'Kjørerapport skolekoder', ok: true });
       return json({ error: 'finnes ikke' }, 404);

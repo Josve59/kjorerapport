@@ -143,6 +143,33 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 0.27.5 – testers can send a drive to the developer
+
+The owner (20 November) asked whether they can get the reports of the people who use the app. They can't: drives stay on the user's phone, and neither GitHub nor Cloudflare receives anything. The owner chose a send button for testers only.
+
+- **Tester codes:** a code can be marked as a tester code (`tester: true` on the server). The signed proof then carries `t: 1`, and `schoolPass().tester` tells the app.
+  - Mark one with `node tools/skolekoder.mjs tester KODE`, or make new ones with `lag "Navn" 1 3 25 tester`.
+  - The owner's test link (Testgruppe) is now a tester code.
+  - A proof from before 0.27.5 has no `t`, so the app asks the server again at the next start rather than after a week.
+- **In the report:** testers get «Send turen til utvikleren» in the «Turen» card. Each press first shows a consent dialog: what is sent, no pictures, deleted when testing ends.
+  - The drive is the same JSON as «Eksporter», gzip-compressed in the browser (`CompressionStream`). A 2.2 MB drive became 0.4 MB.
+  - Afterwards the card says «Sendt 20. november. Takk!», and the button becomes «Send turen på nytt». Sending again replaces the first copy.
+  - Only own drives get the button. Imported, shared and demo drives (Emma) do not.
+- **On the server:** `POST /v1/tur` accepts a drive only from a tester code that is open and not expired, and only from an installation that has used it.
+  - At most 20 MB per drive and 30 a day per phone.
+  - Each drive is stored in KV under `tur:<installation>:<drive id>`.
+- **The owner's tool:**
+  - `turer` lists the drives and fetches new ones to Downloads as `kjorerapport-tester-….json`, which `tools/turrapport.mjs` reads.
+  - `slett-turer alle` deletes them when testing is done.
+- **The privacy page:**
+  - a new «Testere» section;
+  - the summary and «Ingen turer sendes til oss» now name the tester exception;
+  - the school-code server's row says it can receive drives that testers choose to send.
+- **Tested:**
+  - Unit tests: tester proof, upload refused for pupil codes, unknown phones, empty and too large drives, closed codes; resend replaces; admin list, download and delete (303 in all).
+  - Against the live server with a throwaway tester code: the link unlocked Pluss, the button showed, the consent dialog sent Emma's demo drive, `turer` fetched it, and `turrapport` read it.
+  - The test drive was then deleted on the server and the throwaway code closed. Cloudflare's list can show a deleted drive for about a minute.
+
 ## What's new in 0.27.4 – a test link with full access
 
 The owner (20 November): a link others can use to test the app with full access, just like the owner's app, without seeing the code.

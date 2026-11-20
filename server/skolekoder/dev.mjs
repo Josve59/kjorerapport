@@ -19,7 +19,10 @@ export function fileKV(file) {
   const save = () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(data, null, 1)); };
   return {
     async get(k) { return k in data ? data[k].value : null; },
-    async put(k, value, opts = {}) { data[k] = { value, metadata: opts.metadata || null }; save(); },
+    // Turer fra testere (0.27.5) er binære: lagres som base64 i fila
+    async put(k, value, opts = {}) { data[k] = typeof value === 'string' ? { value, metadata: opts.metadata || null } : { b64: Buffer.from(value).toString('base64'), metadata: opts.metadata || null }; save(); },
+    async getWithMetadata(k) { const d = data[k]; if (!d) return { value: null, metadata: null }; return { value: d.b64 ? new Uint8Array(Buffer.from(d.b64, 'base64')).buffer : d.value, metadata: d.metadata }; },
+    async delete(k) { delete data[k]; save(); },
     async list({ prefix = '', cursor } = {}) {
       const keys = Object.keys(data).filter(k => k.startsWith(prefix)).sort().map(name => ({ name, metadata: data[name].metadata }));
       return { keys, list_complete: true, cursor: null };

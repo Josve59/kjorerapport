@@ -490,12 +490,14 @@ export function renderReport(root, r, ctx = {}) {
     </section>
     </details>
 
-    ${ctx.onExclude || onDelete || ctx.talk ? `<section class="card trip-card">
+    ${ctx.onExclude || onDelete || ctx.talk || ctx.devSend ? `<section class="card trip-card">
       <h2 class="card-title">${icon('list')}Turen</h2>
       ${ctx.talk ? `<button type="button" class="btn secondary" id="btn-talk-ask2">${icon('mail', 20)}${esc(ctx.talk.ask)}</button>
       <p class="muted small">${ctx.talk.mine === 'laerer' ? 'Skriv om hele turen, en hendelse eller en strekning. Eleven får det som en melding og ser det her i rapporten.' : 'Spør om hele turen, en hendelse eller en strekning. Læreren får turen med meldingen.'}</p>` : ''}
       ${ctx.onExclude ? `<button type="button" class="btn secondary" id="btn-exclude">${icon(ctx.excluded ? 'check' : 'close', 20)}${ctx.excluded ? 'Regn med turen igjen' : 'Ta turen ut av utregningene'}</button>
       <p class="muted small">${ctx.excluded ? 'Turen er holdt utenfor poengene, fremgangen og faresteder. Tid og km står fortsatt i kjøreloggen, unntatt når noen andre kjørte.' : 'Gikk noe galt, for eksempel med kalibreringen, eller kjørte noen andre? Da regner poeng, kjørelogg, fremgang og det trafikklæreren ser uten denne turen. Turen blir liggende og kan tas med igjen.'}</p>` : ''}
+      ${ctx.devSend ? `<button type="button" class="btn secondary" id="btn-dev-send">${icon('upload', 20)}${ctx.devSend.sentAt ? 'Send turen på nytt' : 'Send turen til utvikleren'}</button>
+      <p class="muted small">${ctx.devSend.sentAt ? `Sendt ${esc(new Date(ctx.devSend.sentAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' }))}. Takk!` : 'Du tester appen. Turen sendes bare når du trykker, og hjelper utvikleren å gjøre rapportene bedre.'}</p>` : ''}
       ${onDelete ? `<button type="button" class="btn danger" id="btn-delete-drive">${icon('trash', 20)}Slett denne turen</button>` : ''}
     </section>` : ''}
     ${feedbackHref ? `<a class="btn secondary feedback-btn" href="${esc(feedbackHref)}">${icon('mail', 20)}Stemte rapporten? Si fra</a>` : ''}
@@ -632,6 +634,8 @@ export function renderReport(root, r, ctx = {}) {
   if (onDelete) root.querySelector('#btn-delete-drive').addEventListener('click', onDelete);
   // Ta turen ut av utregningene (0.18.0)
   if (ctx.onExclude) for (const id of ['#btn-exclude', '#btn-include']) { const b = root.querySelector(id); if (b) b.onclick = () => ctx.onExclude(!ctx.excluded); }
+  // Testere (0.27.5): send turen til utvikleren
+  if (ctx.devSend) { const b = root.querySelector('#btn-dev-send'); if (b) b.onclick = async () => { b.disabled = true; try { await ctx.devSend.onSend(); } finally { b.disabled = false; } }; }
   if (ctx.talk) for (const id of ['#btn-talk-ask', '#btn-talk-ask2']) { const b = root.querySelector(id); if (b) b.onclick = () => ctx.talk.onAsk(null); }
   if (ctx.afterLesson) { const b = root.querySelector('#btn-after-lesson'); if (b) b.onclick = () => ctx.afterLesson.onOpen(); }
   const fetchBtn = root.querySelector('#btn-fetch');

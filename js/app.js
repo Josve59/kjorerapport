@@ -1,7 +1,7 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
 import { practiceSpans, rescore, inSpans } from './practice.js';
-import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
+import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, SEND_ERROR, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
 import { seedDemo } from './demo.js';
@@ -36,7 +36,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.27.4';
+export const APP_VERSION = '0.27.5';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -2860,7 +2860,9 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       // Meldinger om turen (0.18.0): eleven spør, læreren gir tilbakemelding. Bare egne og delte turer.
       talk: talkFor(drive, r, settings),
       afterLesson: afterLessonFor(drive) ? { ...afterLessonFor(drive), onOpen: () => afterLesson(drive, r) } : null,   // 0.18.4
-      shared: drive.shared || null
+      shared: drive.shared || null,
+      // Testere (0.27.5): «Send turen til utvikleren», bare med testkode og bare egne opptak
+      devSend: plusState().school && plusState().school.tester && isOwn(drive) && !drive.demo && !isDemoMode() ? { sentAt: drive.sentToDev || null, onSend: () => sendToDev(id) } : null   // ikke Emmas oppdiktede turer
     });
     const draw = status => {
       drawBase(status);
@@ -3369,6 +3371,19 @@ async function openIncomingFile() {
     // Flere filer på rad (0.18.3): iPhone-appen holder dem i kø, så neste hentes når denne er ferdig
     if (took) setTimeout(openIncomingFile, 600);
   }
+}
+
+/* Testere sender turen til utvikleren (0.27.5): samme fil som «Eksporter», etter samtykke for hver tur */
+async function sendToDev(id) {
+  const ok = await confirmDialog({ title: 'Sende turen til utvikleren?', text: 'Turen sendes til utvikleren av Kjørerapport, som bruker den til å teste og forbedre appen. Den inneholder posisjoner, fart, sensormålinger og hendelser, men ingen bilder. Den slettes når testingen er ferdig, og du kan be om å få den slettet før det.', ok: 'Send turen' });
+  if (!ok) return;
+  const drive = await getDrive(id);
+  if (!drive) return;
+  toast('Sender turen …', { ms: 1500 });
+  const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), ...(await exportPayload(drive)) };
+  const r = await sendTripToDev(toJSON(payload), { id: drive.id, start: drive.startedAt, version: APP_VERSION });
+  if (r.ok) { await updateDrive(id, { sentToDev: new Date().toISOString() }); toast('Turen er sendt. Takk!', { type: 'ok' }); renderDriveReport(id, { keepScroll: true }); return; }
+  infoDialog({ title: 'Turen ble ikke sendt', text: SEND_ERROR[r.error] || SEND_ERROR.server });
 }
 
 async function exportDrive(id) {

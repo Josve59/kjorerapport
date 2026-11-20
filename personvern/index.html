@@ -16,7 +16,7 @@
 
   <main class="doc">
     <h1>Personvern</h1>
-    <p class="lead">Kort fortalt: Kjørerapport har ingen konto og ingen sporing, og turene dine sendes ikke til oss. De blir liggende på din egen telefon.</p>
+    <p class="lead">Kort fortalt: Kjørerapport har ingen konto og ingen sporing. Turene dine blir liggende på din egen telefon, med mindre du er tester og selv velger å sende en tur til utvikleren.</p>
     <p class="muted small">Sist oppdatert 20. november 2026. Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
 
     <h2>Hva appen lagrer</h2>
@@ -30,7 +30,7 @@
     <p>Sensorene brukes bare før og under et opptak. I iPhone-appen fortsetter posisjon og bevegelse å bli målt hvis skjermen låses mens et opptak pågår, så turen ikke får hull. Det stopper når opptaket stoppes, og iPhone viser en blå markering så lenge. Uten et opptak bruker appen ikke sensorene i bakgrunnen.</p>
 
     <h2>Hva som sendes ut av telefonen</h2>
-    <p>Ingen turer sendes til oss. Appen har ingen statistikk- eller reklameverktøy. Noen tjenester brukes for å gjøre rapporten bedre, og de får bare det som står i tabellen:</p>
+    <p>Ingen turer sendes til oss, unntatt når en tester selv sender en tur (se «Testere»). Appen har ingen statistikk- eller reklameverktøy. Noen tjenester brukes for å gjøre rapporten bedre, og de får bare det som står i tabellen:</p>
     <div class="table-wrap">
     <table>
       <thead><tr><th>Tjeneste</th><th>Hva den får</th><th>Når</th></tr></thead>
@@ -38,7 +38,7 @@
         <tr><td>Kart fra Kartverket</td><td>Hvilke kartruter som vises, altså omtrent hvor turen gikk</td><td>Når en rapport med kart åpnes. Kan slås av.</td></tr>
         <tr><td>Veidata fra Statens vegvesen (NVDB)</td><td>Rutens posisjoner, for å hente fartsgrenser, motorveier, vikeplikt, stoppskilt, rundkjøringer, gangfelt, fartsdempere, lyskryss, fotobokser, strekningsmålinger og enkelte skilt. Under kjøring også et område på rundt 4,5 × 4,5 km rundt bilen, for å vise fartsgrensen på skjermen (og fotobokser og strekningsmåling, hvis «Varsel om fotobokser» er slått på). Med veikameraet på spør appen i tillegg om et lite område på rundt 130 × 130 m rundt bilen, hver 100. meter eller hvert minutt, for å vite hvor mange felt veien har. Spørsmålene har ingen navn eller ID, men området viser omtrent hvor bilen er.</td><td>Når «Fartsgrense og veidata» er på. På som standard, kan slås av under Innstillinger.</td></tr>
         <tr><td>Stedsnavn fra Kartverket</td><td>Posisjonen til hendelser og merker, for å finne gatenavn</td><td>Når «Stedsnavn» er på. På som standard, kan slås av under Innstillinger.</td></tr>
-        <tr><td>Skolekode-serveren hos Cloudflare (bare med kode fra trafikkskolen)</td><td>Koden og en tilfeldig nøkkel for denne installasjonen av appen. Serveren lagrer koden, skolens navn, når koden ble tatt i bruk og nøkkelen, ikke navn eller turer. Som alle nettjenester ser Cloudflare vanlige tekniske opplysninger, som IP-adresse.</td><td>Når koden skrives inn, og så omtrent én gang i uka for å sjekke at den fortsatt gjelder</td></tr>
+        <tr><td>Skolekode-serveren hos Cloudflare (bare med kode fra trafikkskolen)</td><td>Koden og en tilfeldig nøkkel for denne installasjonen av appen. Serveren lagrer koden, skolens navn, når koden ble tatt i bruk og nøkkelen, ikke navn. Turer får den bare fra testere som selv trykker «Send turen til utvikleren» (se «Testere» under). Som alle nettjenester ser Cloudflare vanlige tekniske opplysninger, som IP-adresse.</td><td>Når koden skrives inn, og så omtrent én gang i uka for å sjekke at den fortsatt gjelder</td></tr>
         <tr><td>Cloudflare (nettversjonen)</td><td>Vanlige tekniske opplysninger når nettversjonen lastes ned, som IP-adresse. iPhone-appen lastes ned fra App Store.</td><td>Når nettversjonen åpnes første gang og ved oppdateringer</td></tr>
       </tbody>
     </table>
@@ -55,6 +55,9 @@
     <h2>Kjøp i appen (Kjørerapport Pluss)</h2>
     <p>Kjøp i iPhone-appen går gjennom App Store, med Apple-ID-en din. Apple tar seg av betalingen, og appen får bare vite om Pluss er kjøpt. Vi ser ikke hvem som har kjøpt, og får ingen betalingsopplysninger. Apples egne vilkår og personvernregler gjelder for kjøpet.</p>
     <p><strong>Kode fra trafikkskolen.</strong> Har trafikkskolen gitt deg en kode, sjekkes den mot vår server hos Cloudflare (se tabellen over). Serveren vet hvilken skole koden hører til, men ikke hvem du er. Vi ser hvor mange av skolens koder som er tatt i bruk, som grunnlag for fakturaen til skolen, men ikke hvem som bruker dem eller turene deres.</p>
+
+    <h2>Testere (bare med testlenke)</h2>
+    <p>Har du fått en testlenke fra utvikleren, får rapporten knappen «Send turen til utvikleren». Turen sendes bare når du trykker på den og sier ja, én tur om gangen. Den inneholder det samme som en eksportert tur: posisjoner, fart, sensormålinger, hendelser og merker, men ingen bilder. Den lagres på serveren hos Cloudflare, og bare utvikleren kan hente den. Turen brukes bare til å teste og forbedre appen, og slettes når testingen er ferdig. Vil du ha den slettet før, send en e-post (se «Kontakt»). Uten testlenke finnes ikke knappen, og ingen turer sendes.</p>
 
     <h2>Deling er ditt valg</h2>
     <p>Du kan dele en rapport, skrive den ut som PDF, eksportere en tur eller ta sikkerhetskopi. Da bestemmer du selv hvem som får filen, for eksempel trafikklæreren. Fra da av gjelder mottakerens egne regler.</p>

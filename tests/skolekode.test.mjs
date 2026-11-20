@@ -8,7 +8,9 @@ import { setSchoolPass, hasPlus, hasTheory, schoolPass } from '../js/plus.js';
 const memKV = () => { const m = new Map(); return {
   async get(k) { return m.has(k) ? m.get(k).value : null; },
   async put(k, value, o = {}) { m.set(k, { value, metadata: o.metadata || null }); },
-  async list({ prefix = '' } = {}) { return { keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name, metadata: m.get(name).metadata })), list_complete: true }; }
+  async list({ prefix = '' } = {}) { return { keys: [...m.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name, metadata: m.get(name).metadata })), list_complete: true }; },
+  async getWithMetadata(k) { return m.has(k) ? { value: m.get(k).value, metadata: m.get(k).metadata } : { value: null, metadata: null }; },
+  async delete(k) { m.delete(k); }
 }; };
 async function setup() {
   const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
@@ -124,4 +126,43 @@ test('en kode som ble stengt ved en feil, kan åpnes igjen (0.27.4)', async () =
   assert.equal((await call(env, 'POST', '/admin/apne', { kode: code })).status, 401, 'bare med admin-hemmeligheten');
   assert.equal((await call(env, 'POST', '/admin/apne', { kode: code }, { admin: true })).status, 200);
   assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: code, install: 'telefon-1' }, { now: T0 })).status, 200);
+});
+
+test('testere kan sende turer; andre kan ikke (0.27.5)', async () => {
+  const { env, pub } = await setup();
+  const mk = async tester => (await (await call(env, 'POST', '/admin/koder', { skole: tester ? 'Testgruppe' : 'Skole', antall: 1, maaneder: 3, maks: 5, tester }, { admin: true })).json()).koder[0];
+  const testCode = await mk(true), pupilCode = await mk(false);
+  const act = async (kode, install) => (await call(env, 'POST', '/v1/aktiver', { kode, install }, { now: T0 })).json();
+  const tp = await verifyPass((await act(testCode, 'telefon-test-1')).bevis, { install: 'telefon-test-1', now: T0, key: pub });
+  const pp = await verifyPass((await act(pupilCode, 'telefon-elev-1')).bevis, { install: 'telefon-elev-1', now: T0, key: pub });
+  assert.equal(tp.t, 1, 'testkoden står i beviset');
+  assert.equal(pp.t, 0);
+  const send = (kode, install, body, tur = 'tur-1') => worker.fetch(new Request('https://koder.test/v1/tur', { method: 'POST', body, headers: { 'X-Kode': kode, 'X-Install': install, 'X-Tur': tur, 'X-Start': '2027-01-10T12:00', 'X-Versjon': '0.27.5', 'X-Gzip': '0' } }), env, {}, T0 + 1000);
+  const trip = new TextEncoder().encode(JSON.stringify({ app: 'Kjørerapport', drive: { id: 'tur-1' } }));
+  assert.equal((await send(pupilCode, 'telefon-elev-1', trip)).status, 403, 'vanlig elevkode kan ikke sende');
+  assert.equal((await send(testCode, 'en-annen-telefon', trip)).status, 404, 'bare telefoner som har brukt koden');
+  assert.equal((await send(testCode, 'telefon-test-1', new Uint8Array(0))).status, 400);
+  assert.equal((await send(testCode, 'telefon-test-1', new Uint8Array(20 * 1024 * 1024 + 1))).status, 413, 'for stor');
+  assert.equal((await send(testCode, 'telefon-test-1', trip)).status, 200);
+  assert.equal((await send(testCode, 'telefon-test-1', trip)).status, 200, 'samme tur igjen erstatter den første');
+  const list = await (await call(env, 'GET', '/admin/turer', null, { admin: true })).json();
+  assert.equal(list.turer.length, 1);
+  assert.equal(list.turer[0].tur, 'tur-1');
+  assert.equal(list.turer[0].versjon, '0.27.5');
+  assert.equal((await call(env, 'GET', '/admin/turer', null)).status, 401, 'listen krever admin');
+  const got = await call(env, 'GET', '/admin/tur?nokkel=' + encodeURIComponent(list.turer[0].nokkel), null, { admin: true });
+  assert.deepEqual(new Uint8Array(await got.arrayBuffer()), trip, 'turen kommer tilbake slik den ble sendt');
+  await call(env, 'POST', '/admin/steng', { kode: testCode }, { admin: true });
+  assert.equal((await send(testCode, 'telefon-test-1', trip, 'tur-2')).status, 410, 'stengt kode kan ikke sende');
+  const del = await (await call(env, 'POST', '/admin/slett-tur', { alle: true }, { admin: true })).json();
+  assert.equal(del.slettet, 1);
+  assert.equal((await (await call(env, 'GET', '/admin/turer', null, { admin: true })).json()).turer.length, 0);
+});
+
+test('appen husker om skolebeviset er en testkode (0.27.5)', () => {
+  setSchoolPass({ skole: 'Testgruppe', exp: Date.now() + 86400000, tester: true });
+  assert.equal(schoolPass().tester, true);
+  setSchoolPass({ skole: 'Skole', exp: Date.now() + 86400000 });
+  assert.equal(schoolPass().tester, false);
+  setSchoolPass(null);
 });

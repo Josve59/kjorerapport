@@ -85,7 +85,7 @@ export async function activateCode(code) {
   const p = await verifyPass(r.bevis, { install });
   if (!p) return { error: 'server' };
   saveSettings({ ...getSettings(), skolekode: { kode: normalizeCode(code), bevis: r.bevis, sjekket: Date.now() } });
-  setSchoolPass({ skole: p.s, exp: p.exp });
+  setSchoolPass({ skole: p.s, exp: p.exp, tester: p.t === 1 });
   return { ok: true, skole: p.s, til: p.exp };
 }
 
@@ -96,12 +96,13 @@ export async function loadSchoolPass({ now = Date.now(), online = typeof navigat
   if (!sk || !sk.bevis) { setSchoolPass(null); return null; }
   const install = installId();
   let p = await verifyPass(sk.bevis, { install, now });
-  setSchoolPass(p ? { skole: p.s, exp: p.exp } : null);
-  if (online && codesEnabled() && (!p || now - (sk.sjekket || 0) > RECHECK_MS)) {
+  setSchoolPass(p ? { skole: p.s, exp: p.exp, tester: p.t === 1 } : null);
+  // Bevis fra før 0.27.5 mangler «t» (testkode eller ikke): da spørres serveren med en gang, ikke først etter en uke
+  if (online && codesEnabled() && (!p || now - (sk.sjekket || 0) > RECHECK_MS || !('t' in p))) {
     const r = await ask(sk.kode, install);
     if (r.bevis) {
       const p2 = await verifyPass(r.bevis, { install, now });
-      if (p2) { saveSettings({ ...getSettings(), skolekode: { ...sk, bevis: r.bevis, sjekket: now } }); p = p2; setSchoolPass({ skole: p2.s, exp: p2.exp }); }
+      if (p2) { saveSettings({ ...getSettings(), skolekode: { ...sk, bevis: r.bevis, sjekket: now } }); p = p2; setSchoolPass({ skole: p2.s, exp: p2.exp, tester: p2.t === 1 }); }
     } else if (r.gone || r.error === 'ukjent') {
       const { skolekode, ...rest } = getSettings();
       saveSettings(rest);
@@ -111,3 +112,32 @@ export async function loadSchoolPass({ now = Date.now(), online = typeof navigat
   }
   return p;
 }
+
+/* «Send turen til utvikleren» (0.27.5): bare for testere (testkode), og bare når de trykker. Turen sendes som den
+   eksporteres (samme JSON som «Eksporter»), gzip-komprimert der nettleseren kan. → { ok } eller { error } */
+export const SEND_ERROR = {
+  'ikke-tester': 'Koden din er ikke en testkode, så turen kan ikke sendes.',
+  stengt: 'Testkoden virker ikke lenger. Spør den som ga deg lenken.',
+  utlopt: 'Testkoden har gått ut. Spør den som ga deg lenken.',
+  ukjent: 'Fant ikke testkoden din. Åpne testlenken på nytt og prøv igjen.',
+  stor: 'Turen er for stor til å sendes. Bruk «Eksporter» under Innstillinger og send filen på e-post i stedet.',
+  mange: 'Du har sendt mange turer i dag. Prøv igjen i morgen.',
+  nett: 'Ingen nettilkobling. Prøv igjen når du er på nett.',
+  server: 'Kunne ikke sende turen akkurat nå. Prøv igjen om litt.'
+};
+export async function sendTripToDev(json, { id, start, version } = {}) {
+  const sk = getSettings().skolekode;
+  if (!sk || !sk.kode || !codesEnabled()) return { error: 'ukjent' };
+  let body = new TextEncoder().encode(json), gz = false;
+  if (typeof CompressionStream === 'function') {
+    try { body = new Uint8Array(await new Response(new Blob([body]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()); gz = true; } catch { /* sendes ukomprimert */ }
+  }
+  let r;
+  try {
+    r = await fetch(serverUrl() + '/v1/tur', { method: 'POST', body, headers: { 'Content-Type': 'application/octet-stream', 'X-Kode': sk.kode, 'X-Install': installId(), 'X-Tur': String(id || ''), 'X-Start': String(start || ''), 'X-Versjon': String(version || ''), 'X-Gzip': gz ? '1' : '0' } });
+  } catch { return { error: 'nett' }; }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return { error: SEND_ERROR[data.error] ? data.error : 'server' };
+  return { ok: true, bytes: body.byteLength };
+}
+

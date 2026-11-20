@@ -8,6 +8,10 @@
    node tools/skolekoder.mjs steng KODE                    koden slutter å virke (f.eks. skolen betalte ikke)
    node tools/skolekoder.mjs nullstill KODE                eleven har brukt koden på to telefoner og har fått en ny
    node tools/skolekoder.mjs apne KODE                     en kode som ble stengt ved en feil, virker igjen
+   node tools/skolekoder.mjs tester KODE [av]              merker en kode som testkode (testerne kan sende turer)
+   node tools/skolekoder.mjs turer                         lister turene testerne har sendt, og henter nye til
+                                                           Nedlastinger (kjorerapport-tester-….json, leses av turrapport)
+   node tools/skolekoder.mjs slett-turer alle|NØKKEL       sletter turene på serveren når testingen er ferdig
 
    Serveren: KJ_KODE_URL (standard http://localhost:8787, den lokale serveren) eller .local-test/skolekoder/url.txt.
    Hemmelighetene ligger i .local-test/skolekoder/ (holdes utenfor git): privat.jwk.json og admin.txt. Ta vare på dem:
@@ -46,12 +50,12 @@ if (cmd === 'nokler') {
   console.log('Den offentlige nøkkelen (til js/skolekode.js):');
   console.log(JSON.stringify({ kty: pub.kty, crv: pub.crv, x: pub.x, y: pub.y }));
 } else if (cmd === 'lag') {
-  const [skole, antall, maaneder = '12', maks = '2'] = args;
+  const [skole, antall, maaneder = '12', maks = '2', type = ''] = args;
   if (!skole || !antall) { console.log('Bruk: node tools/skolekoder.mjs lag "Skolens navn" 150 [måneder] [telefoner per kode]'); process.exit(1); }
-  const r = await admin('POST', '/admin/koder', { skole, antall: Number(antall), maaneder: Number(maaneder), maks: Number(maks) });
+  const r = await admin('POST', '/admin/koder', { skole, antall: Number(antall), maaneder: Number(maaneder), maks: Number(maks), tester: type === 'tester' });
   const file = path.join(os.homedir(), 'Downloads', `skolekoder-${skole.replace(/[^\wæøåÆØÅ-]+/g, '-')}-${new Date().toLocaleDateString('sv-SE')}.csv`);
   fs.writeFileSync(file, '﻿Kode;Skole;Gyldig i måneder fra første bruk\n' + r.koder.map(k => `${k};${r.skole};${r.maaneder}`).join('\n') + '\n');
-  console.log(`${r.koder.length} koder til ${r.skole} (${r.maaneder} måneder fra eleven tar koden i bruk, høyst ${r.maks} telefoner per kode).`);
+  console.log(`${r.koder.length} koder til ${r.skole} (${r.maaneder} måneder fra eleven tar koden i bruk, høyst ${r.maks} telefoner per kode${r.tester ? ', testkode: kan sende turer' : ''}).`);
   console.log(`Lagret som regneark: ${file}`);
   const web = read('nettside-url.txt');
   if (web && r.koder.length <= 3) for (const k of r.koder) console.log(`Lenke som låser opp av seg selv: ${web}/?kode=${k}`);
@@ -61,8 +65,36 @@ if (cmd === 'nokler') {
   const by = new Map();
   for (const k of r.koder) { const s = by.get(k.skole) || { alle: 0, brukt: 0, stengt: 0 }; s.alle++; if (k.brukt) s.brukt++; if (k.stengt) s.stengt++; by.set(k.skole, s); }
   for (const [s, n] of by) console.log(`${s}: ${n.brukt} av ${n.alle} koder brukt${n.stengt ? `, ${n.stengt} stengt` : ''}`);
-  if (skole) for (const k of r.koder) console.log(`  ${k.kode}  ${k.brukt ? `brukt fra ${day(k.forst)} til ${day(k.til)} (${k.brukt} telefon${k.brukt === 1 ? '' : 'er'})` : 'ikke brukt'}${k.stengt ? ' · STENGT' : ''}`);
+  if (skole) for (const k of r.koder) console.log(`  ${k.kode}  ${k.brukt ? `brukt fra ${day(k.forst)} til ${day(k.til)} (${k.brukt} telefon${k.brukt === 1 ? '' : 'er'})` : 'ikke brukt'}${k.stengt ? ' · STENGT' : ''}${k.tester ? ' · testkode' : ''}`);
   if (!r.koder.length) console.log('Ingen koder ennå.');
+} else if (cmd === 'tester') {
+  const [kode, av] = args;
+  if (!kode) { console.log('Bruk: node tools/skolekoder.mjs tester KODE [av]'); process.exit(1); }
+  const r = await admin('POST', '/admin/tester', { kode, tester: av !== 'av' });
+  console.log(av === 'av' ? `${r.kode} er ikke lenger testkode.` : `${r.kode} er testkode: testerne kan sende turer (appen får vite det neste gang den spør serveren).`);
+} else if (cmd === 'turer') {
+  const { turer } = await admin('GET', '/admin/turer');
+  if (!turer.length) { console.log('Ingen turer fra testere ennå.'); process.exit(0); }
+  const dl = path.join(os.homedir(), 'Downloads');
+  let nye = 0;
+  for (const t of turer) {
+    const name = `kjorerapport-tester-${String(t.start || '').slice(0, 16).replace(/[:T]/g, '-') || t.tur}-${t.install || 'x'}.json`;
+    const file = path.join(dl, name);
+    const sendt = new Date(t.sendt).toLocaleString('nb-NO', { dateStyle: 'short', timeStyle: 'short' });
+    console.log(`  ${sendt}  tur ${String(t.start || '').slice(0, 16).replace('T', ' ')}  telefon ${t.install}  ${(t.bytes / 1e6).toFixed(1).replace('.', ',')} MB  v${t.versjon || '?'}${fs.existsSync(file) ? '' : '  (ny)'}`);
+    if (fs.existsSync(file)) continue;
+    const res = await fetch(url + '/admin/tur?nokkel=' + encodeURIComponent(t.nokkel), { headers: { Authorization: `Bearer ${read('admin.txt')}` } });
+    if (!res.ok) { console.log(`    kunne ikke hente (${res.status})`); continue; }
+    let buf = Buffer.from(await res.arrayBuffer());
+    if (t.gz) buf = (await import('node:zlib')).gunzipSync(buf);
+    fs.writeFileSync(file, buf); nye++;
+  }
+  console.log(`${turer.length} turer på serveren${nye ? `, ${nye} nye hentet til Nedlastinger` : ', ingen nye'}.`);
+} else if (cmd === 'slett-turer') {
+  const [hva] = args;
+  if (!hva) { console.log('Bruk: node tools/skolekoder.mjs slett-turer alle   (eller én NØKKEL fra «turer»)'); process.exit(1); }
+  const r = await admin('POST', '/admin/slett-tur', hva === 'alle' ? { alle: true } : { nokkel: hva });
+  console.log(`${r.slettet} ${r.slettet === 1 ? 'tur' : 'turer'} slettet på serveren.`);
 } else if (cmd === 'steng' || cmd === 'nullstill' || cmd === 'apne') {
   const [kode] = args;
   if (!kode) { console.log(`Bruk: node tools/skolekoder.mjs ${cmd} KODE`); process.exit(1); }

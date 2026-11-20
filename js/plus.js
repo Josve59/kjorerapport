@@ -28,7 +28,7 @@ const notify = () => { for (const fn of listeners) try { fn(hasPlus()); } catch 
 let school = null;
 const schoolOk = () => !!(school && school.exp > Date.now());
 export const schoolPass = () => (schoolOk() ? { ...school } : null);
-export function setSchoolPass(p) { school = p && p.exp ? { skole: String(p.skole || ''), exp: p.exp } : null; notify(); }
+export function setSchoolPass(p) { school = p && p.exp ? { skole: String(p.skole || ''), exp: p.exp, tester: !!p.tester } : null; notify(); }   // tester: testkode (0.27.5)
 
 /* Har brukeren Pluss nå? Utenfor iPhone-appen alltid ja. */
 export function hasPlus() {
