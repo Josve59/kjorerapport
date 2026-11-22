@@ -411,27 +411,40 @@ export function dashLine(rowMean, { from = 0.6, to = 0.97, win = 5, minStep = 12
    - fresh: false når svaret er det samme som sist. Da telles ingenting.
    - t (ms): med tid står en tapt linje i holdMs i stedet for i `hold` bilder.
    - Tapt linje mens den andre ses: den tegnes der feltbredden sier (carried), så den følger veien i stedet for å stå
-     stille, i opptil carryMs. Den regnes ikke som sett (held og carried skilles i det som lagres). */
-export function createLaneTracker({ need = 2, hold = 5, holdMs = 800, carryMs = 2200, tol = 0.1 } = {}) {
-  const T = { left: { line: null, hits: 0, miss: 0, cand: null, seenAt: 0 }, right: { line: null, hits: 0, miss: 0, cand: null, seenAt: 0 } };
+     stille, i opptil carryMs. Den regnes ikke som sett (held og carried skilles i det som lagres).
+   1.0.1, turene 22. nov.: linjene skiftet 25–33 ganger i minuttet i 20–60 km/t, og en tredel av gangene de var borte,
+   var de tilbake innen 1 s. Varm telefon gir feltmodellen 2–3 svar i sekundet, så ett tapt svar varte lenger enn
+   holdMs, og linjen måtte så ses to ganger til før den kom tilbake. Nå:
+   - En tapt linje står minst 2,2 svar lenge (holdMs er minstetiden), så ett tapt svar tar den aldri.
+   - Kommer den tilbake på samme sted innen backMs etter at den falt ut, vises den med en gang. */
+export function createLaneTracker({ need = 2, hold = 5, holdMs = 800, carryMs = 2200, backMs = 1500, tol = 0.1 } = {}) {
+  const T = { left: { line: null, hits: 0, miss: 0, cand: null, seenAt: 0, gone: null }, right: { line: null, hits: 0, miss: 0, cand: null, seenAt: 0, gone: null } };
   const near = (a, b, w) => Math.abs(a.xBottom - b.xBottom) < w * tol * 1.5 && Math.abs(laneX(a, a.yTop) - laneX(b, a.yTop)) < w * tol;
-  const drop = s => { s.line = null; s.hits = 0; s.miss = 0; };
+  let lastAns = null, gapMs = null;   // tiden mellom nye svar (glidende), til hvor lenge en tapt linje står
+  const drop = (s, t) => { if (s.line && Number.isFinite(t)) s.gone = { line: s.line, at: t }; s.line = null; s.hits = 0; s.miss = 0; };
   return {
     step(ln, w, { t = null, fresh = true } = {}) {
       const out = { left: null, right: null, offset: null };
       const timed = Number.isFinite(t);
-      // Lengste tid en tapt linje vises: lenger når den andre linjen ses og bærer den
-      const limit = side => { const o = T[side === 'left' ? 'right' : 'left']; return timed && o.line && !o.miss ? carryMs : holdMs; };
+      if (timed && fresh) {
+        if (lastAns !== null && t > lastAns && t - lastAns < 2000) gapMs = gapMs === null ? t - lastAns : gapMs + (t - lastAns - gapMs) * 0.2;
+        lastAns = t;
+      }
+      // Lengste tid en tapt linje vises: lenger når den andre linjen ses og bærer den, og aldri under 2,2 svar
+      const limit = side => { const o = T[side === 'left' ? 'right' : 'left']; return Math.max(timed && o.line && !o.miss ? carryMs : holdMs, gapMs ? gapMs * 2.2 : 0); };
       for (const side of ['left', 'right']) {
         const s = T[side], raw = ln && ln[side] && !ln[side].predicted ? ln[side] : null;
-        if (!fresh) { if (timed && s.line && s.miss && t - s.seenAt > limit(side)) drop(s); continue; }
+        if (!fresh) { if (timed && s.line && s.miss && t - s.seenAt > limit(side)) drop(s, t); continue; }
         if (raw && s.line && near(raw, s.line, w)) { s.line = raw; s.hits++; s.miss = 0; s.cand = null; s.seenAt = t; }
+        else if (timed && raw && !s.line && s.gone && t - s.gone.at <= backMs && near(raw, s.gone.line, w)) {
+          s.line = raw; s.hits = need; s.miss = 0; s.cand = null; s.seenAt = t; s.gone = null;   // tilbake der den var
+        }
         else {
           if (raw) {
             s.cand = s.cand && near(raw, s.cand.line, w) ? { line: raw, hits: s.cand.hits + 1 } : { line: raw, hits: 1 };
             if (s.cand.hits >= need) { s.line = s.cand.line; s.hits = s.cand.hits; s.miss = 0; s.cand = null; s.seenAt = t; continue; }
           } else s.cand = null;
-          if (s.line) { s.miss++; if (timed ? t - s.seenAt > limit(side) : s.miss > hold) drop(s); }
+          if (s.line) { s.miss++; if (timed ? t - s.seenAt > limit(side) : s.miss > hold) drop(s, t); }
         }
       }
       for (const side of ['left', 'right']) if (T[side].line && T[side].hits >= need) out[side] = T[side].miss ? { ...T[side].line, held: true } : T[side].line;

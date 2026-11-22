@@ -37,8 +37,8 @@ nonisolated final class RoadDetector: @unchecked Sendable {
     private var pool: CVPixelBufferPool?
     private let ci = CIContext(options: [.workingColorSpace: NSNull(), .cacheIntermediates: false])
 
-    /// Laster modellen to ganger: på grafikkprosessoren og med «alle» (Core ML velger, gjerne AI-brikken for deler av den).
-    /// De første svarene måles, og den raskeste brukes resten av økten.
+    /// Laster modellen på grafikkprosessoren (fra 1.0.2; før også med «alle», og den raskeste i starten ble brukt).
+    /// I testbygg kan KJ_DFINE=alle fortsatt velge AI-brikken, til måling.
     func load(modelURL: URL? = nil) -> Bool {
         lock.lock(); defer { lock.unlock() }
         if !models.isEmpty { return true }
@@ -51,10 +51,13 @@ nonisolated final class RoadDetector: @unchecked Sendable {
         #if targetEnvironment(simulator)
         let choices = [("prosessor", MLComputeUnits.cpuOnly)]   // simulatoren gir bare nuller på grafikkprosessoren
         #else
-        var choices = [("gpu", MLComputeUnits.cpuAndGPU), ("alle", MLComputeUnits.all)]
+        // 1.0.2: bare grafikkprosessoren. «alle» (AI-brikken der den kan) vant målingen i starten på to av åtte turer,
+        // men var tregere resten av turen: 145 og 174 ms mot 113–117 ms på grafikkprosessoren ved samme varme (og 63–92
+        // mot 43–57 ms på skrivebordet 11. nov.). Én modell å laste gir også raskere kamerastart og mindre minne.
+        var choices = [("gpu", MLComputeUnits.cpuAndGPU)]
         #if DEBUG
         // Måling (0.13.12): KJ_DFINE=gpu eller alle tvinger én regneenhet, alt annet slår modellen av
-        if let only = ProcessInfo.processInfo.environment["KJ_DFINE"] { choices = choices.filter { $0.0 == only } }
+        if let only = ProcessInfo.processInfo.environment["KJ_DFINE"] { choices = [("gpu", MLComputeUnits.cpuAndGPU), ("alle", MLComputeUnits.all)].filter { $0.0 == only } }
         #endif
         #endif
         for (label, units) in choices {

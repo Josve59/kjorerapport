@@ -1,6 +1,6 @@
 # Slik sender du Kjørerapport til App Store
 
-**22. november: klar til innsending.** To ting gjenstår før du sender inn: én lang prøvetur med versjon 1.0.1 (den er på telefonen din), og helst at en trafikklærer har lest gjennom teorien. Resten er klart. Regn med 1–2 timer arbeid, og så 1–3 dager venting på Apple.
+**22. november: klar til innsending.** To ting gjenstår før du sender inn: én lang prøvetur med versjon 1.0.2 (den er på telefonen din), og helst at en trafikklærer har lest gjennom teorien. Resten er klart. Regn med 1–2 timer arbeid, og så 1–3 dager venting på Apple.
 
 Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). Her er rekkefølgen.
 

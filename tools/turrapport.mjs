@@ -47,6 +47,40 @@ function laneStats(road) {
   return { n: rows.length, both, one, none, flips, perMin: sec > 0 ? (flips * 60) / sec : 0, median };
 }
 
+/* Fart (km/t) ved tiden t: nærmeste GPS-punkt etter t */
+function kmhAtFn(loc) {
+  const fixes = loc.filter(p => Number.isFinite(p.speed));
+  return t => {
+    if (!fixes.length) return NaN;
+    let lo = 0, hi = fixes.length - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (fixes[m].t < t) lo = m + 1; else hi = m; }
+    return fixes[lo].speed * 3.6;
+  };
+}
+
+/* Feltlinjene i bykjøring (20–60 km/t, 1.0.1): hvor ofte de skifter per minutt der. Turene 22. nov. hadde 25–33 i
+   minuttet her mot 9 i minst 60 km/t; følgeren i lanes.js holder nå linjene over ett tapt svar */
+function townLaneFlips(road, loc) {
+  const kmhAt = kmhAtFn(loc);
+  let sec = 0, flips = 0, prev = null, prevT = null, fastN = 0, fastBoth = 0;
+  for (const r of road) {
+    if (!r.lane) continue;
+    const v = kmhAt(r.t), s = (r.lane.l ? 'l' : '') + (r.lane.r ? 'r' : '');
+    if (v >= 60) { fastN++; if (s === 'lr') fastBoth++; }
+    if (v >= 20 && v < 60) { if (prev !== null && r.t - prevT < 1) { sec += r.t - prevT; if (s !== prev) flips++; } prev = s; prevT = r.t; }
+    else prev = null;
+  }
+  return { min: sec / 60, perMin: sec > 0 ? flips * 60 / sec : 0, fastN, fastBoth };
+}
+
+/* Ansiktet i fart (minst 20 km/t, 1.0.1): når bilen står, ser føreren seg rundt eller snakker, og da sier andelen lite */
+function movingFace(head, loc) {
+  const kmhAt = kmhAtFn(loc);
+  let n = 0, ok = 0;
+  for (const h of head) if (kmhAt(h.t) >= 20) { n++; if (h.ok) ok++; }
+  return { n, ok };
+}
+
 /* Feltlinjene i mørket (lys under 30) i minst 40 km/t, der veien som regel har oppmalte linjer */
 function darkLanes(road, loc) {
   const fixes = loc.filter(p => Number.isFinite(p.speed));
@@ -127,6 +161,8 @@ function report(drive, input, file, exportVersion) {
       if (holes.length) { holes.sort((a, b) => a - b); more(`hull uten ansikt: ${n0(holes.length)}, typisk ${String((holes[holes.length >> 1]).toFixed(1)).replace('.', ',')} s · under et halvt sekund: ${n0(holes.filter(x => x < 0.5).length)} · over 2 s: ${n0(holes.filter(x => x > 2).length)}`); } }
     // Fra 0.13.1: hvorfor bildene var uten ansikt (tellerne gjelder hele kameraøkten)
     // Ansiktet når det er mørkt ute (lys på veien under 30): der ble føreren mistet før 0.13.10 lysnet førerbildet
+    const mf = movingFace(head, loc);
+    if (mf.n >= 100) more(`i fart (minst 20 km/t): funnet i ${pct(mf.ok, mf.n)} av ${n0(mf.n)} bilder`);
     const df = darkFace(head, road);
     if (df.n >= 100) more(`i mørket (lys på veien under 30): funnet i ${pct(df.ok, df.n)} av ${n0(df.n)} bilder`);
     if (perf && 'faceDim' in perf && perf.faceFrames) more(perf.faceDim ? `førerbildet lysnet i ${pct(perf.faceDim, perf.faceFrames)} av bildene, ansiktet funnet i ${pct(perf.faceDimOk, perf.faceDim)} av dem` : 'førerbildet ble aldri lysnet (lyst nok i bilen)');
@@ -139,6 +175,8 @@ function report(drive, input, file, exportVersion) {
   if (ls.n) {
     line('Feltlinjer', `begge ${pct(ls.both, ls.n)} · én ${pct(ls.one, ls.n)} · ingen ${pct(ls.none, ls.n)} (${n0(ls.n)} bilder)`);
     more(`skifter ${n0(ls.flips)} ganger, ${n1(ls.perMin)} per min${ls.median !== null ? `; en tilstand varer typisk ${n1(ls.median)} s` : ''}`);
+    const tf = townLaneFlips(road, loc);
+    if (tf.min >= 1) more(`i 20–60 km/t: skifter ${n1(tf.perMin)} per min (${n0(tf.min)} min)${tf.fastN >= 100 ? ` · i minst 60 km/t: begge ${pct(tf.fastBoth, tf.fastN)}` : ''}`);
     // I mørket på veier med linjer (0.13.2 lysner bildet til feltmodellen): 9. nov. var det 10–28 % her, mot ~80 % i lyset
     // Fra 0.13.3: veikanten og midten av veien vist i bilder uten oppmalte linjer
     const ne = road.filter(r => r.lane && r.lane.e).length;

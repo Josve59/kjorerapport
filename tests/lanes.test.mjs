@@ -207,6 +207,43 @@ test('feltlinjer over tid: en båret linje kjennes igjen med en gang når den se
   assert.equal(o.offset, 0.3);
 });
 
+/* 1.0.1: varm telefon, 2–3 svar i sekundet (turene 22. nov.) */
+test('feltlinjer over tid: ett tapt svar fra en treg feltmodell tar ikke linjen', () => {
+  const L = x => ({ xBottom: x, xTop: x + 30, yBottom: 100, yTop: 60 }), R = x => ({ xBottom: x, xTop: x - 30, yBottom: 100, yTop: 60 });
+  const tr = createLaneTracker(), w = 160, both = { left: L(20), right: R(140) }, none = { left: null, right: null };
+  let o;
+  for (let i = 0; i < 4; i++) o = tr.step(both, w, { t: i * 435 });   // 2,3 svar i sekundet
+  assert.ok(o.left && o.right);
+  o = tr.step(none, w, { t: 1740 });                                  // ett svar uten linjer
+  o = tr.step(none, w, { t: 2160, fresh: false });                    // 0,86 s siden sist sett: før tatt bort etter 0,8 s
+  assert.ok(o.left && o.left.held && o.right && o.right.held, 'står til neste svar');
+  o = tr.step(both, w, { t: 2175 });
+  assert.ok(o.left && !o.left.held && o.right && !o.right.held, 'neste svar: sett igjen, uten blink');
+  // To tapte svar tar den fortsatt
+  tr.step(none, w, { t: 2610 }); o = tr.step(none, w, { t: 3045 });
+  o = tr.step(none, w, { t: 3200, fresh: false });
+  assert.equal(o.left, null, 'borte etter to tapte svar');
+});
+
+test('feltlinjer over tid: en linje som kommer tilbake på samme sted, vises med en gang', () => {
+  const L = x => ({ xBottom: x, xTop: x + 30, yBottom: 100, yTop: 60 }), R = x => ({ xBottom: x, xTop: x - 30, yBottom: 100, yTop: 60 });
+  const tr = createLaneTracker(), w = 160, none = { left: null, right: null };
+  for (let i = 0; i < 3; i++) tr.step({ left: L(20), right: null }, w, { t: i * 300 });
+  for (let i = 3; i < 7; i++) tr.step(none, w, { t: i * 300 });      // borte i 1,2 s: tatt bort
+  assert.equal(tr.step(none, w, { t: 1900, fresh: false }).left, null);
+  let o = tr.step({ left: L(22), right: null }, w, { t: 2100 });
+  assert.ok(o.left && !o.left.held, 'samme sted innen 1,5 s: med en gang');
+  // Et annet sted, eller lenge etter: må ses to ganger som før
+  const tr2 = createLaneTracker();
+  for (let i = 0; i < 3; i++) tr2.step({ left: L(20), right: null }, w, { t: i * 300 });
+  for (let i = 3; i < 7; i++) tr2.step(none, w, { t: i * 300 });
+  assert.equal(tr2.step({ left: L(60), right: null }, w, { t: 2100 }).left, null, 'nytt sted: ikke ennå');
+  const tr3 = createLaneTracker();
+  for (let i = 0; i < 3; i++) tr3.step({ left: L(20), right: null }, w, { t: i * 300 });
+  for (let i = 3; i < 12; i++) tr3.step(none, w, { t: i * 300 });
+  assert.equal(tr3.step({ left: L(20), right: null }, w, { t: 3600 }).left, null, 'over 1,5 s etter: ikke ennå');
+});
+
 /* 0.13.15: plasseringen i feltet måles fra linjenes forsvinningspunkt, så en vridd telefon ikke forskyver den */
 test('plassering i feltet: en vridd telefon flytter ikke bilen i feltet', () => {
   const w = 160, h = 120;

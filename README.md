@@ -143,6 +143,33 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.2 – steadier lane lines, and the car model on the GPU
+
+From the owner's three drives on 22 November with 1.0.1 (16:55, 17:26 and 17:50, 18–37 min each, mostly town, after dark):
+- **Camera start:** the cameras started on the first try every time. The app answered after 3.6–4.7 s while it loaded the models.
+- **Lane lines:**
+  - at 60 km/h and over, both lines were seen 87–94 % of the time;
+  - at 20–60 km/h they flipped 25–33 times a minute. A third of the times a line went away, it was back within 1 s.
+  - The phone was «varm» for most of the drives, so the lane model gave only 2–3 answers a second. One missed answer lasted longer than the 0.8 s a lost line stays, and the line then had to be seen twice before it came back.
+- **Car model:** D-FINE small picked «alle» (the Neural Engine where it can) on the first drive. It was slower there for the whole drive: 145 ms against 113–117 ms on the GPU at the same heat. Over all eight drives with D-FINE small it picked «alle» twice, and both times it was slower (desk measurement 11 Nov: 63–92 against 43–57 ms).
+- **Face:** found in 66–68 % of frames.
+  - Moving (at least 20 km/h) it was 81 %, against 94 % on 19 Nov with the same calibration.
+  - It was lower at every light level, and mostly lost when the car turned: 29–65 % in turns over 10°/s, against 56–90 % on 19 Nov. Most losses came right after looking straight ahead.
+  - That points at hands or the steering wheel in front of the camera, or a different phone position, not at the model. Not changed.
+
+**Changes:**
+- `js/lanes.js` `createLaneTracker` (shared with `kamera/js/`):
+  - a lost line now stays for at least 2.2 answer intervals (measured as answers arrive; `holdMs` is still the minimum), so one missed answer never removes it;
+  - a line that comes back where it went within `backMs` (1.5 s) is shown at once. A line in a new place, or one coming back later, still needs two answers.
+  - Two new tests.
+- `RoadDetector.swift`: D-FINE loads on the GPU only. One model load instead of two gives a faster camera start and less memory. Test builds can still choose `KJ_DFINE=alle` for measuring.
+- `tools/turrapport.mjs`:
+  - the face share while moving (at least 20 km/h);
+  - lane flips per minute at 20–60 km/h, and both lines at 60 km/h and over;
+  - these are the numbers to compare on the next drive.
+
+**Models:** the drives do not save pictures, so the lane and car models cannot be measured or trained from them. Improving the models themselves needs pictures from Norwegian town driving at night. That is the next step if the owner wants it.
+
 ## What's new in 1.0.1 – the cameras start in the sale version
 
 **What the owner saw:** on the 1.0.0 sale build (Release) from Xcode, the road camera did not start, and the start button said «Venter på tilgang» for a long time.
