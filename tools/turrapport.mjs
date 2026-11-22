@@ -225,7 +225,8 @@ function report(drive, input, file, exportVersion) {
     for (let i = 1; i < road.length; i++) if (road[i].t - road[i - 1].t > 3) holes.push(`${clock(road[i - 1].t)} (${n0(road[i].t - road[i - 1].t)} s)`);
     if (holes.length) more(`uten bilder fra veikameraet: ${holes.slice(0, 6).join(', ')}${holes.length > 6 ? ` og ${holes.length - 6} til` : ''}`);
     // Kamerastarten (0.26.1): hvor mange forsøk, hvor lang tid til første bilde, og hvorfor et forsøk feilet
-    if (Array.isArray(perf.startLog) && perf.startLog.length) line('Kamerastart', perf.startLog.map((s, i) => `${i + 1}. ${s.err ? s.err : 'ok'}${Number.isFinite(s.ms) ? ` (${n0(s.ms)} ms${Number.isFinite(s.native) ? `, appen svarte etter ${n0(s.native)} ms` : ''})` : ''}${s.want === 1 ? ' · bare førerkameraet' : ''}`).join(' · '));
+    // 1.0.3: netErr = hentinger der serveren i appen ikke svarte, empty = serveren svarte, men kameraet hadde intet bilde
+    if (Array.isArray(perf.startLog) && perf.startLog.length) line('Kamerastart', perf.startLog.map((s, i) => `${i + 1}. ${s.err ? s.err : 'ok'}${Number.isFinite(s.ms) ? ` (${n0(s.ms)} ms${Number.isFinite(s.native) ? `, appen svarte etter ${n0(s.native)} ms` : ''})` : ''}${s.netErr ? ` · serveren svarte ikke ${s.netErr} ganger` : ''}${s.empty ? ` · ${s.empty} svar uten bilde` : ''}${s.want === 1 ? ' · bare førerkameraet' : ''}`).join(' · '));
   }
   // Kalibreringen (0.26.1): forsøkene de siste 12 timene før turen, med bilder med ansikt per trinn og antall forsøk
   if (cp && Array.isArray(cp.calibLog) && cp.calibLog.length) {

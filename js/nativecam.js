@@ -13,9 +13,18 @@ export async function camInfo() {
   return info;
 }
 
-/* Starter kameraene. facings: ['user'] og/eller 'environment'. Svar: { active, multi, error, model } */
-export async function start(facings, { detect = false } = {}) {
-  const r = await window.kjNative.camStart({ facings, detect });
+/* Modellene lastes i appen før kameraene trengs (1.0.3): kall det når eleven er på vei til å kjøre */
+export function prepare() { if (available() && window.kjNative.camPrepare) window.kjNative.camPrepare(); }
+
+/* Starter kameraene. facings: ['user'] og/eller 'environment'. Svar: { active, multi, error, model }.
+   fresh (1.0.3): appen bygger kameraene og serveren opp på nytt (et nytt forsøk etter at bildene ikke kom).
+   Tidsfrist (1.0.3): et svar som aldri kommer, skal ikke stoppe starten for godt. */
+export async function start(facings, { detect = false, fresh = false, timeout = 15000 } = {}) {
+  let limit = null;
+  const late = new Promise(res => { limit = setTimeout(() => res('sent'), timeout); });
+  const r = await Promise.race([window.kjNative.camStart({ facings, detect, fresh }), late]);
+  clearTimeout(limit);
+  if (r === 'sent') throw new Error('Kameraet svarte ikke på ' + Math.round(timeout / 1000) + ' s.');
   if (!r) throw new Error('Kameraet svarte ikke.');
   if (r.error === 'nei') { const e = new Error('Tilgang til kameraet ble avslått.'); e.name = 'NotAllowedError'; throw e; }
   if (r.error) throw new Error('Kameraet startet ikke: ' + r.error);
@@ -55,6 +64,8 @@ export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   let running = true, seq = -1, t = 0, frames = 0, stream = null, timer = null, lastAt = performance.now();
+  // Hvorfor bildene ikke kom (1.0.3): netErr = hentingen feilet (serveren svarte ikke), empty = intet bilde ennå (kameraet)
+  let netErr = 0, empty = 0;
   const pull = async () => {
     const t0 = performance.now();
     // Tidsfrist (0.10.1): en henting som henger (serveren stengt i bakgrunnen) skal ikke stoppe alle senere bilder
@@ -74,8 +85,8 @@ export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
           t = performance.now() - age; frames++; lastAt = performance.now();
         }
         if (bmp.close) bmp.close();
-      }
-    } catch { /* neste forsøk */ }
+      } else empty++;
+    } catch { netErr++; /* neste forsøk */ }
     if (limit) clearTimeout(limit);
     if (running) timer = setTimeout(pull, Math.max(5, 1000 / fps - (performance.now() - t0)));
   };
@@ -85,6 +96,7 @@ export function source(facing, { fps = 10, max = 0, quality = 0.8 } = {}) {
     get width() { return canvas.width; }, get height() { return canvas.height; },
     get t() { return t; }, get frames() { return frames; }, get seq() { return seq; },
     get ready() { return frames > 0; },
+    get netErr() { return netErr; }, get empty() { return empty; },
     get gamma() { return gamma; }, set gamma(v) { gamma = Number.isFinite(v) ? Math.max(0.3, Math.min(1, v)) : 1; },
     /* Millisekunder siden siste nye bilde (eller siden kilden startet) */
     get stalledMs() { return performance.now() - lastAt; },

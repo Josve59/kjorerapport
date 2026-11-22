@@ -29,7 +29,15 @@ struct KjorerapportApp: App {
                 // «Åpne i Kjørerapport» fra Meldinger, Mail, Filer eller AirDrop (0.18.1): nettappen henter filen
                 .onOpenURL { url in recorder.openFile(url) }
         }
-        // Tilbake fra bakgrunnen: sjekk at den lokale serveren fortsatt lytter (iPhone kan ha stengt den)
-        .onChange(of: scenePhase) { _, phase in if phase == .active { server?.restart() } }
+        // Tilbake fra bakgrunnen: den lokale serveren startes på nytt. 1.0.3: iPhone stenger den mens appen ligger
+        // i bakgrunnen uten et opptak, men den sier fortsatt at den er klar. Målt 22. nov.: etter 3 min med låst skjerm
+        // fikk nettappen bare feil fra serveren, så kameraene startet ikke før appen ble lukket og åpnet igjen.
+        // Ikke når appen starter (da lastes siden fra den).
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { Self.wasInBackground = true }
+            if phase == .active { server?.restart(force: Self.wasInBackground); Self.wasInBackground = false }
+        }
     }
+
+    @MainActor private static var wasInBackground = false
 }

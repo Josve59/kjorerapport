@@ -65,6 +65,13 @@ export function setDriverHome(pos) { driverHome = pos || null; driverPick.setHom
 /* Bare veikameraet i nettleseren (0.17.0): utenfor iPhone-appen, når nettleseren kan åpne et kamera */
 export const webRoadOk = () => !native.available() && webCameraSupported();
 
+/* Gjør kameraene klare før de trengs (1.0.3): appen laster bilmodellen og feltmodellen (iPhone-appen), og withFace
+   laster ansiktsgjenkjenningen her. Gjør ingenting når kameraene allerede går. */
+export function prepare({ withFace = false } = {}) {
+  native.prepare();
+  if (withFace) loadModel().catch(() => {});   // feilen vises når kameraet startes
+}
+
 /* Kan telefonen ha begge kameraene på samtidig (iPhone-appen på iPhone XS og nyere, med bilgjenkjenningen)? */
 export async function roadSupported() {
   const i = await native.camInfo();
@@ -76,12 +83,14 @@ export function setSpeed(kmh) { speedKmh = kmh; }   // fartsskilt leses bare nå
 let faceOff = false;
 export function setFaceOff(v) { faceOff = !!v; if (faceOff) { lastPose = null; lastFace = null; } }
 
+let loadTries = 0;
 export function loadModel(onStatus = () => {}) {
   if (landmarker) return Promise.resolve(landmarker);
   if (loading) return loading;
   loading = (async () => {
     onStatus('Laster ansiktsgjenkjenning … (rundt 13 MB første gang)');
-    const { FilesetResolver, FaceLandmarker } = await import(BASE + 'vision_bundle.mjs');
+    // Nytt forsøk med ny adresse (1.0.3): nettleseren husker en import som feilet, og prøver den ikke igjen
+    const { FilesetResolver, FaceLandmarker } = await import(BASE + 'vision_bundle.mjs' + (loadTries++ ? '?forsok=' + loadTries : ''));
     const fileset = await FilesetResolver.forVisionTasks(BASE + 'wasm');
     const opts = delegate => ({
       baseOptions: { modelAssetPath: BASE + 'face_landmarker.task', delegate },
@@ -132,7 +141,8 @@ export async function startCamera(videoEl, { road: withRoad = false, roadOnly = 
       const t0 = performance.now(), entry = { at: Date.now(), want: want.length };
       if (attempt) { onStatus('Starter kameraet på nytt …'); native.stop(); await sleep(700 * attempt); }
       else if (want.length > 1) onStatus('Starter kameraene og bilgjenkjenningen … (første gang etter en oppdatering tar det litt lenger)');
-      try { r = await native.start(want, { detect: withRoad }); }
+      // fresh (1.0.3): på nytt forsøk bygges kameraene og appens lokale server opp på nytt, uansett hva de selv sier
+      try { r = await native.start(want, { detect: withRoad, fresh: attempt > 0, timeout: attempt ? 10000 : 20000 }); }
       catch (e) {
         entry.err = String(e && e.message || e).slice(0, 80); perf.startLog.push(entry);
         if ((e && e.name === 'NotAllowedError') || attempt === 2) throw e;
@@ -146,10 +156,15 @@ export async function startCamera(videoEl, { road: withRoad = false, roadOnly = 
       // og første gang etter en oppdatering tar det lenger enn 4 s: da ble kameraene startet på nytt uten grunn.
       const t1 = performance.now();
       entry.native = Math.round(t1 - t0);
-      while (!driver.ready && performance.now() - t1 < 4000 + 700 * attempt) await sleep(100);
+      while (!driver.ready && performance.now() - t1 < 4000 + 700 * attempt) {
+        // Serveren i appen svarer ikke (1.0.3): da hjelper det ikke å vente. Nytt forsøk, med ny server, med en gang
+        if (!attempt && driver.netErr >= 5) break;
+        await sleep(100);
+      }
       entry.ms = Math.round(performance.now() - t0);
       if (driver.ready) { perf.startLog.push(entry); break; }
-      entry.err = 'ingen bilder'; perf.startLog.push(entry);
+      // Hva hentingen så (1.0.3): feil = serveren svarte ikke, tomme = serveren svarte, men kameraet ga ingen bilder
+      entry.err = 'ingen bilder'; entry.netErr = driver.netErr; entry.empty = driver.empty; perf.startLog.push(entry);
       if (attempt === 2) break;   // vakten prøver videre når kameraet er i bruk
       driver.stop(); driver = null;
     }
@@ -272,7 +287,7 @@ function watchdog() {
   // Full omstart (0.26.1): telefonen gjorde ingenting når den mente kameraene fortsatt gikk, selv om det ikke kom bilder.
   // Stopp går foran start i appens kø, så økten bygges opp på nytt.
   native.stop();
-  native.start(wantFacings, { detect: wantFacings.includes('environment') }).then(r => { entry.why = (r && r.why) || null; }).catch(e => { entry.why = 'feilet: ' + String(e && e.message || e).slice(0, 60); });
+  native.start(wantFacings, { detect: wantFacings.includes('environment'), fresh: true }).then(r => { entry.why = (r && r.why) || null; }).catch(e => { entry.why = 'feilet: ' + String(e && e.message || e).slice(0, 60); });
 }
 
 function faceTick() {

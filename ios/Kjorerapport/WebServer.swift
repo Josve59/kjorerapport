@@ -38,10 +38,11 @@ nonisolated final class WebServer: @unchecked Sendable {
         self.listener = listener
     }
 
-    /// Starter lytteren på nytt hvis den ikke lenger er klar (også når appen kommer fram igjen)
-    func restart() {
+    /// Starter lytteren på nytt hvis den ikke lenger er klar (også når appen kommer fram igjen). force (1.0.3): også
+    /// når den sier at den er klar. Nettappen ber om det når det ikke kom kamerabilder på forrige forsøk.
+    func restart(force: Bool = false) {
         queue.async { [self] in
-            if let l = listener, case .ready = l.state { return }
+            if !force, let l = listener, case .ready = l.state { return }
             listener?.stateUpdateHandler = nil
             listener?.cancel()
             listener = nil

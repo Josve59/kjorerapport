@@ -143,6 +143,22 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.3 – the cameras start after a locked screen, and much faster
+
+The owner reported that the cameras would not start on a new drive after the first one, until the app was closed and opened again, and that the start was slow. Measured on the phone from the Mac on 22 Nov (test build with a log that survives a locked screen):
+- **The bug:** after the phone had been locked for 3 minutes with no drive running, every request to the app's local server failed (40 failed camera fetches in a row). iPhone closes the listening socket while the app is suspended, but the listener still says it is ready, so the app never restarted it. A drive keeps the app awake (background GPS), which is why a second drive straight after the first worked.
+  - **Fix:** the server is always restarted when the app comes back from the background, and a camera retry restarts both the server and the camera session, whatever they report. With the first attempt failing on server errors, the retry starts at once instead of after 4 s.
+  - The face model's import failed while the server was down, and WebKit remembers a failed module import. A retry now uses a new address, and a face model that fails no longer stops the cameras.
+- **Speed:** the first camera start after the app opened took 4.8 s, the cameras themselves under 0.4 s. Most of it was the lane model, which was loaded twice (Neural Engine and GPU). «alle» won on all 8 drives since 16 Nov, so only that one is loaded now. The car and lane models load at the same time, on the home screen (`camPrepare`), and the face model loads while «Før kjøring» opens. After a 3-minute lock the cameras started in 0.47 s.
+- **«Før kjøring»:** GPS and motion are checked at once. Before, the cameras waited for the first GPS position, and GPS and motion were not checked until the cameras and the face model were ready. «Start opptak» waits for the cameras. In the browser the camera still asks for permission after the position, so two questions don't come at once.
+- **Also:**
+  - the first GPS position in the iPhone app now has the same 15 s time limit as in the browser;
+  - a camera start the app never answers gives up after 20 s;
+  - the camera session's notifications are removed when it stops;
+  - the face camera's exposure is reset between drives.
+- **Export:** each failed camera start now says how many fetches got no answer from the server (`netErr`) and how many got no picture from the camera (`empty`). `tools/turrapport.mjs` prints them.
+- **Not tested:** the web version in Safari and Android (the order there is as before), and a long drive with 1.0.3.
+
 ## What's new in 1.0.2 – steadier lane lines, and the car model on the GPU
 
 From the owner's three drives on 22 November with 1.0.1 (16:55, 17:26 and 17:50, 18–37 min each, mostly town, after dark):

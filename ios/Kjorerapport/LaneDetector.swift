@@ -71,7 +71,9 @@ nonisolated final class LaneDetector: @unchecked Sendable {
     private var pool: CVPixelBufferPool?
     private let ci = CIContext(options: [.workingColorSpace: NSNull(), .cacheIntermediates: false])
 
-    /// Laster modellen på grafikkprosessoren og med «alle» (gjerne AI-brikken); den raskeste brukes resten av økten.
+    /// Laster modellen med «alle» (AI-brikken der den kan). 1.0.3: før også på grafikkprosessoren, og den raskeste i
+    /// starten ble brukt, men «alle» vant på alle de 8 siste turene (16.–22. nov.). Én modell gir raskere kamerastart.
+    /// I testbygg kan KJ_LANES=gpu fortsatt velge grafikkprosessoren, til måling.
     func load() -> Bool {
         lock.lock(); defer { lock.unlock() }
         if !models.isEmpty { return true }
@@ -79,10 +81,10 @@ nonisolated final class LaneDetector: @unchecked Sendable {
         #if targetEnvironment(simulator)
         let choices = [("prosessor", MLComputeUnits.cpuOnly)]
         #else
-        var choices = [("alle", MLComputeUnits.all), ("gpu", MLComputeUnits.cpuAndGPU)]
+        var choices = [("alle", MLComputeUnits.all)]
         #if DEBUG
         // Måling (0.13.12): KJ_LANES=gpu eller alle tvinger én regneenhet, alt annet slår modellen av
-        if let only = ProcessInfo.processInfo.environment["KJ_LANES"] { choices = choices.filter { $0.0 == only } }
+        if let only = ProcessInfo.processInfo.environment["KJ_LANES"] { choices = [("alle", MLComputeUnits.all), ("gpu", MLComputeUnits.cpuAndGPU)].filter { $0.0 == only } }
         #endif
         #endif
         for (label, units) in choices {

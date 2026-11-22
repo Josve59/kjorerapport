@@ -61,12 +61,19 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         case "camInfo":
             return (["multi": CameraHub.multiSupported, "model": Bundle.main.url(forResource: "DFine", withExtension: "mlmodelc") != nil,
                      "lanes": Bundle.main.url(forResource: "Lanes", withExtension: "mlmodelc") != nil], nil)
+        case "camPrepare":
+            // 1.0.3: modellene lastes mens eleven gjør seg klar (hjemskjermen og «Før kjøring»), ikke når kameraene startes
+            _ = prepareModels()
+            return (["ok": true], nil)
         case "camStart":
             // Begge kameraene samtidig når telefonen kan (iPhone XS og nyere), ellers det første i listen
             let facings = (body["facings"] as? [String] ?? ["user"]).compactMap(CameraHub.Facing.init(rawValue:))
             let detect = (body["detect"] as? Bool ?? false) && facings.contains(.environment)
-            WebServer.shared?.restart()   // nettappens vakt ber om dette når bildene har stoppet
-            let started = await CameraHub.shared.start(facings)
+            // 1.0.3: et nytt forsøk (fresh) starter serveren på nytt uansett hva den selv mener om tilstanden sin, og
+            // modellene lastes samtidig med at kameraene startes (før etter hverandre: 3,6–4,7 s til svar)
+            WebServer.shared?.restart(force: body["fresh"] as? Bool ?? false)
+            if detect { _ = prepareModels() }
+            let started = await CameraHub.shared.start(facings, fresh: body["fresh"] as? Bool ?? false)
             let model = detect && started.active.contains(.environment) ? await startDetector() : nil
             if model == nil { CameraHub.shared.onRoadFrame = nil }
             let why: Any = CameraHub.shared.takeLastStop().map { $0 as Any } ?? NSNull()   // hvorfor kameraene sist stoppet (0.13.8)
@@ -153,23 +160,40 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         return (["auth": authorizationName], nil)
     }
 
-    /// Laster bilgjenkjenningen (første gang tar det noen sekunder) og gir den veibildene. Svarene går til nettappen
-    /// som window.__kjCamDets({ dets, w, h, age, ms, backend }). Returnerer modellens navn, eller nil.
+    /// Bilmodellen og feltmodellen lastes én gang per økt, begge samtidig og i bakgrunnen (1.0.3). Første gang etter
+    /// en oppdatering tar det noen sekunder. Den samme lastingen deles av alle som venter på den.
+    private var modelsTask: Task<(cars: Bool, lanes: Bool), Never>?
+    private func prepareModels() -> Task<(cars: Bool, lanes: Bool), Never> {
+        if let t = modelsTask { return t }
+        let cars = detector, lanes = laneDetector
+        let t = Task.detached(priority: .userInitiated) { () -> (cars: Bool, lanes: Bool) in
+            let t0 = Date()
+            async let c = cars.load()
+            async let l = lanes.load()
+            let r = await (cars: c, lanes: l)
+            #if DEBUG
+            print("[cam] modellene lastet: biler \(r.cars), felt \(r.lanes) på \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
+            #endif
+            return r
+        }
+        modelsTask = t
+        return t
+    }
+
+    /// Gir bilgjenkjenningen og feltmodellen veibildene når de er lastet. Svarene går til nettappen som
+    /// window.__kjCamDets({ dets, w, h, age, ms, backend }). Returnerer bilmodellens navn, eller nil.
     private func startDetector() async -> String? {
         let detector = self.detector
-        let t0 = Date()
-        let loaded = await Task.detached(priority: .userInitiated) { detector.load() }.value
-        #if DEBUG
-        print("[cam] bilgjenkjenning lastet: \(loaded) \(detector.name) på \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
-        #endif
-        guard loaded else { return nil }
+        let loaded = await prepareModels().value
+        if !loaded.cars || !loaded.lanes { modelsTask = nil }   // prøves igjen neste gang
+        guard loaded.cars else { return nil }
         detector.onResult = { [weak self] result in
             let js = "window.__kjCamDets && window.__kjCamDets(\(Self.jsonString(result)))"
             Task { @MainActor in self?.send(js) }
         }
         // Feltlinjene (0.13.0): egen modell på de samme veibildene, svarene som window.__kjCamLanes({ pts, road, … })
         let lanes = self.laneDetector
-        let lanesLoaded = await Task.detached(priority: .userInitiated) { lanes.load() }.value
+        let lanesLoaded = loaded.lanes
         if lanesLoaded {
             lanes.onResult = { [weak self] result in
                 let js = "window.__kjCamLanes && window.__kjCamLanes(\(Self.jsonString(result)))"

@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.2';
+export const APP_VERSION = '1.0.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -285,6 +285,8 @@ async function renderHome() {
   const me = settings.name || settings.activeDriver || '';
   $('#start-hello').textContent = isTeacher() ? (settings.activeStudent ? `Kjøretime med ${settings.activeStudent}` : 'Velg en elev') : me ? `Hei, ${me}!` : 'Klar for en tur?';
   $('#btn-go-precheck').lastChild.textContent = isTeacher() ? 'Start kjøretime' : 'Start kjøretur';
+  // 1.0.3: appen laster bil- og feltmodellen mens hjemskjermen vises, så kameraene starter raskt når turen begynner
+  if (window.kjNative && settings.cameraOn && hasPlus()) cam.prepare();
   const calibrated = !!getCalib();
   updateCamCard();
   const allDrives = await listDrives();
@@ -1906,6 +1908,7 @@ function renderPrecheck() {
   renderFocusSuggestions();
   const camCheck = $('#check-camera'), roadCheck = $('#check-road');
   const camWanted = () => !!getSettings().cameraOn && hasPlus();   // kameraene er en del av Pluss (0.11.0)
+  if (camWanted()) cam.prepare({ withFace: !roadOnly() });   // 1.0.3: modellene lastes mens skjermen åpnes
   camCheck.hidden = !camWanted() || roadOnly();
   const showRoadCheck = () => {
     roadCheck.hidden = !(camWanted() && roadWanted());
@@ -1951,18 +1954,40 @@ function renderPrecheck() {
     else if (motion === 'unsupported') setCheck(mot, false, 'Ingen bevegelsessensorer på denne enheten');
     else setCheck(mot, null, 'Venter på data …');
     if (motion !== 'denied' && motion !== 'unsupported' && !getSettings().permOk) saveSettings({ ...getSettings(), permOk: true });
-    try {
-      await requestLocationOnce();
-      setCheck(gps, null, 'Venter på god nok nøyaktighet …');
-    } catch (err) {
-      setCheck(gps, false, err.code === 1 ? `Posisjonstilgang avslått. ${permissionHelp('location')}` : isAndroid() ? 'Fikk ikke posisjon. Er Posisjon slått på? Dra ned fra toppen av skjermen og slå på Posisjon.' : 'Fikk ikke posisjon. Prøv der telefonen ser himmelen.');
-    }
-    if (leftDuringStart('#/sjekk')) return;
-    if (camWanted()) {
-      btnStart.textContent = 'Starter kameraene …';   // 1.0.1: ikke «Venter på tilgang» mens kameraene starter
+    // 1.0.3: kameraene startes med en gang, samtidig med posisjonen. Før ventet de på første posisjon, og GPS og
+    // bevegelse ble ikke sjekket før kameraene og ansiktsgjenkjenningen var klare (rundt 6 s etter at skjermen åpnet).
+    // «Start opptak» venter på kameraene, så turen ikke starter uten dem.
+    let camBusy = camWanted(), lastSt = null;
+    const since = performance.now();
+    const updateStart = st => {
+      if (!st) { btnStart.textContent = camBusy ? 'Starter kameraene …' : 'Venter på GPS …'; return; }
+      const waited = (performance.now() - since) / 1000;
+      btnStart.disabled = !(st.gpsOk && st.motionOk) || camBusy;
+      btnStart.textContent = !btnStart.disabled ? 'Start opptak'
+        : !st.motionOk ? 'Venter på bevegelsesdata …'
+        : !st.gpsOk ? (Number.isFinite(st.acc) ? `Venter på GPS (${n0(st.acc)} m) …` : 'Venter på GPS …')
+        : 'Starter kameraene …';
+      $('#step-check').dataset.state = btnStart.disabled ? 'active' : 'done';
+      if (!btnStart.disabled && !btnStart.dataset.buzzed) { vibrate(30); btnStart.dataset.buzzed = '1'; }
+      // Nødutgang: etter 20 s venting med brukbar GPS (≤ 40 m) kan man starte likevel.
+      const anyway = !camBusy && !st.gpsOk && st.motionOk && Number.isFinite(st.acc) && st.acc <= 40 && waited > 20;
+      btnAnyway.hidden = !anyway;
+      if (anyway) btnAnyway.textContent = `Start likevel (${n0(st.acc)} m nøyaktighet)`;
+    };
+    const startCams = async () => {
       try {
+        // Ansiktsgjenkjenningen lastes samtidig med kameraene (1.0.3, før etterpå). Feilen vises når den trengs under
+        const face = roadOnly() ? null : cam.loadModel().catch(() => null);
         await cam.startCamera(roadOnly() ? $('#pre-road-video') : $('#pre-video'), { road: roadWanted(), roadOnly: roadOnly(), home: driverHome(), onStatus: t => setCheck(roadOnly() ? roadCheck : camCheck, null, t) });
-        if (!roadOnly()) await cam.loadModel(t => setCheck(camCheck, null, t));
+        // Feiler ansiktsgjenkjenningen, går kameraene likevel (veikameraet trenger den ikke), og det står hva som skjedde
+        let faceFailed = false;
+        if (face) {
+          if (!cam.state().loaded) setCheck(camCheck, null, 'Laster ansiktsgjenkjenning …');
+          await face;
+          try { await cam.loadModel(t => setCheck(camCheck, null, t)); } catch { faceFailed = true; }
+        }
+        if (leftDuringStart('#/sjekk')) return;
+        if (faceFailed) setCheck(camCheck, false, 'Ansiktsgjenkjenningen startet ikke. Gå tilbake og prøv igjen.');
         cam.startLoop(8);
         if (camUnsub) camUnsub();
         // Kalibreringssjekk (0.12.0): stemmer kalibreringen med der telefonen og føreren er nå? Hvis ikke blir
@@ -1996,14 +2021,25 @@ function renderPrecheck() {
         const why = err && /^Kameraet /.test(err.message || '') ? err.message : 'Kameraet startet ikke';
         setCheck(roadOnly() ? roadCheck : camCheck, false, err && err.name === 'NotAllowedError' ? 'Kameratilgang avslått' : `${why}. Gå tilbake og prøv igjen.`);
       }
+      camBusy = false;
+      if (!leftDuringStart('#/sjekk')) updateStart(lastSt);
+    };
+    // I nettleseren spør kameraet om lov: der startes det etter posisjonen, så det ikke kommer to spørsmål samtidig
+    const early = camBusy && !!window.kjNative;
+    if (early) startCams();
+    try {
+      await requestLocationOnce();
+      setCheck(gps, null, 'Venter på god nok nøyaktighet …');
+    } catch (err) {
+      setCheck(gps, false, err.code === 1 ? `Posisjonstilgang avslått. ${permissionHelp('location')}` : isAndroid() ? 'Fikk ikke posisjon. Er Posisjon slått på? Dra ned fra toppen av skjermen og slå på Posisjon.' : 'Fikk ikke posisjon. Prøv der telefonen ser himmelen.');
     }
     if (leftDuringStart('#/sjekk')) return;
     btnPerm.hidden = true;
     $('#step-perm').dataset.state = 'done';
     $('#perm-text').textContent = 'Tilgang gitt.';
     $('#step-check').dataset.state = 'active';
-    btnStart.textContent = 'Venter på GPS …';
-    const since = performance.now();
+    updateStart(null);
+    if (camBusy && !early) startCams();
     const fixMotion = $('#btn-motion-fix');
     fixMotion.hidden = true;
     fixMotion.onclick = async () => { const r = await requestMotionPermission(); if (r === 'granted') { motion = 'granted'; fixMotion.hidden = true; setCheck(mot, null, 'Venter på data …'); } else setCheck(mot, false, `Tilgang avslått. ${permissionHelp('motion')}`); };
@@ -2024,16 +2060,8 @@ function renderPrecheck() {
       else if (motion !== 'denied' && motion !== 'unsupported') setCheck(mot, false, 'Ingen bevegelsesdata ennå – beveg telefonen litt');
       if (st.steady === null) setCheck(hold, null, 'Venter på bevegelsesdata');
       else setCheck(hold, st.steady, st.steady ? 'Telefonen står stødig' : 'Telefonen beveger seg – fest den i holderen og slipp den');
-      btnStart.disabled = !(st.gpsOk && st.motionOk);
-      btnStart.textContent = !btnStart.disabled ? 'Start opptak'
-        : !st.motionOk ? 'Venter på bevegelsesdata …'
-        : Number.isFinite(st.acc) ? `Venter på GPS (${n0(st.acc)} m) …` : 'Venter på GPS …';
-      $('#step-check').dataset.state = btnStart.disabled ? 'active' : 'done';
-      if (!btnStart.disabled && !btnStart.dataset.buzzed) { vibrate(30); btnStart.dataset.buzzed = '1'; }
-      // Nødutgang: etter 20 s venting med brukbar GPS (≤ 40 m) kan man starte likevel.
-      const anyway = !st.gpsOk && st.motionOk && Number.isFinite(st.acc) && st.acc <= 40 && waited > 20;
-      btnAnyway.hidden = !anyway;
-      if (anyway) btnAnyway.textContent = `Start likevel (${n0(st.acc)} m nøyaktighet)`;
+      lastSt = st;
+      updateStart(st);
     });
   };
   delete btnStart.dataset.buzzed;

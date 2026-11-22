@@ -8,6 +8,7 @@
   window.kjNative = { platform: 'ios', recStart: () => call('recStart'), recStop: () => call('recStop'), info: () => call('info'), status: s => call('recStatus', s),
     // Kameraene (CameraHub.swift): bildene hentes fra /cam/user.jpg og /cam/environment.jpg, bilene kommer som «kjcamdets»
     camInfo: () => call('camInfo'), camStart: o => call('camStart', o), camStop: () => call('camStop'), camConfig: o => call('camConfig', o),
+    camPrepare: () => call('camPrepare'),   // laster modellene før kameraene trengs (1.0.3)
     review: () => call('review'),
     takeFile: () => call('takeFile'),   // fil åpnet i appen fra delearket (0.18.1); appen sier fra med «kjfile»
     beep: (tones, volume) => call('beep', { tones, volume }),   // pip spilt av appen (0.12.2)
@@ -37,8 +38,13 @@
   const geolocation = {
     watchPosition(ok, err) { const id = nextId++; watchers.set(id, { ok, err }); call('geoStart'); return id; },
     clearWatch(id) { watchers.delete(id); if (!watchers.size) call('geoStop'); },
-    getCurrentPosition(ok, err) {
-      const id = geolocation.watchPosition(p => { geolocation.clearWatch(id); ok(p); }, e => { geolocation.clearWatch(id); if (err) err(e); });
+    // Tidsfrist (1.0.3) som i nettleseren: uten den ventet «Før kjøring» for alltid når posisjonen ikke kom
+    getCurrentPosition(ok, err, opts) {
+      let done = false, timer = null;
+      const finish = fn => { if (done) return; done = true; clearTimeout(timer); geolocation.clearWatch(id); fn(); };
+      const id = geolocation.watchPosition(p => finish(() => ok(p)), e => finish(() => { if (err) err(e); }));
+      const ms = opts && Number.isFinite(opts.timeout) ? opts.timeout : null;
+      if (ms !== null) timer = setTimeout(() => finish(() => { if (err) err({ code: 3, message: 'Fant ikke posisjon i tide', PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }); }), ms);
     }
   };
   try { Object.defineProperty(navigator, 'geolocation', { value: geolocation, configurable: true }); } catch (e) { console.error(e); }

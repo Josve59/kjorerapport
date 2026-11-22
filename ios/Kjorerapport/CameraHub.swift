@@ -57,7 +57,8 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
 
     // MARK: Start og stopp
 
-    func start(_ wanted: [Facing]) async -> Started {
+    /// fresh (1.0.3): bygg økten på nytt selv om den sier at den går (nettappen fikk ingen bilder på forrige forsøk)
+    func start(_ wanted: [Facing], fresh: Bool = false) async -> Started {
         let wanted = Facing.allCases.filter { wanted.contains($0) }
         guard !wanted.isEmpty else { return Started(active: [], multi: false, error: "ingen kamera valgt") }
         #if !targetEnvironment(simulator)
@@ -70,7 +71,7 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         #endif
         return await withCheckedContinuation { done in
             setupQueue.async {
-                if Set(self.active) == Set(wanted), self.session?.isRunning == true || self.simTimer != nil {
+                if !fresh, Set(self.active) == Set(wanted), self.session?.isRunning == true || self.simTimer != nil {
                     done.resume(returning: Started(active: self.active, multi: self.active.count > 1, error: nil))
                     return
                 }
@@ -96,9 +97,20 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
     private func noteStop(_ why: String) { lock.lock(); lastStop = why; lock.unlock() }
     func takeLastStop() -> String? { lock.lock(); defer { lock.unlock() }; let s = lastStop; lastStop = nil; return s }
 
+    // Varslene fra økten som går (1.0.3): fjernes når den stoppes. Før ble de liggende, og varsler fra gamle økter
+    // kunne starte eller merke den nye
+    private var observers: [NSObjectProtocol] = []
+
     private func stopNow() {
+        for o in observers { NotificationCenter.default.removeObserver(o) }
+        observers.removeAll()
         session?.stopRunning()
         session = nil
+        // Lysere førerbilde i mørket (setUserBias) hører til turen: kameraet husker det ellers til neste økt
+        if let d = userDevice, userBias != 0, (try? d.lockForConfiguration()) != nil {
+            d.setExposureTargetBias(0, completionHandler: nil)
+            d.unlockForConfiguration()
+        }
         userDevice = nil
         userBias = 0
         #if targetEnvironment(simulator)
@@ -167,12 +179,13 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
         active = got
         lock.unlock()
         session = s
+        let center = NotificationCenter.default
         // Stopper kameraene av seg selv (for varm telefon, en annen app tok kameraet), startes de igjen når det går
         for name in [AVCaptureSession.runtimeErrorNotification, AVCaptureSession.interruptionEndedNotification] {
-            NotificationCenter.default.addObserver(forName: name, object: s, queue: nil) { [weak self] _ in self?.resume() }
+            observers.append(center.addObserver(forName: name, object: s, queue: nil) { [weak self] _ in self?.resume() })
         }
         // Grunnen huskes (0.13.8), så eksporten kan si hvorfor kameraene stoppet
-        NotificationCenter.default.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: s, queue: nil) { [weak self] note in
+        observers.append(center.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: s, queue: nil) { [weak self] note in
             let raw = note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int
             let why: String
             switch raw.flatMap(AVCaptureSession.InterruptionReason.init(rawValue:)) {
@@ -184,11 +197,18 @@ nonisolated final class CameraHub: NSObject, AVCaptureVideoDataOutputSampleBuffe
             default: why = "avbrudd \(raw ?? -1)"
             }
             self?.noteStop(why)
-        }
-        NotificationCenter.default.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: s, queue: nil) { [weak self] note in
+        })
+        observers.append(center.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: s, queue: nil) { [weak self] note in
             self?.noteStop("kamerafeil \((note.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.code ?? 0)")
-        }
+        })
         s.startRunning()
+        // 1.0.3: en økt som ikke kom i gang, meldes som feil (med grunnen når den er kjent), så nettappen prøver igjen
+        // med en gang i stedet for å vente 4 s på bilder som ikke kommer
+        if !s.isRunning {
+            let why = takeLastStop()
+            stopNow()
+            return Started(active: [], multi: false, error: "kameraene kom ikke i gang" + (why.map { " (\($0))" } ?? ""))
+        }
         return Started(active: got, multi: got.count > 1, error: nil)
         #endif
     }
