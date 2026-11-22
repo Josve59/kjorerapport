@@ -3,3 +3,6 @@ node_modules/
 .claude/
 .local-test/
 CLAUDE.local.md
+
+# Overlevering til ny chat: bare på denne Macen (hvor hemmeligheter ligger, planer)
+HANDOVER.md
