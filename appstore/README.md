@@ -7,7 +7,7 @@ Everything that will go into App Store Connect and the app's settings file when 
 | # | What | Status |
 | --- | --- | --- |
 | 1 | **Models for sale** | **Done in 1.0.0.** D-FINE small (COCO only, Apache 2.0), road-tested since 0.13.17, is now the car model in git. The lane model is TwinLiteNet+ with the `n2` weights (comma10k MIT + A2D2 CC BY-ND 4.0), also road-tested since 0.13.7. Both are now in git, and the old overlay folder was renamed to `.local-test/app-models-n2/`, so Release builds no longer stop. |
-| 2 | **Road-test the sale version** | **Owner drives.** 1.0.0 with the shipping models was installed on the phone on 22 November. One long drive with both cameras, then `node tools/turrapport.mjs`. |
+| 2 | **Road-test the sale version** | **Owner drives.** 1.0.1 (1.0.0 plus the camera-start fix for builds from Xcode) with the shipping models was installed on the phone on 22 November. One long drive with both cameras, then `node tools/turrapport.mjs`. |
 | 3 | **Screenshots** | **Done 22 Nov:** eight new images for 1.0.0, theory first, and a new `kjop-pluss-review.png` (section 9). |
 | 4 | **Description, promotional text, keywords** | Done (18 Nov); 1.0.0 adds the safety quiz. The owner reads it through. |
 | 5 | **Review notes** | Updated 22 Nov (section 7): the two code buttons, the safety quiz, and a driving-school code for the reviewer. |

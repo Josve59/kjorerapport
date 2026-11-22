@@ -231,16 +231,35 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     }
 
     /// Utviklerdelen i Innstillinger finnes bare i Xcode og TestFlight, ikke i App Store-utgaven.
+    /// 1.0.1: et bygg fra Xcode har utviklerprofilen (embedded.mobileprovision) i appen, og da er svaret klart med en
+    /// gang. Før spurte salgsoppsettet fra Xcode App Store, og svaret kunne ta lang tid: «Pluss»-visningen kom ikke før
+    /// det, så kameraene startet ikke. TestFlight og App Store har ingen slik profil; der spørres App Store, høyst 5 s.
+    private static var devToolsAnswer: Bool?
     private static func devTools() async -> Bool {
         #if DEBUG
         return true
         #else
-        guard let result = try? await AppTransaction.shared else { return false }
-        switch result.unsafePayloadValue.environment {
-        case .sandbox, .xcode: return true
-        default: return false
+        if let known = devToolsAnswer { return known }
+        if Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision") != nil { devToolsAnswer = true; return true }
+        let answer = await firstAnswer(seconds: 5) {
+            guard let result = try? await AppTransaction.shared else { return false }
+            switch result.unsafePayloadValue.environment {
+            case .sandbox, .xcode: return true
+            default: return false
+            }
         }
+        if let answer { devToolsAnswer = answer }   // uten svar spørres det igjen neste gang
+        return answer ?? false
         #endif
+    }
+
+    /// Svaret fra work, eller nil hvis det tar mer enn seconds (work får gå ferdig, men ingen venter på det)
+    nonisolated private static func firstAnswer(seconds: Double, _ work: @escaping @Sendable () async -> Bool) async -> Bool? {
+        await withCheckedContinuation { (done: CheckedContinuation<Bool?, Never>) in
+            let gate = OnceGate()
+            Task.detached { let v = await work(); if gate.claim() { done.resume(returning: v) } }
+            Task.detached { try? await Task.sleep(for: .seconds(seconds)); if gate.claim() { done.resume(returning: nil) } }
+        }
     }
 
     private var authorizationName: String {
@@ -401,4 +420,11 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         guard let data = try? JSONSerialization.data(withJSONObject: value) else { return "null" }
         return String(decoding: data, as: UTF8.self)
     }
+}
+
+/// Slipper bare den første gjennom (svaret eller tidsfristen i firstAnswer)
+nonisolated final class OnceGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var used = false
+    func claim() -> Bool { lock.lock(); defer { lock.unlock() }; if used { return false }; used = true; return true }
 }

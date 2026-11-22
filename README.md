@@ -143,6 +143,31 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.1 – the cameras start in the sale version
+
+**What the owner saw:** on the 1.0.0 sale build (Release) from Xcode, the road camera did not start, and the start button said «Venter på tilgang» for a long time.
+
+**Cause:** the app asks the iPhone side whether it is a test build (`devTools`). Only then does it apply the owner's «Pluss» view, and the cameras are part of Pluss.
+- Debug builds answer at once.
+- The Release build asked the App Store (`AppTransaction.shared`). In a build installed from Xcode, that answer can take a long time or never come, so Pluss, and with it the cameras, was missing or came late.
+
+**Fixes:**
+- `NativeRecorder.devTools()`:
+  - a build with a developer profile (`embedded.mobileprovision`, every build from Xcode) answers yes at once;
+  - TestFlight and App Store builds have no such profile, so they still ask the App Store, but wait at most 5 s (`firstAnswer`, `OnceGate`), and a real answer is remembered;
+  - the App Store build still never gets the test tools.
+- `js/facecam.js`: the 4 s wait for the first picture now starts when the cameras answer, not before.
+  - The app loads the car and lane models before answering, and the first time after an update that takes longer than 4 s. The cameras were then restarted for no reason.
+  - The time the app took to answer is saved as `startLog[].native`, and `tools/turrapport.mjs` shows it.
+- The pre-drive check:
+  - the start button says «Starter kameraene …» while the cameras start;
+  - the camera line says that the first start after an update takes a little longer.
+
+**Tested:**
+- The tests pass and the Release build compiles.
+- The fix is installed on the phone.
+- Whether the cameras start at once is up to the owner's next drive.
+
 ## What's new in 1.0.0 – ready for the App Store
 
 The owner (22 November): «1. behold navnet kjørerapport, 2. … hvis ikke behold den [n2], 3. den har meldinger på appen når koblet til trafikkskole men ellers ikke, 4. ja. jeg har enk klar, bygg og se på det du trenger til appen skal være 10000% klar», and then «ta med n2 også skriv gjømt et sted i terms at felt modell er trent på audi dataen».

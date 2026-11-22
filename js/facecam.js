@@ -131,6 +131,7 @@ export async function startCamera(videoEl, { road: withRoad = false, roadOnly = 
     for (let attempt = 0; attempt < 3; attempt++) {
       const t0 = performance.now(), entry = { at: Date.now(), want: want.length };
       if (attempt) { onStatus('Starter kameraet på nytt …'); native.stop(); await sleep(700 * attempt); }
+      else if (want.length > 1) onStatus('Starter kameraene og bilgjenkjenningen … (første gang etter en oppdatering tar det litt lenger)');
       try { r = await native.start(want, { detect: withRoad }); }
       catch (e) {
         entry.err = String(e && e.message || e).slice(0, 80); perf.startLog.push(entry);
@@ -141,7 +142,11 @@ export async function startCamera(videoEl, { road: withRoad = false, roadOnly = 
       wantFacings = want;
       // 10 bilder i sekundet (0.13.10, var 15): ansiktsmodellen ser 8, resten ble pakket og sendt til ingen nytte (varme)
       driver = native.source('user', { fps: 10, max: 640 });
-      while (!driver.ready && performance.now() - t0 < 4000 + 700 * attempt) await sleep(100);
+      // 1.0.1: de 4 sekundene regnes fra kameraene svarte. Appen laster bilgjenkjenningen og feltmodellen før den svarer,
+      // og første gang etter en oppdatering tar det lenger enn 4 s: da ble kameraene startet på nytt uten grunn.
+      const t1 = performance.now();
+      entry.native = Math.round(t1 - t0);
+      while (!driver.ready && performance.now() - t1 < 4000 + 700 * attempt) await sleep(100);
       entry.ms = Math.round(performance.now() - t0);
       if (driver.ready) { perf.startLog.push(entry); break; }
       entry.err = 'ingen bilder'; perf.startLog.push(entry);

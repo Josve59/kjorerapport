@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.0.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1959,6 +1959,7 @@ function renderPrecheck() {
     }
     if (leftDuringStart('#/sjekk')) return;
     if (camWanted()) {
+      btnStart.textContent = 'Starter kameraene …';   // 1.0.1: ikke «Venter på tilgang» mens kameraene starter
       try {
         await cam.startCamera(roadOnly() ? $('#pre-road-video') : $('#pre-video'), { road: roadWanted(), roadOnly: roadOnly(), home: driverHome(), onStatus: t => setCheck(roadOnly() ? roadCheck : camCheck, null, t) });
         if (!roadOnly()) await cam.loadModel(t => setCheck(camCheck, null, t));
