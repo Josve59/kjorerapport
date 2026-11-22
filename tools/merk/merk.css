@@ -12,6 +12,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .bar { flex: 1 1 160px; min-width: 120px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
 .bar span { display: block; height: 100%; width: 0; background: var(--green); transition: width .2s; }
 .wrap { display: flex; height: calc(100% - 50px); min-height: 0; }
+.offline { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: #3a1d1d; border-bottom: 1px solid #6b2b2b; }
+.offline[hidden] { display: none; }
+.offline > div { flex: 1; }
+.offline button { width: auto; flex: none; }
+.offline code { font: 13px ui-monospace, Menlo, monospace; }
 .stage { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 12px; }
 #cv { max-width: 100%; max-height: 100%; border-radius: 8px; background: #000; cursor: default; touch-action: none; }
 #cv.drawing { cursor: crosshair; }

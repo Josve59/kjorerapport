@@ -4,7 +4,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 const dir = path.resolve(process.argv[2]); const merk = dir + '-merk';
-const labels = fs.readdirSync(merk).filter(f => /^f\d{5}\.json$/.test(f)).map(f => JSON.parse(fs.readFileSync(path.join(merk, f), 'utf8'))).filter(e => e.status === 'ok');
+let labels = fs.readdirSync(merk).filter(f => /^f\d{5}\.json$/.test(f)).map(f => JSON.parse(fs.readFileSync(path.join(merk, f), 'utf8'))).filter(e => e.status === 'ok');
+// KJ_HOLD=5: bare bildene finetune_norge.py --hold 5 holdt utenfor (hvert 5. godkjente, i forslagenes rekkefølge)
+if (process.env.KJ_HOLD) {
+  const k = Number(process.env.KJ_HOLD), order = JSON.parse(fs.readFileSync(path.join(merk, 'forslag.json'), 'utf8')).frames.map(f => f.id);
+  const ok = new Set(labels.map(e => e.id)), held = new Set(order.filter(id => ok.has(id)).filter((_, i) => i % k === k - 1));
+  labels = labels.filter(e => held.has(e.id));
+  console.log(`bare de ${labels.length} bildene som er holdt utenfor treningen`);
+}
 const xAt = (pts, y) => {   // x på en linje (punkter i vilkårlig rekkefølge) i høyde y, eller null utenfor
   const s = [...pts].sort((a, b) => a[1] - b[1]);
   if (y < s[0][1] || y > s[s.length - 1][1]) return null;

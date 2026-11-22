@@ -12,6 +12,10 @@
     <div class="progress" id="progress" aria-live="polite">Laster …</div>
     <div class="bar" aria-hidden="true"><span id="bar"></span></div>
   </header>
+  <div class="offline" id="offline" role="alert" hidden>
+    <div><b>Merkesiden på Macen svarer ikke.</b> <span id="offline-text"></span> Start den igjen ved å dobbeltklikke <b>Start merkesiden</b> i mappen <code>tools/merk</code> i Kjørerapport-mappen, og trykk så «Prøv igjen».</div>
+    <button type="button" class="primary" id="btn-retry"><span>Prøv igjen</span></button>
+  </div>
   <main class="wrap">
     <section class="stage" id="stage">
       <canvas id="cv" aria-label="Veibildet med linjene"></canvas>

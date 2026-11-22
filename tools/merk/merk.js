@@ -18,6 +18,16 @@ async function start() {
   progress();
 }
 
+/* Serveren på Macen svarer ikke (Claude-appen stoppet den ved bilde 100, 22. nov.): tydelig beskjed, linjene beholdes,
+   og «Prøv igjen» gjør det samme på nytt når serveren er startet. msg null skjuler beskjeden. */
+function offline(msg, retry) {
+  const el = $('#offline');
+  el.hidden = !msg;
+  if (!msg) return;
+  $('#offline-text').textContent = msg;
+  $('#btn-retry').onclick = async ev => { ev.currentTarget.blur(); el.hidden = true; await retry(); };
+}
+
 function progress() {
   const ok = list.filter(f => f.status === 'ok').length, hopp = list.filter(f => f.status === 'hopp').length;
   $('#progress').textContent = `${ok + hopp} av ${list.length} gått gjennom · ${ok} godkjent · ${hopp} hoppet over`;
@@ -35,9 +45,12 @@ async function open(i) {
   try {
     data = await api(`/api/bilde/${f.id}`);
     im = await new Promise((res, rej) => { const x = new Image(); x.onload = () => res(x); x.onerror = rej; x.src = `/img/${f.id}.jpg`; });
-  } catch (err) { if (tok === openSeq) { loading = false; $('#state').textContent = 'Fikk ikke lastet bildet: ' + (err.message || err); } return; }
+  } catch (err) {
+    if (tok === openSeq) { loading = false; offline('Bildet ble ikke lastet.', () => open(i)); }
+    return;
+  }
   if (tok !== openSeq) return;   // et nyere bilde er bedt om
-  loading = false;
+  loading = false; offline(null);
   idx = i; cur = data; img = im; sel = -1; drawing = null; history = []; dirty = false; hover = null; drag = null;
   drawingUi(false);
   const e = cur.etikett;
@@ -201,7 +214,14 @@ async function save(status) {
   const f = list[idx];
   if (f.id !== cur.id) return false;
   const fra = { forslag: lines.filter(l => l.from === 'forslag').length, rettet: lines.filter(l => l.from === 'rettet').length, ny: lines.filter(l => l.from === 'ny').length };
-  await api(`/api/etikett/${f.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, lines: lines.map(l => ({ pts: l.pts })), fra }) });
+  try {
+    await api(`/api/etikett/${f.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, lines: lines.map(l => ({ pts: l.pts })), fra }) });
+  } catch {
+    dirty = true; state();
+    offline('Bildet ble ikke lagret, men linjene dine er ikke borte.', status === 'ok' ? approve : skip);
+    return false;
+  }
+  offline(null);
   f.status = status; f.n = lines.length; dirty = false;
   progress();
   return true;
