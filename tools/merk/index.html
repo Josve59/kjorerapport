@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Merk feltlinjer</title>
+  <link rel="stylesheet" href="/merk.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Merk feltlinjer</h1>
+    <div class="progress" id="progress" aria-live="polite">Laster …</div>
+    <div class="bar" aria-hidden="true"><span id="bar"></span></div>
+  </header>
+  <main class="wrap">
+    <section class="stage" id="stage">
+      <canvas id="cv" aria-label="Veibildet med linjene"></canvas>
+      <div class="drawhint" id="drawhint" hidden>Ny linje: klikk punkter langs linjen nedenfra og opp. Dobbeltklikk eller trykk N når du er ferdig. Esc avbryter.</div>
+    </section>
+    <aside class="side">
+      <div class="frame-head">
+        <div class="frame-id" id="frame-id">–</div>
+        <div class="state" id="state">–</div>
+        <div class="meta" id="meta"></div>
+        <div class="claude" id="claude" hidden></div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="primary" id="btn-ok"><span>Godkjenn og neste</span><kbd>Enter</kbd></button>
+        <button type="button" id="btn-new"><span>Ny linje</span><kbd>N</kbd></button>
+        <button type="button" id="btn-del" disabled><span>Slett valgt linje</span><kbd>⌫</kbd></button>
+        <button type="button" id="btn-clear"><span>Slett alle linjene</span></button>
+        <button type="button" id="btn-skip"><span>Hopp over (ubrukelig bilde)</span><kbd>S</kbd></button>
+        <div class="nav">
+          <button type="button" id="btn-prev"><span>Forrige</span><kbd>←</kbd></button>
+          <button type="button" id="btn-next"><span>Neste</span><kbd>→</kbd></button>
+        </div>
+        <button type="button" id="btn-todo"><span>Gå til neste umerkede</span></button>
+      </div>
+
+      <label class="light">Lysstyrke <input type="range" id="light" min="1" max="4" step="0.25" value="1.5"> <kbd>L</kbd></label>
+      <label class="check"><input type="checkbox" id="show-road"> Vis veikantene modellen så <kbd>V</kbd></label>
+
+      <details class="help" open>
+        <summary>Slik gjør du det</summary>
+        <ul>
+          <li><b>Merk bare malte linjer</b> som synes i bildet: midtlinje, kantlinje og linjer mellom felt. Ikke veikanter, snøkanter, rekkverk eller lys som speiler seg i veien.</li>
+          <li>Stiplede linjer merkes som én hel linje gjennom strekene.</li>
+          <li>De oransje stiplede linjene er forslag. Slett feil forslag, flytt punktene der linjen bommer, og tegn inn linjer som mangler.</li>
+          <li><b>Flytt et punkt:</b> dra det. <b>Nytt punkt på en linje:</b> klikk på den valgte linjen. <b>Fjern et punkt:</b> Alt-klikk på det.</li>
+          <li>Ingen linjer synes? Slett forslagene og godkjenn bildet uten linjer. Det er også nyttig.</li>
+          <li>For mørkt, uskarpt eller usikkert? Hopp over.</li>
+          <li>Angre: <kbd>⌘Z</kbd>. Alt lagres på Macen når du godkjenner.</li>
+        </ul>
+      </details>
+    </aside>
+  </main>
+  <script type="module" src="/merk.js"></script>
+</body>
+</html>

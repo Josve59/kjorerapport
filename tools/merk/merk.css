@@ -1,0 +1,48 @@
+/* Merkesiden: mørk, så veibildene (mest kveld) synes godt. Skiltblå og gul som i appen. */
+:root {
+  --bg: #0e1013; --panel: #171a1f; --line: #2a2f37; --ink: #eef1f5; --muted: #9aa3ae;
+  --blue: #1f6fe5; --yellow: #ffd400; --orange: #ff9f1a; --green: #3ddc84; --red: #ff5d5d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 15px/1.4 -apple-system, system-ui, sans-serif; }
+.top { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.top h1 { font-size: 17px; margin: 0; font-weight: 700; }
+.progress { color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { flex: 1 1 160px; min-width: 120px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar span { display: block; height: 100%; width: 0; background: var(--green); transition: width .2s; }
+.wrap { display: flex; height: calc(100% - 50px); min-height: 0; }
+.stage { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 12px; }
+#cv { max-width: 100%; max-height: 100%; border-radius: 8px; background: #000; cursor: default; touch-action: none; }
+#cv.drawing { cursor: crosshair; }
+.drawhint { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); background: rgba(0,0,0,.8); border: 1px solid var(--orange);
+  color: var(--ink); padding: 8px 14px; border-radius: 10px; max-width: 90%; text-align: center; }
+.side { width: 320px; flex: none; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.frame-head { display: grid; gap: 2px; }
+.frame-id { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.state { font-weight: 600; }
+.state[data-s="ok"] { color: var(--green); }
+.state[data-s="hopp"] { color: var(--muted); }
+.state[data-s="ny"] { color: var(--orange); }
+.meta { color: var(--muted); font-size: 13px; }
+.claude { margin-top: 6px; font-size: 13px; color: var(--ink); background: #1f2633; border: 1px solid #2f3a4d; border-radius: 8px; padding: 6px 8px; }
+.actions { display: grid; gap: 8px; }
+.nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: #222731; color: var(--ink); font: inherit; cursor: pointer; text-align: left; }
+button:hover { border-color: #3a4250; }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--yellow); color: #111; border-color: var(--yellow); font-weight: 700; }
+button.primary kbd { background: rgba(0,0,0,.12); color: #111; border-color: rgba(0,0,0,.2); }
+kbd { font: 12px ui-monospace, Menlo, monospace; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); background: #11141a; color: var(--muted); white-space: nowrap; }
+.light, .check { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.light input { flex: 1; }
+.help { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 10px; }
+.help summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+.help ul { padding-left: 18px; margin: 8px 0 0; display: grid; gap: 6px; }
+.help b { color: var(--ink); }
+@media (max-width: 820px) {
+  .wrap { flex-direction: column; height: auto; }
+  .stage { height: 70vh; }
+  .side { width: 100%; border-left: 0; border-top: 1px solid var(--line); }
+}
