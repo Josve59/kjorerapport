@@ -15,7 +15,7 @@
   <main class="wrap">
     <section class="stage" id="stage">
       <canvas id="cv" aria-label="Veibildet med linjene"></canvas>
-      <div class="drawhint" id="drawhint" hidden>Ny linje: klikk punkter langs linjen nedenfra og opp. Dobbeltklikk eller trykk N når du er ferdig. Esc avbryter.</div>
+      <div class="drawhint" id="drawhint" hidden>Ny linje: klikk punkter langs linjen. Ferdig: trykk «Ferdig med linjen», Enter, eller klikk på siste punkt igjen. Esc avbryter.</div>
     </section>
     <aside class="side">
       <div class="frame-head">
@@ -28,6 +28,7 @@
       <div class="actions">
         <button type="button" class="primary" id="btn-ok"><span>Godkjenn og neste</span><kbd>Enter</kbd></button>
         <button type="button" id="btn-new"><span>Ny linje</span><kbd>N</kbd></button>
+        <button type="button" id="btn-cancel" hidden><span>Avbryt linjen</span><kbd>Esc</kbd></button>
         <button type="button" id="btn-del" disabled><span>Slett valgt linje</span><kbd>⌫</kbd></button>
         <button type="button" id="btn-clear"><span>Slett alle linjene</span></button>
         <button type="button" id="btn-skip"><span>Hopp over (ubrukelig bilde)</span><kbd>S</kbd></button>

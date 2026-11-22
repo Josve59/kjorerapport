@@ -39,7 +39,7 @@ async function open(i) {
   if (tok !== openSeq) return;   // et nyere bilde er bedt om
   loading = false;
   idx = i; cur = data; img = im; sel = -1; drawing = null; history = []; dirty = false; hover = null; drag = null;
-  $('#drawhint').hidden = true; cv.classList.remove('drawing');
+  drawingUi(false);
   const e = cur.etikett;
   lines = e ? e.lines.map(l => ({ pts: l.pts.map(p => [...p]), from: 'lagret' })) : cur.lines.map(l => ({ pts: l.pts.map(p => [...p]), from: 'forslag' }));
   crop = { y0: Math.max(0, cur.y0 - 110), y1: Math.min(1280, cur.y1 + 20) };
@@ -129,7 +129,12 @@ function segDist(p, a, b) {
 
 cv.addEventListener('pointerdown', ev => {
   const [x, y] = fromEvent(ev);
-  if (drawing) { drawing.push([x, y]); draw(); return; }
+  if (drawing) {
+    // Høyreklikk, eller klikk på siste punkt igjen, avslutter linjen
+    const last = drawing[drawing.length - 1];
+    if (ev.button === 2 || (last && drawing.length >= 2 && Math.hypot(last[0] - x, last[1] - y) <= 12 / s)) { finishLine(); return; }
+    drawing.push([x, y]); draw(); return;
+  }
   const h = hit(x, y);
   if (h && h.node !== undefined) {
     if (ev.altKey || ev.button === 2) {   // fjern punktet (en linje trenger minst to)
@@ -157,22 +162,36 @@ cv.addEventListener('pointermove', ev => {
   if (key !== (hover ? `${hover.line}:${hover.node}` : '')) { hover = h; draw(); }
   cv.style.cursor = drawing ? 'crosshair' : h ? (h.node !== undefined ? 'grab' : 'pointer') : 'default';
 });
-cv.addEventListener('pointerup', () => { if (drag) { drag = null; state(); } });
+// Slipper man musen utenfor bildet, eller bytter vindu midt i et drag, skal draget likevel ta slutt
+const endDrag = () => { if (drag) { drag = null; state(); } };
+cv.addEventListener('pointerup', endDrag);
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('blur', endDrag);
 cv.addEventListener('contextmenu', ev => ev.preventDefault());
 cv.addEventListener('dblclick', () => { if (drawing) finishLine(); });
 
+/* Ny linje: tydelig modus med «Ferdig med linjen» og «Avbryt» (eieren ble stående fast i den 22. nov.) */
+function drawingUi(on) {
+  $('#drawhint').hidden = !on; cv.classList.toggle('drawing', on);
+  const b = $('#btn-new');
+  b.classList.toggle('primary', on);
+  b.querySelector('span').textContent = on ? 'Ferdig med linjen' : 'Ny linje';
+  b.querySelector('kbd').textContent = on ? 'Enter' : 'N';
+  $('#btn-cancel').hidden = !on;
+  $('#btn-ok').classList.toggle('primary', !on);
+}
 function newLine() {
   if (drawing) { finishLine(); return; }
-  drawing = []; sel = -1;
-  $('#drawhint').hidden = false; cv.classList.add('drawing'); draw();
+  drag = null; drawing = []; sel = -1;
+  drawingUi(true); draw();
 }
 function finishLine() {
   // Dobbeltklikk legger inn samme punkt to ganger: dropp punkter som ligger oppå hverandre
   const pts = (drawing || []).filter((p, k, a) => !k || Math.hypot(p[0] - a[k - 1][0], p[1] - a[k - 1][1]) > 3);
   if (pts.length >= 2) { snapshot(); lines.push({ pts, from: 'ny' }); sel = lines.length - 1; }
-  drawing = null; $('#drawhint').hidden = true; cv.classList.remove('drawing'); state(); draw();
+  drawing = null; drawingUi(false); state(); draw();
 }
-function cancelLine() { drawing = null; $('#drawhint').hidden = true; cv.classList.remove('drawing'); draw(); }
+function cancelLine() { drawing = null; drawingUi(false); draw(); }
 function delLine() { if (sel < 0) return; snapshot(); lines.splice(sel, 1); sel = -1; state(); draw(); }
 function clearAll() { if (!lines.length) return; snapshot(); lines = []; sel = -1; state(); draw(); }
 
@@ -202,14 +221,20 @@ async function nextTodo() {
   alert('Alle bildene er gått gjennom. Takk!');
 }
 
-$('#btn-ok').onclick = approve;
-$('#btn-skip').onclick = skip;
-$('#btn-new').onclick = newLine;
-$('#btn-del').onclick = delLine;
-$('#btn-clear').onclick = clearAll;
-$('#btn-prev').onclick = () => go(-1);
-$('#btn-next').onclick = () => go(1);
-$('#btn-todo').onclick = nextTodo;
+// Knappene: fokuset slippes etterpå, så tastene alltid går til siden. Alle unntatt «Ferdig» og «Avbryt» avslutter
+// en linje som tegnes først.
+const button = (sel0, fn, keepDrawing = false) => {
+  $(sel0).onclick = ev => { ev.currentTarget.blur(); if (drawing && !keepDrawing) finishLine(); fn(); };
+};
+button('#btn-ok', approve);
+button('#btn-skip', skip);
+button('#btn-new', newLine, true);
+button('#btn-cancel', cancelLine, true);
+button('#btn-del', delLine);
+button('#btn-clear', clearAll);
+button('#btn-prev', () => go(-1));
+button('#btn-next', () => go(1));
+button('#btn-todo', nextTodo);
 $('#light').oninput = e => { light = Number(e.target.value); draw(); };
 $('#show-road').onchange = e => { showRoad = e.target.checked; draw(); };
 window.addEventListener('resize', layout);

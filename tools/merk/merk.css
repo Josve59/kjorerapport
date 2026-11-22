@@ -15,8 +15,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 .stage { flex: 1; min-width: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 12px; }
 #cv { max-width: 100%; max-height: 100%; border-radius: 8px; background: #000; cursor: default; touch-action: none; }
 #cv.drawing { cursor: crosshair; }
-.drawhint { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); background: rgba(0,0,0,.8); border: 1px solid var(--orange);
-  color: var(--ink); padding: 8px 14px; border-radius: 10px; max-width: 90%; text-align: center; }
+/* Nederst og gjennomklikkbar, så den aldri dekker der man skal klikke */
+.drawhint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); background: rgba(0,0,0,.85); border: 1px solid var(--orange);
+  color: var(--ink); padding: 8px 14px; border-radius: 10px; max-width: 90%; text-align: center; pointer-events: none; }
+.drawhint[hidden], button[hidden] { display: none; }
 .side { width: 320px; flex: none; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); padding: 14px; display: flex; flex-direction: column; gap: 14px; }
 .frame-head { display: grid; gap: 2px; }
 .frame-id { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
