@@ -20,7 +20,7 @@ rsync -a --delete \
   "$SRC/" "$DST/"
 echo "Webappen kopiert til $DST"
 
-# Bilgjenkjenningen (D-FINE medium, ferdig kompilert Core ML, se Models/README.md). Vektfilen ligger i biter under 50 MB,
+# Bilgjenkjenningen (D-FINE small fra 1.0.0, ferdig kompilert Core ML, se Models/README.md). Vektfilen ligger i biter under 50 MB,
 # fordi GitHub ikke tar imot filer over 100 MB; bitene settes sammen her.
 MODEL="$SRCROOT/Models/DFine.mlmodelc"
 OUT="$RES/DFine.mlmodelc"
@@ -55,7 +55,8 @@ else
   rm -rf "$RES/DFineTest.mlmodelc"
 fi
 
-# Feltlinjene (TwinLiteNet+ large med egne vekter fra comma10k, 4 MB, se Models/README.md): liten nok til å ligge i ett stykke
+# Feltlinjene (TwinLiteNet+ large med egne vekter «n2», trent på comma10k og A2D2 fra 1.0.0, 4 MB, se Models/README.md;
+# Audi krediteres på lisenssiden): liten nok til å ligge i ett stykke
 rsync -a --delete "$SRCROOT/Models/Lanes.mlmodelc/" "$RES/Lanes.mlmodelc/"
 echo "Feltmodellen kopiert til $RES/Lanes.mlmodelc"
 

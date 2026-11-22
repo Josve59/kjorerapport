@@ -26,9 +26,12 @@ if [ -d ../.local-test/app-models/DFine.mlmodelc ]; then echo "Bilmodell: testmo
 echo "Bygger for $DEVICE …"
 # Swift-koden optimaliseres (0.13.9), men bygget er fortsatt et testbygg (DEBUG: utviklerverktøy og logg virker).
 # Uten optimalisering brukte lesingen av feltmodellens svar mer tid enn modellen selv: 3–5 svar i sekundet og varm telefon.
-xcodebuild -project Kjorerapport.xcodeproj -scheme Kjorerapport -configuration Debug -destination "id=$DEVICE" \
+# KJ_CONFIG=Release ios/ship.sh (1.0.0): salgsversjonen, slik App Store-bygget blir, til en prøvetur før innsending.
+CONFIG="${KJ_CONFIG:-Debug}"
+echo "Oppsett: $CONFIG"
+xcodebuild -project Kjorerapport.xcodeproj -scheme Kjorerapport -configuration "$CONFIG" -destination "id=$DEVICE" \
   -derivedDataPath "$DD" -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-O build 2>&1 | grep -E "error:|\*\* BUILD" || true
-APP="$DD/Build/Products/Debug-iphoneos/Kjorerapport.app"
+APP="$DD/Build/Products/$CONFIG-iphoneos/Kjorerapport.app"
 xcrun devicectl device install app --device "$DEVICE" "$APP" 2>&1 | tail -1
 xcrun devicectl device process launch --terminate-existing --device "$DEVICE" net.svendsenmedia.kjorerapport 2>&1 | tail -1 \
   || echo "Installert, men ikke startet (er telefonen låst?)"

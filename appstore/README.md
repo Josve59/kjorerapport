@@ -2,22 +2,24 @@
 
 Everything that will go into App Store Connect and the app's settings file when the iPhone app is built (phase 1). It is written for a native app in SwiftUI that records with the phone's own sensors and reuses today's analysis and report (see «Architecture» at the bottom). Today's web app is unchanged.
 
-**Status, 17 November 2026 (app 0.22.2): NOT ready for submission.** The package below was written for 0.11 (5 November). Since then the app has gained theory and safety-check practice, the driving-teacher mode with messages, visual profile 2.0, a new icon and new road-camera models. Before the owner's 18th birthday (28 November) these must be done:
+**Status, 22 November 2026 (app 1.0.0): ready to submit once the owner's developer account exists, after one road test.** The owner decided on 22 November: the name stays Kjørerapport, the lane model is `n2` (trained on comma10k and Audi's A2D2, with credit to Audi on the licence page, see «Models» below), messaging is «yes» in the age rating, and the privacy label is the one in section 4. The owner has a sole proprietorship (ENK) ready.
 
-| # | What | Why | Who |
-| --- | --- | --- | --- |
-| 1 | **Decide the models for sale.** The car model on trial (D-FINE small, COCO only, Apache 2.0) should go into git as the shipping model. The lane weights `n2` (A2D2, CC BY-ND) must stay out unless the owner decides otherwise, so the app ships with the comma10k weights from git. | Today the road-tested setup is not the one that may be sold. `copy-web.sh` now stops a Release build while test models are in `.local-test/app-models`. | Owner decides, Claude does it |
-| 2 | **Road-test the build that will be sold.** A Release build with the shipping models on at least one long drive. | Every drive so far has been a Debug build with the test models. | Owner drives |
-| 3 | **New screenshots.** The 7 in `skjermbilder/` are from 0.11.4, with the old look and without theory. | Guideline 2.3: the screenshots must show the app as it is. | Claude |
-| 4 | ~~New description, promotional text and keywords.~~ **Done 18 Nov (0.23.0)**: theory first, the safety check, «Hvem kjører først?», the teacher messages; speed-camera warnings no longer promised. The owner should read it through. | Guideline 2.3. | Owner approves |
-| 5 | ~~Update the review notes (section 7).~~ **Done 18 Nov (0.23.0)**: one purchase at NOK 499, no trial, theory in Pluss with 10 free questions, teacher messages explained. | The reviewer follows the notes. | Done |
-| 6 | **Decide the age-rating answers for messaging.** The learner and the teacher exchange messages as files, and the app shows the other person's text. | Guidelines 1.2 and the age-rating questionnaire. | Owner decides |
-| 7 | **Privacy label.** Recommended now: declare «Precise Location – App Functionality – not linked – no tracking», because coordinates go to NVDB and Kartverket, instead of «Data Not Collected». | Safer reading of guideline 5.1.2. | Owner decides |
-| 8 | **A driving teacher reviews the theory and the theory book.** | Agents fact-checked everything, but no person with a teaching licence has. | Owner |
-| 9 | **The name.** «Kjørerapport: Øvelseskjøring» or a new one (Lappeklar was proposed). | Must be decided before the app is created in App Store Connect. | Owner decides |
-| 10 | **Renew the free signing before 24 November 00:35.** | Otherwise the test phone stops opening the app. | Claude, phone connected |
+| # | What | Status |
+| --- | --- | --- |
+| 1 | **Models for sale** | **Done in 1.0.0.** D-FINE small (COCO only, Apache 2.0), road-tested since 0.13.17, is now the car model in git. The lane model is TwinLiteNet+ with the `n2` weights (comma10k MIT + A2D2 CC BY-ND 4.0), also road-tested since 0.13.7. Both are now in git, and the old overlay folder was renamed to `.local-test/app-models-n2/`, so Release builds no longer stop. |
+| 2 | **Road-test the sale version** | **Owner drives.** 1.0.0 with the shipping models was installed on the phone on 22 November. One long drive with both cameras, then `node tools/turrapport.mjs`. |
+| 3 | **Screenshots** | See section 9. |
+| 4 | **Description, promotional text, keywords** | Done (18 Nov); 1.0.0 adds the safety quiz. The owner reads it through. |
+| 5 | **Review notes** | Updated 22 Nov (section 7): the two code buttons, the safety quiz, and a driving-school code for the reviewer. |
+| 6 | **Age rating** | **Decided:** «Messaging and Chat» yes, everything else no (section 6). |
+| 7 | **Privacy label** | **Decided:** section 4. `PrivacyInfo.xcprivacy` says the same. |
+| 8 | **A driving teacher reviews the theory and the theory book** | Owner, open. Apple does not require it, but schools will ask. |
+| 9 | **The name** | **Decided:** Kjørerapport (in the App Store «Kjørerapport: Øvelseskjøring»). |
+| 10 | **Signing** | Renewed 22 Nov, valid until 29 Nov 02:14. From the 28th the paid account takes over. |
 
-After the 28th: enrolment (1–2 days, sometimes more), agreements, bank and tax, TestFlight on the owner's phone and preferably one other iPhone, then review (1–3 days). A realistic release date is early December.
+**Models.** The lane weights `n2` are trained on comma10k (MIT) and Audi's A2D2 (CC BY-ND 4.0). The licence allows commercial use with credit, which is on `lisenser/index.html` (Om appen › Lisenser og kilder). Whether trained weights count as «adapted material» under the no-derivatives term is unsettled; the owner knows and decided on 22 November 2026 to ship it. If Audi ever objects, swap in the comma10k-only weights (`ios/Models/lanes-comma10k.pth`) in an update.
+
+After the 28th: enrolment (1–2 days, sometimes more), agreements, bank and tax, TestFlight on the owner's phone and preferably one other iPhone, then review (1–3 days). A realistic release date is the first half of December.
 
 The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). Its «Allerede ferdig» list is from 5 November: see the table above.
 
@@ -80,39 +82,36 @@ Ready-to-use snippet: [`Info-tillatelser.plist`](Info-tillatelser.plist).
 
 ## 4. Privacy label («App Privacy» in App Store Connect)
 
-**Recommended answer: «Data Not Collected».**
+**Decided 22 November 2026 (the owner said yes).** Answer «Yes, we collect data» with these three types. For each: purpose **App Functionality**, **not linked** to the user's identity, **not used for tracking**.
 
-Reasoning, against Apple's definition («collect» = data leaves the phone in a way that lets you or partners access it for longer than needed to answer the request right away):
-- Drives, marks, notes, the training plan and camera angles are stored only on the phone. There is no server, no account, no analytics and no ads.
-- Location points sent to Statens vegvesen (NVDB) and Kartverket are lookups answered right away (speed limits, maps, place names). We do not store them, and they are not used for tracking.
-- Sharing a report, PDF or backup is something the user does themselves (share sheet), not collection by the app.
-- Feedback by email is sent by the user from their own email app.
+| Type in App Store Connect | What leaves the phone | Why |
+| --- | --- | --- |
+| Location › Precise Location | Positions along the route, sent to Statens vegvesen (NVDB) and Kartverket | Speed limits, road data, maps and place names. Answered right away; nothing is kept. |
+| Identifiers › User ID | The access code from the driving school, only if the user enters one | The school-code server checks that the code is valid and how many phones use it. |
+| Identifiers › Device ID | A random key the app makes for this installation, only with a school code | So one pupil's code works on at most two phones. It is not the advertising ID. |
 
-**Must be checked again** if the app gets analytics, crash reporting from a third party, an account, cloud backup, or sending to driving schools or insurers. Then the label must be updated *before* that version is released.
+Not collected: drives, marks, notes, the training plan, camera data and theory progress all stay on the phone, and purchases go through Apple. «Send turen til utvikleren» exists only in the web version and in test builds (TestFlight, Xcode), never in the App Store build (`devBuild` in app.js), so tester drives are not part of this label. `ios/Kjorerapport/PrivacyInfo.xcprivacy` lists the same three types.
+
+**Must be checked again** before a version that adds analytics, third-party crash reporting, an account, cloud backup, iCloud sharing for the teacher messages (planned), or sending data to driving schools or insurers.
 
 ---
 
-## 5. Privacy policy – what must change for the app
+## 5. Privacy policy
 
-The current page (`personvern/`) is good. For the iPhone app, change:
-- «telefonens egne nettleserlagring» → «appens lagring på telefonen» (deleted when the app is deleted).
-- «Appen kjører ikke i bakgrunnen» → «Under et opptak fortsetter posisjon og bevegelse å måles også med låst skjerm. Når opptaket er stoppet, brukes ingen sensorer.»
-- Remove GitHub Pages from the table (the app is downloaded from the App Store; Apple's own terms apply).
-- Sletting: «Slett appen, så forsvinner alt» instead of website data in the browser.
-- The camera: describe the road camera as well (cars, lane lines, speed signs), still analysed only on the phone.
+**Done (checked 22 November 2026).** `personvern/` covers both the web version and the iPhone app: storage on the phone and deletion with the app, recording with the screen locked, both cameras, NVDB and Kartverket, the school-code server, Cloudflare for the web version, purchases through Apple, and the tester section (web and TestFlight only).
 
 ---
 
 ## 6. Age rating
 
-Answer «No» / «None» to every question in Apple's age rating questionnaire. That includes:
-- no violence, gambling, profanity or medical content
-- user-generated content and messaging: since 0.18.0 a learner and a driving teacher can send each other messages. They go as a file through iOS's own share sheet (Messages, Mail, AirDrop) to someone the user already knows; the app has no chat service, no server, no user directory and no way to reach strangers. Check Apple's current wording of the «Messaging and Chat» and «User-Generated Content» questions before submitting: if either covers file exchange between known people, answer yes and expect a higher rating. Not settled.
-- no unrestricted web access (the help and privacy pages are the app's own)
-- no advertising
-- no parental controls or age assurance
+**Decided 22 November 2026:** answer **yes** to «Messaging and Chat». When a learner is connected to a driving school, the learner and the driving teacher send each other messages about the drives (as files through the iOS share sheet, to someone they already know; no chat service, no user directory, no way to reach strangers). Answer «No» / «None» to everything else:
+- no violence, gambling, profanity or medical content;
+- no user-generated content shown to others than the one teacher or learner;
+- no unrestricted web access (the help and privacy pages are the app's own);
+- no advertising;
+- no parental controls or age assurance.
 
-The in-app purchase does not affect the rating. That gives **4+**. The app is meant for 15–17-year-olds and their companions, but the age rating describes content, not the target group.
+Apple works out the rating from the answers, so it will probably be higher than 4+. That is fine as long as it is below 16+, since learners start theory at 15. If Apple's result is 16+ or higher, stop and check before submitting. The in-app purchase does not affect the rating.
 
 ---
 
@@ -132,13 +131,15 @@ Paste into «Notes» under App Review Information (in English, since the reviewe
 >
 > **Camera (optional):** off by default. When enabled, face and road analysis run on-device; no images or video are stored or transmitted.
 >
-> **In-app purchase.** One non-consumable, «Kjørerapport Pluss» (one-time, Family Sharing on, no trial). It unlocks the full theory practice and the safety check, the cameras, the training plan, the driving-teacher summary, «Hva må du øve mer på?» and reports for drives older than the 10 latest. Free for everyone: recording, the report, the map, speed limits, data export, and 10 theory questions (tab «Opplæring» › «Teori og sikkerhet» › «Prøv 10 gratis spørsmål»). Every locked theory tile opens the Pluss screen; it is also under Settings (gear icon) › «Kjørerapport Pluss». «Gjenopprett kjøp» (Restore) and «Kode fra trafikkskolen» (Apple offer codes) are on the same screen.
+> **In-app purchase.** One non-consumable, «Kjørerapport Pluss» (one-time, Family Sharing on, no trial). It unlocks the full theory practice and the safety check (with a 59-question quiz), the cameras, the training plan, the driving-teacher summary, «Hva må du øve mer på?» and reports for drives older than the 10 latest. Free for everyone: recording, the report, the map, speed limits, data export, and 10 theory questions (tab «Opplæring» › «Teori og sikkerhet» › «Prøv 10 gratis spørsmål»). Every locked theory tile opens the Pluss screen; it is also under Settings (gear icon) › «Kjørerapport Pluss». «Gjenopprett kjøp» (Restore) and «App Store-kode» (Apple offer codes) are on the same screen.
+>
+> **«Kode fra trafikkskolen» (driving-school code):** Norwegian driving schools buy access for their own pupils from us under a written agreement and give each pupil a personal code (guideline 3.1.3(c): sold directly to organisations for their students, never to individuals). The app shows no school prices and no links to buy outside the App Store. A code for review: REVIEW_CODE (Pluss screen › «Kode fra trafikkskolen»).
 >
 > **Messages between learner and driving teacher:** sent as a file through the iOS share sheet (Messages, Mail, AirDrop) to someone the user already knows. The app has no chat service, no server and no user directory.
 >
 > **Cameras on the simulator or without a car:** the cameras need a real device mounted in a car to be useful. They can be started under Home › «Kamera: speil- og skulderblikk» › «Start kamera».
 
-Contact information: your name, phone and email. No demo account is needed (no login).
+Contact information: your name, phone and email. No demo account is needed (no login). Replace REVIEW_CODE with the code in `.local-test/skolekoder/apple-review.txt` (made for Apple, 5 phones, never in git).
 
 ---
 

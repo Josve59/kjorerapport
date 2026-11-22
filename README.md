@@ -143,6 +143,24 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.0 – ready for the App Store
+
+The owner (22 November): «1. behold navnet kjørerapport, 2. … hvis ikke behold den [n2], 3. den har meldinger på appen når koblet til trafikkskole men ellers ikke, 4. ja. jeg har enk klar, bygg og se på det du trenger til appen skal være 10000% klar», and then «ta med n2 også skriv gjømt et sted i terms at felt modell er trent på audi dataen».
+
+- **The models that are sold are the ones that were road-tested:**
+  - Car model: D-FINE small (COCO only, Apache 2.0) replaces medium in `ios/Models/DFine.mlmodelc`. It has been on the owner's phone since 0.13.17 and keeps the phone cool.
+  - Lane model: the weights `n2` (comma10k + Audi's A2D2) replace the comma10k-only ones in `ios/Models/Lanes.mlmodelc`. They have been on the phone since 0.13.7. A2D2 is CC BY-ND 4.0: Audi is credited on the licence page (Om appen › Lisenser og kilder). Whether trained weights count as adapted material is unsettled; the owner knows and chose to ship them. `lanes-comma10k.pth` stays as the fallback.
+  - The old overlay folder is now `.local-test/app-models-n2/`, so Release builds no longer stop.
+- **Privacy label decided and matched:** Precise Location, User ID (the school code) and Device ID (the random install key), all for app functionality, not linked to the user, no tracking. `PrivacyInfo.xcprivacy` lists the same three.
+- **«Send turen til utvikleren» only in the web version and test builds** (`devBuild`), not in the App Store app, so the label stays true. The privacy page says so.
+- **App Store package** (`appstore/`):
+  - age rating: «Messaging and Chat» yes;
+  - the review notes explain the two code buttons (Apple offer codes, and driving-school codes under guideline 3.1.3(c)) and give Apple a school code, kept in `.local-test/skolekoder/apple-review.txt`;
+  - the description mentions the safety quiz;
+  - the status table and the Norwegian step-by-step guide are updated;
+  - new screenshots.
+- **Version 1.0.0** in the app and in Xcode (`MARKETING_VERSION`). `KJ_CONFIG=Release ios/ship.sh` installs the sale version for a road test before submission.
+
 ## What's new in 0.28.1 – a quiz about the safety check, and drawings for theory and the car
 
 The owner (20 November): «Work on and expand the theory and safety questions with graphics, and make a quiz like the theory for the safety questions.»

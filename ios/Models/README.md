@@ -1,6 +1,8 @@
 # D-FINE for the road camera (Core ML)
 
-`DFine.mlmodelc` is **D-FINE medium, trained on COCO only** (`ustc-community/dfine-medium-coco`, Apache 2.0). Until 0.13.4 it was the same model pretrained on Objects365 and then trained on COCO (`dfine-medium-obj2coco`, COCO AP about 55), and until 0.10.1 xlarge (AP about 59).
+`DFine.mlmodelc` is **D-FINE small, trained on COCO only** (`ustc-community/dfine-small-coco`, Apache 2.0, 10.3 M parameters, 20 MB) since 1.0.0. It ran on the owner's phone as a test model from 0.13.17 (12 Nov) and became the shipping model for the App Store: medium heated the phone to «serious» within minutes at 5 answers a second, small stayed at normal temperature (measured on the phone, see the heat notes). On 162 COCO val pictures small finds 79 % of the vehicles against 85 % for medium (at least 96 px, the close ones: 91 against 96 %). Convert it with `python convert-dfine.py ustc-community/dfine-small-coco DFine.mlpackage`.
+
+Before 1.0.0 the model was **D-FINE medium, trained on COCO only** (`ustc-community/dfine-medium-coco`). Until 0.13.4 it was the same model pretrained on Objects365 and then trained on COCO (`dfine-medium-obj2coco`, COCO AP about 55), and until 0.10.1 xlarge (AP about 59).
 
 **Why COCO only (0.13.5):** Objects365 is listed as non-commercial, so a model trained on it may not be usable in an app that is sold. COCO's annotations are CC BY 4.0. On 162 COCO val2017 pictures with vehicles (575 cars, trucks, buses and motorcycles; neither model was trained on them), at the app's score of 0.35 and overlap 0.5 (`.local-test/dfine/compare.py`):
 
@@ -136,7 +138,7 @@ The first test on pictures from another source than the training pictures. Audi'
 
 A little better on every set, but the extra lines in city streets are still there: they need training pictures that show such streets.
 
-**Training with the A2D2 drives too (run `n2`, not in the app):** the 14 A2D2 drives that are not test drives added to comma10k, 20 257 pictures in all, fine-tuned from the 0.13.6 weights: `KJ_AUG=2 KJ_A2D2=../../a2d2/data python train.py --init best.pth --epochs 15 --low 8 --lr 4e-4` (287 min).
+**Training with the A2D2 drives too (run `n2`, the app's lane model since 1.0.0):** the 14 A2D2 drives that are not test drives added to comma10k, 20 257 pictures in all, fine-tuned from the 0.13.6 weights: `KJ_AUG=2 KJ_A2D2=../../a2d2/data python train.py --init best.pth --epochs 15 --low 8 --lr 4e-4` (287 min).
 
 | | 0.13.6 | n1 | n2 (comma10k + A2D2 + weather) |
 | --- | --- | --- | --- |
@@ -156,6 +158,6 @@ A little better on every set, but the extra lines in city streets are still ther
 - The test is less independent for `n2` than for the others: the motorway drive and the two country drives were filmed on the same days as drives in the training. The city drive is the clean one. There the app's line fit gives 442 right and 198 wrong lines with `n2`, 389 and 574 with 0.13.6, 423 and 356 with BDD100K.
 - Still wrong with `n2`: lines on tram rails, and a little worse road edge on dark comma10k pictures.
 - **On the phone as test weights (0.13.7), not in git:** converted with the tag `n2` to `.local-test/app-models/Lanes.mlmodelc`, which `ios/copy-web.sh` uses in place of the model here when it is there: `python convert-lanes.py - ../../.local-test/lanes-comma/n2/best.pth ../../.local-test/app-models/Lanes.mlpackage n2`, then `xcrun coremlcompiler compile Lanes.mlpackage .` in that folder. `check_coreml.py`: lane pixels 99.997 % the same as PyTorch, road pixels 99.993 %.
-- **Not in the app in git:** A2D2 is CC BY-ND 4.0. Commercial use is allowed with attribution, but changed material may not be shared, and whether trained weights are changed material is not settled. The owner decides.
+- **In the app since 1.0.0 (owner decided 22 Nov 2026):** `Lanes.mlmodelc` here is now `n2` (version tag `n2` in the model, so exports show it). A2D2 is CC BY-ND 4.0: commercial use is allowed with attribution, and changed material may not be shared. Whether trained weights count as changed material is not settled; the owner was told and chose to ship it with credit to Audi on the licence page. The dataset itself is not changed or shared, only the trained weights. The comma10k-only weights are still here as `lanes-comma10k.pth` if `n2` ever has to be swapped out.
 
-**Licence:** the model code is MIT (© 2025 Chế Quang Huy), the training pictures and labels are MIT (© 2020 Comma.ai, Inc.), and the weights are our own. Both notices are on the app's licence page (`lisenser/index.html`). Nothing in the lane model is limited to non-commercial use now.
+**Licence:** the model code is MIT (© 2025 Chế Quang Huy). The training pictures and labels are comma10k (MIT, © 2020 Comma.ai, Inc.) and, for `n2`, A2D2 (Audi AG, CC BY-ND 4.0, www.a2d2.audi). The weights are our own. The notices and the credit to Audi are on the app's licence page (`lisenser/index.html`). Nothing in the lane model is limited to non-commercial use.

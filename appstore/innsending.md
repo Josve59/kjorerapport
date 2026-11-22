@@ -1,6 +1,6 @@
 # Slik sender du Kjørerapport til App Store
 
-**17. november: ikke klar ennå.** Se tabellen øverst i [README.md](README.md) for det som må gjøres før 28. november. Resten av denne sida er fortsatt riktig rekkefølge. Regn med 1–2 timer arbeid, og så 1–3 dager venting på Apple.
+**22. november: klar til innsending.** To ting gjenstår før du sender inn: én lang prøvetur med versjon 1.0.0 (den er på telefonen din), og helst at en trafikklærer har lest gjennom teorien. Resten er klart. Regn med 1–2 timer arbeid, og så 1–3 dager venting på Apple.
 
 Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). Her er rekkefølgen.
 
@@ -8,15 +8,17 @@ Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). H
 
 ## Allerede ferdig
 
-- [x] Appen: opptak, rapport, Pluss med prøveperiode, «Hva må du øve mer på?», demotur for Apple
-- [x] Ikon (lyst og mørkt), tillatelsestekster, personvernmanifest, eksportsvar (ingen kryptering)
-- [x] 7 App Store-bilder i [`skjermbilder/`](skjermbilder/) (6,9", riktig størrelse)
+- [x] Appen 1.0.0: opptak og rapport, begge kameraene, teorien (420 spørsmål, 123 skilt, prøver, teoribok), sikkerhetskontrollen med quiz, opplæringsplan, trafikklærer med meldinger, Pluss-kjøpet og koder fra trafikkskolen
+- [x] Modellene som selges ligger i appen: bilmodellen D-FINE small og feltmodellen n2 (Audi krediteres under Om appen › Lisenser og kilder)
+- [x] Ikon (lyst og mørkt), tillatelsestekster, personvernmanifest som stemmer med etiketten, eksportsvar (ingen kryptering)
+- [x] App Store-bilder i [`skjermbilder/`](skjermbilder/) (6,9")
 - [x] Beskrivelse ([`beskrivelse.txt`](beskrivelse.txt)), navn, undertittel, nøkkelord, kampanjetekst (README del 2)
 - [x] Personvern: https://kjorerapport.jo-9fc.workers.dev/personvern/
 - [x] Hjelp og kontakt (støtte-URL): https://kjorerapport.jo-9fc.workers.dev/hjelp/
-- [x] Notat til App Review på engelsk (README del 7)
+- [x] Notat til App Review på engelsk (README del 7), med en egen skolekode til Apple i `.local-test/skolekoder/apple-review.txt`
 - [x] Bilde av Pluss-siden til kjøpene: [`kjop-pluss-review.png`](kjop-pluss-review.png)
 - [x] Testkjøp i Xcode (`ios/Pluss.storekit`)
+- [x] Valgene dine (22. november): navnet Kjørerapport, meldinger «ja» i aldersgrensen, personvernetiketten, n2 med kreditering til Audi
 
 ---
 
@@ -40,6 +42,7 @@ Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). H
 - Åpne `ios/Kjorerapport.xcodeproj` i Xcode.
 - Under **Signing & Capabilities**: velg det nye teamet ditt på **begge** målene, *Kjorerapport* og *KjorerapportWidgets*.
 - La «Automatically manage signing» stå på. Xcode registrerer app-ID-ene selv.
+- Teamet i prosjektet er i dag det gratis teamet ditt. Får det betalte teamet en annen ID, bytter Xcode den i prosjektet når du velger det. Si fra til Claude, så committes endringen.
 
 ### 4. Opprett appen i App Store Connect
 - My Apps › **+** › New App:
@@ -82,13 +85,13 @@ Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet. Bi
 | Markedsførings-URL | https://kjorerapport.jo-9fc.workers.dev/trafikkskole/ (valgfri) |
 | Personvern-URL | https://kjorerapport.jo-9fc.workers.dev/personvern/ |
 | Kategori | Utdanning (Education), og Navigasjon som nummer to |
-| Aldersgrense | Svar «Nei/Ingen» på alt (README del 6), da blir det 4+ |
-| App Privacy | **Data Not Collected** (README del 4) |
+| Aldersgrense | «Messaging and Chat»: **Ja**. Alt annet: «Nei/Ingen» (README del 6). Blir resultatet 16+ eller høyere, stopp og si fra |
+| App Privacy | Tre typer, alle «App Functionality», ikke koblet til deg, ingen sporing: **Precise Location**, **User ID** og **Device ID** (README del 4) |
 | Innholdsrettigheter | Ja, appen bruker tredjepartsdata, og du har rett til det (åpne lisenser: NVDB og Kartverket) |
 | Pris | Gratis |
 | Tilgjengelighet | Bare Norge |
 | Copyright | © 2026 Svendsen Media |
-| App Review | Notatet i README del 7, ditt navn, telefon og e-post. Ingen innlogging trengs. |
+| App Review | Notatet i README del 7, ditt navn, telefon og e-post. Bytt REVIEW_CODE med koden i `.local-test/skolekoder/apple-review.txt`. Ingen innlogging trengs. |
 | Kjøp | Legg til kjøpet på versjonen (det må sendes sammen med første versjon) |
 
 ### 9. Send til vurdering
@@ -101,4 +104,4 @@ Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet. Bi
 ## Etterpå
 - Svar på anmeldelser i App Store Connect.
 - Nye versjoner: øk *Version* (1.0.1, 1.1 …) og *Build*, last opp, og send inn på nytt.
-- Koder til trafikkskoler: Pluss › Offer Codes (README del 12).
+- Gratis koder til en pilotskole: Pluss › Offer Codes (README del 12). Betalte skoleavtaler: egne koder med `node tools/skolekoder.mjs lag "Skolens navn" antall` (README del 12).

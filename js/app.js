@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '0.28.1';
+export const APP_VERSION = '1.0.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -2911,7 +2911,9 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       afterLesson: afterLessonFor(drive) ? { ...afterLessonFor(drive), onOpen: () => afterLesson(drive, r) } : null,   // 0.18.4
       shared: drive.shared || null,
       // Testere (0.27.5): «Send turen til utvikleren», bare med testkode og bare egne opptak
-      devSend: isTester() && isOwn(drive) && !drive.demo && !isDemoMode() ? { sentAt: drive.sentToDev || null, onSend: () => sendToDev(id) } : null   // ikke Emmas oppdiktede turer
+      // Bare nettversjonen og testbygg (TestFlight, Xcode), ikke App Store-appen (1.0.0): der lover personvernetiketten
+      // at bare posisjonsoppslag og skolekodens tilfeldige nøkkel forlater telefonen
+      devSend: isTester() && (!window.kjNative || devBuild) && isOwn(drive) && !drive.demo && !isDemoMode() ? { sentAt: drive.sentToDev || null, onSend: () => sendToDev(id) } : null   // ikke Emmas oppdiktede turer
     });
     const draw = status => {
       drawBase(status);

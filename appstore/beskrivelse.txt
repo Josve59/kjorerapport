@@ -13,6 +13,7 @@ Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og 
 
 SIKKERHETSKONTROLLEN
 Alle 46 oppgavene sensor kan gi deg før kjøringen på oppkjøringen, med hvordan du gjør det og hva en feil kan føre til. Tilpasset elbil, bensin og diesel, eller hybrid.
+• Quiz med 59 spørsmål og tegninger av bilen, øvd som teorien.
 
 SLIK FUNGERER ØVELSESKJØRINGEN
 • Telefonen står i en holder. Ledsageren starter og stopper opptaket, og føreren rører ikke telefonen.

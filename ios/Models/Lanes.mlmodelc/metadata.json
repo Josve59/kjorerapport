@@ -1,7 +1,7 @@
 [
   {
+    "shortDescription" : "TwinLiteNet+ large (MIT, chequanghuy\/TwinLiteNetPlus), test weights n2 (see ios\/Models\/README.md). Input 640x384 RGB. Outputs lanes, road [1,1,384,640]: >0 = lane line \/ road.",
     "metadataOutputVersion" : "3.0",
-    "shortDescription" : "TwinLiteNet+ large (MIT, chequanghuy\/TwinLiteNetPlus), trained from scratch on comma10k (MIT, comma.ai). Input 640x384 RGB. Outputs lanes, road [1,1,384,640]: >0 = lane line \/ road.",
     "outputSchema" : [
       {
         "hasShapeFlexibility" : "0",
@@ -24,12 +24,13 @@
         "type" : "MultiArray"
       }
     ],
-    "storagePrecision" : "Mixed (Float16, Float32)",
+    "version" : "n2",
     "modelParameters" : [
 
     ],
     "author" : "Kjorerapport",
     "specificationVersion" : 8,
+    "storagePrecision" : "Mixed (Float16, Float32)",
     "mlProgramOperationTypeHistogram" : {
       "Ios17.reshape" : 22,
       "Ios16.softmax" : 2,
@@ -53,10 +54,10 @@
       "Ios17.mul" : 2
     },
     "computePrecision" : "Mixed (Float16, Float32, Int32)",
-    "isUpdatable" : "0",
     "stateSchema" : [
 
     ],
+    "isUpdatable" : "0",
     "availability" : {
       "macOS" : "14.0",
       "tvOS" : "17.0",
@@ -83,7 +84,7 @@
       }
     ],
     "userDefinedMetadata" : {
-      "com.github.apple.coremltools.conversion_date" : "2026-11-10",
+      "com.github.apple.coremltools.conversion_date" : "2026-11-11",
       "com.github.apple.coremltools.source" : "torch==2.8.0",
       "com.github.apple.coremltools.version" : "9.0",
       "com.github.apple.coremltools.source_dialect" : "TorchScript"
