@@ -8,7 +8,7 @@ Everything that will go into App Store Connect and the app's settings file when 
 | --- | --- | --- |
 | 1 | **Models for sale** | **Done in 1.0.0.** D-FINE small (COCO only, Apache 2.0), road-tested since 0.13.17, is now the car model in git. The lane model is TwinLiteNet+ with the `n2` weights (comma10k MIT + A2D2 CC BY-ND 4.0), also road-tested since 0.13.7. Both are now in git, and the old overlay folder was renamed to `.local-test/app-models-n2/`, so Release builds no longer stop. |
 | 2 | **Road-test the sale version** | **Owner drives.** 1.0.0 with the shipping models was installed on the phone on 22 November. One long drive with both cameras, then `node tools/turrapport.mjs`. |
-| 3 | **Screenshots** | See section 9. |
+| 3 | **Screenshots** | **Done 22 Nov:** eight new images for 1.0.0, theory first, and a new `kjop-pluss-review.png` (section 9). |
 | 4 | **Description, promotional text, keywords** | Done (18 Nov); 1.0.0 adds the safety quiz. The owner reads it through. |
 | 5 | **Review notes** | Updated 22 Nov (section 7): the two code buttons, the safety quiz, and a driving-school code for the reviewer. |
 | 6 | **Age rating** | **Decided:** «Messaging and Chat» yes, everything else no (section 6). |
@@ -160,21 +160,30 @@ Contact information: your name, phone and email. No demo account is needed (no l
 
 ## 9. Screenshots
 
-**Done (0.11.4):** seven images in [`skjermbilder/`](skjermbilder/), 1320 × 2868 (6.9-inch iPhone, Apple scales them down to smaller phones). Upload them in this order:
+**Done (22 November 2026, app 1.0.0):** eight images in [`skjermbilder/`](skjermbilder/), 1320 × 2868 (6.9-inch iPhone, Apple scales them down to smaller phones). Theory is the main selling point, so it comes first. Upload them in this order:
 
-1. «Rapport etter hver øvingstur» – the top of the report.
-2. «Bare fartsgrensen på skjermen» – a real recording in the simulator, with the speed limit from NVDB.
-3. «Se hvor det skjedde» – the map in full screen with numbered events.
-4. «Hele øvingen samlet» – Turer, the driving log.
-5. «Klar til neste kjøretime» – Til trafikklæreren.
-6. «Hva må du øve mer på?»
-7. «I gang på et halvt minutt» – the check before driving.
+1. `01-teori.png` «Klar til teoriprøven» – the theory overview (Opplæring › Teori og sikkerhet): readiness ring 72 %, today's goal, the exam date and the last three practice tests.
+2. `02-sporsmal.png` «Tegninger og forklaring» – a theory question (fog lights) just after a right answer: the right option, the drawing of a road in fog, the rule, the legal reference and «Les mer i teoriboka». Scrolled so the whole explanation shows; the question itself is above.
+3. `03-kryss.png` «Hvem kjører først?» – a crossing with three cars on a priority road, the first car tapped.
+4. `04-sikkerhet.png` «Sikkerhetskontrollen» – a safety-check quiz question with the drawing of the car's brake lights.
+5. `05-rapport.png` «Rapport etter hver øvingstur» – the top of the report: score, «Nytt på denne turen» and «Kort fortalt».
+6. `06-opptak.png` «Bare fartsgrensen på skjermen» – a real recording in the simulator (simulated position along `ios/testrute-trondheim.txt`), with the speed limit from NVDB and without the test buttons.
+7. `07-kart.png` «Se hvor det skjedde» – the map in full screen with numbered events (braking, acceleration, turns) and speeding in red on the route.
+8. `08-laerer.png` «Klar til neste kjøretime» – Til trafikklæreren: what has been practised since the last lesson, and what to work on.
+
+[`kjop-pluss-review.png`](kjop-pluss-review.png) (retaken 22 November): the Pluss page as a new user sees it, with «Kjøp for 499,00 kr». A raw screenshot without caption, for the purchase review in App Store Connect.
 
 How they were made:
-- From the real app in the simulator (iPhone 18 Pro Max, light mode, Norwegian, the status bar set to 09:41).
-- The data is made-up practice drives for «Emma», laid along real streets in central Trondheim (`ios/testrute-trondheim.txt`). No real person's drives or addresses are shown.
-- The tools are in [`verktoy/`](verktoy/): `seed.js` (test data), `shot.sh` (one screenshot from the simulator) and `compose.py` (adds the captions from `captions.json`; needs Python with Pillow). To make new ones, ask Claude to «lag nye App Store-bilder».
-- The test build has a hook for this: `KJ_EVAL` (Debug only, WebAppView.swift) runs a script that fills in the test data.
+- From the real app (Debug build) in the simulator: iPhone 18 Pro Max, light mode, Norwegian, the status bar set to 09:41 (`xcrun simctl status_bar <id> override --time 9:41 …`).
+- The data is the made-up learner «Emma», as in the in-app demo (`js/demo.js`) but stored as normal data, so the demo bar never shows: eight practice drives along public streets in central Trondheim, theory with three practice tests and an exam date, and signs and the safety check half done. No real person's drives or addresses are shown. Pluss is on in images 1–8.
+- The tools are in [`verktoy/`](verktoy/):
+  - `seed.js` fills in the test data through the Debug-only `KJ_EVAL` hook (`WebAppView.swift`). The first time, it deletes all drives and settings in the simulator app. The newest drive keeps the speed limit, so the report shows progress and still has something to practise.
+  - `shot.sh` takes one screenshot from the simulator.
+  - `compose.py` adds the captions from `captions.json` (`~/.local/mlenv/bin/python compose.py`, needs Pillow). Colours from the design profile «Skilt og vei»: road-sign blue background, a yellow centre line and white Overpass text. The phone sits in the same place on every image.
+  - `pluss-av.js` turns Pluss off and answers with the App Store price, for the review screenshot. Set the view to «Som App Store» first, or the test build turns Pluss back on.
+  - Raw screenshots go to `verktoy/raw/raw-<name>.png` (git-ignored).
+- For the 1.0.0 set, the app was driven by the remote control in the git-ignored `.local-test/sim/` (`driver.mjs` + `agent.js`, loaded together with `seed.js`), with helper scripts in `.local-test/appstore-shots/` that open a given question, tap the cars and scroll to a spot where no text is cut by the tab bar.
+- To make new ones, ask Claude to «lag nye App Store-bilder».
 
 ---
 

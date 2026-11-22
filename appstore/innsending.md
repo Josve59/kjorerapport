@@ -11,7 +11,7 @@ Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). H
 - [x] Appen 1.0.0: opptak og rapport, begge kameraene, teorien (420 spørsmål, 123 skilt, prøver, teoribok), sikkerhetskontrollen med quiz, opplæringsplan, trafikklærer med meldinger, Pluss-kjøpet og koder fra trafikkskolen
 - [x] Modellene som selges ligger i appen: bilmodellen D-FINE small og feltmodellen n2 (Audi krediteres under Om appen › Lisenser og kilder)
 - [x] Ikon (lyst og mørkt), tillatelsestekster, personvernmanifest som stemmer med etiketten, eksportsvar (ingen kryptering)
-- [x] App Store-bilder i [`skjermbilder/`](skjermbilder/) (6,9")
+- [x] App Store-bilder i [`skjermbilder/`](skjermbilder/) (6,9"): 8 nye bilder av 1.0.0 fra 22. november, teorien først
 - [x] Beskrivelse ([`beskrivelse.txt`](beskrivelse.txt)), navn, undertittel, nøkkelord, kampanjetekst (README del 2)
 - [x] Personvern: https://kjorerapport.jo-9fc.workers.dev/personvern/
 - [x] Hjelp og kontakt (støtte-URL): https://kjorerapport.jo-9fc.workers.dev/hjelp/
@@ -59,7 +59,7 @@ Ett kjøp, **Non-Consumable**. Feltene står i README del 12:
 
 Ikke lag den gamle prøveperioden (`…pluss.trial14`). Appen har ingen prøveperiode lenger.
 
-Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet. Bildet må tas på nytt, siden Pluss-siden er endret.
+Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet.
 
 ### 6. Last opp appen
 - I Xcode: velg **Any iOS Device (arm64)** øverst, så **Product › Archive**.
@@ -79,7 +79,7 @@ Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet. Bi
 ### 8. Fyll ut appsiden (App Store-fanen)
 | Felt | Hva |
 |---|---|
-| Bilder (6,9") | De 7 bildene i `skjermbilder/`, i nummerrekkefølge |
+| Bilder (6,9") | De 8 bildene i `skjermbilder/`, i nummerrekkefølge |
 | Kampanjetekst, beskrivelse, nøkkelord | README del 2 og `beskrivelse.txt` |
 | Støtte-URL | https://kjorerapport.jo-9fc.workers.dev/hjelp/ |
 | Markedsførings-URL | https://kjorerapport.jo-9fc.workers.dev/trafikkskole/ (valgfri) |

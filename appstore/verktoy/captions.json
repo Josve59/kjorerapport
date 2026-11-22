@@ -1,7 +1,8 @@
-[["report", "Rapport etter hver øvingstur", "Bremsing, gass, svinger og fart, og hva dere bør øve på neste gang."],
- ["rec", "Bare fartsgrensen på skjermen", "Ledsageren starter og stopper. Føreren kjører, og telefonen står i holderen."],
- ["map", "Se hvor det skjedde", "Bråbremsing, svinger og fart over grensen, rett på kartet."],
- ["turer", "Hele øvingen samlet", "Kjørelogg med tid, kilometer, veityper og mørkekjøring."],
- ["teacher", "Klar til neste kjøretime", "Vis trafikklæreren hva dere har øvd på siden sist."],
- ["klar", "Hva må du øve mer på?", "Se hva som er på plass, og hva dere bør øve mer på."],
- ["precheck", "I gang på et halvt minutt", "Fest telefonen og trykk start. Appen sjekker GPS og sensorer først."]]
+[["teori", "Klar til teoriprøven", "420 spørsmål, prøver som den ekte, og hvor klar du er i prosent."],
+ ["sporsmal", "Tegninger og forklaring", "Forklaring etter hvert svar, og regelen i teoriboka."],
+ ["kryss", "Hvem kjører først?", "Trykk på bilene i riktig rekkefølge, og se krysset spilles av."],
+ ["sikkerhet", "Sikkerhetskontrollen", "Alle 46 oppgavene, og en quiz med tegninger av bilen."],
+ ["rapport", "Rapport etter hver øvingstur", "Bremsing, gass, svinger og fart, og hva dere bør øve på neste gang."],
+ ["opptak", "Bare fartsgrensen på skjermen", "Ledsageren starter og stopper. Føreren kjører, og telefonen står i holderen."],
+ ["kart", "Se hvor det skjedde", "Bråbremsing, svinger og fart over grensen, rett på kartet."],
+ ["laerer", "Klar til neste kjøretime", "Vis trafikklæreren hva dere har øvd på siden sist."]]

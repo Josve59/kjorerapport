@@ -159,6 +159,8 @@ The owner (22 November): «1. behold navnet kjørerapport, 2. … hvis ikke beho
   - the description mentions the safety quiz;
   - the status table and the Norwegian step-by-step guide are updated;
   - new screenshots.
+- **New App Store screenshots:** 8 images, theory first, in the «Skilt og vei» colours, made from the Emma test data with `appstore/verktoy/` (section 9 in `appstore/README.md`). The Pluss review image is retaken.
+- **The full-screen map reaches the bottom edge** in the iPhone app. It used to stop above the home indicator and leave a light band. The map buttons and the source line now move in by the safe area instead.
 - **Version 1.0.0** in the app and in Xcode (`MARKETING_VERSION`). `KJ_CONFIG=Release ios/ship.sh` installs the sale version for a road test before submission.
 
 ## What's new in 0.28.1 – a quiz about the safety check, and drawings for theory and the car
