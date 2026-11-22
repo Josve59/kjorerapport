@@ -1,5 +1,5 @@
 /* Kjørerapport Pluss (0.11.0): ett engangskjøp i iPhone-appen (App Store, PlusStore.swift).
-   Gratis: opptak, rapport, kart, fartsgrense, fotoboksvarsel, guider, kjørelogg, eksport og sikkerhetskopi, og
+   Gratis: opptak, rapport, kart, fartsgrense, guider, kjørelogg, eksport og sikkerhetskopi, og
    rapportene for de FREE_REPORTS siste turene. Pluss: kameraene, opplæringsplanen (med faresteder),
    trafikklærersiden og rapportene for alle eldre turer. Nettversjonen (Safari) har alt, som før.
    Turene slettes aldri og kan alltid eksporteres, også uten Pluss.

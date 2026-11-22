@@ -99,6 +99,7 @@ nonisolated final class RoadDetector: @unchecked Sendable {
         queue.async { [self] in
             defer { lock.lock(); busy = false; lock.unlock() }
             guard let out = detect(frame, roadBottom: bottom, dark: dark) else { return }
+            FrameLog.shared.noteCars(out)
             onResult?(out)
         }
     }

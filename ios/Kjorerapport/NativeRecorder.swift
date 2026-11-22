@@ -57,7 +57,19 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             if ProcessInfo.processInfo.environment["KJ_JS"] != nil { UIApplication.shared.isIdleTimerDisabled = true }
             #endif
             // thermal (0.13.12): varmetrinnet fra iOS (0 normal, 1 lunken, 2 varm, 3 svært varm)
-            return (["devTools": await Self.devTools(), "thermal": ProcessInfo.processInfo.thermalState.rawValue], nil)
+            let dev = await Self.devTools()
+            FrameLog.shared.allow(dev)   // veibilder til modelltrening bare i testbygg (1.0.4)
+            return (["devTools": dev, "thermal": ProcessInfo.processInfo.thermalState.rawValue], nil)
+        case "framesSet":
+            FrameLog.shared.allow(await Self.devTools())
+            FrameLog.shared.set(body["on"] as? Bool ?? false)
+            return (FrameLog.shared.status(), nil)
+        case "framesInfo":
+            FrameLog.shared.allow(await Self.devTools())
+            return (FrameLog.shared.status(), nil)
+        case "framesClear":
+            FrameLog.shared.clear()
+            return (FrameLog.shared.status(), nil)
         case "camInfo":
             return (["multi": CameraHub.multiSupported, "model": Bundle.main.url(forResource: "DFine", withExtension: "mlmodelc") != nil,
                      "lanes": Bundle.main.url(forResource: "Lanes", withExtension: "mlmodelc") != nil], nil)
@@ -73,6 +85,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             // modellene lastes samtidig med at kameraene startes (før etter hverandre: 3,6–4,7 s til svar)
             WebServer.shared?.restart(force: body["fresh"] as? Bool ?? false)
             if detect { _ = prepareModels() }
+            FrameLog.shared.newSession()
             let started = await CameraHub.shared.start(facings, fresh: body["fresh"] as? Bool ?? false)
             let model = detect && started.active.contains(.environment) ? await startDetector() : nil
             if model == nil { CameraHub.shared.onRoadFrame = nil }
@@ -129,6 +142,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
             laneDetector.configure(roadBottom: body["roadBottom"] as? Double, gamma: body["laneGamma"] as? Double ?? 1)
             if let bias = body["faceBias"] as? Double { CameraHub.shared.setUserBias(bias) }   // førerkameraet i mørket (0.13.10)
             ModelPace.still = body["still"] as? Bool ?? false   // bilen står stille: modellene går 1 gang i sekundet (0.13.12)
+            FrameLog.shared.note(["roadBottom": body["roadBottom"] ?? NSNull(), "dark": body["dark"] as? Bool ?? false, "laneGamma": body["laneGamma"] ?? NSNull()])
         case "geoStart":
             watching = true
             startLocation()
@@ -304,6 +318,8 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for loc in locations {
             if recording { addDistance(loc) }
+            // Fart og GPS-nøyaktighet til veibildene (1.0.4), ingen posisjon
+            FrameLog.shared.note(["kmh": loc.speed >= 0 ? (loc.speed * 36).rounded() / 10 : NSNull(), "gpsAcc": loc.horizontalAccuracy.rounded()])
             let sample: [String: Any] = [
                 "type": "loc",
                 "ts": loc.timestamp.timeIntervalSince1970 * 1000,

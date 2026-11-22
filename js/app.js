@@ -16,7 +16,7 @@ import { teacherSummary, teacherText, teacherHtml } from './teacher.js';
 import * as cam from './facecam.js';
 import { createLiveLimit, createLiveRoad } from './livelimit.js';
 import { trackCurvature, aheadCurvature, kappaPrior } from './roadshape.js';
-import { createAtkSounds, unlockSound, playSound } from './sound.js';
+import { unlockSound, playSound } from './sound.js';
 import { createSpeedWarn, createDropGrace } from './speedwarn.js';
 import { SURFACES, SURFACE_LABEL, surfaceFactor, suggestSurface, surfaceSplit, dayKey } from './surface.js';
 import { CLASS_LABEL, CALIB_STEPS, MIRRORS, closeMirrorText, calibrationFromSamples, calibRedo, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.3';
+export const APP_VERSION = '1.0.4';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -693,7 +693,7 @@ async function renderPlus(feature = null) {
       <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse.'}</p>`}
       ${owned ? '' : `
       <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button>${codesEnabled() && st.native ? '<button type="button" class="link" id="plus-appcode">App Store-kode</button>' : ''}</div>`}
-      ${st.native ? `<p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, fotoboksvarsel, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>` : ''}`;
+      ${st.native ? `<p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>` : ''}`;
     const back = root.querySelector('#plus-back');
     if (back) back.onclick = () => goBack();
     const sc = root.querySelector('#plus-school'); if (sc) sc.onclick = () => schoolCode(sc);
@@ -2147,13 +2147,7 @@ async function startRecording(replay = null) {
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
   show('record');
   const settings = getSettings();
-  // Lyd ved fotobokser (v0.9.10 / k0.7.5): låses opp nå, i trykket på «Start», ellers spiller ikke iPhone lyden
-  // Fotobokser (0.18.4): av som standard (eieren). Vises bare når «Varsel om fotobokser» er på, og lyden bare når
-  // «Lyd ved fotobokser» også er på.
-  const atkOn = !replay && settings.netLimits !== false && settings.atkWarn === true;
-  const atkSound = atkOn && settings.atkSound === true ? createAtkSounds() : null;
-  if (atkSound) unlockSound();
-  // Fartsvarsel (0.12.0): rød kant (og pip hvis valgt) når farten er for høy
+  // Fartsvarsel (0.12.0): rød kant (og pip hvis valgt) når farten er for høy. Varselet om fotobokser er tatt ut (1.0.4)
   const speedWarn = settings.speedWarn !== false || settings.speedSound ? createSpeedWarn() : null;
   let speedBeep = !!settings.speedSound;
   const dropGrace = createDropGrace();   // kartet alene senker grensen: varselet venter litt (0.13.11)
@@ -2186,13 +2180,10 @@ async function startRecording(replay = null) {
   renderMarkGrid({});
   let gapMsg = '', gapShown = null, stillSince = null, lastNativeStatus = -Infinity;   // lang pause: minn om å stoppe turen (v0.9.3, før Trondheim–Storlien)
   // Aktiv fartsgrense fra NVDB (v0.9.4), når «Veidata» er på. Endringene lagres med turen for sammenligning.
-  const live = !replay && settings.netLimits !== false ? createLiveLimit({ atk: true }) : null;
+  const live = !replay && settings.netLimits !== false ? createLiveLimit() : null;
   const liveLog = [];
   liveLimitNow = null; camLimit.reset(); camSignNew = null; roadTrack.length = 0; liveRoad = null;
-  const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed'), atkEl = $('#rec-atk');
-  const atkPop = $('#atk-pop');
-  atkEl.hidden = true; atkPop.hidden = true;
-  let popUntil = 0;
+  const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed');
   // Demoturen (v0.9.19) har egne fartsgrenser langs den tenkte ruta, så skiltet vises også under avspilling
   const demoLimits = replay && replay.data && replay.data.limits ? replay.data.limits : null;
   limitBox.hidden = !live && !demoLimits;
@@ -2229,22 +2220,6 @@ async function startRecording(replay = null) {
         // Høyere grense like foran (0.18.4): kartet bytter ofte litt etter skiltet, så lyden venter (kanten vises)
         const fwd = !cl && st.pos && Number.isFinite(warnLim) ? live.ahead({ ...st.pos, heading: recorder && recorder.lastFix ? recorder.lastFix.bearing : NaN }, Math.max(80, Math.min(200, (st.kmh || 0) / 3.6 * 6))) : null;
         warnSpeed(st.kmh, warnLim, st.elapsed, Number.isFinite(fwd) && fwd > warnLim);
-        // Fotoboks foran eller strekningsmåling (v0.9.7)
-        // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
-        // 2 s etter at bilen har passert, og forsvinner så av seg selv. Av som standard fra 0.18.4.
-        const atk = st.pos && atkOn ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
-        if (atkSound && st.pos) { const snd = atkSound.step(atk, { kmh: st.kmh, limit: liveLimitNow, t: st.elapsed }); if (snd) playSound(snd); }
-        const big = atk && ((atk.kind === 'boks' || atk.kind === 'strekning-foran') ? atk.d <= 300 : atk.kind === 'ferdig');
-        atkEl.hidden = !atk || big;
-        if (atk && !big) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
-        if (big) {
-          popUntil = st.elapsed + 2;
-          atkPop.dataset.kind = atk.kind;
-          atkPop.querySelector('.atk-pop-title').textContent = atk.kind === 'boks' ? 'Fotoboks' : atk.kind === 'ferdig' ? 'Strekningsmåling ferdig' : 'Strekningsmåling';
-          atkPop.querySelector('.atk-pop-main').textContent = atk.kind === 'ferdig' ? `snitt ${atk.avg ?? '–'} km/t` : `om ${atk.d} m`;
-          atkPop.querySelector('.atk-pop-sub').textContent = [liveLimitNow ? `Fartsgrense ${liveLimitNow}` : '', Number.isFinite(st.kmh) ? `du kjører ${n0(st.kmh)} km/t` : ''].filter(Boolean).join(' · ');
-          atkPop.hidden = false;
-        } else if (st.elapsed > popUntil) atkPop.hidden = true;
         const last = liveLog[liveLog.length - 1];
         if (!last || last.limit !== res.limit) liveLog.push({ t: Math.round(st.elapsed), limit: res.limit });
         if (recorder) recorder.liveLimits = liveLog;
@@ -2690,7 +2665,6 @@ async function finishRecording() {
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
   $('#record').classList.remove('speeding'); $('#record').style.setProperty('--speed-warn', 0);
-  $('#atk-pop').hidden = true;
   closeCamView();
   // Veikameraet: bildestørrelse, modell og hvor rask telefonen var, lagret med turen
   const cs = cam.state();
@@ -3187,15 +3161,10 @@ async function renderSettings() {
     el.checked = settings[key] !== false;
     el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
-  // Lyd ved fotobokser: på som standard. Slås den på (eller trykkes «Prøv lyden»), spilles lyden for 300 m før.
   // Fartsvarsel (0.12.0): synlig kant er på som standard, lyden velges selv. Krever fartsgrensen fra Statens vegvesen.
   { const el = $('#speedWarn'); el.checked = settings.speedWarn !== false; el.onchange = () => saveSettings({ ...getSettings(), speedWarn: el.checked }); }
   { const el = $('#speedSound'); el.checked = !!settings.speedSound; el.onchange = () => { saveSettings({ ...getSettings(), speedSound: el.checked }); if (el.checked) { unlockSound(); playSound('fart'); } }; }
   { const el = $('#showFace'); el.checked = settings.showFace === true; el.onchange = () => saveSettings({ ...getSettings(), showFace: el.checked }); }
-  // Fotobokser av som standard (0.18.4): både varselet på skjermen og lyden må slås på
-  { const el = $('#atkWarn'), row = $('#atkSound-row'); el.checked = settings.atkWarn === true; row.hidden = !el.checked; el.onchange = () => { saveSettings({ ...getSettings(), atkWarn: el.checked }); row.hidden = !el.checked; }; }
-  { const el = $('#atkSound'); el.checked = settings.atkSound === true; el.onchange = () => { saveSettings({ ...getSettings(), atkSound: el.checked }); if (el.checked) { unlockSound(); playSound('naer'); } }; }
-  $('#btn-test-sound').onclick = () => { unlockSound(); playSound('varsel'); setTimeout(() => playSound('naer'), 900); setTimeout(() => playSound('fart'), 1900); };
   // Kart og by-tilpasset jevn fart er på som standard
   { const el = $('#autoSpeak'); el.checked = !!settings.autoSpeak; el.onchange = () => { saveSettings({ ...getSettings(), autoSpeak: el.checked }); if (el.checked) speak('Rapporten leses opp når turen er ferdig.'); }; }
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {
@@ -3294,6 +3263,24 @@ async function renderSettings() {
   const thumbs = $('#roadThumbs');
   thumbs.checked = !!getSettings().roadThumbs;
   thumbs.onchange = () => saveSettings({ ...getSettings(), roadThumbs: thumbs.checked });
+  // Veibilder til modelltrening (1.0.4): bare i iPhone-appen. Appen selv sjekker at det er et testbygg.
+  const nat = window.kjNative;
+  if (nat && nat.framesInfo) {
+    const row = $('#frames-row'), sw = $('#framesOn'), st = $('#frames-status'), del = $('#btn-frames-clear');
+    const draw = i => {
+      if (!i) return;
+      sw.checked = !!i.on;
+      st.textContent = i.count ? `Lagret nå: ${i.count} bilder, ${n1(i.bytes / 1e9)} GB.` : 'Ingen bilder lagret ennå.';
+      del.hidden = !i.count;
+    };
+    row.hidden = false;
+    nat.framesInfo().then(draw).catch(() => {});
+    sw.onchange = () => nat.framesSet(sw.checked).then(draw).catch(() => {});
+    del.onclick = async () => {
+      if (!await confirmDialog({ title: 'Slette veibildene?', text: 'Alle lagrede veibilder slettes fra telefonen. Hent dem til Macen først hvis de skal brukes.', ok: 'Slett' })) return;
+      draw(await nat.framesClear().catch(() => null));
+    };
+  }
 }
 
 /* Deg (0.12.0): eleven har bare sitt eget navn. Trafikklæreren har elevene i fanen Elever. */

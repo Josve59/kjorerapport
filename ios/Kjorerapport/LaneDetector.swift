@@ -126,6 +126,7 @@ nonisolated final class LaneDetector: @unchecked Sendable {
             out["hot"] = hot
             out["th"] = ProcessInfo.processInfo.thermalState.rawValue   // trinnet (0–3), så eksporten viser hvor varm (0.13.11)
             out["run"] = (CACurrentMediaTime() - t0) * 1000
+            FrameLog.shared.maybeSave(frame, lanes: out)   // veibilder til modelltrening (1.0.4, bare når det er slått på)
             onResult?(out)
         }
     }

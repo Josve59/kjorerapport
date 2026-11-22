@@ -16,11 +16,6 @@ const SIGNS = { type: 96, filter: '(5530=7633 OR 5530=7601 OR 5530=7602)' };
 const CROSSING = { type: 174 };   // gangfelt (selve feltet, linje over vegen)
 const BUMP = { type: 103 };       // fartsdemper (fartshump, -pute osv.)
 const SIGNAL = { type: 89 };      // signalanlegg (lyskryss), strekning
-// v0.9.7: automatisk trafikkontroll. ATK-punkt (162): fotoboks, navn 9522, kontrollretning 9527.
-// Streknings-ATK (823): linje fra inngang til utgang, navn 9520, kontrollretning 9519. Geometrien i NVDB går i
-// metreringsretningen, så «Med metreringsretning» betyr samme vei som linjen (sjekket mot E6/E14 ved Trondheim).
-const ATK_POINT = { type: 162 };
-const ATK_SECTION = { type: 823 };
 // 0.18.0: motorveg (595), egenskap Motorvegtype 5378: «Motorveg» eller «Motortrafikkveg». Rundt Trondheim har det
 // meste av E6 og E39 80 eller 70 km/t, så fartsgrensen alene ga for lite motorvei i kjøreloggen.
 const MOTORWAY = { type: 595 };
@@ -313,18 +308,6 @@ export async function fetchRoadInfo(p, signal) {
   return { segs, widths };
 }
 
-/* Fotobokser og strekningsmålinger i ett kartutsnitt (under kjøring, livelimit.js). */
-export async function fetchAtkBox(b, signal) {
-  const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
-  const get = async type => (await nvdbPage(`${NVDB_BASE}/${type}?kartutsnitt=${box}&srid=4326&inkluder=egenskaper,geometri&antall=200`, signal)).objekter || [];
-  const props = o => Object.fromEntries((o.egenskaper || []).map(e => [e.id, e.verdi]));
-  const [pts, secs] = await Promise.all([get(ATK_POINT.type), get(ATK_SECTION.type)]);
-  return {
-    points: pts.map(o => ({ ...(parsePoint(o.geometri && o.geometri.wkt) || {}), name: props(o)[9522] || '', ctl: ctlDir(props(o)[9527]) })).filter(p => Number.isFinite(p.lat)),
-    sections: secs.map(o => ({ name: props(o)[9520] || '', ctl: ctlDir(props(o)[9519]), pts: thin(parseLines(o.geometri && o.geometri.wkt)) })).filter(x => x.pts.length > 1)
-  };
-}
-
 /* Henter fartsgrensestrekninger for alle utsnitt. Returnerer [{limit, pts}]. */
 export async function fetchSpeedLimitSegments(points, onProgress = () => {}, signal) {
   const boxes = routeBoxes(points);
@@ -430,7 +413,7 @@ async function fetchPoints(points, spec, withProps, signal, full = false) {
       for (const o of data.objekter || []) {
         if (seen.has(o.id)) continue;
         seen.add(o.id);
-        // Punkt, eller midten av en linje (gangfelt og signalanlegg er linjer). full: hele linjen (streknings-ATK)
+        // Punkt, eller midten av en linje (gangfelt og signalanlegg er linjer). full: hele linjen
         const wkt = o.geometri ? o.geometri.wkt : '';
         if (full) {
           const props = {};
@@ -486,56 +469,23 @@ export function nearRoute(points, items, maxM = 40) {
   return items.filter(it => sample.some(p => Math.abs(p.lat - it.lat) < 0.001 && metres(p, it) <= maxM));
 }
 
-/* Kontrollretning fra NVDB-tekst → 'med' | 'mot' | null */
-export function ctlDir(v) {
-  const t = String(v || '').toLowerCase();
-  return t.startsWith('med') ? 'med' : t.startsWith('mot') ? 'mot' : null;
-}
+/* Retningen fra a til b i grader fra nord (motorveier langs kjøreretningen) */
 const bearing = (a, b) => (Math.atan2((b.lon - a.lon) * Math.cos(a.lat * Math.PI / 180), b.lat - a.lat) * 180 / Math.PI + 360) % 360;
-/* Metreringsretningen der en fotoboks står: retningen til fartsgrensestrekningen nærmest (grader fra nord) */
-async function meteringDir(p, signal) {
-  try {
-    const segs = await fetchLimitBox({ minLat: p.lat - 0.0005, maxLat: p.lat + 0.0005, minLon: p.lon - 0.0011, maxLon: p.lon + 0.0011 }, signal);
-    let best = null;
-    for (const sg of segs) for (let i = 1; i < sg.pts.length; i++) {
-      const a = sg.pts[i - 1], b = sg.pts[i], d = segDist(p, a, b, Math.cos(p.lat * Math.PI / 180));
-      if (metres(a, b) > 1 && (!best || d < best.d)) best = { d, dir: bearing(a, b) };
-    }
-    return best && best.d < 60 ? Math.round(best.dir) : null;
-  } catch (err) { if (err && err.name === 'AbortError') throw err; return null; }
-}
-/* Tynner ut en linje til punkter minst m meter fra hverandre (pluss siste) */
-function thin(line, m = 25) {
-  const out = [];
-  for (const p of line) if (!out.length || metres(out[out.length - 1], p) >= m) out.push({ lat: Math.round(p.lat * 1e5) / 1e5, lon: Math.round(p.lon * 1e5) / 1e5 });
-  const last = line[line.length - 1];
-  if (last && out.length && metres(out[out.length - 1], last) > 1) out.push({ lat: Math.round(last.lat * 1e5) / 1e5, lon: Math.round(last.lon * 1e5) / 1e5 });
-  return out;
-}
 
 export async function fetchRoadData(points, signal) {
-  const [stops, giveway, rb, signs, crossings, bumps, signals, atkPts, atkSecs] = await Promise.all([
+  const [stops, giveway, rb, signs, crossings, bumps, signals] = await Promise.all([
     fetchPoints(points, SIGN_STOP, false, signal),
     fetchPoints(points, SIGN_GIVEWAY, false, signal),
     fetchPoints(points, ROUNDABOUT, true, signal),
     fetchPoints(points, SIGNS, true, signal),
     fetchPoints(points, CROSSING, false, signal),
     fetchPoints(points, BUMP, true, signal),
-    fetchPoints(points, SIGNAL, true, signal),
-    fetchPoints(points, ATK_POINT, true, signal),
-    fetchPoints(points, ATK_SECTION, true, signal, true)
+    fetchPoints(points, SIGNAL, true, signal)
   ]);
   const r5 = v => Math.round(v * 1e5) / 1e5;
   const pt = p => ({ lat: r5(p.lat), lon: r5(p.lon) });
-  const atk = nearRoute(points, atkPts.map(p => ({ ...pt(p), name: p.props[9522] || '', ctl: ctlDir(p.props[9527]) })), 40);
-  for (const a of atk) a.mdir = await meteringDir(a, signal);
-  const near = p => nearRoute(points, [p], 150).length > 0;   // tunneler: GPS-en kan bomme mye ved inn- og utgang
-  const sections = atkSecs.map(x => ({ name: x.props[9520] || '', ctl: ctlDir(x.props[9519]), pts: thin(x.line) }))
-    .filter(x => x.pts.length > 1 && (near(x.pts[0]) || near(x.pts[x.pts.length - 1])));
   return {
-    v: 4,   // v3 (0.9.7): fotobokser og strekningsmålinger; v4 (0.26.3): retningen på gangfelt
-    atk,
-    sections,
+    v: 4,   // v4 (0.26.3): retningen på gangfelt. Fotobokser og strekningsmåling hentes ikke fra 1.0.4
     stops: stops.map(pt),
     giveway: giveway.map(pt),
     roundabouts: rb.map(p => ({ ...pt(p), d: Number(p.props[1791]) || 25, name: p.props[1073] || '' })),
@@ -648,49 +598,6 @@ export function evaluateRoad(points, road, events = [], limits = null) {
     out.signs.push({ t: points[i].t, tTo: points[e].t, lat: sg.lat, lon: sg.lon, kind: sg.kind, kmh: Math.round(points[i].kmh), maxKmh: Math.round(maxKmh),
       events: events.filter(ev => ev.t >= points[i].t && ev.t <= points[e].t).map(ev => ev.n) });
   }
-  // v0.9.7 – fotobokser og strekningsmålinger. Bare kontroller i vår kjøreretning: metreringsretningen ved boksen
-  // sammenlignes med retningen bilen kjørte. Ukjent retning tas med, men merkes som usikker.
-  const limitAt = i => (limits && Number.isFinite(limits[i]) ? limits[i] : null);
-  const angDiff = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); return Math.min(d, 360 - d); };
-  out.atk = []; out.sections = [];
-  for (const a of road.atk || []) {
-    const { i, d } = nearest(a);
-    if (d > 30 || points[i].kmh < 5) continue;
-    let ours = null;
-    if (Number.isFinite(a.mdir) && a.ctl) { const withM = angDiff(headingAt(i), a.mdir) < 90; ours = a.ctl === 'med' ? withM : !withM; }
-    if (ours === false) continue;   // måler motgående trafikk
-    out.atk.push({ t: points[i].t, lat: a.lat, lon: a.lon, name: a.name || '', kmh: Math.round(points[i].kmh), limit: limitAt(i), sure: ours === true });
-  }
-  out.atk.sort((x, y) => x.t - y.t);
-  out.atk = out.atk.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 5);
-  for (const sc of road.sections || []) {
-    const a0 = sc.pts[0], a1 = sc.pts[sc.pts.length - 1];
-    const orders = sc.ctl === 'mot' ? [[a1, a0]] : sc.ctl === 'med' ? [[a0, a1]] : [[a0, a1], [a1, a0]];
-    let len = 0; for (let k = 1; k < sc.pts.length; k++) len += metres(sc.pts[k - 1], sc.pts[k]);
-    for (const [entry, exit] of orders) {
-      const e = nearest(entry);
-      if (e.d > 150) continue;
-      // Utgangen: punktet der kjørt lengde etter inngangen er lik strekningens lengde. I tunneler mister GPS-en
-      // ofte posisjonen (Helltunnelen 31. okt.: 141 av 213 posisjoner for unøyaktige), så punktet nærmest utgangen kan
-      // ligge langt unna. Krav: ruten fortsetter forbi, og punktet ligger innen 400 m fra utgangen.
-      let xi = e.i;
-      while (xi < points.length - 1 && cum[xi] - cum[e.i] < len) xi++;
-      // Utgangen må ligge nær linjen mellom punktene rundt (et langt GPS-hopp etter tunnelen er greit)
-      if (xi <= e.i || cum[xi] - cum[e.i] < len * 0.9 || segDist(exit, points[xi - 1], points[xi], Math.cos(exit.lat * Math.PI / 180)) > 400) continue;
-      const x = { i: xi };
-      // Tid ved utgangen: lineært mellom de to punktene rundt (jevn fart gjennom et GPS-hull)
-      const over = cum[xi] - cum[e.i] - len, seg = cum[xi] - cum[xi - 1];
-      const tExit = seg > 0 ? points[xi].t - (points[xi].t - points[xi - 1].t) * Math.min(1, over / seg) : points[xi].t;
-      const dt = tExit - points[e.i].t, avg = len / dt * 3.6;
-      if (!(dt > 0) || avg < 5 || avg > 200) continue;
-      const lims = []; let maxKmh = 0;
-      for (let q = e.i; q <= x.i; q++) { const v = limitAt(q); if (v !== null) lims.push(v); maxKmh = Math.max(maxKmh, points[q].kmh); }
-      lims.sort((p, q) => p - q);
-      out.sections.push({ t: points[e.i].t, tTo: Math.round(tExit * 10) / 10, name: sc.name || '', lengthM: Math.round(len), avgKmh: Math.round(avg), maxKmh: Math.round(maxKmh),
-        limit: lims.length ? lims[lims.length >> 1] : null });
-    }
-  }
-  out.sections.sort((x, y) => x.t - y.t);
   for (const k of ['crossings', 'bumps', 'signals', 'signs']) out[k].sort((x, y) => x.t - y.t);
   // NVDB har ofte ett gangfelt og én fartsdemper per kjøreretning: det samme stedet innen 4 s er ett
   out.crossings = out.crossings.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 4);

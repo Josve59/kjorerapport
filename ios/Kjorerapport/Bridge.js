@@ -9,6 +9,8 @@
     // Kameraene (CameraHub.swift): bildene hentes fra /cam/user.jpg og /cam/environment.jpg, bilene kommer som «kjcamdets»
     camInfo: () => call('camInfo'), camStart: o => call('camStart', o), camStop: () => call('camStop'), camConfig: o => call('camConfig', o),
     camPrepare: () => call('camPrepare'),   // laster modellene før kameraene trengs (1.0.3)
+    // Veibilder til modelltrening (1.0.4, bare testbygg): { on, count, bytes, sessions }
+    framesSet: on => call('framesSet', { on }), framesInfo: () => call('framesInfo'), framesClear: () => call('framesClear'),
     review: () => call('review'),
     takeFile: () => call('takeFile'),   // fil åpnet i appen fra delearket (0.18.1); appen sier fra med «kjfile»
     beep: (tones, volume) => call('beep', { tones, volume }),   // pip spilt av appen (0.12.2)

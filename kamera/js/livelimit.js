@@ -3,16 +3,14 @@
    hentes i bakgrunnen før bilen kommer til kanten. Krever nett og at «Veidata» er på.
    Verdien skifter først når to av de tre siste punktene er enige, så den ikke blinker i kryss.
    Det er NVDB sin fartsgrense, ikke skiltene: i Sverige og der NVDB mangler data vises «–». */
-import { fetchLimitBox, fetchAtkBox, fetchRoadInfo, matchLimits, matchDetail, limitDistance, NEAR_M } from './enrich.js';
-import { createLiveAtk } from './liveatk.js';
+import { fetchLimitBox, fetchRoadInfo, matchLimits, matchDetail, limitDistance, NEAR_M } from './enrich.js';
 import { matchRoad, laneCount, laneWidthFrom } from './roadshape.js';
 
 const HALF_LAT = 0.02, HALF_LON = 0.045;     // ca. 2,2 km hver vei (lengdegrad er kortere i nord)
 const EDGE = 0.35;                            // ny henting når bilen er i ytterste 35 % av området
 
-/* atk: også fotobokser og strekningsmåling for området (v0.9.7), via fetchAtk. */
-export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkBox, atk = false, now = () => Date.now() } = {}) {
-  const live = atk ? createLiveAtk() : null;
+/* Varselet om fotobokser og strekningsmåling (v0.9.7) er tatt ut i 1.0.4 (eieren). */
+export function createLiveLimit({ fetchBox = fetchLimitBox, now = () => Date.now() } = {}) {
   let box = null, segs = [], loading = null, failedAt = -Infinity, current = null, status = 'venter';
   const recent = [];   // siste treff (fartsgrense eller null)
   const nearAt = new Map();   // når hver grense sist ble funnet nær bilen (0.26.5)
@@ -27,7 +25,6 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
     const b = { minLat: p.lat - HALF_LAT, maxLat: p.lat + HALF_LAT, minLon: p.lon - HALF_LON, maxLon: p.lon + HALF_LON };
     loading = fetchBox(b).then(list => {
       box = b; segs = index(list); status = 'ok';
-      if (live) fetchAtk(b).then(data => live.load(data, list)).catch(() => {});
     })
       .catch(() => { failedAt = now(); status = 'feil'; })
       .finally(() => { loading = null; });
@@ -80,8 +77,6 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
     for (const [x, n] of counts) if (n >= 2 || recent.length === 1) { current = x; break; }
     return { limit: current, status: current === null && status === 'ok' ? 'ukjent' : status };
   };
-  /* Fotoboks foran / strekningsmåling: p = {lat, lon, t (s), kmh}. { text, kind } eller null. */
-  const atkStatus = p => (live ? live.update(p) : null);
   /* Fartsgrensestrekningene nær et punkt (veiens linje, til svingen foran i roadshape.js) */
   const near = (p, d = 0.002) => (!p || !box ? [] : segs.filter(s => p.lat > s.minLat - d && p.lat < s.maxLat + d && p.lon > s.minLon - 2 * d && p.lon < s.maxLon + 2 * d));
   /* Fartsgrensen et stykke foran bilen (0.18.4): punktet flyttet m meter fram langs kjøreretningen, bare strekninger
@@ -95,7 +90,7 @@ export function createLiveLimit({ fetchBox = fetchLimitBox, fetchAtk = fetchAtkB
     const v = matchLimits([q], near(q, 0.003), 25, { parallelOnly: true })[0];
     return Number.isFinite(v) ? v : null;
   };
-  return { update, atk: atkStatus, near, ahead, get limit() { return current; } };
+  return { update, near, ahead, get limit() { return current; } };
 }
 
 /* Felt og feltbredde der bilen er (0.10.3): nytt lite område fra Statens vegvesen når bilen har kjørt 100 m (eller

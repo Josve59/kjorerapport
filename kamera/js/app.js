@@ -11,13 +11,12 @@ import { driveLog, sumLogs, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import { teacherSummary, teacherText, teacherHtml } from './teacher.js';
 import * as cam from './facecam.js';
 import { createLiveLimit } from './livelimit.js';
-import { createAtkSounds, unlockSound, playSound } from './sound.js';
 import { createCamLimit } from './signs.js';
 import { CLASS_LABEL, CALIB_STEPS, MIRRORS, calibrationFromSamples, classifyPose, evaluateMirrors, toGaze, gazeCalib, useGaze } from './camera.js';
 import { roadSummary } from './road.js';
 import { driverProfile, planSettings, planShares, createPlanner } from './plan.js';
 
-export const APP_VERSION = 'k0.7.14';
+export const APP_VERSION = 'k0.7.15';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -1005,9 +1004,6 @@ async function startRecording(replay = null) {
   if (stopPrecheck) { stopPrecheck(); stopPrecheck = null; }
   show('record');
   const settings = getSettings();
-  // Lyd ved fotobokser (v0.9.10 / k0.7.5): låses opp nå, i trykket på «Start», ellers spiller ikke iPhone lyden
-  const atkSound = !replay && settings.netLimits !== false && settings.atkSound !== false ? createAtkSounds() : null;
-  if (atkSound) unlockSound();
   const elapsed = $('#rec-elapsed'), dist = $('#rec-dist'), gps = $('#rec-gps'), warn = $('#rec-warn'), saved = $('#rec-saved'), markCount = $('#rec-marks');
   warn.innerHTML = '';
   saved.textContent = '';
@@ -1015,13 +1011,10 @@ async function startRecording(replay = null) {
   renderMarkGrid({});
   let gapMsg = '', gapShown = null, stillSince = null;   // lang pause: minn om å stoppe turen (v0.9.3, før Trondheim–Storlien)
   // Aktiv fartsgrense fra NVDB (v0.9.4), når «Veidata» er på. Endringene lagres med turen for sammenligning.
-  const live = !replay && settings.netLimits !== false ? createLiveLimit({ atk: true }) : null;
+  const live = !replay && settings.netLimits !== false ? createLiveLimit() : null;
   const liveLog = [];
   liveLimitNow = null; camLimit.reset(); camSignNew = null;
-  const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed'), atkEl = $('#rec-atk');
-  const atkPop = $('#atk-pop');
-  atkEl.hidden = true; atkPop.hidden = true;
-  let popUntil = 0;
+  const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed');
   limitBox.hidden = !live;
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
@@ -1047,22 +1040,6 @@ async function startRecording(replay = null) {
         limitNote.textContent = cl ? (cl.agree ? 'Fartsgrense (Statens vegvesen) · kameraet så samme skilt' : `Skilt sett av kameraet${cl.nvdb ? ` · Statens vegvesen: ${cl.nvdb}` : ''}`)
           : res.limit !== null ? 'Fartsgrense (Statens vegvesen)' : res.status === 'feil' ? 'Fartsgrense: ingen nett' : res.status === 'ukjent' ? 'Fartsgrense ukjent her' : 'Henter fartsgrense …';
         speedEl.textContent = Number.isFinite(st.kmh) ? n0(st.kmh) : '–';
-        // Fotoboks foran eller strekningsmåling (v0.9.7)
-        // Lite varsel fra 1 km, stort kort de siste 300 m og etter en strekningsmåling (k0.7.1). Kortet blir stående
-        // 2 s etter at bilen har passert, og forsvinner så av seg selv.
-        const atk = st.pos ? live.atk({ ...st.pos, t: st.elapsed, kmh: st.kmh }) : null;
-        if (atkSound && st.pos) { const snd = atkSound.step(atk, { kmh: st.kmh, limit: liveLimitNow, t: st.elapsed }); if (snd) playSound(snd); }
-        const big = atk && ((atk.kind === 'boks' || atk.kind === 'strekning-foran') ? atk.d <= 300 : atk.kind === 'ferdig');
-        atkEl.hidden = !atk || big;
-        if (atk && !big) { atkEl.textContent = atk.text; atkEl.dataset.kind = atk.kind; }
-        if (big) {
-          popUntil = st.elapsed + 2;
-          atkPop.dataset.kind = atk.kind;
-          atkPop.querySelector('.atk-pop-title').textContent = atk.kind === 'boks' ? 'Fotoboks' : atk.kind === 'ferdig' ? 'Strekningsmåling ferdig' : 'Strekningsmåling';
-          atkPop.querySelector('.atk-pop-main').textContent = atk.kind === 'ferdig' ? `snitt ${atk.avg ?? '–'} km/t` : `om ${atk.d} m`;
-          atkPop.querySelector('.atk-pop-sub').textContent = [liveLimitNow ? `Fartsgrense ${liveLimitNow}` : '', Number.isFinite(st.kmh) ? `du kjører ${n0(st.kmh)} km/t` : ''].filter(Boolean).join(' · ');
-          atkPop.hidden = false;
-        } else if (st.elapsed > popUntil) atkPop.hidden = true;
         let last = null; for (let i = liveLog.length - 1; i >= 0 && !last; i--) if (!liveLog[i].src) last = liveLog[i];   // siste fra NVDB
         if (!last || last.limit !== res.limit) liveLog.push({ t: Math.round(st.elapsed), limit: res.limit });
         if (recorder) recorder.liveLimits = liveLog;
@@ -1413,7 +1390,6 @@ async function finishRecording() {
   vibrate([60, 60, 60]);
   $('#record').classList.add('busy');
   const camInfo = cameraInfo();
-  $('#atk-pop').hidden = true;
   closeCamView();
   const drive = await rec.stop();
   if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
@@ -1601,9 +1577,6 @@ async function renderSettings() {
     el.checked = settings[key] !== false;
     el.onchange = () => { saveSettings({ ...getSettings(), [key]: el.checked }); };
   });
-  // Lyd ved fotobokser: på som standard. Slås den på (eller trykkes «Prøv lyden»), spilles lyden for 300 m før.
-  { const el = $('#atkSound'); el.checked = settings.atkSound !== false; el.onchange = () => { saveSettings({ ...getSettings(), atkSound: el.checked }); if (el.checked) { unlockSound(); playSound('naer'); } }; }
-  $('#btn-test-sound').onclick = () => { unlockSound(); playSound('varsel'); setTimeout(() => playSound('naer'), 900); setTimeout(() => playSound('fart'), 1900); };
   // Kart og by-tilpasset jevn fart er på som standard
   { const el = $('#autoSpeak'); el.checked = !!settings.autoSpeak; el.onchange = () => { saveSettings({ ...getSettings(), autoSpeak: el.checked }); if (el.checked) speak('Rapporten leses opp når turen er ferdig.'); }; }
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {

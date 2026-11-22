@@ -143,6 +143,16 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.4 – no speed camera warnings, and road pictures for model training
+
+- **Speed camera warnings removed (owner's decision, 22 Nov):** the yellow notice and the big card on the driving screen, the sounds, the two switches in Settings, the «Fotoboks i X km/t» and «Strekningsmåling» situations in the report, and the speed cameras in «Langs veien». Speed cameras and section control are no longer fetched from NVDB, during the drive or for the report (`liveatk.js`, `fetchAtkBox`, `createAtkSounds` and their tests are gone). Old drives keep the data, but it is not shown. The help, privacy, licence and driving-school pages no longer mention them. The same in the camera test app (`kamera/`, k0.7.15). The sign «Automatisk trafikkontroll» stays in the theory.
+- **Road pictures for model training (test builds only, off by default):** the owner's drive of 22 Nov 20:05 (1.0.3, 52 min, 39 km, 88 % in the dark, mostly country road) had both lane lines only 23 % of the time in the dark at 40 km/h or more, and they flipped 46 times a minute. The owner sees the lines «in the air» or all over the road on country roads. The export has no pictures, so this can't be checked or trained on.
+  - The new switch «Veibilder til modelltrening» (Settings › Utvikler, iPhone app only) saves one road-camera picture every 2 s (720×1280 JPEG) with the lane model's answer on exactly that picture and the car model's latest answer, plus speed, GPS accuracy, dashboard edge, darkness and heat. No positions and no pictures of the driver. At most 4 GB, and it stops when the phone has less than 2 GB free.
+  - The pictures stay in the app's own folder until `tools/hent-veibilder.sh` copies them by cable to `.local-test/veibilder/` (git-ignored). «Slett veibildene» deletes them on the phone.
+  - The native side only saves pictures when the app knows it is a test build (`devTools`), so the web app cannot turn it on in the App Store version.
+  - A likely cause of lines «in the air», still to check on the pictures: the line fit assumes the horizon is 25 % of the picture height above the dashboard edge, and draws the lines up to there. If the phone sits differently or the dashboard is high, the top of the lines ends above the road. The lane model may also find «lines» in the dark above the end of the road (lights, reflector posts), and points above the road are not removed.
+- **Tested:** 304 tests; both apps load in the browser; Settings has no speed camera switches; a report renders; on the phone 7 pictures in 14 s with the lane model's answer. **Not tested:** a drive with the pictures switched on.
+
 ## What's new in 1.0.3 – the cameras start after a locked screen, and much faster
 
 The owner reported that the cameras would not start on a new drive after the first one, until the app was closed and opened again, and that the start was slow. Measured on the phone from the Mac on 22 Nov (test build with a log that survives a locked screen):
