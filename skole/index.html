@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Skolesiden (1.0.8): trafikkskolen deler ut elevtilganger fra pakken sin. Lenken etter «#» er skolens nøkkel. -->
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Elevtilganger – Kjørerapport</title>
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/side.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <header class="topbar">
+    <a class="brand" href="../trafikkskole/"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
+    <span class="muted small">For trafikkskoler</span>
+  </header>
+  <main class="portal" id="app" aria-live="polite">
+    <p class="muted">Henter elevtilgangene …</p>
+  </main>
+</div>
+<footer><div class="wrap narrow"><span>© 2026 Svendsen Media</span><a href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Jo@svendsenmedia.net</a></div></footer>
+<dialog class="ask" id="ask"><h2 id="ask-title"></h2><p id="ask-text"></p><div class="actions"><button type="button" class="btn secondary small" value="nei">Avbryt</button><button type="button" class="btn primary small" value="ja" id="ask-ok"></button></div></dialog>
+<script type="module" src="skole.js"></script>
+</body>
+</html>

@@ -33,7 +33,23 @@
    nøkkelen. Serveren kan ikke finne kjøpet hos Apple eller vite hvem som kjøpte. Ingenting stenges, bare telles.
    «pluss:<kjop>» → { forst, installs: [{ i, forst, sist }], maks }   (maks: flest telefoner i bruk på én gang)
    POST /v1/pluss          { kjop, install }             → { ok }
-   GET  /admin/pluss                                     → { kjop, naa: { 1, 2, 3, '4+' }, maks: { … }, liste } */
+   GET  /admin/pluss                                     → { kjop, naa: { 1, 2, 3, '4+' }, maks: { … }, liste }
+
+   Skolesiden (1.0.8): trafikkskolen kjøper en pakke med elevtilganger og deler dem ut selv på sin egen side
+   (skole/index.html). Ingen konto: skolen har en hemmelig lenke, og serveren lagrer bare SHA-256 av nøkkelen i den.
+   Eleven får en lenke på SMS med en kode. En tilgang er opptatt fra skolen deler den ut; tar eleven den aldri i bruk,
+   kan skolen trekke den tilbake. Ingen navn lagres: skolen skriver koden inn i sitt eget elevsystem om den vil.
+   «skole:<id>» → { id, navn, kjopt, maaneder, maks, laget, tokenHash, nylig, bestillinger, pakker }
+   «skoletoken:<sha256>» → id. Kodene får { skoleId, utdelt } i tillegg, og metadata som skolesiden kan liste uten å
+   lese hver kode.
+   GET  /v1/skole          (Authorization: Bearer <skolens nøkkel>) → { navn, kjopt, brukt, ubrukt, igjen, koder, … }
+   POST /v1/skole/ny                                     → { kode, igjen }   (409 tomt)
+   POST /v1/skole/ny-telefon | steng | apne { kode }    → { ok, tilbake }   (steng på en ubrukt kode = trekk tilbake)
+   POST /v1/skole/bestill  { antall }                    → { ok }
+   POST /admin/skole       { navn, antall, maaneder, maks } → { id, token }
+   POST /admin/skole/pakke { id|navn, antall }           → { kjopt }
+   POST /admin/skole/ny-lenke { id|navn }                → { token }   (den gamle lenken slutter å virke)
+   GET  /admin/skoler                                    → { skoler: [{ id, navn, kjopt, brukt, ubrukt, igjen, bestillinger }] } */
 
 export const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';   // uten 0/O, 1/I/L, så kodene er lette å skrive av
 export const CODE_LEN = 12;
@@ -78,7 +94,9 @@ export async function signPass(env, payload) {
 async function readJson(req) { try { return await req.json(); } catch { return {}; } }
 const isAdmin = (req, env) => !!env.ADMIN_SECRET && req.headers.get('Authorization') === `Bearer ${env.ADMIN_SECRET}`;
 const getCode = async (env, c) => { const v = await env.CODES.get('kode:' + c); return v ? JSON.parse(v) : null; };
-const putCode = (env, c, rec) => env.CODES.put('kode:' + c, JSON.stringify(rec), { metadata: { skole: rec.skole } });
+/* Metadata (1.0.8): nok til at skolesiden kan liste kodene uten å lese hver av dem. s: 0 åpen, 1 stengt, 2 trukket tilbake */
+const codeMeta = rec => ({ skole: rec.skole, sid: rec.skoleId || undefined, u: rec.utdelt || undefined, f: rec.forst || undefined, n: rec.installs.length, s: rec.trukket ? 2 : rec.stengt ? 1 : 0, m: rec.maaneder });
+const putCode = (env, c, rec) => env.CODES.put('kode:' + c, JSON.stringify(rec), { metadata: codeMeta(rec) });
 const until = rec => (rec.forst ? rec.forst + rec.maaneder * MONTH : null);
 
 async function activate(req, env, now) {
@@ -246,6 +264,161 @@ async function plusSummary(env, now) {
   return json({ kjop: liste.length, naa, maks, liste });
 }
 
+/* Skolesiden (1.0.8) */
+const RECENT_MS = 5 * 60000;   // Cloudflare-listen kan ligge opptil et minutt etter; koder skolen nettopp rørte, leses direkte
+const sha256hex = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('');
+const newToken = () => b64u(crypto.getRandomValues(new Uint8Array(32)));
+const clampInt = (v, lo, hi, d) => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+/* Skolens id av navnet: «Trafikkskolen Øst AS» → «trafikkskolen-ost-as» */
+export const schoolId = navn => String(navn || '').toLowerCase().replace(/æ/g, 'ae').replace(/ø/g, 'o').replace(/å/g, 'a')
+  .normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+const getSchool = async (env, id) => { const v = id ? await env.CODES.get('skole:' + id) : null; return v ? JSON.parse(v) : null; };
+const putSchool = (env, s) => env.CODES.put('skole:' + s.id, JSON.stringify(s), { metadata: { navn: s.navn } });
+
+async function schoolFromReq(req, env) {
+  const m = /^Bearer (\S+)$/.exec(req.headers.get('Authorization') || '');
+  if (!m || m[1].length < 30 || m[1] === env.ADMIN_SECRET) return null;
+  const id = await env.CODES.get('skoletoken:' + await sha256hex(m[1]));
+  return id ? getSchool(env, id) : null;
+}
+
+/* Én rad på skolesiden, fra koden selv eller fra metadataen i listen */
+const rowOf = (c, r) => ({ kode: formatCode(c), utdelt: r.utdelt || null, forst: r.forst || null, til: r.forst ? r.forst + r.maaneder * MONTH : null, telefoner: r.telefoner, stengt: !!r.stengt, trukket: !!r.trukket });
+async function schoolRows(env, school, now) {
+  const rows = new Map();
+  let cursor;
+  do {
+    const page = await env.CODES.list({ prefix: 'kode:', cursor });
+    for (const k of page.keys) {
+      const m = k.metadata;
+      if (m && m.sid === school.id) rows.set(k.name.slice(5), rowOf(k.name.slice(5), { utdelt: m.u, forst: m.f, maaneder: m.m || school.maaneder, telefoner: m.n || 0, stengt: m.s >= 1, trukket: m.s === 2 }));
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  for (const n of school.nylig || []) {
+    if (now - n.t >= RECENT_MS) continue;
+    const rec = await getCode(env, n.k);
+    if (rec && rec.skoleId === school.id) rows.set(n.k, rowOf(n.k, { ...rec, telefoner: rec.installs.length }));
+  }
+  return [...rows.values()];
+}
+/* En tilgang er brukt når eleven har tatt den i bruk, og opptatt når den er delt ut men ikke tatt i bruk.
+   En ubrukt kode som er stengt (trukket tilbake), gir tilgangen tilbake. */
+const counts = (rows, kjopt) => {
+  const brukt = rows.filter(r => r.forst).length, ubrukt = rows.filter(r => !r.forst && !r.stengt).length;
+  return { brukt, ubrukt, igjen: Math.max(0, kjopt - brukt - ubrukt) };
+};
+async function schoolOverview(env, school, now) {
+  const rows = await schoolRows(env, school, now);
+  rows.sort((a, b) => (b.utdelt || 0) - (a.utdelt || 0));
+  const open = (school.bestillinger || []).filter(b => !b.ferdig);
+  return { navn: school.navn, kjopt: school.kjopt, ...counts(rows, school.kjopt), maaneder: school.maaneder, maks: school.maks, bestilt: open.length ? open[open.length - 1] : null, koder: rows };
+}
+const touch = (school, c, now) => { school.nylig = [...(school.nylig || []).filter(n => now - n.t < RECENT_MS && n.k !== c), { k: c, t: now }].slice(-100); };
+
+async function schoolNewCode(env, school, now) {
+  const { igjen } = counts(await schoolRows(env, school, now), school.kjopt);
+  if (igjen <= 0) return json({ error: 'tomt' }, 409);
+  let c;
+  do { c = randomCode(); } while (await getCode(env, c));
+  await putCode(env, c, { skole: school.navn, skoleId: school.id, maaneder: school.maaneder, maks: school.maks, laget: now, utdelt: now, forst: null, installs: [], stengt: false, tester: false });
+  touch(school, c, now);
+  await putSchool(env, school);
+  return json({ kode: formatCode(c), igjen: igjen - 1, maaneder: school.maaneder, maks: school.maks });
+}
+
+async function schoolChange(req, env, school, now, action) {
+  const c = normalizeCode((await readJson(req)).kode);
+  const rec = validCode(c) ? await getCode(env, c) : null;
+  if (!rec || rec.skoleId !== school.id) return json({ error: 'ukjent' }, 404);
+  let tilbake = false;
+  if (action === 'ny-telefon') {
+    if (!rec.forst) return json({ error: 'ubrukt' }, 409);
+    rec.installs = [];
+  } else if (action === 'steng') {
+    if (!rec.stengt) { rec.stengt = true; if (!rec.forst) { rec.trukket = true; tilbake = true; } }
+  } else if (action === 'apne') {
+    if (rec.trukket) return json({ error: 'trukket' }, 409);   // tilgangen er gitt tilbake: del ut en ny
+    rec.stengt = false;
+  }
+  await putCode(env, c, rec);
+  touch(school, c, now);
+  await putSchool(env, school);
+  return json({ ok: true, kode: formatCode(c), tilbake });
+}
+
+async function schoolOrder(req, env, school, now) {
+  const n = Math.floor(Number((await readJson(req)).antall));
+  if (!(n >= 1 && n <= 2000)) return json({ error: 'antall' }, 400);
+  school.bestillinger = [...(school.bestillinger || []), { antall: n, t: now }].slice(-20);
+  await putSchool(env, school);
+  return json({ ok: true });
+}
+
+async function adminNewSchool(req, env, now) {
+  const { navn, antall, maaneder = 12, maks = 2 } = await readJson(req);
+  const name = String(navn || '').trim().slice(0, 80), id = schoolId(name), n = Math.floor(Number(antall));
+  if (!name || !id || !(n >= 0 && n <= 5000)) return json({ error: 'Oppgi navn og antall (0–5000).' }, 400);
+  if (await getSchool(env, id)) return json({ error: 'finnes' }, 409);
+  const token = newToken();
+  const school = { id, navn: name, kjopt: n, maaneder: clampInt(maaneder, 1, 36, 12), maks: clampInt(maks, 1, 5, 2), laget: now, tokenHash: await sha256hex(token), nylig: [], bestillinger: [], pakker: n ? [{ antall: n, t: now }] : [] };
+  await env.CODES.put('skoletoken:' + school.tokenHash, id);
+  await putSchool(env, school);
+  return json({ id, navn: name, kjopt: n, maaneder: school.maaneder, maks: school.maks, token });
+}
+
+async function adminFindSchool(req, env) {
+  const b = await readJson(req);
+  return { b, school: await getSchool(env, b.id || schoolId(b.navn)) };
+}
+async function adminSchoolPack(req, env, now) {
+  const { b, school } = await adminFindSchool(req, env);
+  if (!school) return json({ error: 'ukjent' }, 404);
+  const n = Math.floor(Number(b.antall));
+  if (!(n >= 1 && n <= 5000)) return json({ error: 'antall' }, 400);
+  school.kjopt += n;
+  school.pakker = [...(school.pakker || []), { antall: n, t: now }];
+  school.bestillinger = (school.bestillinger || []).map(x => ({ ...x, ferdig: true }));   // bestillingen er levert
+  await putSchool(env, school);
+  return json({ id: school.id, navn: school.navn, kjopt: school.kjopt });
+}
+async function adminNewLink(req, env) {
+  const { school } = await adminFindSchool(req, env);
+  if (!school) return json({ error: 'ukjent' }, 404);
+  const token = newToken();
+  if (school.tokenHash) await env.CODES.delete('skoletoken:' + school.tokenHash);
+  school.tokenHash = await sha256hex(token);
+  await env.CODES.put('skoletoken:' + school.tokenHash, school.id);
+  await putSchool(env, school);
+  return json({ id: school.id, navn: school.navn, token });
+}
+async function adminSchools(env, now) {
+  const rowsBy = new Map();
+  let cursor;
+  do {
+    const page = await env.CODES.list({ prefix: 'kode:', cursor });
+    for (const k of page.keys) {
+      const m = k.metadata;
+      if (!m || !m.sid) continue;
+      if (!rowsBy.has(m.sid)) rowsBy.set(m.sid, []);
+      rowsBy.get(m.sid).push({ forst: m.f || null, stengt: m.s >= 1 });
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  const skoler = [];
+  cursor = undefined;
+  do {
+    const page = await env.CODES.list({ prefix: 'skole:', cursor });
+    for (const k of page.keys) {
+      const s = await getSchool(env, k.name.slice(6));
+      if (s) skoler.push({ id: s.id, navn: s.navn, kjopt: s.kjopt, laget: s.laget, ...counts(rowsBy.get(s.id) || [], s.kjopt), bestillinger: (s.bestillinger || []).filter(x => !x.ferdig) });
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  skoler.sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  return json({ skoler });
+}
+
 export default {
   async fetch(req, env, ctx, now = Date.now()) {
     const url = new URL(req.url);
@@ -254,6 +427,15 @@ export default {
       if (req.method === 'POST' && url.pathname === '/v1/aktiver') return await activate(req, env, now);
       if (req.method === 'POST' && url.pathname === '/v1/tur') return await receiveTrip(req, env, now);
       if (req.method === 'POST' && url.pathname === '/v1/pluss') return await countPlus(req, env, now);
+      if (url.pathname === '/v1/skole' || url.pathname.startsWith('/v1/skole/')) {
+        const school = await schoolFromReq(req, env);
+        if (!school) return json({ error: 'nei' }, 401);
+        if (req.method === 'GET' && url.pathname === '/v1/skole') return json(await schoolOverview(env, school, now));
+        if (req.method === 'POST' && url.pathname === '/v1/skole/ny') return await schoolNewCode(env, school, now);
+        const action = url.pathname.slice('/v1/skole/'.length);
+        if (req.method === 'POST' && ['ny-telefon', 'steng', 'apne'].includes(action)) return await schoolChange(req, env, school, now, action);
+        if (req.method === 'POST' && action === 'bestill') return await schoolOrder(req, env, school, now);
+      }
       if (url.pathname.startsWith('/admin/')) {
         if (!isAdmin(req, env)) return json({ error: 'nei' }, 401);
         if (req.method === 'POST' && url.pathname === '/admin/koder') return await createCodes(req, env, now);
@@ -266,6 +448,10 @@ export default {
         if (req.method === 'GET' && url.pathname === '/admin/tur') return await getTrip(url, env);
         if (req.method === 'POST' && url.pathname === '/admin/slett-tur') return await deleteTrips(req, env);
         if (req.method === 'GET' && url.pathname === '/admin/pluss') return await plusSummary(env, now);
+        if (req.method === 'POST' && url.pathname === '/admin/skole') return await adminNewSchool(req, env, now);
+        if (req.method === 'POST' && url.pathname === '/admin/skole/pakke') return await adminSchoolPack(req, env, now);
+        if (req.method === 'POST' && url.pathname === '/admin/skole/ny-lenke') return await adminNewLink(req, env);
+        if (req.method === 'GET' && url.pathname === '/admin/skoler') return await adminSchools(env, now);
       }
       if (url.pathname === '/') return json({ tjeneste: 'Kjørerapport skolekoder', ok: true });
       return json({ error: 'finnes ikke' }, 404);

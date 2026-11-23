@@ -1,7 +1,7 @@
 /* Skolekoder (0.27.0): serveren (server/skolekoder/worker.js) og kontrollen i appen (js/skolekode.js) sammen */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { normalizeCode, formatCode, signPass } from '../server/skolekoder/worker.js';
+import worker, { normalizeCode, formatCode, signPass, schoolId } from '../server/skolekoder/worker.js';
 import { verifyPass, looksLikeCode, normalizeCode as appNormalize, PUBLIC_KEY, codeFromUrl, reportPlusUse } from '../js/skolekode.js';
 import { setSchoolPass, hasPlus, hasTheory, schoolPass } from '../js/plus.js';
 
@@ -238,4 +238,97 @@ test('appen melder Pluss-kjøpet høyst én gang i uka, bare når App Store sier
     globalThis.fetch = oldFetch;
     if (oldLS === undefined) delete globalThis.localStorage; else globalThis.localStorage = oldLS;
   }
+});
+
+/* Skolesiden (1.0.8): skolen deler ut tilganger fra en pakke, uten konto og uten elevnavn */
+const asSchool = (env, token, method, path, body, now = T0) => worker.fetch(new Request('https://koder.test' + path, { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: body ? JSON.stringify(body) : undefined }), env, {}, now);
+test('skolens id lages av navnet', () => {
+  assert.equal(schoolId('Trafikkskolen Øst AS'), 'trafikkskolen-ost-as');
+  assert.equal(schoolId('  Bærum Kjøreskole & Co '), 'baerum-kjoreskole-co');
+});
+
+test('skolesiden: pakken teller ned, eleven tar koden i bruk, og en ubrukt kode kan trekkes tilbake', async () => {
+  const { env, pub } = await setup();
+  assert.equal((await call(env, 'POST', '/admin/skole', { navn: 'Test Trafikkskole', antall: 2 })).status, 401, 'bare eieren lager skoler');
+  const made = await (await call(env, 'POST', '/admin/skole', { navn: 'Test Trafikkskole', antall: 2 }, { admin: true, now: T0 })).json();
+  assert.equal(made.id, 'test-trafikkskole');
+  assert.ok(made.token.length >= 40);
+  assert.equal((await call(env, 'POST', '/admin/skole', { navn: 'Test trafikkskole', antall: 5 }, { admin: true })).status, 409, 'samme navn to ganger');
+  assert.equal((await asSchool(env, 'feil-' + made.token, 'GET', '/v1/skole')).status, 401);
+  assert.equal((await asSchool(env, env.ADMIN_SECRET, 'GET', '/v1/skole')).status, 401, 'admin-hemmeligheten er ingen skolenøkkel');
+  assert.ok(!JSON.stringify(await env.CODES.get('skole:test-trafikkskole')).includes(made.token), 'nøkkelen lagres ikke i klartekst');
+
+  let o = await (await asSchool(env, made.token, 'GET', '/v1/skole')).json();
+  assert.deepEqual([o.navn, o.kjopt, o.brukt, o.ubrukt, o.igjen], ['Test Trafikkskole', 2, 0, 0, 2]);
+  const a = await (await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 1000)).json();
+  assert.ok(looksLikeCode(a.kode));
+  assert.equal(a.igjen, 1);
+  const b = await (await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 2000)).json();
+  assert.equal(b.igjen, 0);
+  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 3000)).status, 409, 'pakken er tom');
+  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 3000)).json();
+  assert.deepEqual([o.brukt, o.ubrukt, o.igjen, o.koder.length], [0, 2, 0, 2]);
+  assert.equal(o.koder[0].kode, b.kode, 'nyeste først');
+
+  // Eleven tar koden i bruk i appen, og beviset viser skolens navn
+  const act = await (await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1' }, { now: T0 + 86400000 })).json();
+  const p = await verifyPass(act.bevis, { install: 'elev-telefon-1', now: T0 + 86400000, key: pub });
+  assert.equal(p.s, 'Test Trafikkskole');
+  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 86400000)).json();
+  assert.deepEqual([o.brukt, o.ubrukt, o.igjen], [1, 1, 0]);
+  const ra = o.koder.find(k => k.kode === a.kode);
+  assert.equal(ra.telefoner, 1);
+  assert.ok(ra.til > ra.forst);
+
+  // Den andre eleven tok aldri koden i bruk: skolen trekker den tilbake og får tilgangen igjen
+  const back = await (await asSchool(env, made.token, 'POST', '/v1/skole/steng', { kode: b.kode })).json();
+  assert.equal(back.tilbake, true);
+  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: b.kode, install: 'elev-telefon-2' })).status, 410, 'en trukket kode virker ikke');
+  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/apne', { kode: b.kode })).status, 409, 'trukket kan ikke åpnes igjen');
+  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 86400000)).json();
+  assert.deepEqual([o.brukt, o.ubrukt, o.igjen], [1, 0, 1]);
+
+  // Ny telefon, steng og åpne igjen på en kode i bruk; tilgangen kommer ikke tilbake når en brukt kode stenges
+  await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1b' }, { now: T0 + 86400000 });
+  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1c' }, { now: T0 + 86400000 })).status, 409, 'to telefoner er brukt');
+  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/ny-telefon', { kode: a.kode })).status, 200);
+  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1c' }, { now: T0 + 86400000 })).status, 200, 'ny telefon virker');
+  const closed = await (await asSchool(env, made.token, 'POST', '/v1/skole/steng', { kode: a.kode })).json();
+  assert.equal(closed.tilbake, false);
+  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 86400000)).json();
+  assert.deepEqual([o.brukt, o.igjen], [1, 1], 'en stengt kode i bruk er fortsatt brukt');
+  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/apne', { kode: a.kode })).status, 200);
+
+  // En annen skole kan ikke røre koden
+  const other = await (await call(env, 'POST', '/admin/skole', { navn: 'Annen Skole', antall: 1 }, { admin: true })).json();
+  assert.equal((await asSchool(env, other.token, 'POST', '/v1/skole/steng', { kode: a.kode })).status, 404);
+  assert.equal((await (await asSchool(env, other.token, 'GET', '/v1/skole')).json()).koder.length, 0);
+
+  // Bestilling, ny pakke og ny lenke
+  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/bestill', { antall: 50 })).status, 200);
+  let all = await (await call(env, 'GET', '/admin/skoler', null, { admin: true, now: T0 + 86400000 })).json();
+  const mine = all.skoler.find(x => x.id === 'test-trafikkskole');
+  assert.deepEqual([mine.kjopt, mine.brukt, mine.ubrukt, mine.igjen, mine.bestillinger[0].antall], [2, 1, 0, 1, 50]);
+  await call(env, 'POST', '/admin/skole/pakke', { navn: 'Test Trafikkskole', antall: 50 }, { admin: true });
+  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 86400000)).json();
+  assert.deepEqual([o.kjopt, o.igjen, o.bestilt], [52, 51, null]);
+  const nl = await (await call(env, 'POST', '/admin/skole/ny-lenke', { id: 'test-trafikkskole' }, { admin: true })).json();
+  assert.equal((await asSchool(env, made.token, 'GET', '/v1/skole')).status, 401, 'den gamle lenken virker ikke lenger');
+  assert.equal((await asSchool(env, nl.token, 'GET', '/v1/skole')).status, 200);
+  // Eierens liste over koder viser også skolens koder (fakturagrunnlag)
+  const codes = await (await call(env, 'GET', '/admin/koder?skole=' + encodeURIComponent('Test Trafikkskole'), null, { admin: true })).json();
+  assert.equal(codes.koder.length, 2);
+});
+
+test('skolesiden ser nye koder med en gang, selv om listen hos Cloudflare ligger etter', async () => {
+  const { env } = await setup();
+  const made = await (await call(env, 'POST', '/admin/skole', { navn: 'Treg Liste', antall: 3 }, { admin: true })).json();
+  const list = env.CODES.list;
+  env.CODES.list = async o => (o.prefix === 'kode:' ? { keys: [], list_complete: true } : list(o));   // listen har ikke fått med seg noe ennå
+  await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0);
+  await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 1000);
+  const o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 2000)).json();
+  assert.deepEqual([o.ubrukt, o.igjen, o.koder.length], [2, 1, 2]);
+  await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 3000);
+  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 4000)).status, 409, 'pakken kan ikke overskrides mens listen henger etter');
 });

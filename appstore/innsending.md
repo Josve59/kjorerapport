@@ -59,6 +59,8 @@ Ett kjøp, **Non-Consumable**. Feltene står i README del 12:
 
 Ikke lag den gamle prøveperioden (`…pluss.trial14`). Appen har ingen prøveperiode lenger.
 
+Når appen er ute i App Store: be Claude legge App Store-lenken i `APP_STORE_URL` i `elev/elev.js` (1.0.8). Da får elevene fra trafikkskolene en knapp rett til appen i stedet for «søk etter Kjørerapport».
+
 Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet.
 
 ### 6. Last opp appen

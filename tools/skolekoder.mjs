@@ -15,6 +15,13 @@
    node tools/skolekoder.mjs pluss                         hvor mange telefoner hvert Pluss-kjøp brukes på (1.0.7):
                                                            viser om noen deler kjøpet. Ingenting stenges.
 
+   Skolesiden (1.0.8): skolen deler ut tilganger selv fra en pakke, på sin egen side.
+   node tools/skolekoder.mjs skole "Skolens navn" 100 [mnd] lager skolen med 100 tilganger og skriver ut lenken til
+                                                           skolens side (send den til skolen; den er skolens nøkkel)
+   node tools/skolekoder.mjs pakke "Skolens navn" 50       legger til 50 tilganger (etter betalt faktura)
+   node tools/skolekoder.mjs skoler                        alle skolene: kjøpt, i bruk, sendt, igjen og nye bestillinger
+   node tools/skolekoder.mjs ny-lenke "Skolens navn"       ny lenke til skolen; den gamle slutter å virke
+
    Serveren: KJ_KODE_URL (standard http://localhost:8787, den lokale serveren) eller .local-test/skolekoder/url.txt.
    Hemmelighetene ligger i .local-test/skolekoder/ (holdes utenfor git): privat.jwk.json og admin.txt. Ta vare på dem:
    uten den private nøkkelen kan ikke serveren lage bevis appen godtar, og en ny nøkkel krever en ny versjon av appen. */
@@ -97,6 +104,26 @@ if (cmd === 'nokler') {
   if (!hva) { console.log('Bruk: node tools/skolekoder.mjs slett-turer alle   (eller én NØKKEL fra «turer»)'); process.exit(1); }
   const r = await admin('POST', '/admin/slett-tur', hva === 'alle' ? { alle: true } : { nokkel: hva });
   console.log(`${r.slettet} ${r.slettet === 1 ? 'tur' : 'turer'} slettet på serveren.`);
+} else if (cmd === 'skole' || cmd === 'ny-lenke') {
+  const [navn, antall, maaneder = '12'] = args;
+  if (!navn || (cmd === 'skole' && antall === undefined)) { console.log(cmd === 'skole' ? 'Bruk: node tools/skolekoder.mjs skole "Skolens navn" 100 [måneder]' : 'Bruk: node tools/skolekoder.mjs ny-lenke "Skolens navn"'); process.exit(1); }
+  const r = cmd === 'skole' ? await admin('POST', '/admin/skole', { navn, antall: Number(antall), maaneder: Number(maaneder) }) : await admin('POST', '/admin/skole/ny-lenke', { navn });
+  const web = read('nettside-url.txt') || 'https://kjorerapport.jo-9fc.workers.dev';
+  console.log(cmd === 'skole' ? `${r.navn} er lagt inn med ${r.kjopt} tilganger (${r.maaneder} måneder fra eleven tar koden i bruk, ${r.maks} telefoner per kode).` : `${r.navn} har fått en ny lenke. Den gamle virker ikke lenger.`);
+  console.log('Lenken til skolens side (send den bare til skolen, den er skolens nøkkel):');
+  console.log(`${web}/skole/#${r.token}`);
+} else if (cmd === 'pakke') {
+  const [navn, antall] = args;
+  if (!navn || !antall) { console.log('Bruk: node tools/skolekoder.mjs pakke "Skolens navn" 50'); process.exit(1); }
+  const r = await admin('POST', '/admin/skole/pakke', { navn, antall: Number(antall) });
+  console.log(`${r.navn} har nå ${r.kjopt} tilganger totalt. Skolen ser det på siden sin med en gang.`);
+} else if (cmd === 'skoler') {
+  const { skoler } = await admin('GET', '/admin/skoler');
+  if (!skoler.length) { console.log('Ingen skoler med egen side ennå. Lag en med «skole "Navn" 100».'); process.exit(0); }
+  for (const s of skoler) {
+    console.log(`${s.navn}: ${s.kjopt} kjøpt, ${s.brukt} i bruk, ${s.ubrukt} sendt men ikke tatt i bruk, ${s.igjen} igjen`);
+    for (const b of s.bestillinger) console.log(`  BESTILLING: ${b.antall} tilganger, ${day(b.t)}. Send faktura, og kjør «pakke "${s.navn}" ${b.antall}» når den er betalt.`);
+  }
 } else if (cmd === 'pluss') {
   const r = await admin('GET', '/admin/pluss');
   if (!r.kjop) { console.log('Ingen Pluss-kjøp har meldt seg ennå (appen melder seg én gang i uka når Pluss er kjøpt).'); process.exit(0); }

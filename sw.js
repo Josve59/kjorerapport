@@ -1,6 +1,6 @@
 /* Service worker: alt forhåndslagres, så appen virker uten nett etter første lasting.
    Endre VERSION ved hver utgivelse, så gamle filer byttes ut. */
-const VERSION = 'v1.0.7';
+const VERSION = 'v1.0.8';
 const CACHE = 'kjorerapport-' + VERSION;
 const ML_CACHE = 'kjorerapport-ml';   // ansiktsgjenkjenningen, beholdes mellom versjoner
 const ASSETS = [
@@ -46,6 +46,8 @@ self.addEventListener('fetch', e => {
   }
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (url.pathname.includes('/kamera/')) return;   // kamera-testversjonen har sin egen service worker
+  // Skolesiden og elevsiden (1.0.8) hentes alltid fra nettet, så skolene får rettelser med en gang
+  if (url.pathname.includes('/skole/') || url.pathname.includes('/elev/') || url.pathname.endsWith('/css/side.css')) return;
   /* Ansiktsgjenkjenningen (rundt 13 MB) lastes først når kameraet brukes, og lagres da for bruk uten nett */
   // Modellene: ansiktsgjenkjenningen, og bilgjenkjenningen for veikameraet i nettversjonen (0.17.0)
   if (url.pathname.includes('/vendor/mediapipe/') || url.pathname.includes('/vendor/dfine/') || url.pathname.includes('/vendor/ort/')) {

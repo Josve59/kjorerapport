@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Elevsiden (1.0.8): lenken trafikkskolen sender på SMS (…/elev/?kode=…&fra=Skolen). Viser koden og hvordan eleven
+       kommer i gang på iPhone (appen) og Android (nettversjonen, låst opp av koden). -->
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Kjørerapport Pluss fra trafikkskolen</title>
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/side.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <header class="topbar">
+    <a class="brand" href="../trafikkskole/"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
+  </header>
+  <main class="portal" id="app">
+    <section class="sign-card">
+      <p class="eyebrow" id="from" hidden></p>
+      <h1>Du har fått Kjørerapport Pluss</h1>
+      <p>Hele teorien med forklaringer, prøver som den ekte, sikkerhetskontrollen og en rapport etter hver øvelsestur.</p>
+      <p class="muted small" style="margin:16px 0 0">Koden din</p>
+      <p class="code" id="code">–</p>
+      <button type="button" class="btn yellow" id="copy">Kopier koden</button>
+    </section>
+
+    <section class="card" id="ios">
+      <h2>Med iPhone</h2>
+      <ol class="steps">
+        <li id="ios-store">Last ned <strong>Kjørerapport</strong> fra App Store.</li>
+        <li>Åpne appen, trykk på tannhjulet og velg «Kjørerapport Pluss».</li>
+        <li>Trykk «Kode fra trafikkskolen» og lim inn koden.</li>
+      </ol>
+    </section>
+
+    <section class="card" id="android">
+      <h2>Med Android eller PC</h2>
+      <p>Kjørerapport finnes som nettside. Trykk på knappen, så er alt låst opp.</p>
+      <a class="btn primary" id="web" href="../">Åpne Kjørerapport</a>
+      <p class="muted small" style="margin-top:12px">Legg siden til på Hjem-skjermen, så åpnes den som en app.</p>
+    </section>
+
+    <p class="muted small" id="terms">Koden virker på to telefoner i 12 måneder fra du tar den i bruk. Ikke del den med andre.</p>
+  </main>
+</div>
+<footer><div class="wrap narrow"><span>© 2026 Svendsen Media</span><a href="../personvern/">Personvern</a></div></footer>
+<script type="module" src="elev.js"></script>
+</body>
+</html>

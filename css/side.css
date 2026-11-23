@@ -110,3 +110,52 @@ footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; g
 .doc details.license .license-text p { margin: 0 0 10px; }
 .doc ul.credits { list-style: none; padding: 0; }
 .doc ul.credits li { padding: 12px 0; border-bottom: 1px solid var(--line); margin: 0; }
+
+/* Skolesiden og elevsiden (1.0.8): skolen deler ut elevtilganger, eleven får koden sin. Som i appen: ett blått
+   skiltkort per side (det viktigste), og gult bare for den ene hovedhandlingen. */
+:root { --brand: #0b4cb4; --brand-2: #083b8f; --primary: #f5c518; --on-primary: #0f1a2b; --warn-bg: #fff6d6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --brand: #0e45a8; --brand-2: #0a347f; --warn-bg: #2a2410; } }
+:root[data-theme="dark"] { --brand: #0e45a8; --brand-2: #0a347f; --warn-bg: #2a2410; }
+.sign-card { position: relative; isolation: isolate; color: #fff; background: linear-gradient(160deg, var(--brand) 0%, var(--brand-2) 100%); border-radius: 22px; padding: 24px 22px 20px; margin: 0 0 16px; box-shadow: 0 12px 30px color-mix(in srgb, var(--brand) 30%, transparent); }
+.sign-card::before { content: ''; position: absolute; inset: 6px; z-index: -1; border: 2px solid rgba(255, 255, 255, .88); border-radius: 17px; pointer-events: none; }
+.sign-card .eyebrow, .sign-card .muted { color: #d3e0f7; }
+.sign-card h1 { font-size: clamp(1.7rem, 6vw, 2.3rem); }
+@media (prefers-contrast: more) { .sign-card .eyebrow, .sign-card .muted { color: #fff; } .sign-card::before { border-color: #fff; } }
+.btn.yellow { background: var(--primary); color: var(--on-primary); }
+.btn.wide { width: 100%; }
+.btn.small { min-height: 44px; padding: 8px 14px; font-size: 0.95rem; }
+.btn:disabled { opacity: .5; cursor: default; filter: none; }
+.btn:focus-visible, .linkbtn:focus-visible, .seg button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--accel); outline-offset: 2px; }
+.big-num { font-size: clamp(3.2rem, 15vw, 4.6rem); font-weight: 800; line-height: 1; letter-spacing: -0.03em; margin: 4px 0 2px; }
+.meter { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, .22); overflow: hidden; margin: 16px 0 10px; }
+.meter > span { display: block; height: 100%; background: var(--primary); border-radius: 5px; }
+.stats { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; padding: 0; list-style: none; font-size: 0.95rem; }
+.code { font: 700 1.45rem/1.25 ui-monospace, 'SF Mono', Menlo, Consolas, monospace; letter-spacing: .04em; overflow-wrap: anywhere; }
+.portal > section:not(.sign-card) { margin-top: 28px; }
+.portal h2 { font-size: 1.35rem; }
+.notice { background: var(--warn-bg); border-radius: var(--radius); padding: 12px 16px; margin: 12px 0; }
+.msg { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0 14px; font-size: 0.95rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0 14px; }
+.filters input { flex: 1 1 180px; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { min-height: 40px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 0.92rem; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
+.row-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.row-top .code { font-size: 1.1rem; }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; border: 1px solid currentColor; }
+.pill.ok { color: var(--good); }
+.pill.wait { color: var(--muted); }
+.pill.off { color: var(--brake); }
+.rows .meta { margin: 6px 0 10px; color: var(--muted); font-size: 0.92rem; }
+.rows .actions:empty { display: none; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accel); font: inherit; text-decoration: underline; cursor: pointer; }
+.steps { padding-left: 22px; margin: 0 0 12px; }
+.steps li { margin-bottom: 8px; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100vw - 32px); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-weight: 700; z-index: 10; }
+dialog.ask { border: 0; border-radius: 18px; padding: 22px; max-width: min(420px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); }
+dialog.ask::backdrop { background: rgba(8, 13, 23, .5); }
+dialog.ask .actions { justify-content: flex-end; margin-top: 16px; }
+select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; }

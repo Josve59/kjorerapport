@@ -31,6 +31,15 @@ Til App Store-personvernet: «Identifikatorer – enhets-ID», ikke knyttet til 
 **Gir hele Pluss**
 En gyldig kode gir hele Pluss. Det gjelder også teorien i nettversjonen, som elever med Android bruker.
 
+**Skolesiden (1.0.8)**
+Trafikkskolen kjøper en pakke med elevtilganger og deler dem ut selv på sin egen side, `…/skole/#nøkkel` (`skole/index.html`, `skole/skole.js`):
+- Ingen konto. Lenken er skolens nøkkel. Den står etter «#», så den sendes aldri til nettstedet, bare til kodeserveren. Serveren lagrer bare SHA-256 av nøkkelen.
+- «Gi en elev tilgang» lager en kode og en ferdig SMS med lenke til elevsiden (`elev/index.html`). Elevsiden viser koden og hvordan eleven kommer i gang på iPhone (appen) og Android (nettversjonen, låst opp av `?kode=`).
+- En tilgang er opptatt fra skolen deler den ut. Tar eleven den aldri i bruk, kan skolen trekke den tilbake, og den kommer tilbake i pakken. «Ny telefon» og «Steng» som i eierens verktøy.
+- «Bestill flere» åpner skolens e-post med bestillingen ferdig skrevet, og bestillingen lagres også på serveren, så den vises i `skoler`.
+- Ingen elevnavn lagres. Skolen skriver koden i sitt eget elevsystem om den vil vite hvem som har hvilken.
+- Cloudflares liste over nøkler kan ligge opptil et minutt etter. Koder skolen har rørt de siste fem minuttene, leses derfor direkte (`nylig` i skolens post), så tallene stemmer med en gang og pakken ikke kan overskrides.
+
 **Telling av Pluss-kjøp (1.0.7)**
 Pluss kjøpes per person i App Store, uten Familiedeling. For å se om kjøp deles på mange telefoner, melder iPhone-appen seg høyst én gang i uka (`POST /v1/pluss`):
 - med et anonymt kjøpsnummer: SHA-256 av Apples kjøps-ID, laget på telefonen (`PlusStore.swift`). Serveren kan ikke finne kjøpet hos Apple eller vite hvem som kjøpte;
@@ -89,7 +98,13 @@ node tools/skolekoder.mjs nullstill K7MX-29QF-H4TA          # eleven har brukt b
 node tools/skolekoder.mjs lag "Testgruppe" 1 3 25            # én felles testlenke: 3 måneder, høyst 25 telefoner
 node tools/skolekoder.mjs apne K7MX-29QF-H4TA               # angrer «steng»: koden virker igjen
 node tools/skolekoder.mjs pluss                             # hvor mange telefoner hvert Pluss-kjøp brukes på
+node tools/skolekoder.mjs skole "Trafikkskolen AS" 100      # skolens side med 100 tilganger; skriver ut lenken til skolen
+node tools/skolekoder.mjs skoler                            # alle skolene: kjøpt, i bruk, sendt, igjen og nye bestillinger
+node tools/skolekoder.mjs pakke "Trafikkskolen AS" 50       # 50 nye tilganger etter betalt faktura
+node tools/skolekoder.mjs ny-lenke "Trafikkskolen AS"       # lenken har kommet på avveie: ny lenke, den gamle slutter å virke
 ```
+
+**Ny skole, steg for steg:** skolen bestiller → send faktura → når den er betalt: `skole "Navn" 100` → send lenken til skolen (e-post til den som har ansvaret). Senere bestillinger kommer på e-post og vises i `skoler`; når fakturaen er betalt: `pakke "Navn" 50`.
 
 **Testlenke (0.27.4):** `https://kjorerapport.jo-9fc.workers.dev/?kode=KODE` låser opp Pluss av seg selv i nettversjonen. En kode kan gjelde høyst 50 telefoner; elevkoder er 2 som før.
 
