@@ -4,7 +4,7 @@
    I Safari bare førerkameraet, som før. Ingen bilder lagres eller sendes – bare vinkler og tall om veien går videre. */
 import { poseFromMatrix, eyesFromBlendshapes } from './camera.js';
 import { processDetections, detectTaillights, roadDets, focalPx, onRoad as onRoadArea, VEHICLE_WIDTH } from './road.js';
-import { detectLanes, toGray, rowMeans, dashLine, scaleLane, LANE_WIDTH, createLaneTracker, laneGamma, roadEdgeLines } from './lanes.js';
+import { detectLanes, toGray, rowMeans, dashLine, scaleLane, LANE_WIDTH, createLaneTracker, laneGamma, roadEdgeLines, roadSpan } from './lanes.js';
 import { createTracker } from './track.js';
 import { matchShift } from './flow.js';
 import { readSigns, signTracker, signAhead } from './signs.js';
@@ -437,9 +437,12 @@ function roadTick() {
     // linjene over på den enkle bildeanalysen i et par bilder. Det samme svaret regnes heller ikke ut på nytt.
     const ml = mlLanes && mlLanes.w > 0 && Math.abs(mlLanes.h / mlLanes.w - vh / vw) < 0.02 && performance.now() - mlLanes.at < 1500 ? mlLanes : null;
     const fresh = !ml || ml.at !== laneAnsAt || !laneRaw || laneRawW !== W;
+    // Linjene slutter der panseret begynner (1.0.5), ikke ved dashbordkanten under det
+    const span = ml ? roadSpan(scaleRoad(ml.road, W / ml.w), W) : null;
+    const bottom = span && Number.isFinite(span.hood) ? Math.max(base.top + 0.08, Math.min(base.bottom, (span.hood - 2) / H)) : base.bottom;
     if (fresh) {
       const points = ml ? mlPoints(ml, W / ml.w, W) : null;
-      laneRaw = detectLanes(gray, W, H, { ...base, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
+      laneRaw = detectLanes(gray, W, H, { ...base, bottom, curve: true, far: base.horizon + 0.04, kappa: shape.kappa, kappaWeight: shape.kappaWeight,
         focal: focalPx(W, H), camH: camHEst, laneWidth: laneW, predict: true, prev, points });
       laneRaw.ml = !!points; laneRawW = W; laneAnsAt = ml ? ml.at : performance.now();
     }
@@ -452,7 +455,7 @@ function roadTick() {
     // midten av veien (feltet vårt er høyre halvdel). Telles ikke som sette linjer, og gir ikke sideavvik.
     let edge = false;
     if (ml && !painted(ln.left) && !painted(ln.right)) {
-      const e = roadEdgeLines(scaleRoad(ml.road, W / ml.w), W, { vh: base.horizon * H, yBottom: base.bottom * H });
+      const e = roadEdgeLines(scaleRoad(ml.road, W / ml.w), W, { vh: base.horizon * H, yBottom: bottom * H });
       if (e.right) { ln.left = e.left; ln.right = e.right; edge = true; }
     }
     // En linje som bæres etter feltbredden mens den er borte (carried, 0.13.9), vises, men lagres ikke som sett
@@ -493,8 +496,11 @@ function roadTick() {
    høyre, …]. Et punkt mer enn 6 % av bredden utenfor veien foran på samme høyde droppes. */
 function mlPoints(ml, k, W) {
   const road = scaleRoad(ml.road, k), m = W * 0.06, out = [];
+  // 1.0.5: punkter over veien (takkanter, lys, trær) eller på panseret tas heller ikke med
+  const span = roadSpan(road, W);
   for (let i = 0; i + 1 < ml.pts.length; i += 2) {
     const x = ml.pts[i] * k, y = ml.pts[i + 1] * k;
+    if (span && (y < span.top - 3 || y > span.hood - 2)) continue;
     let e = null, best = Infinity;
     for (const r of road) { const d = Math.abs(r[0] - y); if (d < best) { best = d; e = r; } }
     if (e && best < 6 && (x < e[1] - m || x > e[2] + m)) continue;

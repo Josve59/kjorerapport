@@ -309,6 +309,24 @@ function stretchDark(gray, w, y0, y1) {
   return out;
 }
 
+/* Hvor veien modellen ser begynner og slutter i bildet (1.0.5): øverste rad, og raden der panseret begynner (veien
+   blir smalere igjen nederst). Feltlinjer kan ikke ligge over veien eller på panseret. Veibildene fra turen 22. nov.
+   kl. 21.30 viste linjer fra en takkant (over veien) og linjer tegnet ned over panseret: telefonen står lavt, og
+   dashbordkanten appen finner ligger under panseret. road: [[y, venstre, høyre], …]. Svarer { top, hood } eller null. */
+export function roadSpan(road, w) {
+  if (!road || road.length < 6) return null;
+  const rows = road.slice().sort((a, b) => a[0] - b[0]);
+  const yTop = rows[0][0], yEnd = rows[rows.length - 1][0];
+  let widest = 0, hood = Infinity;
+  for (const [y, a, b] of rows) {
+    const s = b - a;
+    if (s > widest) widest = s;
+    // Bare i nedre del av veien: midt i bildet kan en sving eller en bil gjøre veien smalere
+    else if (widest > w * 0.25 && s < 0.8 * widest && y > yTop + 0.6 * (yEnd - yTop)) { hood = y; break; }
+  }
+  return { top: yTop, hood };
+}
+
 /* Veikanten når veien ikke har oppmalte linjer (0.13.3). På smale veier uten gode markeringer fant appen ingen linjer,
    mens feltmodellen ser veien (det blå feltet). Feltet vårt er da høyre halvdel av veien: høyre veikant og midten.
    road: [[y, venstre, høyre], …] fra feltmodellen i analysebildets piksler. vh: horisonten (rad), yBottom: nederste

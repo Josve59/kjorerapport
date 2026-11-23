@@ -143,6 +143,22 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.5 – a lane model trained on the owner's Norwegian winter roads
+
+- **New lane model `n3`** (`ios/Models/Lanes.mlmodelc`, details in `ios/Models/README.md`): `n2` fine-tuned on 286 of the owner's own road pictures from the drive of 22 Nov at 21:30. That drive was after dark, on winter roads with salt, snow and wet asphalt. The pictures were saved by the test build (1.0.4) and labelled by the owner on the new labelling page.
+  - On held-out pictures it finds 77 % of the lines against 52 % with `n2`, and is right 70 % of the time against 75 %. On comma10k and A2D2 it is within 0.01–0.02 of `n2`.
+  - Through the app's own line fit on that drive's 714 pictures, both lines are seen in 593 pictures against 246, and no line in 23 against 137. That is optimistic: the training pictures are among them.
+  - Exports show it as «TwinLiteNet+ n3».
+  - Still wrong: snow-covered car parks and roads, where lines follow tyre tracks.
+- **Lane points above the road or on the bonnet are dropped** (`roadSpan` in `js/lanes.js`, used in `js/facecam.js`). The lines end where the bonnet starts, not at the dashboard edge below it.
+  - The road pictures showed a line extended up past where the road ends (over a roof), and lines drawn down over the bonnet: the phone sits low.
+  - On the 714 pictures with `n2`, both lines were found in 251 pictures against 239.
+- **Labelling page and training (developer tools, not in the app):**
+  - `tools/merk/`: proposals from the lane model, a local page to correct them, and `Start merkesiden.command`.
+  - `ios/Models/lanes-train/finetune_norge.py` and `eval_norge.py`.
+  - The pictures and labels stay in `.local-test/`.
+- **Tested:** 304 tests; Core ML against PyTorch 99.996 % the same lane pixels. **Not tested:** a drive with `n3`.
+
 ## What's new in 1.0.4 – no speed camera warnings, and road pictures for model training
 
 - **Speed camera warnings removed (owner's decision, 22 Nov):** the yellow notice and the big card on the driving screen, the sounds, the two switches in Settings, the «Fotoboks i X km/t» and «Strekningsmåling» situations in the report, and the speed cameras in «Langs veien». Speed cameras and section control are no longer fetched from NVDB, during the drive or for the report (`liveatk.js`, `fetchAtkBox`, `createAtkSounds` and their tests are gone). Old drives keep the data, but it is not shown. The help, privacy, licence and driving-school pages no longer mention them. The same in the camera test app (`kamera/`, k0.7.15). The sign «Automatisk trafikkontroll» stays in the theory.

@@ -1,6 +1,6 @@
 [
   {
-    "shortDescription" : "TwinLiteNet+ large (MIT, chequanghuy\/TwinLiteNetPlus), test weights n2 (see ios\/Models\/README.md). Input 640x384 RGB. Outputs lanes, road [1,1,384,640]: >0 = lane line \/ road.",
+    "shortDescription" : "TwinLiteNet+ large (MIT, chequanghuy\/TwinLiteNetPlus), test weights n3 (see ios\/Models\/README.md). Input 640x384 RGB. Outputs lanes, road [1,1,384,640]: >0 = lane line \/ road.",
     "metadataOutputVersion" : "3.0",
     "outputSchema" : [
       {
@@ -24,7 +24,7 @@
         "type" : "MultiArray"
       }
     ],
-    "version" : "n2",
+    "version" : "n3",
     "modelParameters" : [
 
     ],
@@ -84,7 +84,7 @@
       }
     ],
     "userDefinedMetadata" : {
-      "com.github.apple.coremltools.conversion_date" : "2026-11-11",
+      "com.github.apple.coremltools.conversion_date" : "2026-11-23",
       "com.github.apple.coremltools.source" : "torch==2.8.0",
       "com.github.apple.coremltools.version" : "9.0",
       "com.github.apple.coremltools.source_dialect" : "TorchScript"
