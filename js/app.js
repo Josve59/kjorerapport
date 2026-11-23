@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.11';
+export const APP_VERSION = '1.0.12';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -2204,8 +2204,11 @@ async function startRecording(replay = null) {
         const res = live.update(st.pos && { ...st.pos, acc: st.acc });   // GPS-ens usikkerhet: veien bilen er på, holdes (0.13.1)
         // Skilt fra veikameraet (midlertidige og digitale skilt) går foran NVDB til neste skilt, 3 km eller ny NVDB-strekning
         // 0.13.9: skiltet gjelder fra der det står (ahead = avstanden da det ble lest), ikke fra der kameraet leste det
-        if (camSignNew) { camLimit.sign(camSignNew.limit, st.distanceM, res.limit, camSignNew.ahead); liveLog.push({ t: Math.round(st.elapsed), limit: camSignNew.limit, src: 'kamera', ...(camSignNew.ahead ? { ahead: camSignNew.ahead } : {}) }); camSignNew = null; }
-        const cl = camLimit.current(st.distanceM, res.limit);
+        // 1.0.12: kursen tas med, så et skilt bilen svinger bort fra før den passerer det, slippes (GPS-kursen er bare til å stole på i fart)
+        const b0 = recorder && recorder.lastFix ? recorder.lastFix.bearing : NaN;
+        const brg = st.kmh >= 8 && Number.isFinite(b0) && b0 >= 0 ? b0 : NaN;
+        if (camSignNew) { camLimit.sign(camSignNew.limit, st.distanceM, res.limit, camSignNew.ahead, brg); liveLog.push({ t: Math.round(st.elapsed), limit: camSignNew.limit, src: 'kamera', ...(camSignNew.ahead ? { ahead: camSignNew.ahead } : {}) }); camSignNew = null; }
+        const cl = camLimit.current(st.distanceM, res.limit, brg);
         const lim = cl ? cl.limit : res.limit;
         liveLimitNow = lim;
         limitSign.textContent = lim ?? '–';

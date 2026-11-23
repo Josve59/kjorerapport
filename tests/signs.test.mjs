@@ -135,3 +135,46 @@ test('0.22.1: et skilt kartet bekreftet, slippes når kartet viser høyere grens
   assert.equal(low.current(300, 50).limit, 50);
   assert.equal(low.current(340, 30).limit, 50, 'lavere i kartet: venter som før');
 });
+
+test('1.0.12: et skilt bilen svinger bort fra før den passerer det, slippes når kartet viser noe annet', () => {
+  // Turen 23. nov.: 30-skilt lest 18 m foran ved et kryss der kartet var ukjent, så venstresving inn på en 50-vei
+  const cl = createCamLimit();
+  cl.sign(30, 1000, null, 18, 321);
+  assert.equal(cl.current(1010, null, NaN), null, 'bilen står: skiltet er ikke nådd ennå');
+  assert.equal(cl.current(1020, null, 304).limit, 30, 'ved skiltet, ingen sving ennå');
+  assert.equal(cl.current(1030, null, 234).limit, 30, 'svinger, men kartet er fortsatt ukjent');
+  assert.equal(cl.current(1045, 50, 221).limit, 30, 'kartet viser 50 akkurat nå');
+  assert.equal(cl.current(1056, 50, 221), null, '10 m med 50 i kartet etter svingen: skiltet slippes');
+  // Samme sving, men kartet viser det samme som skiltet: holdes
+  const same = createCamLimit();
+  same.sign(30, 0, null, 18, 321);
+  same.current(30, 30, 222);
+  assert.equal(same.current(80, 30, 222).limit, 30);
+  // Sving uten kart: holdes, det er det eneste vi vet
+  const none = createCamLimit();
+  none.sign(30, 0, null, 18, 321);
+  none.current(30, null, 222);
+  assert.equal(none.current(200, null, 222).limit, 30);
+  // En sving lenger enn 50 m etter skiltet er vanlig kjøring på samme vei: holdes som før
+  const curve = createCamLimit();
+  curve.sign(50, 0, 80, 18, 10);
+  curve.current(18, 80, 10);
+  assert.equal(curve.current(120, 80, 100).limit, 50, 'midlertidig skilt i 80-sone, kurve etter 100 m');
+  // Uten kurs (eldre kall) virker det som før
+  const old = createCamLimit();
+  old.sign(30, 0, null, 18);
+  old.current(30, 50);
+  assert.equal(old.current(60, 50).limit, 30);
+});
+
+test('1.0.12: rapportens skiltlag regner kursen fra punktene', () => {
+  // Rett nordover 100 m, så rett vestover; skiltet (30) leses 18 m før svingen, kartet sier 50 etter svingen
+  const pts = [];
+  for (let i = 0; i <= 10; i++) pts.push({ t: i, lat: 63 + (i * 10) / 111195, lon: 10 });
+  const c = Math.cos(63.0009 * Math.PI / 180);
+  for (let i = 1; i <= 20; i++) pts.push({ t: 10 + i, lat: pts[10].lat, lon: 10 - (i * 10) / (111195 * c) });
+  const limits = pts.map((p, i) => (i <= 10 ? null : 50));
+  const o = overlayCamSigns(pts, limits, [{ t: 9, limit: 30, ahead: 18 }]);
+  const last30 = o.cam.length ? o.cam[o.cam.length - 1][1] : -1;
+  assert.ok(last30 < 14, `30 skal slutte rett etter svingen, sluttet på punkt ${last30}`);
+});

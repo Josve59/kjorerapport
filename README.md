@@ -143,6 +143,32 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.12 – a sign for the road straight on no longer follows a turn
+
+From the drive on 23 November at 19.33 (1.0.11, 53 min, 38.8 km):
+
+- **What happened:**
+  - The car stopped at a junction where the map had no limit.
+  - The camera read a 30 sign 18 m ahead.
+  - The car then turned left (heading 320° → 222°) onto a road the map knows as 50.
+  - Because the map was unknown at the sign, the first map value after it (50) was taken as the value «at the sign». So the change was never seen, and 30 held for 300 m.
+  - Result: two false speed warnings (38 and 41 km/h «in a 30 zone», 17 s together).
+- **The rule (`createCamLimit` in `js/signs.js`):**
+  - `sign()` and `current()` take the heading.
+  - If the car turns more than 60° before it is 50 m past the sign, the sign probably belonged to the road straight on. It is dropped once the map has shown a different limit for 10 m.
+  - If the map shows nothing, or the same limit, the sign holds as before.
+- **Where the heading comes from:**
+  - In the app, from GPS, only at 8 km/h or more.
+  - In the report after the drive (`overlayCamSigns`), from the points once the car has moved 8 m.
+  - In `tools/turrapport.mjs`, as in the app.
+- **Checked on drives:**
+  - On this drive, the warnings go from 19 to 17, and the two false ones are gone. In the report's sign layer the 30 now ends at 27:18 instead of 27:48.
+  - Seven older drives (19–22 Nov) give exactly the same speed warnings as before.
+- **Also seen in the drive, no change needed:**
+  - Lane lines: model n3 sees both lines in 82 % of frames (n2 on 22 Nov: 30 %), and they flip 15 times a minute (25–46 before).
+  - Face found in 96 % of frames.
+  - The phone was «varm» 89 % of the time, as on earlier drives (heat is still an open item).
+
 ## What's new in 1.0.11 – the school price is not on the website
 
 The owner (23 November) wants the price per pupil for driving schools agreed with each school, so ordinary visitors don't see what schools pay.

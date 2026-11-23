@@ -117,11 +117,13 @@ function speedWarnings(loc, liveLimits) {
   for (const p of loc) {
     if (lastFix && Number.isFinite(p.acc) && p.acc <= 50) dist += haversine(lastFix, p);
     if (Number.isFinite(p.acc) && p.acc <= 50) lastFix = p;
+    const kmh0 = Number.isFinite(p.speed) ? p.speed * 3.6 : NaN;
+    const brg = kmh0 >= 8 && Number.isFinite(p.bearing) && p.bearing >= 0 ? p.bearing : NaN;   // som i appen (1.0.12)
     while (li < limits.length && limits[li].t <= p.t) {
       const x = limits[li++];
-      if (x.src === 'kamera') cam.sign(x.limit, dist, nvdb, x.ahead); else nvdb = x.limit;   // ahead fra 0.13.9: skiltet gjelder fra der det står
+      if (x.src === 'kamera') cam.sign(x.limit, dist, nvdb, x.ahead, brg); else nvdb = x.limit;   // ahead fra 0.13.9: skiltet gjelder fra der det står
     }
-    const cl = cam.current(dist, nvdb);
+    const cl = cam.current(dist, nvdb, brg);
     const limit = cl ? cl.limit : nvdb;
     const kmh = Number.isFinite(p.speed) && p.speed >= 0 ? p.speed * 3.6 : NaN;
     // Henstand når kartet alene senker grensen (0.13.11); KJ_NOGRACE=1 regner som før, til sammenligning

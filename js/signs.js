@@ -245,18 +245,31 @@ export function signTracker({ maxGap = 900, minReads = 3, minShare = 0.6 } = {})
    0.22.1, etter turen 16. nov. kl. 19.18: et 50-skilt som kartet bekreftet, gjaldt fortsatt 100 m inn på en 80-vei
    etter en rundkjøring, og skjermen viste rød kant for 62 km/t «i 50-sone». Har kartet bekreftet skiltet, er det
    kartets strekning skiltet hører til. Viser kartet så en høyere grense i upStableM, er bilen på en ny vei og
-   skiltet slippes. Skilt kartet ikke har bekreftet (midlertidige og digitale), holdes som før. */
-export function createCamLimit({ maxM = 3000, nvdbM = 150, stableM = 100, upM = 300, upStableM = 30 } = {}) {
+   skiltet slippes. Skilt kartet ikke har bekreftet (midlertidige og digitale), holdes som før.
+   1.0.12, etter turen 23. nov. kl. 19.33: bilen stanset ved et kryss, kameraet leste et 30-skilt 18 m foran, og bilen
+   svingte så til venstre inn på en 50-vei. Kartet var ukjent ved skiltet, så 50 ble tatt som kartets verdi «ved
+   skiltet», og 30 gjaldt i 300 m med fartsvarsel for 41 km/t. Nå tas kursen med (bearing, grader, NaN når bilen
+   står): svinger bilen mer enn turnDeg før den er turnM forbi skiltet, hørte skiltet trolig til veien rett fram.
+   Det slippes når kartet så viser en annen grense i offM. Viser kartet ingenting, eller det samme, holdes det. */
+export function createCamLimit({ maxM = 3000, nvdbM = 150, stableM = 100, upM = 300, upStableM = 30, turnDeg = 60, turnM = 50, offM = 10 } = {}) {
   let cam = null, next = null;
-  const sign = (limit, distM, nvdb, aheadM = 0) => {
+  const sign = (limit, distM, nvdb, aheadM = 0, bearing = NaN) => {
     const ahead = Number.isFinite(aheadM) && aheadM > 0 ? aheadM : 0;
-    const x = { limit, d0: distM + ahead, nvdb0: nvdb, chg: null, agreed: false };
+    const x = { limit, d0: distM + ahead, nvdb0: nvdb, chg: null, agreed: false, brg: Number.isFinite(bearing) ? bearing : null, turned: false, off: null };
     if (ahead > 0) next = x; else { cam = x; next = null; }
   };
-  const current = (distM, nvdb) => {
+  const turn = (x, distM, bearing) => {
+    if (x.turned || x.brg === null || !Number.isFinite(bearing) || distM > x.d0 + turnM) return;
+    if (Math.abs((((bearing - x.brg) % 360) + 540) % 360 - 180) > turnDeg) x.turned = true;
+  };
+  const current = (distM, nvdb, bearing = NaN) => {
+    if (next) turn(next, distM, bearing);
     if (next && distM >= next.d0) { cam = next; next = null; }
     if (!cam) return null;
+    turn(cam, distM, bearing);
     const since = distM - cam.d0, known = Number.isFinite(nvdb);
+    if (cam.turned && known && nvdb !== cam.limit) { if (cam.off === null) cam.off = distM; } else cam.off = null;
+    if (cam.off !== null && distM - cam.off >= offM) { cam = null; return null; }
     // Skiltet sett der NVDB ennå ikke var kjent: husk første kjente verdi
     if (!Number.isFinite(cam.nvdb0) && known) cam.nvdb0 = nvdb;
     if (known && nvdb === cam.limit) cam.agreed = true;
@@ -288,14 +301,22 @@ export function overlayCamSigns(points, limits, signs, opts) {
   const list = (signs || []).filter(x => x && Number.isFinite(x.t) && Number.isFinite(x.limit)).sort((a, b) => a.t - b.t);
   if (!list.length) return { limits: out, cam: runs };
   const rad = Math.PI / 180;
-  let dist = 0, si = 0, run = null;
+  let dist = 0, si = 0, run = null, ref = null, brg = NaN;
   for (let i = 0; i < points.length; i++) {
     const p = points[i], q = points[i - 1];
     if (q && Number.isFinite(p.lat) && Number.isFinite(q.lat)) dist += Math.hypot((p.lat - q.lat) * 111195, (p.lon - q.lon) * 111195 * Math.cos(p.lat * rad));
+    // Kursen fra punktene (1.0.12): regnes først når bilen har flyttet seg 8 m, så GPS-støy i ro ikke gir en sving
+    if (Number.isFinite(p.lat)) {
+      if (!ref) ref = p;
+      else {
+        const dy = (p.lat - ref.lat) * 111195, dx = (p.lon - ref.lon) * 111195 * Math.cos(p.lat * rad);
+        if (Math.hypot(dx, dy) >= 8) { brg = (Math.atan2(dx, dy) / rad + 360) % 360; ref = p; }
+      }
+    }
     const nv = Number.isFinite(limits[i]) ? limits[i] : null;
     // Eldre turer lagret ikke avstanden til skiltet: 25 m er vanlig leseavstand
-    while (si < list.length && list[si].t <= p.t) { const x = list[si++]; cam.sign(x.limit, dist, nv, Number.isFinite(x.ahead) ? x.ahead : 25); }
-    const cl = cam.current(dist, nv);
+    while (si < list.length && list[si].t <= p.t) { const x = list[si++]; cam.sign(x.limit, dist, nv, Number.isFinite(x.ahead) ? x.ahead : 25, brg); }
+    const cl = cam.current(dist, nv, brg);
     if (!cl || cl.agree) continue;
     out[i] = cl.limit;
     if (run && run[1] === i - 1 && run[2] === cl.limit) run[1] = i; else runs.push(run = [i, i, cl.limit]);
