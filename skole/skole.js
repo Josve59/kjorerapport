@@ -45,6 +45,9 @@ const FILTERS = [['alle', 'Alle'], ['i-bruk', 'I bruk'], ['ubrukt', 'Ikke tatt i
 const inFilter = (r, f) => { const st = statusOf(r); return f === 'alle' || (f === 'stengt' ? ['stengt', 'trukket', 'utlopt'].includes(st) : st === f); };
 const norm = s => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
 
+/* SMS-lenken (1.0.8): med elevens nummer åpnes Meldinger med både mottaker og tekst. Nummeret brukes bare her i skolens
+   nettleser; det lagres ikke og sendes ikke til serveren. «?&body=» virker på både iPhone og Android. */
+const smsHref = (num, body) => `sms:${String(num || '').replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '')}?&body=${encodeURIComponent(body)}`;
 const linkFor = kode => `${location.origin}/elev/?kode=${encodeURIComponent(kode)}&fra=${encodeURIComponent(data.navn)}`;
 const messageFor = kode => `Hei! ${data.navn} gir deg Kjørerapport Pluss: hele teorien med forklaringer, sikkerhetskontrollen og en rapport etter hver øvelsestur. Trykk her for å komme i gang: ${linkFor(kode)}`;
 
@@ -142,8 +145,10 @@ function render() {
       <p class="muted small" style="margin:0">Koden</p>
       <p class="code">${esc(fresh)}</p>
       <div class="msg">${esc(messageFor(fresh))}</div>
+      <label class="field" for="sms-to">Elevens mobilnummer <span class="muted small">(valgfritt, lagres ikke)</span>
+        <input type="tel" id="sms-to" inputmode="tel" autocomplete="off" placeholder="For eksempel 912 34 567"></label>
       <div class="actions">
-        <a class="btn yellow small" href="sms:?&body=${encodeURIComponent(messageFor(fresh))}">Send som SMS</a>
+        <a class="btn yellow small" id="sms-send" href="${smsHref('', messageFor(fresh))}">Send som SMS</a>
         <button type="button" class="btn secondary small" id="copy-msg">Kopier meldingen</button>
         <button type="button" class="btn secondary small" id="copy-code">Kopier koden</button>
       </div>
@@ -172,7 +177,7 @@ function render() {
       <details class="card"><summary><strong>Slik virker det</strong></summary>
         <ol class="steps" style="margin-top:12px">
           <li>Trykk «Gi en elev tilgang». Dere får en kode og en ferdig melding med lenke.</li>
-          <li>Send meldingen til eleven på SMS, eller lim den inn i systemet dere bruker til elevene.</li>
+          <li>Skriv elevens mobilnummer og trykk «Send som SMS», så åpnes Meldinger med alt ferdig utfylt. Nummeret lagres ikke. Sitter dere på en PC uten telefon, kopier meldingen og lim den inn i systemet dere bruker til elevene.</li>
           <li>Eleven trykker på lenken. Med iPhone laster eleven ned appen og limer inn koden. Med Android åpnes nettversjonen av Kjørerapport, ferdig låst opp.</li>
         </ol>
         <ul class="steps">
@@ -204,6 +209,8 @@ function wire() {
     const f = $('#fresh'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const done = $('#fresh-done'); if (done) done.onclick = () => { fresh = null; render(); };
+  const smsTo = $('#sms-to'), smsSend = $('#sms-send');
+  if (smsTo && smsSend) smsTo.oninput = () => { smsSend.href = smsHref(smsTo.value, messageFor(fresh)); };
   const cm = $('#copy-msg'); if (cm) cm.onclick = async () => toast(await copy(messageFor(fresh)) ? 'Meldingen er kopiert' : 'Kunne ikke kopiere');
   const cc = $('#copy-code'); if (cc) cc.onclick = async () => toast(await copy(fresh) ? 'Koden er kopiert' : 'Kunne ikke kopiere');
   const to = $('#to-order'); if (to) to.onclick = () => $('#order-sec').scrollIntoView({ behavior: 'smooth' });
