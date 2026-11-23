@@ -8,7 +8,10 @@ import { serverUrl } from '../js/skolekode.js';
 const KEY = 'kjorerapport.skolenokkel';
 const CONTACT = 'Jo@svendsenmedia.net';
 const PACKS = [25, 50, 100, 200];
-const PRICE = 350;   // kr per elev uten mva (eieren, 18. nov. 2026)
+/* Kr per elev inkl. mva (eieren, 23. nov. 2026: 360 kr + 25 % mva; før 350 kr uten mva). Kjøreopplæring er unntatt fra
+   mva, så skolene har som regel ikke fradrag: prisen med mva er den de faktisk betaler. */
+const PRICE = 450;
+const PRICE_EX = PRICE / 1.25;
 
 const $ = s => document.querySelector(s);
 const app = $('#app');
@@ -157,10 +160,10 @@ function render() {
     </section>
     <section id="order-sec" aria-labelledby="h-order">
       <h2 id="h-order">Bestill flere</h2>
-      <p>${PRICE} kr per elev uten mva. Dere får faktura på e-post, og tilgangene kommer på denne siden når bestillingen er behandlet.</p>
+      <p>${PRICE} kr per elev inkl. mva (${PRICE_EX} kr + mva). Dere får faktura på e-post, og tilgangene kommer på denne siden når bestillingen er behandlet.</p>
       <div class="actions" style="align-items:center">
         <label for="pack" class="muted small">Antall</label>
-        <select id="pack">${PACKS.map(p => `<option value="${p}"${p === 50 ? ' selected' : ''}>${p} elever (${kr(p * PRICE)})</option>`).join('')}</select>
+        <select id="pack">${PACKS.map(p => `<option value="${p}"${p === 50 ? ' selected' : ''}>${p} elever (${kr(p * PRICE)} inkl. mva)</option>`).join('')}</select>
         <a class="btn primary small" id="order" href="#">Send bestilling</a>
       </div>
       <p class="muted small" style="margin-top:8px">Knappen åpner e-posten deres med bestillingen ferdig skrevet.</p>
@@ -187,7 +190,7 @@ function render() {
 function orderMail() {
   const nPack = Number($('#pack').value);
   const subject = `Bestilling: ${nPack} elevtilganger til Kjørerapport`;
-  const body = `Hei!\n\n${data.navn} vil bestille ${nPack} elevtilganger til Kjørerapport Pluss (${nPack} × ${PRICE} kr = ${kr(nPack * PRICE)} uten mva).\n\nFaktura sendes til:\nOrganisasjonsnummer:\n\nHilsen\n`;
+  const body = `Hei!\n\n${data.navn} vil bestille ${nPack} elevtilganger til Kjørerapport Pluss (${nPack} × ${PRICE} kr = ${kr(nPack * PRICE)} inkl. mva).\n\nFaktura sendes til:\nOrganisasjonsnummer:\n\nHilsen\n`;
   return `mailto:${CONTACT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 

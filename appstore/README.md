@@ -33,7 +33,7 @@ The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). Its «Al
 | Create an **Apple Developer** account (about NOK 1,200 a year) | TestFlight on your own phone and publishing | developer.apple.com/programs |
 | Enrol as an **individual** | An ENK is not a legal entity, so Apple only accepts it as an individual. Your legal name is shown as the seller. Requires age 18 | Same place |
 | Check that the name **«Kjørerapport»** is free | The name must be unique in the App Store | App Store Connect when the app is created |
-| Set the **price** | Decided 18 Nov: the app is free to download; «Kjørerapport Pluss» is a one-time in-app purchase at NOK 499 per person, without Family Sharing (section 12; per person since 23 Nov). Driving schools: NOK 350 per pupil excl. VAT, invoiced directly (see section 12) | App Store Connect |
+| Set the **price** | Decided 18 Nov: the app is free to download; «Kjørerapport Pluss» is a one-time in-app purchase at NOK 499 per person, without Family Sharing (section 12; per person since 23 Nov). Driving schools: NOK 450 per pupil incl. VAT (360 + VAT; decided 23 Nov, before 350 excl. VAT), invoiced directly (see section 12) | App Store Connect |
 | Sign the **Paid Applications agreement** and add bank and tax details | Needed before any in-app purchase can be sold | App Store Connect › Business |
 
 ---
@@ -236,7 +236,7 @@ How they were made:
 - The first in-app purchase must be **submitted together with an app version** (choose it under «In-App Purchases» on the version page).
 - The **Paid Applications agreement**, bank and tax details must be in place, or the product will show «Får ikke kontakt med App Store».
 - **Small Business Program** (developer.apple.com): Apple then takes 15 % instead of 30 %. Apply before the first sale.
-- **Codes for driving schools:** for a pilot, Apple offer codes (Monetization › In-App Purchases › Pluss › Offer Codes) can be given away free; the pupils use «Kode fra trafikkskolen» on the Pluss screen. They may **not** be sold. Paid school deals (NOK 350 per pupil excl. VAT, invoiced directly) need our own access codes with a small server (planned after launch), sold only to driving schools under guideline 3.1.3(c), never to individuals, and with no school price or link shown in the app.
+- **Codes for driving schools:** for a pilot, Apple offer codes (Monetization › In-App Purchases › Pluss › Offer Codes) can be given away free; the pupils use «Kode fra trafikkskolen» on the Pluss screen. They may **not** be sold. Paid school deals (NOK 450 per pupil incl. VAT since 23 Nov, invoiced directly) need our own access codes with a small server (planned after launch), sold only to driving schools under guideline 3.1.3(c), never to individuals, and with no school price or link shown in the app.
 
 **Testing without paying:**
 - **In Xcode:** ▶︎ in Xcode uses `ios/Pluss.storekit` (chosen in the shared scheme «Kjorerapport»). The purchase sheet appears, nothing is charged, and Debug › StoreKit › Manage Transactions lets you delete the purchase to test again.
