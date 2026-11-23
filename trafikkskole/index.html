@@ -20,9 +20,6 @@
   <link rel="stylesheet" href="../css/side.css">
   <link rel="stylesheet" href="../css/forside.css">
   <style>
-    .qr { display: inline-block; background: #fff; padding: 10px; border-radius: 12px; line-height: 0; }
-    .qr img { width: 132px; height: 132px; }
-    .try { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; }
     .incar { list-style: none; padding: 0; margin: 0; }
     .incar li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; margin-bottom: 18px; }
     .incar .num { margin: 0; }
@@ -31,7 +28,7 @@
     .price-card .per { color: var(--muted); margin: 8px 0 0; }
     .grid2.gap { gap: 18px; margin-top: 24px; }
     .grid2.gap .card h3 { margin-bottom: 6px; }
-    @media (max-width: 860px) { .try { grid-template-columns: 1fr; } .try .qr { display: none; } .price-card { grid-template-columns: 1fr; gap: 18px; } }
+    @media (max-width: 860px) { .price-card { grid-template-columns: 1fr; gap: 18px; } }
   </style>
 </head>
 <body class="landing">
@@ -52,7 +49,7 @@
         <p class="lead">Mesteparten av øvelseskjøringen skjer med ledsager, uten at dere ser den. Kjørerapport gjør den synlig, og gir elevene teorien med forklaring mellom timene.</p>
         <div class="cta">
           <a class="btn yellow big" href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Ta kontakt</a>
-          <a class="btn ghost big" href="../#/demo" data-app="#/demo">Se en demotur</a>
+          <a class="btn ghost big" href="#slik">Slik virker det</a>
         </div>
         <ul class="trust"><li>450 kr per elev inkl. mva</li><li>Ingen konto</li><li>Ingen elevnavn hos oss</li></ul>
       </div>
@@ -159,17 +156,13 @@
     </section>
 
     <section class="section" id="kontakt" aria-labelledby="h-kontakt" style="padding-top:0">
-      <div class="card try">
-        <span class="qr"><img src="img/qr-app.svg" alt="QR-kode til en demotur i appen" width="132" height="132"></span>
-        <div>
-          <h2 id="h-kontakt" style="font-size:clamp(1.4rem,3.4vw,1.9rem)">Prøv på telefonen</h2>
-          <p>Skann koden og trykk «Se en demotur». Det tar ett minutt. Spørsmål, eller vil dere i gang? Send en e-post.</p>
-          <div class="btn-row" style="margin-top:12px">
-            <a class="btn primary" href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Send e-post</a>
-            <a class="btn secondary" href="../" data-app="">Åpne appen</a>
-          </div>
-          <p class="muted small" style="margin-top:12px">Jo@svendsenmedia.net</p>
+      <div class="card">
+        <h2 id="h-kontakt" style="font-size:clamp(1.4rem,3.4vw,1.9rem)">Vil dere prøve?</h2>
+        <p>Send en e-post, så får dere en egen testside for skolen og en tilgang til å prøve appen før dere bestemmer dere.</p>
+        <div class="btn-row" style="margin-top:12px">
+          <a class="btn primary" href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Send e-post</a>
         </div>
+        <p class="muted small" style="margin-top:12px">Jo@svendsenmedia.net</p>
       </div>
     </section>
   </div>
@@ -178,10 +171,8 @@
 <footer class="site-foot">
   <div class="wrap">
     <span>© 2026 Svendsen Media, Trondheim</span>
-    <nav aria-label="Bunnmeny"><a href="../">Forsiden</a><a href="../hjelp/">Hjelp</a><a href="../personvern/">Personvern</a><a href="Kjorerapport-infoark.pdf">Infoark (PDF)</a></nav>
+    <nav aria-label="Bunnmeny"><a href="../">Forsiden</a><a href="../hjelp/">Hjelp</a><a href="../personvern/">Personvern</a></nav>
   </div>
 </footer>
-<script>/* 1.0.8: på svendsenmedia.net/kjorerapport/ ligger nettversjonen under app/. I iPhone-appen og på den gamle adressen ligger den på roten, så lenken er «../» der. */
-if (location.hostname.endsWith('svendsenmedia.net')) document.querySelectorAll('a[data-app]').forEach(a => { a.href = '../app/' + (a.dataset.app || ''); });</script>
 </body>
 </html>

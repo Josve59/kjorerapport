@@ -37,7 +37,7 @@
   <div class="wrap nav-in">
     <a class="brand" href="./"><img src="icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
     <nav aria-label="Hovedmeny"><a href="#funksjoner">Funksjoner</a><a href="#pris">Pris</a><a href="#skoler">Trafikkskoler</a><a href="#sporsmal">Spørsmål</a></nav>
-    <a class="btn yellow" id="top-cta" href="app/">Prøv gratis</a>
+    <a class="btn yellow" id="top-cta" href="#" hidden>Last ned</a>
   </div>
 </header>
 
@@ -51,7 +51,7 @@
         <div class="cta">
           <a class="btn yellow big" id="appstore" href="#" hidden>Last ned i App Store</a>
           <span class="soon" id="soon">Kommer snart i App Store</span>
-          <a class="btn ghost big" href="app/">Prøv i nettleseren</a>
+          <a class="btn ghost big" href="#funksjoner">Se hva appen gjør</a>
         </div>
         <ul class="trust"><li>Gratis å laste ned</li><li>Ingen konto</li><li>Turene blir på telefonen</li></ul>
       </div>
@@ -212,7 +212,7 @@
       <p class="kicker"><span class="lane" aria-hidden="true"></span>Spørsmål og svar</p>
       <h2 id="h-faq">Lurer du på noe?</h2>
       <details><summary>Hva koster Kjørerapport?</summary><p>Appen er gratis å laste ned, og opptak, rapport, kart og 10 teorispørsmål er gratis. Kjørerapport Pluss koster 499 kr én gang, ikke som abonnement, og gir hele teorien, sikkerhetskontrollen, kameraene og alle rapportene.</p></details>
-      <details><summary>Virker den på Android?</summary><p>Appen er for iPhone. På Android og PC kan du bruke nettversjonen i nettleseren. Der er alt gratis unntatt teorien, som låses opp med en kode fra trafikkskolen.</p></details>
+      <details><summary>Virker den på Android?</summary><p>Appen er for iPhone. Har du Android og har fått en kode fra trafikkskolen, får du en lenke til nettversjonen sammen med koden.</p></details>
       <details><summary>Trenger jeg en konto?</summary><p>Nei. Turene lagres bare på telefonen din, og ingen turer lastes opp. Du bestemmer selv om du vil dele en rapport, for eksempel med trafikklæreren.</p></details>
       <details><summary>Hvordan måler appen kjøringen?</summary><p>Med telefonens GPS, akselerometer og gyroskop: bremsing, gass, svinger og fart. Fartsgrensene hentes fra Statens vegvesen. Med kameraene på ser appen også speil- og skulderblikk og bilen foran. Bildene lagres aldri, og gjenkjenningen skjer på telefonen.</p></details>
       <details><summary>Kan den erstatte trafikkskolen?</summary><p>Nei. Kjørerapport er laget for øvelseskjøringen mellom timene. Målingene er veiledende, og erstatter ikke ledsager eller trafikklærer.</p></details>
@@ -226,7 +226,6 @@
       <div class="cta">
         <a class="btn yellow big" id="appstore2" href="#" hidden>Last ned i App Store</a>
         <span class="soon" id="soon2">Kommer snart i App Store</span>
-        <a class="btn ghost big" href="app/">Prøv i nettleseren</a>
       </div>
     </section>
   </div>
@@ -240,10 +239,11 @@
 </footer>
 <script>
   // Lenken til appen i App Store fylles inn når appen er ute (appstore/innsending.md). Til da står «Kommer snart».
+  // Nettsiden lenker ikke til nettversjonen (1.0.10): eieren vil ikke gjøre koden lett å finne. Android-elever får lenken på elevsiden.
   const APP_STORE_URL = '';
   if (APP_STORE_URL) {
     for (const [a, s] of [['appstore', 'soon'], ['appstore2', 'soon2']]) { const el = document.getElementById(a); el.href = APP_STORE_URL; el.hidden = false; document.getElementById(s).hidden = true; }
-    const top = document.getElementById('top-cta'); top.href = APP_STORE_URL; top.textContent = 'Last ned';
+    const top = document.getElementById('top-cta'); top.href = APP_STORE_URL; top.hidden = false;
   }
 </script>
 </body>

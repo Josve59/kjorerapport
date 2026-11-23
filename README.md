@@ -143,6 +143,22 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.10 – no public links to the web version
+
+The owner (23 November) wants the web version of the app, which shows all of its code, to be harder to find.
+
+- **The handout is gone:** the driving-school handout (`trafikkskole/Kjorerapport-infoark.pdf` and `ark.html`) had a QR code to the old GitHub Pages address. It also said the app works on Android from the browser, and it used pictures that were already removed. The PDF, the page and `img/qr-app.svg` are deleted, and so is the footer link to them.
+- **The front page:**
+  - «Prøv i nettleseren» is gone from the top and the end.
+  - The top button stays hidden until `APP_STORE_URL` is set.
+  - The Android answer says pupils with a code from their school get a link to the web version.
+- **The driving-school page:**
+  - «Se en demotur» became «Slik virker det».
+  - The demo QR code and «Åpne appen» are gone. The card now offers a test page for the school by e-mail.
+- **Help, privacy, licences:** on svendsenmedia.net the «Åpne appen» button is removed. In the iPhone app it still goes back to the app.
+- **Still there on purpose:** `/kjorerapport/app/` works, and the pupil page (`elev/`) links to it with the code for Android pupils. The web app has `noindex`, so search engines leave it out.
+- **Not solved by this:** anyone who opens the web version can read its code. The old address `josve59.github.io/kjorerapport/` still serves the whole app until the GitHub project is made private.
+
 ## What's new in 1.0.9 – a new website on svendsenmedia.net/kjorerapport
 
 The owner asked for a website that is «utrolig bra». Website pages only; the app itself is unchanged, but the help, privacy, licence and driving-school pages are also bundled in the iPhone app, so the version goes up.
