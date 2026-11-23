@@ -4,92 +4,247 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Forsiden for appen (1.0.8): svendsenmedia.net/kjorerapport/. Ligger på roten, så lenkene er de samme her som der
-       (Workeren i tools/nettside-cloudflare.mjs viser denne fila på /kjorerapport/). Nettversjonen ligger under app/. -->
-  <title>Kjørerapport – teori og øvelseskjøring i én app</title>
-  <meta name="description" content="Kjørerapport samler teorien, sikkerhetskontrollen og øvelseskjøringen til førerkort klasse B. Rapport etter hver tur, uten konto.">
-  <meta property="og:title" content="Kjørerapport – øv til lappen med en rapport etter hver tur">
-  <meta property="og:description" content="Teori med forklaring, sikkerhetskontrollen og rapport etter hver øvelsestur. Ingen konto, turene blir på telefonen.">
-  <meta property="og:image" content="forside/01-teori.jpg">
+       (Workeren i tools/nettside-worker.mjs viser denne fila på /kjorerapport/). Nettversjonen ligger under app/.
+       Stil: css/side.css + css/forside.css. Bildene: tools/nettside-bilder.py. -->
+  <title>Kjørerapport – øv til lappen, med en rapport etter hver tur</title>
+  <meta name="description" content="Kjørerapport samler teorien, sikkerhetskontrollen og øvelseskjøringen til førerkort klasse B i én app. Rapport etter hver tur, uten konto.">
+  <link rel="canonical" href="https://svendsenmedia.net/kjorerapport/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="nb_NO">
+  <meta property="og:url" content="https://svendsenmedia.net/kjorerapport/">
+  <meta property="og:title" content="Kjørerapport – øv til lappen, med en rapport etter hver tur">
+  <meta property="og:description" content="Teori med forklaring, sikkerhetskontrollen og en rapport etter hver øvelsestur. Ingen konto, turene blir på telefonen.">
+  <meta property="og:image" content="https://svendsenmedia.net/kjorerapport/forside/deling.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0b4cb4">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preload" as="image" href="forside/telefon-teori.webp" fetchpriority="high">
   <link rel="stylesheet" href="css/side.css">
+  <link rel="stylesheet" href="css/forside.css">
+  <script type="application/ld+json">
+  {"@context": "https://schema.org", "@type": "MobileApplication", "name": "Kjørerapport", "operatingSystem": "iOS",
+   "applicationCategory": "EducationalApplication", "inLanguage": "nb",
+   "description": "Teori, sikkerhetskontroll og øvelseskjøring til førerkort klasse B, med en rapport etter hver tur.",
+   "offers": {"@type": "Offer", "price": "0", "priceCurrency": "NOK"},
+   "publisher": {"@type": "Organization", "name": "Svendsen Media", "url": "https://svendsenmedia.net"}}
+  </script>
 </head>
-<body>
-<div class="wrap">
-  <header class="topbar">
+<body class="landing">
+<header class="nav">
+  <div class="wrap nav-in">
     <a class="brand" href="./"><img src="icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
-    <nav><a href="#funksjoner">Hva den gjør</a><a href="trafikkskole/">For trafikkskoler</a><a href="hjelp/">Hjelp</a></nav>
-  </header>
+    <nav aria-label="Hovedmeny"><a href="#funksjoner">Funksjoner</a><a href="#pris">Pris</a><a href="#skoler">Trafikkskoler</a><a href="#sporsmal">Spørsmål</a></nav>
+    <a class="btn yellow" id="top-cta" href="app/">Prøv gratis</a>
+  </div>
+</header>
 
-  <section class="hero">
-    <div>
-      <span class="eyebrow">For deg som skal ta lappen</span>
-      <div class="road" aria-hidden="true"></div>
-      <h1>Øv til lappen, med en rapport etter hver tur.</h1>
-      <p class="lead">Kjørerapport samler teorien, sikkerhetskontrollen og øvelseskjøringen i én app. Etter hver tur ser dere hva som gikk bra, og hva dere bør øve på neste gang.</p>
-      <div class="btn-row">
-        <a class="btn yellow" id="appstore" href="#" hidden>Last ned i App Store</a>
-        <span class="soon" id="soon">Kommer snart i App Store</span>
-        <a class="btn secondary" href="app/">Prøv nettversjonen</a>
+<main>
+  <section class="hero-sign" aria-labelledby="h-hero">
+    <div class="wrap hero-in">
+      <div class="hero-text">
+        <p class="kicker"><span class="lane" aria-hidden="true"></span>Førerkort klasse B</p>
+        <h1 id="h-hero">Øv til lappen. <span class="sub">Få en rapport etter hver tur.</span></h1>
+        <p class="lead">Teorien, sikkerhetskontrollen og øvelseskjøringen i én app. Etter hver tur ser dere hva som gikk bra, og hva dere bør øve på neste gang.</p>
+        <div class="cta">
+          <a class="btn yellow big" id="appstore" href="#" hidden>Last ned i App Store</a>
+          <span class="soon" id="soon">Kommer snart i App Store</span>
+          <a class="btn ghost big" href="app/">Prøv i nettleseren</a>
+        </div>
+        <ul class="trust"><li>Gratis å laste ned</li><li>Ingen konto</li><li>Turene blir på telefonen</li></ul>
       </div>
-      <p class="muted small" style="margin-top:14px">Gratis å laste ned. Ingen konto. Turene blir på telefonen din.</p>
-    </div>
-    <img class="shot" src="forside/01-teori.jpg" alt="Teorien i appen: 72 prosent klar, dagens mål, dato for teoriprøven og de siste prøvene" width="460" height="1000">
-  </section>
-
-  <section class="block" id="funksjoner" aria-labelledby="h-funk">
-    <h2 id="h-funk">Alt du trenger fram til oppkjøringen</h2>
-    <div class="grid3" style="margin-top:20px">
-      <div class="card feature"><h3>Teorien</h3><p>Alle 420 spørsmålene med tegninger og forklaring, prøver som den ekte, skiltprøven og «Hvem kjører først?». Du ser hvor klar du er i prosent.</p></div>
-      <div class="card feature"><h3>Rapport etter hver tur</h3><p>Telefonen måler bremsing, gass, svinger og fart mens dere kjører. Etterpå får dere turen på kart, med det som gikk bra og konkrete tips.</p></div>
-      <div class="card feature"><h3>Sikkerhetskontrollen</h3><p>Alle 46 oppgavene fra oppkjøringen, med tegninger av bilen og en quiz, så du kan svare når sensor spør.</p></div>
-      <div class="card feature"><h3>Til trafikklæreren</h3><p>En oppsummering av øvingen siden forrige kjøretime, klar til å vise eller dele. Læreren ser hva dere har øvd på.</p></div>
-      <div class="card feature"><h3>Speil og skulderblikk</h3><p>Med kameraene ser appen om føreren sjekker speil og gjør skulderblikk, og bilen foran og feltlinjene. Bildene lagres aldri.</p></div>
-      <div class="card feature"><h3>Logg til forsikringen</h3><p>Flere forsikringsselskaper gir høyere startbonus etter 2 000 km øvelseskjøring. Kjørerapport fører loggen for dere.</p></div>
+      <div class="hero-phones" aria-hidden="true">
+        <img class="back" src="forside/telefon-kart.webp" alt="" width="559" height="1196">
+        <img class="front" src="forside/telefon-teori.webp" alt="" width="559" height="1196" fetchpriority="high">
+      </div>
     </div>
   </section>
+  <div class="road-band" aria-hidden="true"></div>
 
-  <section class="block" aria-labelledby="h-bilder">
-    <h2 id="h-bilder">Slik ser det ut</h2>
-    <div class="gallery" tabindex="0" aria-label="Skjermbilder fra appen, kan rulles sidelengs">
-      <img src="forside/02-sporsmal.jpg" alt="Et teorispørsmål med tegning og forklaring" width="460" height="1000" loading="lazy">
-      <img src="forside/03-kryss.jpg" alt="«Hvem kjører først?» i et kryss med tre biler" width="460" height="1000" loading="lazy">
-      <img src="forside/04-sikkerhet.jpg" alt="Et spørsmål fra sikkerhetskontrollen om bremselysene" width="460" height="1000" loading="lazy">
-      <img src="forside/05-rapport.jpg" alt="Rapporten etter en øvelsestur" width="460" height="1000" loading="lazy">
-      <img src="forside/07-kart.jpg" alt="Turen på kart med nummererte hendelser" width="460" height="1000" loading="lazy">
-      <img src="forside/08-laerer.jpg" alt="Oppsummeringen til trafikklæreren" width="460" height="1000" loading="lazy">
+  <div class="wrap features" id="funksjoner">
+    <section class="feature-row" aria-labelledby="h-teori">
+      <div class="ft-text">
+        <p class="kicker"><span class="lane" aria-hidden="true"></span>Teorien</p>
+        <h2 id="h-teori">Klar til teoriprøven, uten å pugge i blinde.</h2>
+        <p class="lead">Hvert svar får en forklaring og en tegning, og regelen står i teoriboka i appen.</p>
+        <ul class="check">
+          <li>Alle 420 spørsmålene i de sju temaene på prøven</li>
+          <li>Prøver som den ekte: 45 oppgaver på 90 minutter</li>
+          <li>Skiltprøven, skiltkort og «Hvem kjører først?» med kryss som spilles av</li>
+          <li>Hvor klar du er i prosent, og en plan fram til prøvedatoen</li>
+        </ul>
+      </div>
+      <div class="ft-media duo">
+        <img class="back" src="forside/telefon-kryss.webp" alt="«Hvem kjører først?»: et kryss med tre biler" width="559" height="1196" loading="lazy">
+        <img class="front" src="forside/telefon-sporsmal.webp" alt="Et teorispørsmål med tegning og forklaring etter svaret" width="559" height="1196" loading="lazy">
+      </div>
+    </section>
+
+    <section class="feature-row flip" aria-labelledby="h-tur">
+      <div class="ft-text">
+        <p class="kicker"><span class="lane" aria-hidden="true"></span>Øvelseskjøring</p>
+        <h2 id="h-tur">En rapport etter hver tur.</h2>
+        <p class="lead">Fest telefonen i holderen. Ledsageren starter turen, føreren kjører, og når dere stopper, er rapporten klar.</p>
+        <ul class="check">
+          <li>Bremsing, gass, svinger og fart, med konkrete tips til neste tur</li>
+          <li>Fartsgrensen på skjermen mens dere kjører</li>
+          <li>Hele turen på kart, med hendelsene der de skjedde</li>
+          <li>Med kameraene: speil- og skulderblikk, bilen foran og feltlinjene. Bildene lagres aldri.</li>
+        </ul>
+      </div>
+      <div class="ft-media duo">
+        <img class="back" src="forside/telefon-opptak.webp" alt="Skjermen under kjøring, med fart og fartsgrense" width="559" height="1196" loading="lazy">
+        <img class="front" src="forside/telefon-rapport.webp" alt="Rapporten etter en øvelsestur, med poeng og tips" width="559" height="1196" loading="lazy">
+      </div>
+    </section>
+
+    <section class="feature-row" aria-labelledby="h-sikk">
+      <div class="ft-text">
+        <p class="kicker"><span class="lane" aria-hidden="true"></span>Sikkerhetskontrollen</p>
+        <h2 id="h-sikk">Svar trygt når sensor spør.</h2>
+        <p class="lead">Alle 46 oppgavene fra oppkjøringen, med tegninger av bilen, og en quiz som viser hva som sitter.</p>
+        <ul class="check">
+          <li>Lys, dekk, bremser, væsker og varsellamper</li>
+          <li>Tegninger som viser hvor du finner det på bilen</li>
+          <li>Quiz du kan ta så mange ganger du vil</li>
+        </ul>
+      </div>
+      <div class="ft-media">
+        <img src="forside/telefon-sikkerhet.webp" alt="Et spørsmål fra sikkerhetskontrollen med tegning av bremselysene" width="559" height="1196" loading="lazy">
+      </div>
+    </section>
+
+    <section class="feature-row flip" aria-labelledby="h-laerer">
+      <div class="ft-text">
+        <p class="kicker"><span class="lane" aria-hidden="true"></span>Trafikklæreren</p>
+        <h2 id="h-laerer">Kom forberedt til neste kjøretime.</h2>
+        <p class="lead">Appen samler det dere har øvd på siden forrige time. Vis det til trafikklæreren, eller del det på forhånd.</p>
+        <ul class="check">
+          <li>Kilometer, mørkekjøring og variasjon siden sist</li>
+          <li>Det dere bør øve mer på, og det som sitter</li>
+          <li>Læreren kan svare med en melding tilbake</li>
+        </ul>
+      </div>
+      <div class="ft-media">
+        <img src="forside/telefon-laerer.webp" alt="Oppsummeringen til trafikklæreren" width="559" height="1196" loading="lazy">
+      </div>
+    </section>
+  </div>
+
+  <section class="band" aria-labelledby="h-start">
+    <div class="wrap">
+      <p class="kicker"><span class="lane" aria-hidden="true"></span>Slik kommer dere i gang</p>
+      <h2 id="h-start">Tre steg, så er dere på vei.</h2>
+      <div class="steps3">
+        <div class="step"><span class="num">1</span><h3>Last ned appen</h3><p>Gratis, og uten konto. Prøv 10 teorispørsmål med en gang.</p></div>
+        <div class="step"><span class="num">2</span><h3>Fest telefonen</h3><p>I en holder i bilen. Ledsageren starter turen, og føreren rører ikke telefonen.</p></div>
+        <div class="step"><span class="num">3</span><h3>Se rapporten</h3><p>Når dere stopper. Neste tur kan handle om det som står igjen.</p></div>
+      </div>
+      <p class="note-line">Målingene er veiledende, og erstatter ikke ledsager eller trafikklærer.</p>
     </div>
   </section>
 
-  <section class="block" aria-labelledby="h-pris">
-    <div class="sign-card">
-      <p class="eyebrow">Pris</p>
-      <h2 id="h-pris" style="color:#fff">Ett kjøp, ikke abonnement</h2>
-      <p>Opptak, rapport, kart, fartsgrense, kjørelogg og 10 teorispørsmål er gratis. Kjørerapport Pluss koster 499 kr én gang og gir hele teorien, sikkerhetskontrollen, kameraene og alle rapportene.</p>
-      <p class="muted" style="margin:0">Bruker trafikkskolen din Kjørerapport, får du Pluss fra skolen.</p>
-    </div>
-  </section>
+  <div class="wrap">
+    <section class="section" aria-labelledby="h-forsikring">
+      <div class="insure">
+        <p class="km">2 000 km<small>øvelseskjøring</small></p>
+        <div>
+          <h2 id="h-forsikring" style="font-size:clamp(1.4rem,3.4vw,1.9rem)">Gir bedre bilforsikring når du har lappen.</h2>
+          <p style="margin:0">Flere forsikringsselskaper gir høyere startbonus etter 2 000 km øvelseskjøring med ledsager. Kjørerapport fører loggen for dere, klar til å vise selskapet. Sjekk vilkårene hos ditt.</p>
+        </div>
+      </div>
+    </section>
 
-  <section class="block" aria-labelledby="h-skoler">
-    <div class="grid2">
+    <section class="section" id="pris" aria-labelledby="h-pris" style="padding-top:0">
+      <p class="kicker"><span class="lane" aria-hidden="true"></span>Pris</p>
+      <h2 id="h-pris">Ett kjøp. Ikke abonnement.</h2>
+      <div class="prices">
+        <div class="price">
+          <h3>Gratis</h3>
+          <p class="amount">0 kr</p>
+          <p class="per">For alltid</p>
+          <ul class="check">
+            <li>Opptak og rapport etter hver tur</li>
+            <li>Kart, fartsgrense og kjørelogg</li>
+            <li>Rapportene for de 10 siste turene</li>
+            <li>10 teorispørsmål å prøve</li>
+            <li>Turene kan alltid eksporteres</li>
+          </ul>
+        </div>
+        <div class="price plus">
+          <h3>Kjørerapport Pluss</h3>
+          <p class="amount">499 kr</p>
+          <p class="per">Én gang, gjelder til lappen er i boks</p>
+          <ul class="check">
+            <li>Hele teorien: 420 spørsmål, prøver, teoriboka og skiltprøven</li>
+            <li>Sikkerhetskontrollen med quiz</li>
+            <li>Kameraene: speil, skulderblikk og bilen foran</li>
+            <li>Opplæringsplanen og faresteder på kartet</li>
+            <li>Oppsummeringen til trafikklæreren</li>
+            <li>Alle rapportene, ikke bare de 10 siste</li>
+          </ul>
+          <p class="foot">Bruker trafikkskolen din Kjørerapport? Da får du Pluss med en kode fra skolen.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="schools" id="skoler" aria-labelledby="h-skoler">
+    <div class="wrap schools-in">
       <div>
-        <h2 id="h-skoler">For trafikkskoler</h2>
-        <p>Gi elevene Kjørerapport Pluss. Skolen deler ut tilgangene selv, med en lenke på SMS, e-post eller en QR-kode, og ser hvor mange som er i bruk.</p>
-        <div class="btn-row"><a class="btn primary" href="trafikkskole/">Les mer</a><a class="btn secondary" href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Ta kontakt</a></div>
+        <p class="kicker" style="color:var(--lane)">For trafikkskoler</p>
+        <h2 id="h-skoler">Elever som har øvd, før de kommer til timen.</h2>
+        <p>Gi elevene Kjørerapport Pluss. Dere deler ut tilgangene selv, og eleven tar med seg rapportene til timen.</p>
+        <div class="btn-row"><a class="btn light" href="trafikkskole/">Les mer</a><a class="btn line" href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Ta kontakt</a></div>
       </div>
-      <div class="card">
-        <h3>Personvern</h3>
-        <p>Ingen konto, ingen reklame og ingen sporing. Turene lagres bare på telefonen, og du bestemmer selv hva du deler.</p>
-        <p><a href="personvern/">Les hele personvernerklæringen</a></p>
-      </div>
+      <ul>
+        <li><strong>Egen side for skolen</strong>Del ut tilganger på SMS, e-post eller QR-kode, og se hvor mange som er i bruk.</li>
+        <li><strong>450 kr per elev inkl. mva</strong>Kjøp en pakke. En tilgang som aldri blir tatt i bruk, kan trekkes tilbake.</li>
+        <li><strong>Ingen konto, ingen elevnavn</strong>Eleven skriver bare inn koden. Vi lagrer ingen navn.</li>
+      </ul>
     </div>
   </section>
-</div>
-<footer><div class="wrap"><span>© 2026 Svendsen Media</span><span><a href="hjelp/">Hjelp</a> · <a href="personvern/">Personvern</a> · <a href="lisenser/">Lisenser</a> · <a href="mailto:Jo@svendsenmedia.net">Jo@svendsenmedia.net</a></span></div></footer>
+
+  <div class="wrap">
+    <section class="section faq" id="sporsmal" aria-labelledby="h-faq">
+      <p class="kicker"><span class="lane" aria-hidden="true"></span>Spørsmål og svar</p>
+      <h2 id="h-faq">Lurer du på noe?</h2>
+      <details><summary>Hva koster Kjørerapport?</summary><p>Appen er gratis å laste ned, og opptak, rapport, kart og 10 teorispørsmål er gratis. Kjørerapport Pluss koster 499 kr én gang, ikke som abonnement, og gir hele teorien, sikkerhetskontrollen, kameraene og alle rapportene.</p></details>
+      <details><summary>Virker den på Android?</summary><p>Appen er for iPhone. På Android og PC kan du bruke nettversjonen i nettleseren. Der er alt gratis unntatt teorien, som låses opp med en kode fra trafikkskolen.</p></details>
+      <details><summary>Trenger jeg en konto?</summary><p>Nei. Turene lagres bare på telefonen din, og ingen turer lastes opp. Du bestemmer selv om du vil dele en rapport, for eksempel med trafikklæreren.</p></details>
+      <details><summary>Hvordan måler appen kjøringen?</summary><p>Med telefonens GPS, akselerometer og gyroskop: bremsing, gass, svinger og fart. Fartsgrensene hentes fra Statens vegvesen. Med kameraene på ser appen også speil- og skulderblikk og bilen foran. Bildene lagres aldri, og gjenkjenningen skjer på telefonen.</p></details>
+      <details><summary>Kan den erstatte trafikkskolen?</summary><p>Nei. Kjørerapport er laget for øvelseskjøringen mellom timene. Målingene er veiledende, og erstatter ikke ledsager eller trafikklærer.</p></details>
+      <details><summary>Jeg har fått en kode fra trafikkskolen. Hva gjør jeg?</summary><p>Åpne lenken du fikk på SMS eller e-post, eller åpne appen, trykk på tannhjulet, velg «Kjørerapport Pluss» og «Kode fra trafikkskolen».</p></details>
+      <p style="margin-top:20px"><a href="hjelp/">Flere svar i hjelpen</a> · <a href="personvern/">Personvern</a></p>
+    </section>
+
+    <section class="end-sign" aria-labelledby="h-end">
+      <h2 id="h-end">Klar for neste øvelsestur?</h2>
+      <p>Last ned Kjørerapport, og få en rapport etter turen.</p>
+      <div class="cta">
+        <a class="btn yellow big" id="appstore2" href="#" hidden>Last ned i App Store</a>
+        <span class="soon" id="soon2">Kommer snart i App Store</span>
+        <a class="btn ghost big" href="app/">Prøv i nettleseren</a>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span>© 2026 Svendsen Media, Trondheim</span>
+    <nav aria-label="Bunnmeny"><a href="trafikkskole/">For trafikkskoler</a><a href="hjelp/">Hjelp</a><a href="personvern/">Personvern</a><a href="lisenser/">Lisenser</a><a href="mailto:Jo@svendsenmedia.net">Jo@svendsenmedia.net</a></nav>
+  </div>
+</footer>
 <script>
-  // Lenken til appen i App Store fylles inn når appen er ute (appstore/innsending.md). Til da: «Kommer snart».
+  // Lenken til appen i App Store fylles inn når appen er ute (appstore/innsending.md). Til da står «Kommer snart».
   const APP_STORE_URL = '';
-  if (APP_STORE_URL) { const a = document.getElementById('appstore'); a.href = APP_STORE_URL; a.hidden = false; document.getElementById('soon').hidden = true; }
+  if (APP_STORE_URL) {
+    for (const [a, s] of [['appstore', 'soon'], ['appstore2', 'soon2']]) { const el = document.getElementById(a); el.href = APP_STORE_URL; el.hidden = false; document.getElementById(s).hidden = true; }
+    const top = document.getElementById('top-cta'); top.href = APP_STORE_URL; top.textContent = 'Last ned';
+  }
 </script>
 </body>
 </html>
