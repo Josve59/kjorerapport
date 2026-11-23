@@ -17,7 +17,7 @@
   <main class="doc">
     <h1>Personvern</h1>
     <p class="lead">Kort fortalt: Kjørerapport har ingen konto og ingen sporing. Turene dine blir liggende på din egen telefon, med mindre du er tester og selv velger å sende en tur til utvikleren.</p>
-    <p class="muted small">Sist oppdatert 22. november 2026. Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
+    <p class="muted small">Sist oppdatert 23. november 2026. Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
 
     <h2>Hva appen lagrer</h2>
     <p>Når ledsageren starter et opptak, lagrer appen dette på telefonen:</p>
@@ -39,6 +39,7 @@
         <tr><td>Veidata fra Statens vegvesen (NVDB)</td><td>Rutens posisjoner, for å hente fartsgrenser, motorveier, vikeplikt, stoppskilt, rundkjøringer, gangfelt, fartsdempere, lyskryss og enkelte skilt. Under kjøring også et område på rundt 4,5 × 4,5 km rundt bilen, for å vise fartsgrensen på skjermen. Med veikameraet på spør appen i tillegg om et lite område på rundt 130 × 130 m rundt bilen, hver 100. meter eller hvert minutt, for å vite hvor mange felt veien har. Spørsmålene har ingen navn eller ID, men området viser omtrent hvor bilen er.</td><td>Når «Fartsgrense og veidata» er på. På som standard, kan slås av under Innstillinger.</td></tr>
         <tr><td>Stedsnavn fra Kartverket</td><td>Posisjonen til hendelser og merker, for å finne gatenavn</td><td>Når «Stedsnavn» er på. På som standard, kan slås av under Innstillinger.</td></tr>
         <tr><td>Skolekode-serveren hos Cloudflare (bare med kode fra trafikkskolen)</td><td>Koden og en tilfeldig nøkkel for denne installasjonen av appen. Serveren lagrer koden, skolens navn, når koden ble tatt i bruk og nøkkelen, ikke navn. Turer får den bare fra testere som selv trykker «Send turen til utvikleren» (se «Testere» under). Som alle nettjenester ser Cloudflare vanlige tekniske opplysninger, som IP-adresse.</td><td>Når koden skrives inn, og så omtrent én gang i uka for å sjekke at den fortsatt gjelder</td></tr>
+        <tr><td>Samme server, med Pluss kjøpt i iPhone-appen</td><td>Et anonymt kjøpsnummer og den tilfeldige nøkkelen for installasjonen. Kjøpsnummeret lages på telefonen av Apples kjøps-ID, og kan ikke gjøres om til den igjen. Serveren lagrer bare nummeret, nøkkelen og når appen sist meldte seg, for å telle hvor mange telefoner hvert kjøp brukes på. Den vet ikke hvem som har kjøpt.</td><td>Høyst én gang i uka mens Pluss er kjøpt</td></tr>
         <tr><td>Cloudflare (nettversjonen)</td><td>Vanlige tekniske opplysninger når nettversjonen lastes ned, som IP-adresse. iPhone-appen lastes ned fra App Store.</td><td>Når nettversjonen åpnes første gang og ved oppdateringer</td></tr>
       </tbody>
     </table>
@@ -54,6 +55,7 @@
 
     <h2>Kjøp i appen (Kjørerapport Pluss)</h2>
     <p>Kjøp i iPhone-appen går gjennom App Store, med Apple-ID-en din. Apple tar seg av betalingen, og appen får bare vite om Pluss er kjøpt. Vi ser ikke hvem som har kjøpt, og får ingen betalingsopplysninger. Apples egne vilkår og personvernregler gjelder for kjøpet.</p>
+    <p>Pluss gjelder for den som kjøper det, og deles ikke med familien. For å se om kjøp deles på mange telefoner, melder appen seg høyst én gang i uka med et anonymt kjøpsnummer (se tabellen over). Det brukes bare til å telle telefoner per kjøp. Ingenting stenges, og nummeret kan ikke knyttes til deg.</p>
     <p><strong>Kode fra trafikkskolen.</strong> Har trafikkskolen gitt deg en kode, sjekkes den mot vår server hos Cloudflare (se tabellen over). Serveren vet hvilken skole koden hører til, men ikke hvem du er. Vi ser hvor mange av skolens koder som er tatt i bruk, som grunnlag for fakturaen til skolen, men ikke hvem som bruker dem eller turene deres.</p>
 
     <h2>Testere (bare med testlenke)</h2>

@@ -1,7 +1,7 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
 import { practiceSpans, rescore, inSpans } from './practice.js';
-import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, SEND_ERROR, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
+import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, reportPlusUse, SEND_ERROR, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
 import { isAndroid, installHelp, permissionHelp, screenLockHelp } from './platform.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.6';
+export const APP_VERSION = '1.0.7';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -684,7 +684,7 @@ async function renderPlus(feature = null) {
       <section class="plus-hero">
         <span class="plus-badge">${icon('check', 18)}Pluss</span>
         <h2>${school ? (school.tester ? 'Du tester Kjørerapport' : 'Du har Pluss fra trafikkskolen') : webFree ? 'Nettversjonen' : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
-        <p>${school ? (school.tester ? `Full tilgang til ${esc(longDay(school.exp))}. Takk for at du tester!` : `Fra ${esc(school.skole)}, til ${esc(longDay(school.exp))}. Alt i appen er låst opp.`) : webFree ? 'Her er alt gratis, unntatt teorien. Teorien får du i iPhone-appen med Pluss, eller med en kode fra trafikkskolen.' : owned ? 'Alt i appen er låst opp, for hele familien med Familiedeling.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks, og for hele familien med Familiedeling.'}</p>
+        <p>${school ? (school.tester ? `Full tilgang til ${esc(longDay(school.exp))}. Takk for at du tester!` : `Fra ${esc(school.skole)}, til ${esc(longDay(school.exp))}. Alt i appen er låst opp.`) : webFree ? 'Her er alt gratis, unntatt teorien. Teorien får du i iPhone-appen med Pluss, eller med en kode fra trafikkskolen.' : owned ? 'Alt i appen er låst opp.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks.'}</p>
       </section>
       <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${hasIt(k) ? `<span class="plus-ok">${icon('check', 18)}</span>` : owned ? `<span class="lock-tag">${icon('lock', 14)}Kode</span>` : ''}</div>`; }).join('')}</section>
       ${webFree && codesEnabled() ? '<button type="button" class="btn secondary" id="plus-school">Jeg har en kode fra trafikkskolen</button>' : ''}
@@ -707,7 +707,7 @@ async function renderPlus(feature = null) {
       if (!r.error && fn === redeemPlus) { toast('Koden behandles. Pluss låses opp av seg selv når App Store har godkjent den.', { ms: 5000 }); return; }
       if (r.error === 'venter') { infoDialog({ title: 'Venter på godkjenning', text: 'Kjøpet må godkjennes (for eksempel av en forelder med «Spør før kjøp»). Pluss låses opp av seg selv når det er godkjent.' }); return; }
       if (r.error) infoDialog({ title: 'Kjøpet gikk ikke', text: r.error });
-      else if (fn === restorePlus) infoDialog({ title: 'Fant ikke Pluss', text: 'Det er ikke kjøpt Pluss med denne Apple-ID-en. Er det kjøpt av noen andre i familien, må Familiedeling være slått på.' });
+      else if (fn === restorePlus) infoDialog({ title: 'Fant ikke Pluss', text: 'Det er ikke kjøpt Pluss med denne Apple-ID-en. Bruk samme Apple-ID som da du kjøpte. Pluss gjelder for den som kjøpte det, og deles ikke med familien.' });
     };
     const buy = root.querySelector('#plus-buy');
     if (buy) buy.onclick = () => act(buy, buyPlus, 'Pluss er låst opp. God tur!');
@@ -3693,7 +3693,7 @@ function init() {
   document.querySelectorAll('.btn-back').forEach(b => b.onclick = goBack);
   wireTabbar();
   setupLongPress($('#btn-stop'), finishRecording);
-  // Pluss: status fra App Store ved start; endres den (kjøp, Familiedeling, refusjon), tegnes skjermen på nytt
+  // Pluss: status fra App Store ved start; endres den (kjøp på en annen telefon, refusjon), tegnes skjermen på nytt
   // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke
   // låse opp Pluss i App Store-utgaven (0.11.4).
   const wantedMode = modeFromLegacy(getSettings());
@@ -3716,6 +3716,8 @@ function init() {
   let plusWas = hasPlus();
   onPlusChange(plus => {
     updatePlusMarks();
+    // Telling av telefoner per kjøp (1.0.7): bare når App Store sier at Pluss er kjøpt, høyst én gang i uka
+    reportPlusUse(plusState()).catch(() => {});
     if (plus === plusWas) return;
     plusWas = plus;
     if (plus) setTimeout(maybeCamIntro, 600);

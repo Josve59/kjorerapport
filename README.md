@@ -143,6 +143,14 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.7 – Pluss per person, and counting phones per purchase
+
+- **Pluss is per person, not for the family** (the owner decided 23 Nov). Family Sharing is off in `ios/Pluss.storekit`, and must be **off** when the purchase is created in App Store Connect: once on, Apple does not let you turn it off (`appstore/README.md` section 12, `appstore/innsending.md`). The texts «for hele familien» and «Familiedeling» are gone from the Pluss page, the theory pages, the help page and the App Store description; «Gjenopprett kjøp» without a purchase now says to use the same Apple ID. The price stays NOK 499.
+- **Counting phones per purchase, nothing blocked** (`reportPlusUse` in `js/skolekode.js`, `POST /v1/pluss` and `GET /admin/pluss` in `server/skolekoder/worker.js`, `node tools/skolekoder.mjs pluss`). With Pluss bought, the iPhone app reports at most once a week with an anonymous purchase number (SHA-256 of Apple's original transaction ID, made on the phone in `PlusStore.swift`) and the install key. The server counts phones in use (reported in the last 14 days) per purchase and the most at once. Not in the demo, not without network, and errors are ignored. If many purchases show 3 or more phones at once, a limit of one phone at a time can be built (a new app version).
+- **Privacy:** «Purchases › Purchase History» (app functionality, not linked, no tracking) added to the App Store label and `PrivacyInfo.xcprivacy`; the privacy page has a new table row and paragraph.
+- **New review screenshot** `appstore/kjop-pluss-review.png` from the simulator (Debug build, view «Som App Store», price as App Store answers). The old one still listed «fotoboksvarsel», removed in 1.0.4.
+- **Tests:** two new tests in `tests/skolekode.test.mjs` (the server's count, the weekly limit on writes, phone switch against sharing; the app reports only with a purchase, once a week, one report at a time). Not tested with a real App Store purchase: that needs the product in App Store Connect (from 28 Nov).
+
 ## What's new in 1.0.6 – small faults before App Store
 
 - **Theory: the explanation fits on the screen with the question** (`js/theoryui.js`, `css/theme.css`). After an answer the question card shrinks: the options that were neither right nor chosen are hidden, the text is smaller and a drawing becomes a small picture (a tap still shows it large). «Meld fra» sits on the answer line instead of its own line at the bottom.

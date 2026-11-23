@@ -1,9 +1,10 @@
+import CryptoKit
 import StoreKit
 import UIKit
 
 /// Kjørerapport Pluss: ett engangskjøp i App Store (ikke abonnement) som låser opp kameraene, opplæringsplanen,
-/// trafikklærersiden og rapportene for alle eldre turer. Kjøpet hører til Apple-ID-en, kan deles med familien
-/// (Familiedeling), og gjenopprettes på en ny telefon. Selve turene er alltid gratis å ta opp, se og ta kopi av.
+/// trafikklærersiden og rapportene for alle eldre turer. Kjøpet hører til Apple-ID-en, og gjenopprettes på en ny
+/// telefon. 1.0.7: per person, uten Familiedeling. Selve turene er alltid gratis å ta opp, se og ta kopi av.
 /// I Xcode prøves kjøpet uten penger med Pluss.storekit (valgt i skjemaet Kjorerapport).
 /// 0.23.0: ingen prøveperiode lenger (eieren: mange kjøper en teoriapp 7–14 dager før prøven, og 14 gratis dager ville
 /// gitt hele teorien gratis). Teorien er en del av Pluss, og 10 spørsmål er gratis i nettappen.
@@ -13,7 +14,10 @@ final class PlusStore {
 
     private(set) var product: Product?
     private(set) var owned = false
-    /// Kalles når eierskapet endrer seg (kjøp på en annen enhet, refusjon, Familiedeling)
+    /// Anonymt kjøpsnummer (1.0.7): SHA-256 av Apples kjøps-ID, laget her på telefonen. Appen sender det til serveren
+    /// for å telle hvor mange telefoner som bruker hvert kjøp. Selve kjøps-ID-en forlater aldri telefonen.
+    private(set) var purchaseKey: String?
+    /// Kalles når eierskapet endrer seg (kjøp på en annen enhet, refusjon)
     var onChange: ((Bool) -> Void)?
     private var updates: Task<Void, Never>?
 
@@ -36,18 +40,25 @@ final class PlusStore {
     }
 
     private func refreshOwned() async {
-        var has = false
+        var has = false, key: String?
         for await result in Transaction.currentEntitlements {
             guard case .verified(let t) = result, t.revocationDate == nil else { continue }
-            if t.productID == Self.productID { has = true }
+            if t.productID == Self.productID { has = true; key = Self.anonymous(t.originalID) }
         }
         let changed = has != owned
         owned = has
+        purchaseKey = key
         if changed { onChange?(has) }
     }
 
+    /// Samme kjøp gir samme nummer på alle telefoner, men nummeret kan ikke gjøres om til kjøps-ID-en igjen
+    private static func anonymous(_ id: UInt64) -> String {
+        let hash = SHA256.hash(data: Data("kjorerapport-pluss:\(id)".utf8))
+        return String(hash.map { String(format: "%02x", $0) }.joined().prefix(32))
+    }
+
     var status: [String: Any] {
-        ["owned": owned, "available": product != nil, "price": product?.displayPrice ?? NSNull()]
+        ["owned": owned, "available": product != nil, "price": product?.displayPrice ?? NSNull(), "kjop": purchaseKey ?? NSNull()]
     }
 
     /// Kjøpet. Svar: { owned, error }: error er «avbrutt», «venter» (godkjenning, f.eks. Spør før kjøp) eller en melding.

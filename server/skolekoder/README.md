@@ -31,6 +31,13 @@ Til App Store-personvernet: «Identifikatorer – enhets-ID», ikke knyttet til 
 **Gir hele Pluss**
 En gyldig kode gir hele Pluss. Det gjelder også teorien i nettversjonen, som elever med Android bruker.
 
+**Telling av Pluss-kjøp (1.0.7)**
+Pluss kjøpes per person i App Store, uten Familiedeling. For å se om kjøp deles på mange telefoner, melder iPhone-appen seg høyst én gang i uka (`POST /v1/pluss`):
+- med et anonymt kjøpsnummer: SHA-256 av Apples kjøps-ID, laget på telefonen (`PlusStore.swift`). Serveren kan ikke finne kjøpet hos Apple eller vite hvem som kjøpte;
+- og den tilfeldige nøkkelen for installasjonen.
+
+Serveren lagrer bare nummeret, nøkkelen og når appen sist meldte seg. Ingenting stenges. En telefon regnes som i bruk når den har meldt seg de siste 14 dagene. `node tools/skolekoder.mjs pluss` viser hvor mange kjøp som er i bruk på 1, 2, 3 og 4 eller flere telefoner. 2 kan være et bytte av telefon; 3 eller flere på én gang tyder på deling. Til App Store-personvernet: «Kjøp – kjøpshistorikk», ikke knyttet til brukeren, ikke sporing.
+
 ## Filer
 
 - `worker.js` – serveren, en Cloudflare Worker uten avhengigheter.
@@ -81,6 +88,7 @@ node tools/skolekoder.mjs steng K7MX-29QF-H4TA              # koden slutter å v
 node tools/skolekoder.mjs nullstill K7MX-29QF-H4TA          # eleven har brukt begge telefonene og har fått ny
 node tools/skolekoder.mjs lag "Testgruppe" 1 3 25            # én felles testlenke: 3 måneder, høyst 25 telefoner
 node tools/skolekoder.mjs apne K7MX-29QF-H4TA               # angrer «steng»: koden virker igjen
+node tools/skolekoder.mjs pluss                             # hvor mange telefoner hvert Pluss-kjøp brukes på
 ```
 
 **Testlenke (0.27.4):** `https://kjorerapport.jo-9fc.workers.dev/?kode=KODE` låser opp Pluss av seg selv i nettversjonen. En kode kan gjelde høyst 50 telefoner; elevkoder er 2 som før.

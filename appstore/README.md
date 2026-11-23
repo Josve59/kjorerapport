@@ -33,7 +33,7 @@ The step-by-step guide is [`innsending.md`](innsending.md) (Norwegian). Its «Al
 | Create an **Apple Developer** account (about NOK 1,200 a year) | TestFlight on your own phone and publishing | developer.apple.com/programs |
 | Enrol as an **individual** | An ENK is not a legal entity, so Apple only accepts it as an individual. Your legal name is shown as the seller. Requires age 18 | Same place |
 | Check that the name **«Kjørerapport»** is free | The name must be unique in the App Store | App Store Connect when the app is created |
-| Set the **price** | Decided 18 Nov: the app is free to download; «Kjørerapport Pluss» is a one-time in-app purchase at NOK 499 for the whole family (section 12). Driving schools: NOK 350 per pupil excl. VAT, invoiced directly (see section 12) | App Store Connect |
+| Set the **price** | Decided 18 Nov: the app is free to download; «Kjørerapport Pluss» is a one-time in-app purchase at NOK 499 per person, without Family Sharing (section 12; per person since 23 Nov). Driving schools: NOK 350 per pupil excl. VAT, invoiced directly (see section 12) | App Store Connect |
 | Sign the **Paid Applications agreement** and add bank and tax details | Needed before any in-app purchase can be sold | App Store Connect › Business |
 
 ---
@@ -82,15 +82,16 @@ Ready-to-use snippet: [`Info-tillatelser.plist`](Info-tillatelser.plist).
 
 ## 4. Privacy label («App Privacy» in App Store Connect)
 
-**Decided 22 November 2026 (the owner said yes).** Answer «Yes, we collect data» with these three types. For each: purpose **App Functionality**, **not linked** to the user's identity, **not used for tracking**.
+**Decided 22 November 2026 (the owner said yes); Purchases added 23 November (app 1.0.7, counting phones per purchase).** Answer «Yes, we collect data» with these four types. For each: purpose **App Functionality**, **not linked** to the user's identity, **not used for tracking**.
 
 | Type in App Store Connect | What leaves the phone | Why |
 | --- | --- | --- |
 | Location › Precise Location | Positions along the route, sent to Statens vegvesen (NVDB) and Kartverket | Speed limits, road data, maps and place names. Answered right away; nothing is kept. |
 | Identifiers › User ID | The access code from the driving school, only if the user enters one | The school-code server checks that the code is valid and how many phones use it. |
-| Identifiers › Device ID | A random key the app makes for this installation, only with a school code | So one pupil's code works on at most two phones. It is not the advertising ID. |
+| Identifiers › Device ID | A random key the app makes for this installation, with a school code or with Pluss bought | So one pupil's code works on at most two phones, and to count phones per Pluss purchase. It is not the advertising ID. |
+| Purchases › Purchase History | With Pluss bought: an anonymous purchase number (SHA-256 of Apple's original transaction ID, made on the phone), at most once a week | To count how many phones use each purchase (Pluss is per person). Nothing is blocked; the server cannot look the purchase up at Apple. |
 
-Not collected: drives, marks, notes, the training plan, camera data and theory progress all stay on the phone, and purchases go through Apple. «Send turen til utvikleren» exists only in the web version and in test builds (TestFlight, Xcode), never in the App Store build (`devBuild` in app.js), so tester drives are not part of this label. `ios/Kjorerapport/PrivacyInfo.xcprivacy` lists the same three types.
+Not collected: drives, marks, notes, the training plan, camera data and theory progress all stay on the phone, and payment goes through Apple. «Send turen til utvikleren» exists only in the web version and in test builds (TestFlight, Xcode), never in the App Store build (`devBuild` in app.js), so tester drives are not part of this label. `ios/Kjorerapport/PrivacyInfo.xcprivacy` lists the same four types.
 
 **Must be checked again** before a version that adds analytics, third-party crash reporting, an account, cloud backup, iCloud sharing for the teacher messages (planned), or sending data to driving schools or insurers.
 
@@ -131,7 +132,7 @@ Paste into «Notes» under App Review Information (in English, since the reviewe
 >
 > **Camera (optional):** off by default. When enabled, face and road analysis run on-device; no images or video are stored or transmitted.
 >
-> **In-app purchase.** One non-consumable, «Kjørerapport Pluss» (one-time, Family Sharing on, no trial). It unlocks the full theory practice and the safety check (with a 59-question quiz), the cameras, the training plan, the driving-teacher summary, «Hva må du øve mer på?» and reports for drives older than the 10 latest. Free for everyone: recording, the report, the map, speed limits, data export, and 10 theory questions (tab «Opplæring» › «Teori og sikkerhet» › «Prøv 10 gratis spørsmål»). Every locked theory tile opens the Pluss screen; it is also under Settings (gear icon) › «Kjørerapport Pluss». «Gjenopprett kjøp» (Restore) and «App Store-kode» (Apple offer codes) are on the same screen.
+> **In-app purchase.** One non-consumable, «Kjørerapport Pluss» (one-time, Family Sharing off, no trial). It unlocks the full theory practice and the safety check (with a 59-question quiz), the cameras, the training plan, the driving-teacher summary, «Hva må du øve mer på?» and reports for drives older than the 10 latest. Free for everyone: recording, the report, the map, speed limits, data export, and 10 theory questions (tab «Opplæring» › «Teori og sikkerhet» › «Prøv 10 gratis spørsmål»). Every locked theory tile opens the Pluss screen; it is also under Settings (gear icon) › «Kjørerapport Pluss». «Gjenopprett kjøp» (Restore) and «App Store-kode» (Apple offer codes) are on the same screen.
 >
 > **«Kode fra trafikkskolen» (driving-school code):** Norwegian driving schools buy access for their own pupils from us under a written agreement and give each pupil a personal code (guideline 3.1.3(c): sold directly to organisations for their students, never to individuals). The app shows no school prices and no links to buy outside the App Store. A code for review: REVIEW_CODE (Pluss screen › «Kode fra trafikkskolen»).
 >
@@ -171,7 +172,7 @@ Contact information: your name, phone and email. No demo account is needed (no l
 7. `07-kart.png` «Se hvor det skjedde» – the map in full screen with numbered events (braking, acceleration, turns) and speeding in red on the route.
 8. `08-laerer.png` «Klar til neste kjøretime» – Til trafikklæreren: what has been practised since the last lesson, and what to work on.
 
-[`kjop-pluss-review.png`](kjop-pluss-review.png) (retaken 22 November): the Pluss page as a new user sees it, with «Kjøp for 499,00 kr». A raw screenshot without caption, for the purchase review in App Store Connect.
+[`kjop-pluss-review.png`](kjop-pluss-review.png) (retaken 23 November, app 1.0.7; the one from 22 November still said «fotoboksvarsel»): the Pluss page as a new user sees it, scrolled down to «Kjøp for 499,00 kr», «Gjenopprett kjøp» and the two code links. A raw screenshot without caption, for the purchase review in App Store Connect.
 
 How they were made:
 - From the real app (Debug build) in the simulator: iPhone 18 Pro Max, light mode, Norwegian, the status bar set to 09:41 (`xcrun simctl status_bar <id> override --time 9:41 …`).
@@ -224,7 +225,7 @@ How they were made:
 | Reference name | Pluss |
 | Product ID | `net.svendsenmedia.kjorerapport.pluss` (must match `PlusStore.swift` exactly) |
 | Price | NOK 499 (price point 499,00), decided 18 Nov 2026 |
-| Family Sharing | **On** (the app says the purchase works for the whole family) |
+| Family Sharing | **Off** (decided 23 Nov 2026, app 1.0.7: Pluss is per person). Leave it off: once turned on, Apple does not let you turn it off again |
 | Display name (Norwegian) | Kjørerapport Pluss |
 | Description (Norwegian) | Hele teorien, kameraene, opplæringsplanen, trafikklæreren og alle rapportene. Ett kjøp, ikke abonnement. |
 | Review screenshot | A screenshot of the Pluss screen (Innstillinger › Se Pluss) |

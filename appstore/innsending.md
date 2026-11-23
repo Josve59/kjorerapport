@@ -55,7 +55,7 @@ Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). H
 
 ### 5. Opprett kjøpet (Monetization › In-App Purchases)
 Ett kjøp, **Non-Consumable**. Feltene står i README del 12:
-- **Pluss**: ID `net.svendsenmedia.kjorerapport.pluss`, **499 kr**, Familiedeling på
+- **Pluss**: ID `net.svendsenmedia.kjorerapport.pluss`, **499 kr**, **Familiedeling AV** (bestemt 23. nov.: Pluss er per person). Ikke slå den på: Apple lar deg ikke slå den av igjen.
 
 Ikke lag den gamle prøveperioden (`…pluss.trial14`). Appen har ingen prøveperiode lenger.
 

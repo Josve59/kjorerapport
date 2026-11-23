@@ -5,7 +5,9 @@
    Turene slettes aldri og kan alltid eksporteres, også uten Pluss.
    0.23.0 (eieren): teorien og sikkerhetskontrollen er det store salgspunktet, så de hører til Pluss, og 10 faste
    spørsmål er gratis å prøve. Det er ingen prøveperiode lenger: mange kjøper en teoriapp 7–14 dager før prøven, og
-   14 gratis dager ville gitt hele teorien gratis. Prisen er 499 kr (App Store Connect), for hele familien. */
+   14 gratis dager ville gitt hele teorien gratis. Prisen er 499 kr (App Store Connect).
+   1.0.7 (eieren): Pluss kjøpes per person, uten Familiedeling. Om kjøp deles på flere telefoner, telles først
+   (skolekode.js, reportPlusUse); ingenting stenges. */
 
 export const FREE_REPORTS = 10;
 export const PLUS_FEATURES = {
@@ -59,7 +61,7 @@ export function setDevPlus(v) { devOverride = v === true || v === false ? v : nu
 export async function refreshPlus() {
   if (!native()) { state = { ...state, owned: true, loaded: true }; return plusState(); }
   const r = await window.kjNative.plusStatus().catch(() => null);
-  if (r) state = { owned: !!r.owned, available: !!r.available, price: r.price || null, loaded: true };
+  if (r) state = { owned: !!r.owned, available: !!r.available, price: r.price || null, loaded: true, kjop: typeof r.kjop === 'string' ? r.kjop : null };
   notify();
   return plusState();
 }
@@ -67,6 +69,7 @@ export async function refreshPlus() {
 const run = async cmd => {
   const r = await window.kjNative[cmd]().catch(e => ({ error: String(e && e.message || e) }));
   if (r && typeof r.owned === 'boolean') state = { ...state, owned: r.owned };
+  if (r && typeof r.kjop === 'string') state = { ...state, kjop: r.kjop };
   notify();
   return { owned: hasPlus(), bought: state.owned || devOverride === true, error: r && r.error ? r.error : null };
 };

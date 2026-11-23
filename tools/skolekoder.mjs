@@ -12,6 +12,8 @@
    node tools/skolekoder.mjs turer                         lister turene testerne har sendt, og henter nye til
                                                            Nedlastinger (kjorerapport-tester-….json, leses av turrapport)
    node tools/skolekoder.mjs slett-turer alle|NØKKEL       sletter turene på serveren når testingen er ferdig
+   node tools/skolekoder.mjs pluss                         hvor mange telefoner hvert Pluss-kjøp brukes på (1.0.7):
+                                                           viser om noen deler kjøpet. Ingenting stenges.
 
    Serveren: KJ_KODE_URL (standard http://localhost:8787, den lokale serveren) eller .local-test/skolekoder/url.txt.
    Hemmelighetene ligger i .local-test/skolekoder/ (holdes utenfor git): privat.jwk.json og admin.txt. Ta vare på dem:
@@ -95,6 +97,15 @@ if (cmd === 'nokler') {
   if (!hva) { console.log('Bruk: node tools/skolekoder.mjs slett-turer alle   (eller én NØKKEL fra «turer»)'); process.exit(1); }
   const r = await admin('POST', '/admin/slett-tur', hva === 'alle' ? { alle: true } : { nokkel: hva });
   console.log(`${r.slettet} ${r.slettet === 1 ? 'tur' : 'turer'} slettet på serveren.`);
+} else if (cmd === 'pluss') {
+  const r = await admin('GET', '/admin/pluss');
+  if (!r.kjop) { console.log('Ingen Pluss-kjøp har meldt seg ennå (appen melder seg én gang i uka når Pluss er kjøpt).'); process.exit(0); }
+  const line = o => `1 telefon: ${o[1]}, 2: ${o[2]}, 3: ${o[3]}, 4 eller flere: ${o['4+']}`;
+  console.log(`${r.kjop} Pluss-kjøp har meldt seg.`);
+  console.log(`I bruk nå (siste 14 dager):  ${line(r.naa)}`);
+  console.log(`Flest på én gang noen gang:  ${line(r.maks)}`);
+  console.log('2 kan være at noen har byttet telefon. 3 eller flere på én gang tyder på deling.');
+  for (const k of r.liste.filter(x => x.maks >= 3)) console.log(`  kjøp ${k.kjop}…  ${k.naa} i bruk nå, flest ${k.maks}, ${k.telefoner} telefoner totalt, sist ${day(k.sist)}`);
 } else if (cmd === 'steng' || cmd === 'nullstill' || cmd === 'apne') {
   const [kode] = args;
   if (!kode) { console.log(`Bruk: node tools/skolekoder.mjs ${cmd} KODE`); process.exit(1); }

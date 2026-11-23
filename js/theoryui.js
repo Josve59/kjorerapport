@@ -177,7 +177,7 @@ function renderTheoryFree(root, ctx) {
     </div>
     <section class="card th-plus-card">
       <h2 class="card-title">${icon('check')}Alt i teorien med Pluss</h2>
-      <ul class="th-why"><li>${QUESTIONS.length} spørsmål i de sju temaene på prøven</li><li>Hvor klar du er i prosent, og en plan fram til prøvedatoen</li><li>${isNativeApp() ? 'Ett kjøp, ikke abonnement, for hele familien' : 'Låses opp med en kode fra trafikkskolen'}</li></ul>
+      <ul class="th-why"><li>${QUESTIONS.length} spørsmål i de sju temaene på prøven</li><li>Hvor klar du er i prosent, og en plan fram til prøvedatoen</li><li>${isNativeApp() ? 'Ett kjøp, ikke abonnement' : 'Låses opp med en kode fra trafikkskolen'}</li></ul>
       <button type="button" class="btn secondary" id="th-to-plus">Se Pluss</button>
     </section>
     <p class="muted small th-note">Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og skiltforskriften. Den ekte prøven har andre spørsmål, men de samme temaene.</p>`;
@@ -448,7 +448,7 @@ function renderPracticeDone(root, ctx) {
     <section class="card"><ul class="q-sum">${P.items.map((id, i) => `<li class="${P.results[i] ? 'ok' : 'no'}">${icon(P.results[i] ? 'check' : 'close', 18)}${sumFig(byId.get(id))}<span>${esc(byId.get(id).label || byId.get(id).q)}</span></li>`).join('')}</ul></section>
     ${readCard(weak)}
     ${P.filter.free && !hasTheory() ? `<section class="card th-plus-card"><h2 class="card-title">${icon('check')}Det var de 10 gratis</h2>
-      <p>Med Pluss får du alle ${QUESTIONS.length} spørsmålene, prøver som den ekte, teoriboka, skiltprøven og sikkerhetskontrollen. ${isNativeApp() ? 'Ett kjøp, for hele familien.' : 'Låses opp med en kode fra trafikkskolen.'}</p></section>
+      <p>Med Pluss får du alle ${QUESTIONS.length} spørsmålene, prøver som den ekte, teoriboka, skiltprøven og sikkerhetskontrollen. ${isNativeApp() ? 'Ett kjøp, ikke abonnement.' :'Låses opp med en kode fra trafikkskolen.'}</p></section>
     <button type="button" class="btn primary" id="q-plus">Se Pluss</button>
     <button type="button" class="btn secondary" id="q-again">${icon('repeat', 20)}Ta de 10 igjen</button>`
     : `<button type="button" class="btn primary" id="q-again">${icon('repeat', 20)}Øv videre</button>`}

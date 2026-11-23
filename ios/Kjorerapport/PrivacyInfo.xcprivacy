@@ -2,7 +2,8 @@
 <!-- Personvernmanifest (Apple krever det), likt personvernetiketten i App Store (appstore/README.md del 4, 1.0.0):
      ingen sporing. Turene lagres på telefonen. Det som forlater telefonen: posisjoner til Statens vegvesen og
      Kartverket (fartsgrenser og kart), og med kode fra trafikkskolen koden og en tilfeldig nøkkel per installasjon.
-     Ingenting av det er knyttet til hvem brukeren er. Eneste «required reason»-API er systemets oppetid, brukt til å
+     1.0.7: med Pluss kjøpt også et anonymt kjøpsnummer (SHA-256 av kjøps-ID-en) og nøkkelen, høyst én gang i uka,
+     for å telle telefoner per kjøp. Ingenting av det er knyttet til hvem brukeren er. Eneste «required reason»-API er systemets oppetid, brukt til å
      regne sensorenes tidsstempler om til klokketid under et opptak (NativeRecorder.swift). -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -40,6 +41,18 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

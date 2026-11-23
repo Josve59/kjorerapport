@@ -26,7 +26,14 @@
    POST /admin/tester      { kode, tester }              → { ok }
    GET  /admin/turer                                     → { turer: [{ nokkel, kode, install, tur, start, bytes, gz, versjon, sendt }] }
    GET  /admin/tur?nokkel=…                              → selve turen (som den ble sendt)
-   POST /admin/slett-tur   { nokkel } eller { alle: true } → { ok, slettet } */
+   POST /admin/slett-tur   { nokkel } eller { alle: true } → { ok, slettet }
+
+   Telling av Pluss-kjøp (1.0.7): Pluss kjøpes per person i App Store. For å se om kjøp deles, melder iPhone-appen seg
+   høyst én gang i uka med et anonymt kjøpsnummer (SHA-256 av Apples kjøps-ID, laget på telefonen) og installasjons-
+   nøkkelen. Serveren kan ikke finne kjøpet hos Apple eller vite hvem som kjøpte. Ingenting stenges, bare telles.
+   «pluss:<kjop>» → { forst, installs: [{ i, forst, sist }], maks }   (maks: flest telefoner i bruk på én gang)
+   POST /v1/pluss          { kjop, install }             → { ok }
+   GET  /admin/pluss                                     → { kjop, naa: { 1, 2, 3, '4+' }, maks: { … }, liste } */
 
 export const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';   // uten 0/O, 1/I/L, så kodene er lette å skrive av
 export const CODE_LEN = 12;
@@ -195,6 +202,50 @@ async function deleteTrips(req, env) {
   return json({ ok: true, slettet: keys.length });
 }
 
+/* Pluss-telling (1.0.7). En telefon regnes som i bruk når den har meldt seg de siste 14 dagene: appen melder seg hver
+   uke, så to telefoner som brukes samtidig, synes begge. Bytter noen telefon, er den gamle ute etter 14 dager. */
+export const PLUS_ACTIVE = 14 * 86400000;
+const PLUS_WRITE_EVERY = 6 * 86400000;   // KV tåler 1000 skrivinger om dagen gratis: høyst én per telefon i uka
+const PLUS_KEEP = 20;                    // telefoner per kjøp som huskes
+const activeNow = (rec, now) => rec.installs.filter(x => now - x.sist <= PLUS_ACTIVE).length;
+const bucket = n => (n >= 4 ? '4+' : String(n));
+
+async function countPlus(req, env, now) {
+  const { kjop, install } = await readJson(req);
+  if (typeof kjop !== 'string' || !/^[0-9a-f]{32}$/.test(kjop)) return json({ error: 'kjop' }, 400);
+  if (typeof install !== 'string' || install.length < 8 || install.length > 64) return json({ error: 'install' }, 400);
+  const key = 'pluss:' + kjop, old = await env.CODES.get(key);
+  const rec = old ? JSON.parse(old) : { forst: now, installs: [], maks: 0 };
+  const id = install.slice(0, 16);
+  let row = rec.installs.find(x => x.i === id);
+  if (row && now - row.sist < PLUS_WRITE_EVERY) return json({ ok: true });
+  if (row) row.sist = now; else { row = { i: id, forst: now, sist: now }; rec.installs.push(row); }
+  rec.installs.sort((a, b) => b.sist - a.sist);
+  rec.installs = rec.installs.slice(0, PLUS_KEEP);
+  rec.maks = Math.max(rec.maks || 0, activeNow(rec, now));
+  await env.CODES.put(key, JSON.stringify(rec));
+  return json({ ok: true });
+}
+
+async function plusSummary(env, now) {
+  const naa = { 1: 0, 2: 0, 3: 0, '4+': 0 }, maks = { 1: 0, 2: 0, 3: 0, '4+': 0 }, liste = [];
+  let cursor;
+  do {
+    const page = await env.CODES.list({ prefix: 'pluss:', cursor });
+    for (const k of page.keys) {
+      const v = await env.CODES.get(k.name);
+      if (!v) continue;
+      const rec = JSON.parse(v), n = activeNow(rec, now);
+      if (n) naa[bucket(n)]++;
+      if (rec.maks) maks[bucket(rec.maks)]++;
+      liste.push({ kjop: k.name.slice(6, 12), telefoner: rec.installs.length, naa: n, maks: rec.maks || 0, forst: rec.forst, sist: Math.max(0, ...rec.installs.map(x => x.sist)) });
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  liste.sort((a, b) => b.maks - a.maks || b.sist - a.sist);
+  return json({ kjop: liste.length, naa, maks, liste });
+}
+
 export default {
   async fetch(req, env, ctx, now = Date.now()) {
     const url = new URL(req.url);
@@ -202,6 +253,7 @@ export default {
     try {
       if (req.method === 'POST' && url.pathname === '/v1/aktiver') return await activate(req, env, now);
       if (req.method === 'POST' && url.pathname === '/v1/tur') return await receiveTrip(req, env, now);
+      if (req.method === 'POST' && url.pathname === '/v1/pluss') return await countPlus(req, env, now);
       if (url.pathname.startsWith('/admin/')) {
         if (!isAdmin(req, env)) return json({ error: 'nei' }, 401);
         if (req.method === 'POST' && url.pathname === '/admin/koder') return await createCodes(req, env, now);
@@ -213,6 +265,7 @@ export default {
         if (req.method === 'GET' && url.pathname === '/admin/turer') return await listTrips(env);
         if (req.method === 'GET' && url.pathname === '/admin/tur') return await getTrip(url, env);
         if (req.method === 'POST' && url.pathname === '/admin/slett-tur') return await deleteTrips(req, env);
+        if (req.method === 'GET' && url.pathname === '/admin/pluss') return await plusSummary(env, now);
       }
       if (url.pathname === '/') return json({ tjeneste: 'Kjørerapport skolekoder', ok: true });
       return json({ error: 'finnes ikke' }, 404);
