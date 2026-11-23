@@ -11,7 +11,7 @@
 <body>
 <div class="wrap narrow">
   <header class="topbar">
-    <a class="brand" href="../trafikkskole/"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
+    <a class="brand" href="../"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
   </header>
 
   <main class="doc">
@@ -90,9 +90,11 @@
     <p>Kjørerapport lages av Svendsen Media. Spørsmål om personvern: <a href="mailto:Jo@svendsenmedia.net?subject=Personvern%20i%20Kj%C3%B8rerapport">Jo@svendsenmedia.net</a>.</p>
     <p class="muted small">Fordi turene bare ligger på din telefon, behandler Svendsen Media ingen personopplysninger om kjøringen din. Du har likevel alltid rett til å klage til Datatilsynet.</p>
 
-    <p class="btn-row"><a class="btn secondary" href="../">Åpne appen</a><a class="btn secondary" href="../trafikkskole/">For trafikkskoler</a><a class="btn secondary" href="../lisenser/">Lisenser og kilder</a></p>
+    <p class="btn-row"><a class="btn secondary" href="../" data-app="">Åpne appen</a><a class="btn secondary" href="../trafikkskole/">For trafikkskoler</a><a class="btn secondary" href="../lisenser/">Lisenser og kilder</a></p>
   </main>
 </div>
 <footer><div class="wrap narrow"><span>© 2026 Svendsen Media</span><a href="mailto:Jo@svendsenmedia.net">Jo@svendsenmedia.net</a></div></footer>
+<script>/* 1.0.8: på svendsenmedia.net/kjorerapport/ ligger nettversjonen under app/. I iPhone-appen og på den gamle adressen ligger den på roten, så lenken er «../» der. */
+if (location.hostname.endsWith('svendsenmedia.net')) document.querySelectorAll('a[data-app]').forEach(a => { a.href = '../app/' + (a.dataset.app || ''); });</script>
 </body>
 </html>

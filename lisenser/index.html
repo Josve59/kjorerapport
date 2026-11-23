@@ -368,7 +368,7 @@ FROM, OUT OF THE USE OF OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.</pre>
     </details>
 
-    <p class="btn-row"><a class="btn secondary" href="../">Åpne appen</a><a class="btn secondary" href="../personvern/">Personvern</a></p>
+    <p class="btn-row"><a class="btn secondary" href="../" data-app="">Åpne appen</a><a class="btn secondary" href="../personvern/">Personvern</a></p>
   </main>
 </div>
 <script>
@@ -385,5 +385,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.</pre>
   });
 </script>
 <footer><div class="wrap narrow"><span>© 2026 Svendsen Media</span><a href="mailto:Jo@svendsenmedia.net">Jo@svendsenmedia.net</a></div></footer>
+<script>/* 1.0.8: på svendsenmedia.net/kjorerapport/ ligger nettversjonen under app/. I iPhone-appen og på den gamle adressen ligger den på roten, så lenken er «../» der. */
+if (location.hostname.endsWith('svendsenmedia.net')) document.querySelectorAll('a[data-app]').forEach(a => { a.href = '../app/' + (a.dataset.app || ''); });</script>
 </body>
 </html>

@@ -19,7 +19,7 @@ if (!ok) {
   $('#terms').textContent = 'Lenken mangler koden, eller den er skrevet av feil. Spør trafikkskolen om en ny lenke.';
 } else {
   $('#code').textContent = code;
-  $('#web').href = `../?kode=${encodeURIComponent(code)}`;
+  $('#web').href = `../app/?kode=${encodeURIComponent(code)}`;   // nettversjonen ligger under app/ (1.0.8)
 }
 if (APP_STORE_URL) $('#ios-store').innerHTML = `Last ned <strong>Kjørerapport</strong> fra App Store: <a href="${APP_STORE_URL}">åpne App Store</a>.`;
 // Android og PC først når eleven ikke har iPhone

@@ -56,7 +56,8 @@ const mailHref = (to, kode) => `mailto:${isMail(to) ? encodeURIComponent(String(
 const canShare = () => typeof navigator.share === 'function';
 // Telefoner og Mac kan åpne SMS fra en lenke; på en vanlig PC er e-post den naturlige hovedknappen
 const smsFirst = /iPhone|iPad|Android|Macintosh/.test(navigator.userAgent);
-const linkFor = kode => `${location.origin}/elev/?kode=${encodeURIComponent(kode)}&fra=${encodeURIComponent(data.navn)}`;
+// Relativt til denne siden, så lenken virker både på svendsenmedia.net/kjorerapport/ og på den gamle adressen
+const linkFor = kode => new URL(`../elev/?kode=${encodeURIComponent(kode)}&fra=${encodeURIComponent(data.navn)}`, location.href).href;
 const messageFor = kode => `Hei! ${data.navn} gir deg Kjørerapport Pluss: hele teorien med forklaringer, sikkerhetskontrollen og en rapport etter hver øvelsestur. Trykk her for å komme i gang: ${linkFor(kode)}`;
 
 let toastTimer;

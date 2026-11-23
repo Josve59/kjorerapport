@@ -67,7 +67,7 @@ if (cmd === 'nokler') {
   console.log(`${r.koder.length} koder til ${r.skole} (${r.maaneder} måneder fra eleven tar koden i bruk, høyst ${r.maks} telefoner per kode${r.tester ? ', testkode: kan sende turer' : ''}).`);
   console.log(`Lagret som regneark: ${file}`);
   const web = read('nettside-url.txt');
-  if (web && r.koder.length <= 3) for (const k of r.koder) console.log(`Lenke som låser opp av seg selv: ${web}/?kode=${k}`);
+  if (web && r.koder.length <= 3) for (const k of r.koder) console.log(`Lenke som låser opp av seg selv: ${web}/app/?kode=${k}`);   // nettversjonen ligger under /app/ (1.0.8)
 } else if (cmd === 'liste') {
   const [skole] = args;
   const r = await admin('GET', '/admin/koder' + (skole ? '?skole=' + encodeURIComponent(skole) : ''));

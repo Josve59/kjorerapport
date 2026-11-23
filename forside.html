@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Forsiden for appen (1.0.8): svendsenmedia.net/kjorerapport/. Ligger på roten, så lenkene er de samme her som der
+       (Workeren i tools/nettside-cloudflare.mjs viser denne fila på /kjorerapport/). Nettversjonen ligger under app/. -->
+  <title>Kjørerapport – teori og øvelseskjøring i én app</title>
+  <meta name="description" content="Kjørerapport samler teorien, sikkerhetskontrollen og øvelseskjøringen til førerkort klasse B. Rapport etter hver tur, uten konto.">
+  <meta property="og:title" content="Kjørerapport – øv til lappen med en rapport etter hver tur">
+  <meta property="og:description" content="Teori med forklaring, sikkerhetskontrollen og rapport etter hver øvelsestur. Ingen konto, turene blir på telefonen.">
+  <meta property="og:image" content="forside/01-teori.jpg">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/side.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <a class="brand" href="./"><img src="icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
+    <nav><a href="#funksjoner">Hva den gjør</a><a href="trafikkskole/">For trafikkskoler</a><a href="hjelp/">Hjelp</a></nav>
+  </header>
+
+  <section class="hero">
+    <div>
+      <span class="eyebrow">For deg som skal ta lappen</span>
+      <div class="road" aria-hidden="true"></div>
+      <h1>Øv til lappen, med en rapport etter hver tur.</h1>
+      <p class="lead">Kjørerapport samler teorien, sikkerhetskontrollen og øvelseskjøringen i én app. Etter hver tur ser dere hva som gikk bra, og hva dere bør øve på neste gang.</p>
+      <div class="btn-row">
+        <a class="btn yellow" id="appstore" href="#" hidden>Last ned i App Store</a>
+        <span class="soon" id="soon">Kommer snart i App Store</span>
+        <a class="btn secondary" href="app/">Prøv nettversjonen</a>
+      </div>
+      <p class="muted small" style="margin-top:14px">Gratis å laste ned. Ingen konto. Turene blir på telefonen din.</p>
+    </div>
+    <img class="shot" src="forside/01-teori.jpg" alt="Teorien i appen: 72 prosent klar, dagens mål, dato for teoriprøven og de siste prøvene" width="460" height="1000">
+  </section>
+
+  <section class="block" id="funksjoner" aria-labelledby="h-funk">
+    <h2 id="h-funk">Alt du trenger fram til oppkjøringen</h2>
+    <div class="grid3" style="margin-top:20px">
+      <div class="card feature"><h3>Teorien</h3><p>Alle 420 spørsmålene med tegninger og forklaring, prøver som den ekte, skiltprøven og «Hvem kjører først?». Du ser hvor klar du er i prosent.</p></div>
+      <div class="card feature"><h3>Rapport etter hver tur</h3><p>Telefonen måler bremsing, gass, svinger og fart mens dere kjører. Etterpå får dere turen på kart, med det som gikk bra og konkrete tips.</p></div>
+      <div class="card feature"><h3>Sikkerhetskontrollen</h3><p>Alle 46 oppgavene fra oppkjøringen, med tegninger av bilen og en quiz, så du kan svare når sensor spør.</p></div>
+      <div class="card feature"><h3>Til trafikklæreren</h3><p>En oppsummering av øvingen siden forrige kjøretime, klar til å vise eller dele. Læreren ser hva dere har øvd på.</p></div>
+      <div class="card feature"><h3>Speil og skulderblikk</h3><p>Med kameraene ser appen om føreren sjekker speil og gjør skulderblikk, og bilen foran og feltlinjene. Bildene lagres aldri.</p></div>
+      <div class="card feature"><h3>Logg til forsikringen</h3><p>Flere forsikringsselskaper gir høyere startbonus etter 2 000 km øvelseskjøring. Kjørerapport fører loggen for dere.</p></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-bilder">
+    <h2 id="h-bilder">Slik ser det ut</h2>
+    <div class="gallery" tabindex="0" aria-label="Skjermbilder fra appen, kan rulles sidelengs">
+      <img src="forside/02-sporsmal.jpg" alt="Et teorispørsmål med tegning og forklaring" width="460" height="1000" loading="lazy">
+      <img src="forside/03-kryss.jpg" alt="«Hvem kjører først?» i et kryss med tre biler" width="460" height="1000" loading="lazy">
+      <img src="forside/04-sikkerhet.jpg" alt="Et spørsmål fra sikkerhetskontrollen om bremselysene" width="460" height="1000" loading="lazy">
+      <img src="forside/05-rapport.jpg" alt="Rapporten etter en øvelsestur" width="460" height="1000" loading="lazy">
+      <img src="forside/07-kart.jpg" alt="Turen på kart med nummererte hendelser" width="460" height="1000" loading="lazy">
+      <img src="forside/08-laerer.jpg" alt="Oppsummeringen til trafikklæreren" width="460" height="1000" loading="lazy">
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-pris">
+    <div class="sign-card">
+      <p class="eyebrow">Pris</p>
+      <h2 id="h-pris" style="color:#fff">Ett kjøp, ikke abonnement</h2>
+      <p>Opptak, rapport, kart, fartsgrense, kjørelogg og 10 teorispørsmål er gratis. Kjørerapport Pluss koster 499 kr én gang og gir hele teorien, sikkerhetskontrollen, kameraene og alle rapportene.</p>
+      <p class="muted" style="margin:0">Bruker trafikkskolen din Kjørerapport, får du Pluss fra skolen.</p>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="h-skoler">
+    <div class="grid2">
+      <div>
+        <h2 id="h-skoler">For trafikkskoler</h2>
+        <p>Gi elevene Kjørerapport Pluss. Skolen deler ut tilgangene selv, med en lenke på SMS, e-post eller en QR-kode, og ser hvor mange som er i bruk.</p>
+        <div class="btn-row"><a class="btn primary" href="trafikkskole/">Les mer</a><a class="btn secondary" href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Ta kontakt</a></div>
+      </div>
+      <div class="card">
+        <h3>Personvern</h3>
+        <p>Ingen konto, ingen reklame og ingen sporing. Turene lagres bare på telefonen, og du bestemmer selv hva du deler.</p>
+        <p><a href="personvern/">Les hele personvernerklæringen</a></p>
+      </div>
+    </div>
+  </section>
+</div>
+<footer><div class="wrap"><span>© 2026 Svendsen Media</span><span><a href="hjelp/">Hjelp</a> · <a href="personvern/">Personvern</a> · <a href="lisenser/">Lisenser</a> · <a href="mailto:Jo@svendsenmedia.net">Jo@svendsenmedia.net</a></span></div></footer>
+<script>
+  // Lenken til appen i App Store fylles inn når appen er ute (appstore/innsending.md). Til da: «Kommer snart».
+  const APP_STORE_URL = '';
+  if (APP_STORE_URL) { const a = document.getElementById('appstore'); a.href = APP_STORE_URL; a.hidden = false; document.getElementById('soon').hidden = true; }
+</script>
+</body>
+</html>

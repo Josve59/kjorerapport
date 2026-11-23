@@ -17,7 +17,7 @@
 <body>
 <div class="wrap narrow">
   <header class="topbar">
-    <a class="brand" href="../trafikkskole/"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
+    <a class="brand" href="../"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
   </header>
 
   <main class="doc">
@@ -79,9 +79,11 @@
       <p class="muted small">Kjørerapport lages av Svendsen Media i Trondheim.</p>
     </div>
 
-    <p class="btn-row"><a class="btn secondary" href="../">Åpne appen</a><a class="btn secondary" href="../personvern/">Personvern</a><a class="btn secondary" href="../trafikkskole/">For trafikkskoler</a><a class="btn secondary" href="../lisenser/">Lisenser og kilder</a></p>
+    <p class="btn-row"><a class="btn secondary" href="../" data-app="">Åpne appen</a><a class="btn secondary" href="../personvern/">Personvern</a><a class="btn secondary" href="../trafikkskole/">For trafikkskoler</a><a class="btn secondary" href="../lisenser/">Lisenser og kilder</a></p>
   </main>
 </div>
 <footer><div class="wrap narrow"><span>© 2026 Svendsen Media</span><a href="mailto:Jo@svendsenmedia.net">Jo@svendsenmedia.net</a></div></footer>
+<script>/* 1.0.8: på svendsenmedia.net/kjorerapport/ ligger nettversjonen under app/. I iPhone-appen og på den gamle adressen ligger den på roten, så lenken er «../» der. */
+if (location.hostname.endsWith('svendsenmedia.net')) document.querySelectorAll('a[data-app]').forEach(a => { a.href = '../app/' + (a.dataset.app || ''); });</script>
 </body>
 </html>

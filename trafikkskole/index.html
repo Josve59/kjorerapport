@@ -33,7 +33,7 @@
 <body>
 <div class="wrap">
   <header class="topbar">
-    <a class="brand" href="./"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
+    <a class="brand" href="../"><img src="../icons/icon.svg" alt="" width="30" height="30">Kjørerapport</a>
     <nav><a href="#hva">Hva den gjør</a><a href="#personvern">Personvern</a><a href="#kontakt">Kontakt</a></nav>
   </header>
 
@@ -44,7 +44,7 @@
       <h1>Eleven kommer forberedt til timen.</h1>
       <p class="lead">Kjørerapport gjør elevens telefon til en øvingslogg for øvelseskjøring med ledsager. Etter hver tur får eleven en rapport over bremsing, gass, svinger, fart og fartsgrenser, på kart og med konkrete tips til neste tur.</p>
       <div class="btn-row">
-        <a class="btn primary" href="../#/demo">Se en demotur</a>
+        <a class="btn primary" href="../#/demo" data-app="#/demo">Se en demotur</a>
         <a class="btn secondary" href="#kontakt">Ta kontakt</a>
       </div>
       <p class="muted small" style="margin-top:14px">Gratis å prøve. Ingen konto. Turene blir på elevens telefon.</p>
@@ -139,7 +139,7 @@
           <p>Skann koden og trykk «Se en demotur». Det tar ett minutt.</p>
           <div class="btn-row" style="margin-top:12px">
             <a class="btn primary" href="mailto:Jo@svendsenmedia.net?subject=Kj%C3%B8rerapport%20for%20trafikkskoler">Send e-post</a>
-            <a class="btn secondary" href="../">Åpne appen</a>
+            <a class="btn secondary" href="../" data-app="">Åpne appen</a>
           </div>
           <p class="muted small" style="margin-top:12px">Jo@svendsenmedia.net</p>
         </div>
@@ -148,5 +148,7 @@
   </section>
 </div>
 <footer><div class="wrap"><span>© 2026 Svendsen Media</span><span><a href="../personvern/">Personvern</a> · <a href="Kjorerapport-infoark.pdf">Infoark (PDF)</a></span></div></footer>
+<script>/* 1.0.8: på svendsenmedia.net/kjorerapport/ ligger nettversjonen under app/. I iPhone-appen og på den gamle adressen ligger den på roten, så lenken er «../» der. */
+if (location.hostname.endsWith('svendsenmedia.net')) document.querySelectorAll('a[data-app]').forEach(a => { a.href = '../app/' + (a.dataset.app || ''); });</script>
 </body>
 </html>
