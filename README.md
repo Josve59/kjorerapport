@@ -143,6 +143,17 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.11 – the school price is not on the website
+
+The owner (23 November) wants the price per pupil for driving schools agreed with each school, so ordinary visitors don't see what schools pay.
+
+- **Front page:** the school block says «Pris etter avtale» in place of 450 kr.
+- **Driving-school page:**
+  - The trust list says «Pris etter avtale».
+  - The price card says «Etter avtale» and «Ta kontakt, så får dere et tilbud».
+  - The page description for search engines no longer has the price.
+- **Unchanged:** the school's own page (`skole/`, reached only through the school's secret link) still counts orders at 450 kr. The App Store notes and this README keep 450 kr as the standard price.
+
 ## What's new in 1.0.10 – no public links to the web version
 
 The owner (23 November) wants the web version of the app, which shows all of its code, to be harder to find.
