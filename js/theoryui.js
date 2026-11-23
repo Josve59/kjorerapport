@@ -62,11 +62,13 @@ export const teacherTheory = p => theoryBrief(p, { questions: QUESTIONS, signQue
 
 /* «Meld fra om feil» (0.25.0): e-post til samme adresse som «Gi tilbakemelding» i Innstillinger, med spørsmålet fylt
    inn. Ingen trafikklærer har gått gjennom spørsmålene ennå, så elever og lærere kan si fra om noe er feil eller uklart. */
-function reportLink(id, text) {
+function reportLink(id, text, short = false) {
   const a = document.getElementById('btn-feedback'), to = a ? (a.getAttribute('href') || '').split('?')[0] : '';
   if (!to.startsWith('mailto:')) return '';
   const href = `${to}?subject=${encodeURIComponent(`Feil i spørsmål ${id}`)}&body=${encodeURIComponent(`Spørsmål ${id}: ${text}\n\nHva er feil eller uklart?\n\n`)}`;
-  return `<a class="link q-report" href="${esc(href)}">${icon('flag', 16)}Meld fra om feil i spørsmålet</a>`;
+  // Kort utgave i svarlinjen i øvingen (1.0.6), så forklaringen får plass på skjermen
+  return short ? `<a class="link q-report" href="${esc(href)}" aria-label="Meld fra om feil i spørsmålet">${icon('flag', 16)}Meld fra</a>`
+    : `<a class="link q-report" href="${esc(href)}">${icon('flag', 16)}Meld fra om feil i spørsmålet</a>`;
 }
 
 /* Fra feilene til teoriboka (0.25.0): delene med flest feil, med lenke rett dit */
@@ -341,7 +343,7 @@ export function renderPractice(root, ctx) {
       <button type="button" class="icon-btn q-bm ${marked ? 'on' : ''}" id="q-bm" aria-pressed="${marked}" aria-label="${marked ? 'Fjern bokmerket' : 'Bokmerk spørsmålet'}">${icon('star', 22)}</button>
       <button type="button" class="icon-btn" id="q-close" aria-label="Avslutt øvingen">${icon('close', 22)}</button></div>
     <span class="th-bar q-prog"><span id="q-prog-fill" style="width:${from}%"></span></span>
-    <section class="card q-card ${answered ? '' : 'q-enter'}">
+    <section class="card q-card ${answered ? 'q-answered' : 'q-enter'}">
       <p class="eyebrow">${esc(q.eyebrow || t.title)}${level(q) >= 3 ? ' <span class="q-hard">Vanskelig</span>' : ''}</p>
       ${q.img ? `<div class="q-fig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.img)}">${figure(q.img)}</div>` : ''}
       <div class="q-head"><h2 class="q-text">${esc(q.q)}</h2>${speakBtn('q-read')}</div>
@@ -354,13 +356,12 @@ export function renderPractice(root, ctx) {
       }).join('')}</div>
     </section>
     ${answered ? `<section class="card q-why ${right ? 'ok' : 'no'}" aria-live="polite">
-      <p class="q-verdict"><span class="q-verdict-ico">${icon(right ? 'check' : 'close', 22)}</span>${right ? 'Riktig!' : 'Ikke riktig'}${combo >= 3 ? `<span class="q-combo">${icon('flame', 16)}${combo} på rad</span>` : ''}</p>
+      <p class="q-verdict"><span class="q-verdict-ico">${icon(right ? 'check' : 'close', 22)}</span>${right ? 'Riktig!' : 'Ikke riktig'}${combo >= 3 ? `<span class="q-combo">${icon('flame', 16)}${combo} på rad</span>` : ''}${reportLink(q.id, q.q, true)}</p>
       ${q.wimg && !play ? `<div class="q-fig q-wfig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.wimg)}">${figure(q.wimg)}</div>` : ''}
       ${play ? `<div class="cx-player"><button type="button" class="btn secondary cx-playbtn" data-play="${play}">${icon('play', 20)}Se hvem som kjører først</button></div>` : ''}
       <p class="q-rule">${esc(rule)}</p>${rest ? `<p>${esc(rest)}</p>` : ''}
       <p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
       ${more ? `<button type="button" class="link q-more" id="q-more">${icon('book', 18)}<span>Les mer i teoriboka: ${esc(bookSection(more).title)}</span>${icon('chev', 16)}</button>` : ''}
-      ${reportLink(q.id, q.q)}
     </section>
     <div class="q-dock"><button type="button" class="btn primary" id="q-next">${P.i + 1 < P.items.length ? 'Neste spørsmål' : 'Se hvordan det gikk'}${icon('chev', 20)}</button></div>` : ''}`;
   root.querySelector('#q-close').onclick = () => { const back = P.back; practice = null; ctx.go(back); };

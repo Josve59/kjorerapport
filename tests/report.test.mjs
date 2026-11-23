@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { analyze, makeDemo } from '../js/analysis.js';
-import { buildSummary, eventsPer10km, eventLabel, headline, evaluateFocus } from '../js/report.js';
+import { buildSummary, eventsPer10km, eventLabel, headline, evaluateFocus, spreadPins } from '../js/report.js';
 
 const r = analyze(makeDemo());
 
@@ -130,4 +130,16 @@ test('0.26.2: en uttatt periode vet hvilket merke som tok den ut, så «Angre» 
   const sp = speedingFor(r, { limits }, [{ cat: 'grense', t: 100 + 5 }, { cat: 'grense', t: 100 + 60 }]);
   assert.equal(sp.ignored.length, 1);
   assert.deepEqual(sp.ignored[0].markT, [105], 'bare merket på den strekningen');
+});
+
+test('kartnåler på samme sted skyves fra hverandre, de andre står i ro (1.0.6)', () => {
+  const pts = [{ x: 100, y: 100 }, { x: 100, y: 100 }, { x: 101, y: 102 }, { x: 300, y: 100 }];
+  const off = spreadPins(pts, 32);
+  const at = pts.map((p, i) => ({ x: p.x + off[i].dx, y: p.y + off[i].dy }));
+  for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) {
+    assert.ok(Math.hypot(at[i].x - at[j].x, at[i].y - at[j].y) >= 31, `nål ${i} og ${j} ligger for tett`);
+  }
+  assert.deepEqual(off[3], { dx: 0, dy: 0 });   // en nål for seg selv flyttes ikke
+  for (const o of off.slice(0, 3)) assert.ok(Math.hypot(o.dx, o.dy) < 32, 'nålene står fortsatt ved stedet sitt');
+  assert.deepEqual(spreadPins(pts, 32), off);   // likt hver gang
 });

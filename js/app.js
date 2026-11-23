@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.5';
+export const APP_VERSION = '1.0.6';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -692,7 +692,7 @@ async function renderPlus(feature = null) {
       <button type="button" class="btn primary plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
       <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse.'}</p>`}
       ${owned ? '' : `
-      <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button>${codesEnabled() && st.native ? '<button type="button" class="link" id="plus-appcode">App Store-kode</button>' : ''}</div>`}
+      <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><span class="plus-codes"><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button>${codesEnabled() && st.native ? '<button type="button" class="link" id="plus-appcode">App Store-kode</button>' : ''}</span></div>`}
       ${st.native ? `<p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>` : ''}`;
     const back = root.querySelector('#plus-back');
     if (back) back.onclick = () => goBack();

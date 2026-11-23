@@ -296,6 +296,31 @@ p, li, dd { text-wrap: pretty; }
 .q-opt.wrong { border-color: var(--brake); background: color-mix(in srgb, var(--brake) 11%, var(--surface)); }
 .q-opt.wrong .q-letter, .q-opt.wrong .q-mark { background: var(--brake); color: var(--on-color); border-radius: 50%; }
 .q-opt.dim { opacity: .55; }
+/* Etter svaret (1.0.6): spørsmål og forklaring skal stå på én skjerm. Spørsmålet krymper: alternativene som verken
+   var riktige eller valgt, skjules, teksten blir mindre og tegningen et lite bilde (trykk viser den stor som før).
+   Før begynte forklaringen under «Neste» på en iPhone, eller spørsmålet forsvant over kanten. */
+.q-card.q-answered { padding-top: 14px; padding-bottom: 14px; }
+.q-answered .eyebrow { display: none; }
+.q-answered .q-opt.dim { display: none; }
+.q-answered .q-fig { margin: 0 0 8px; }
+.q-answered .q-fig .tsvg { max-height: 72px; width: auto; max-width: 100%; }
+.q-answered .q-fig .tsvg-pict { width: 72px; height: 72px; }
+.q-answered .q-head { margin-bottom: 10px; }
+.q-answered .q-text { font-size: 1.05rem; }
+.q-answered .q-opts { gap: 8px; }
+.q-answered .q-opt { min-height: 44px; padding: 7px 12px; gap: 10px; font-size: .95rem; line-height: 1.3; }
+.q-answered .q-letter { width: 26px; height: 26px; font-size: .82rem; }
+.q-answered .q-opt-pic { min-height: 0; padding: 8px; }
+.q-answered .q-pic .tsvg { width: 60px; height: 60px; }
+.q-answered + .q-why { padding-top: 10px; padding-bottom: 8px; }
+.q-answered + .q-why .q-verdict { margin-bottom: 2px; }
+.q-answered + .q-why .q-verdict-ico { width: 28px; height: 28px; }
+.q-answered + .q-why .q-rule { font-size: 1rem; margin: 4px 0 6px; }
+.q-answered + .q-why p { margin-top: 0; margin-bottom: 6px; }
+.q-answered + .q-why .q-more { margin-top: 4px; padding-top: 6px; min-height: 44px; }
+/* «Meld fra» står til høyre i svarlinjen, ikke på en egen linje nederst */
+.q-verdict .q-report { align-items: center; margin-left: auto; padding: 0 0 0 10px; font-size: .88rem; }
+.q-verdict .q-combo + .q-report { margin-left: 0; }
 .q-why { border-left: 4px solid var(--line); }
 .q-why.ok { border-left-color: var(--good); }
 .q-why.no { border-left-color: var(--brake); }

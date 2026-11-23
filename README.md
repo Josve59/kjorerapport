@@ -143,6 +143,17 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.6 – small faults before App Store
+
+- **Theory: the explanation fits on the screen with the question** (`js/theoryui.js`, `css/theme.css`). After an answer the question card shrinks: the options that were neither right nor chosen are hidden, the text is smaller and a drawing becomes a small picture (a tap still shows it large). «Meld fra» sits on the answer line instead of its own line at the bottom.
+  - Before, the explanation started under «Neste» on an iPhone, or the question slid out over the top.
+  - Measured on 40 questions at 390 × 844: 28 fit on one screen against 2 before. Long explanations still need a little scrolling.
+- **Map pins no longer lie on top of each other** (`spreadPins` in `js/report.js`, both the Kartverket map and the drawn map without network). Pins closer than a pin width are pushed apart, as little as possible, again after every zoom. Before, events at the same place on a drive that goes out and back hid each other (Emma's first drive: 1 under 10 and 11). The route also keeps clear of «Utforsk kartet».
+- **Pluss page:** «Kode fra trafikkskolen» and «App Store-kode» sit together under «Gjenopprett kjøp», so «App Store-kode» no longer ends up alone on a line.
+- **Emma's speed in the demo** (`js/demo.js`, `DEMO_LIMITS` in `js/demo-route.js`, `DEMO_V` 6): the demo drives now follow the speed limits along the route (from NVDB), 3 km/h under and slowing before a lower limit. The oldest drives have a few short slips of 7 km/h over. Speed scores go from 73–79 to 94–100; before, all eight drives got 0 and «for høy fart».
+- **App Store build checked in the simulator** (Release, no developer profile): no «Visning» card, seven taps on the version number do nothing, and «Avansert» has no developer part. The counter-test with a test build was not run.
+- **Tested:** 305 tests, the theory, map and demo in the browser at phone width. **Not tested:** on the phone.
+
 ## What's new in 1.0.5 – a lane model trained on the owner's Norwegian winter roads
 
 - **New lane model `n3`** (`ios/Models/Lanes.mlmodelc`, details in `ios/Models/README.md`): `n2` fine-tuned on 286 of the owner's own road pictures from the drive of 22 Nov at 21:30. That drive was after dark, on winter roads with salt, snow and wet asphalt. The pictures were saved by the test build (1.0.4) and labelled by the owner on the new labelling page.

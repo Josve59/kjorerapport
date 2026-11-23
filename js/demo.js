@@ -4,12 +4,12 @@
    teori med tre prøver og en prøvedato, og to elever til i trafikklærer-visningen. Ingenting her er ekte. */
 import { importDrive, listDrives, deleteDrive, getSettings, saveSettings, isDemoMode } from './db.js';
 import { makeDemo } from './analysis.js';
-import { DEMO_ROUTE } from './demo-route.js';
+import { DEMO_ROUTE, DEMO_LIMITS } from './demo-route.js';
 import { createTestDrives, TEST_STUDENTS } from './testdata.js';
 import { QUESTIONS } from './theory-b.js';
 import { emptyProgress, answer, addExam, buildExam, scoreExam, rng, dayKey, dueAt } from './theory.js';
 
-export const DEMO_V = 5;
+export const DEMO_V = 6;
 const DAY = 86400000;
 
 /* Emmas turer: demoturen (2–5 runder, 10–27 min) lagt langs ruta. Eldre turer brå, de nyeste mykere. */
@@ -25,9 +25,11 @@ async function emmaDrives(now) {
     const a = ROUTE[i - 1], b = ROUTE[i], f = (s - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
     return { lat: a[0] + (b[0] - a[0]) * f, lon: a[1] + (b[1] - a[1]) * f, bearing: (Math.atan2((b[1] - a[1]) * Math.cos(a[0] * rad), b[0] - a[0]) / rad + 360) % 360 };
   };
-  // [dager siden, klokka, frø, hvor på ruta, hvor brå, runder] (runder: lengden på turen, så turene ikke er like)
-  const plan = [[34, 17, 3, 0, 1.3, 2], [31, 12, 5, 900, 1.2, 3], [27, 18, 7, 1800, 1.1, 2], [24, 14, 9, 400, 1.0, 4], [20, 19, 11, 2600, 0.95, 3], [16, 11, 13, 1200, 0.9, 5], [11, 18, 15, 3100, 0.85, 3], [5, 17, 17, 200, 0.75, 4]];
-  for (const [i, [ago, hour, seed, offset, k, rounds]] of plan.entries()) {
+  const limitAt = s => { s = ((s % total) + total) % total; let L = DEMO_LIMITS[0][1]; for (const [from, v] of DEMO_LIMITS) if (from <= s) L = v; return L; };
+  // [dager siden, klokka, frø, hvor på ruta, hvor brå, runder, glipp i farten] (runder: lengden på turen, så turene
+  // ikke er like; glipp: korte øyeblikk over grensen, færre etter hvert)
+  const plan = [[34, 17, 3, 0, 1.3, 2, 4], [31, 12, 5, 900, 1.2, 3, 3], [27, 18, 7, 1800, 1.1, 2, 3], [24, 14, 9, 400, 1.0, 4, 2], [20, 19, 11, 2600, 0.95, 3, 2], [16, 11, 13, 1200, 0.9, 5, 1], [11, 18, 15, 3100, 0.85, 3, 1], [5, 17, 17, 200, 0.75, 4, 0]];
+  for (const [i, [ago, hour, seed, offset, k, rounds, slips]] of plan.entries()) {
     const parts = Array.from({ length: rounds }, (_, r) => makeDemo(seed + r * 100, { yaw: 0.7, pitch: 0.35 }));
     const input = { loc: [], gyro: [], grav: [], acc: [] };
     let t0 = 0;
@@ -36,8 +38,22 @@ async function emmaDrives(now) {
     input.acc = input.acc.map(a => ({ ...a, x: a.x * k * 0.75, y: a.y * k * 0.75, z: a.z * k * 0.75 }));
     input.gyro = input.gyro.map(a => ({ ...a, x: a.x * k, y: a.y * k, z: a.z * k }));
     if (k < 1) { const sp = input.loc.map(p => p.speed), w = Math.round((1 - k) * 6); input.loc = input.loc.map((p, j) => { let t = 0, n = 0; for (let q = Math.max(0, j - w); q <= Math.min(sp.length - 1, j + w); q++) { t += sp[q]; n++; } return { ...p, speed: t / n }; }); }
-    let s = offset, prev = null;
-    input.loc = input.loc.map(p => { if (prev) s += Math.max(0, (p.speed + prev.speed) / 2) * (p.t - prev.t); prev = p; const q = at(s); return { ...p, lat: q.lat, lon: q.lon, bearing: q.bearing }; });
+    // Farten følger fartsgrensene langs ruta (1.0.6). Før kjørte demoturene 34 og 48 km/t uansett grense, og alle Emmas
+    // turer fikk 0 i fartspoeng. Nå holder hun seg 3 km/t under grensen og senker farten før en lavere grense; glippene
+    // er 7 sekunder 7 km/t over (under 10, så de teller ikke som alvorlige). Ingen brå sprang: høyst 1,8 m/s² opp.
+    const rand = rng(seed), T = input.loc[input.loc.length - 1].t;
+    const slipAt = Array.from({ length: slips }, (_, m) => T * (m + 0.3 + rand() * 0.4) / slips);
+    let s = offset, prev = null, v = 0, slipUntil = -1;
+    input.loc = input.loc.map(p => {
+      const dt = prev ? p.t - prev.t : 0, lim = limitAt(s), fast = p.speed * 3.6 >= 20;
+      if (slipAt.length && p.t >= slipAt[0] && fast) { slipAt.shift(); slipUntil = p.t + 7; }
+      const want = p.t < slipUntil && fast ? (lim + 7) / 3.6 : Math.min(p.speed, (Math.min(lim, limitAt(s + 35)) - 3) / 3.6);
+      const vNew = prev ? Math.min(want, v + 1.8 * dt) : want;
+      if (prev) s += Math.max(0, (vNew + v) / 2) * dt;
+      v = vNew; prev = p;
+      const q = at(s);
+      return { ...p, speed: v, lat: q.lat, lon: q.lon, bearing: q.bearing };
+    });
     const start = new Date(now - ago * DAY); start.setHours(hour, (i * 13) % 60, 0, 0);
     await importDrive({ drive: { id: 'demo-emma-' + i, startedAt: start.toISOString(), driver: 'Emma', imported: false, surface: 'dry' }, input }, { keepId: true });
   }

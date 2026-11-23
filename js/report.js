@@ -939,6 +939,28 @@ function thTxt(r, k) {
   return `brå over ${f(t.brisk)} g, kraftig over ${f(t.harsh)} g`;
 }
 
+/* Nåler som ligger oppå hverandre (1.0.6), skyves fra hverandre til de står minst «gap» fra hverandre. Det skjer der
+   ruten går samme vei to ganger (tur-retur) eller flere hendelser kommer tett. Hver nål flyttes så lite som mulig,
+   så den står fortsatt ved stedet sitt. Inn: punkter i skjermpiksler. Ut: forskyvningen {dx, dy} for hvert punkt. */
+export function spreadPins(pts, gap = 32, rounds = 60) {
+  const p = pts.map(q => ({ x: q.x, y: q.y }));
+  for (let r = 0; r < rounds; r++) {
+    let moved = false;
+    for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) {
+      let ux = p[j].x - p[i].x, uy = p[j].y - p[i].y;
+      const d = Math.hypot(ux, uy);
+      if (d >= gap - 0.5) continue;
+      // Samme sted: fast retning per par (side ved side først), så resultatet blir likt hver gang
+      if (d < 0.01) { const a = (i + j - 1) * 2.4; ux = Math.cos(a); uy = Math.sin(a); } else { ux /= d; uy /= d; }
+      const push = (gap - d) / 2;
+      p[i].x -= ux * push; p[i].y -= uy * push; p[j].x += ux * push; p[j].y += uy * push;
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  return p.map((q, i) => ({ dx: q.x - pts[i].x, dy: q.y - pts[i].y }));
+}
+
 /* Ekte kart (Leaflet + Kartverket). Ruten tegnes som vei med gul midtlinje, hendelser som nummer. */
 let mapCloser = null;
 /* Lukker kartet i fullskjerm (ved skjermbytte og når rapporten tegnes på nytt) */
@@ -973,17 +995,29 @@ function initRealMap(root, r, marks, sp, onEventTap) {
   const first = r.points[0], last = r.points[r.points.length - 1];
   L.marker([first.lat, first.lon], { icon: icon('<span>Start</span>', 'lm-start', 22), interactive: false, keyboard: false }).addTo(map);
   L.marker([last.lat, last.lon], { icon: icon('<span>Slutt</span>', 'lm-end', 22), interactive: false, keyboard: false }).addTo(map);
+  const pins = [];   // hendelser og merker, så de kan skyves fra hverandre
   for (const m of marks) if (Number.isFinite(m.lat)) {
-    L.marker([m.lat, m.lon], { icon: icon(`<span>${m.letter}</span>`, 'lm-mark', 28), interactive: false, keyboard: false }).addTo(map);
+    pins.push({ mk: L.marker([m.lat, m.lon], { icon: icon(`<span>${m.letter}</span>`, 'lm-mark', 28), interactive: false, keyboard: false }).addTo(map), size: 28 });
   }
   for (const e of r.events) {
     const mk = L.marker([e.lat, e.lon], { icon: icon(`<span class="lm-ev lm-${KIND_CSS[e.kind]}" data-n="${e.n}">${e.n}</span>`, 'lm-ev-wrap', 36),
       title: `${e.n}. ${eventLabel(e)}`, riseOnHover: true, zIndexOffset: 1000 }).addTo(map);
+    pins.push({ mk, size: 36 });
     mk.bindPopup(`<strong>${e.n}. ${esc(eventLabel(e))}</strong><br>${mss(e.t)} inn i turen, ${kmh(e.speedKmh)}`, { closeButton: false, autoPan: true });
     mk.on('click', () => { if (map.isExpanded && map.isExpanded()) mk.openPopup(); else { mk.closePopup(); onEventTap(String(e.n)); } });
   }
   const bounds = L.latLngBounds(ll);
-  map.fitBounds(bounds, { padding: [28, 28] });
+  map.fitBounds(bounds, { paddingTopLeft: [28, 28], paddingBottomRight: [28, 64] });   // fri for «Utforsk kartet» nederst
+  // Leaflet setter margen bare når ikonet lages, så forskyvningen står til neste zoom
+  const spread = () => {
+    const off = spreadPins(pins.map(p => map.latLngToLayerPoint(p.mk.getLatLng())));
+    pins.forEach((p, i) => {
+      const el = p.mk.getElement(); if (!el) return;
+      el.style.marginLeft = `${(off[i].dx - p.size / 2).toFixed(1)}px`; el.style.marginTop = `${(off[i].dy - p.size / 2).toFixed(1)}px`;
+    });
+  };
+  map.on('zoomend resize', spread);
+  spread();
   setupReplay(root, r, map);
   // «Utforsk kartet» (0.10.1): fullskjerm med flytting, lukkeknapp og «Hele ruten». På mobil er dra av i rapporten,
   // så siden kan rulles forbi kartet; et trykk på kartet åpner fullskjerm. Hendelsene får en boble med navnet der.
@@ -1201,15 +1235,20 @@ function routeMap(r, marks = []) {
   const X = x => offX + (x - minX) * s, Y = y => offY + (y - minY) * s;
   const d = pts.map((p, i) => `${i ? 'L' : 'M'}${X(xs[i]).toFixed(1)} ${Y(ys[i]).toFixed(1)}`).join('');
   const sx = X(xs[0]), sy = Y(ys[0]), ex = X(xs[xs.length - 1]), ey = Y(ys[ys.length - 1]);
-  const markPins = (r.marks || []).filter(m => Number.isFinite(m.lat)).map(m => {
-    const mx = X(m.lon * cos), my = Y(-m.lat);
+  // Nålene skyves fra hverandre som på det ekte kartet (1.0.6); 40 enheter er litt mer enn en nål
+  const markList = (r.marks || []).filter(m => Number.isFinite(m.lat));
+  const at = [...markList, ...r.events].map(p => ({ x: X(p.lon * cos), y: Y(-p.lat) }));
+  const off = spreadPins(at, 40);
+  const pos = i => [at[i].x + off[i].dx, at[i].y + off[i].dy];
+  const markPins = markList.map((m, i) => {
+    const [mx, my] = pos(i);
     return `<g class="markpin" transform="translate(${mx.toFixed(1)} ${my.toFixed(1)})" aria-label="Merke ${m.letter}">
       <rect x="-13" y="-13" width="26" height="26" rx="4" transform="rotate(45)" fill="var(--ink)" stroke="var(--surface)" stroke-width="2.5"/>
       <text text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="800" fill="var(--surface)">${m.letter}</text>
     </g>`;
   }).join('');
-  const markers = r.events.map(e => {
-    const mx = X(e.lon * cos), my = Y(-e.lat);
+  const markers = r.events.map((e, k) => {
+    const [mx, my] = pos(markList.length + k);
     return `<g class="marker" data-n="${e.n}" transform="translate(${mx.toFixed(1)} ${my.toFixed(1)})" role="button" tabindex="0" aria-label="Hendelse ${e.n}">
       <circle r="22" class="halo"/>
       <circle r="17" fill="${KIND_COLOR[e.kind]}" stroke="#fff" stroke-width="3"/>
