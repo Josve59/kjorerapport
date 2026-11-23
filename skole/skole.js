@@ -4,6 +4,7 @@
    kodeserveren (server/skolekoder/worker.js). Ingen elevnavn lagres: vil skolen vite hvem som har hvilken kode, skriver
    den koden i sitt eget elevsystem. */
 import { serverUrl } from '../js/skolekode.js';
+import { qrSvg } from './qr.js';
 
 const KEY = 'kjorerapport.skolenokkel';
 const CONTACT = 'Jo@svendsenmedia.net';
@@ -48,6 +49,13 @@ const norm = s => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
 /* SMS-lenken (1.0.8): med elevens nummer åpnes Meldinger med både mottaker og tekst. Nummeret brukes bare her i skolens
    nettleser; det lagres ikke og sendes ikke til serveren. «?&body=» virker på både iPhone og Android. */
 const smsHref = (num, body) => `sms:${String(num || '').replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '')}?&body=${encodeURIComponent(body)}`;
+/* Gratis måter å nå eleven på uten SMS-leverandør: e-post fra skolens eget e-postprogram, delingsmenyen på enheten og
+   QR-kode på skjermen. Feltet tar enten mobilnummer eller e-post; ingenting av det lagres eller sendes til serveren. */
+const isMail = v => /@/.test(String(v || ''));
+const mailHref = (to, kode) => `mailto:${isMail(to) ? encodeURIComponent(String(to).trim()).replace(/%40/g, '@') : ''}?subject=${encodeURIComponent(`Kjørerapport Pluss fra ${data.navn}`)}&body=${encodeURIComponent(messageFor(kode))}`;
+const canShare = () => typeof navigator.share === 'function';
+// Telefoner og Mac kan åpne SMS fra en lenke; på en vanlig PC er e-post den naturlige hovedknappen
+const smsFirst = /iPhone|iPad|Android|Macintosh/.test(navigator.userAgent);
 const linkFor = kode => `${location.origin}/elev/?kode=${encodeURIComponent(kode)}&fra=${encodeURIComponent(data.navn)}`;
 const messageFor = kode => `Hei! ${data.navn} gir deg Kjørerapport Pluss: hele teorien med forklaringer, sikkerhetskontrollen og en rapport etter hver øvelsestur. Trykk her for å komme i gang: ${linkFor(kode)}`;
 
@@ -79,6 +87,16 @@ function ask(title, text, ok) {
   });
 }
 
+/* QR-koden til elevsiden i et vindu, når eleven står hos skolen */
+function showQr(kode) {
+  const d = $('#qr');
+  $('#qr-img').innerHTML = qrSvg(linkFor(kode), { label: `QR-kode for ${kode}` }) || '<p>Lenken er for lang for en QR-kode. Send den på SMS eller e-post i stedet.</p>';
+  $('#qr-code').textContent = kode;
+  $('#qr-close').onclick = () => d.close();
+  d.onclick = e => { if (e.target === d) d.close(); };   // trykk utenfor lukker
+  d.showModal();
+}
+
 function problem(title, text, retry = false) {
   app.innerHTML = `<section class="card"><h1 style="font-size:1.6rem">${esc(title)}</h1><p>${text}</p>${retry ? '<button type="button" class="btn secondary" id="retry">Prøv igjen</button>' : ''}</section>`;
   const b = $('#retry'); if (b) b.onclick = load;
@@ -106,7 +124,7 @@ function rowHtml(r) {
   const st = statusOf(r), [label, cls] = LABEL[st];
   const meta = [r.utdelt ? `Sendt ${day(r.utdelt)}` : null, r.forst ? `tatt i bruk ${day(r.forst)}` : null,
     r.til && st !== 'trukket' ? `gjelder til ${day(r.til, true)}` : null, r.forst ? `${r.telefoner} av ${data.maks} telefoner` : null].filter(Boolean).join(' · ');
-  const acts = st === 'ubrukt' ? [['kopier', 'Kopier meldingen'], ['steng', 'Trekk tilbake']]
+  const acts = st === 'ubrukt' ? [['qr', 'QR-kode'], ['kopier', 'Kopier meldingen'], ['steng', 'Trekk tilbake']]
     : st === 'i-bruk' ? [...(r.telefoner ? [['ny-telefon', 'Ny telefon']] : []), ['steng', 'Steng']]
     : st === 'stengt' ? [['apne', 'Åpne igjen']] : [];
   return `<li><div class="row-top"><span class="code">${esc(r.kode)}</span><span class="pill ${cls}">${label}</span></div>
@@ -143,14 +161,16 @@ function render() {
     <section class="card" id="fresh" aria-labelledby="h-fresh" style="margin-top:16px">
       <h2 id="h-fresh">Klar til å sende</h2>
       <p class="muted small" style="margin:0">Koden</p>
-      <p class="code">${esc(fresh)}</p>
+      <div class="code-line"><p class="code">${esc(fresh)}</p><button type="button" class="linkbtn" id="copy-code">Kopier koden</button></div>
       <div class="msg">${esc(messageFor(fresh))}</div>
-      <label class="field" for="sms-to">Elevens mobilnummer <span class="muted small">(valgfritt, lagres ikke)</span>
-        <input type="tel" id="sms-to" inputmode="tel" autocomplete="off" placeholder="For eksempel 912 34 567"></label>
+      <label class="field" for="send-to">Elevens mobil eller e-post <span class="muted small">(valgfritt, lagres ikke)</span>
+        <input type="text" id="send-to" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="912 34 567 eller navn@epost.no"></label>
       <div class="actions">
-        <a class="btn yellow small" id="sms-send" href="${smsHref('', messageFor(fresh))}">Send som SMS</a>
+        <a class="btn ${smsFirst ? 'yellow' : 'secondary'} small" id="sms-send" href="${smsHref('', messageFor(fresh))}">Send som SMS</a>
+        <a class="btn ${smsFirst ? 'secondary' : 'yellow'} small" id="mail-send" href="${mailHref('', fresh)}">Send på e-post</a>
+        ${canShare() ? '<button type="button" class="btn secondary small" id="share-msg">Del meldingen</button>' : ''}
         <button type="button" class="btn secondary small" id="copy-msg">Kopier meldingen</button>
-        <button type="button" class="btn secondary small" id="copy-code">Kopier koden</button>
+        <button type="button" class="btn secondary small" id="show-qr">Vis QR-kode</button>
       </div>
       <p class="muted small" style="margin-top:12px">Skriv gjerne koden inn i elevsystemet deres, så vet dere hvem som har den. Kjørerapport lagrer ingen navn.</p>
       <button type="button" class="linkbtn" id="fresh-done">Ferdig</button>
@@ -177,7 +197,7 @@ function render() {
       <details class="card"><summary><strong>Slik virker det</strong></summary>
         <ol class="steps" style="margin-top:12px">
           <li>Trykk «Gi en elev tilgang». Dere får en kode og en ferdig melding med lenke.</li>
-          <li>Skriv elevens mobilnummer og trykk «Send som SMS», så åpnes Meldinger med alt ferdig utfylt. Nummeret lagres ikke. Sitter dere på en PC uten telefon, kopier meldingen og lim den inn i systemet dere bruker til elevene.</li>
+          <li>Send meldingen til eleven, slik det passer dere: skriv mobilnummeret og trykk «Send som SMS», skriv e-posten og trykk «Send på e-post», bruk «Del meldingen», eller vis QR-koden hvis eleven står hos dere. Nummer og e-post lagres ikke.</li>
           <li>Eleven trykker på lenken. Med iPhone laster eleven ned appen og limer inn koden. Med Android åpnes nettversjonen av Kjørerapport, ferdig låst opp.</li>
         </ol>
         <ul class="steps">
@@ -209,8 +229,18 @@ function wire() {
     const f = $('#fresh'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const done = $('#fresh-done'); if (done) done.onclick = () => { fresh = null; render(); };
-  const smsTo = $('#sms-to'), smsSend = $('#sms-send');
-  if (smsTo && smsSend) smsTo.oninput = () => { smsSend.href = smsHref(smsTo.value, messageFor(fresh)); };
+  const sendTo = $('#send-to'), smsSend = $('#sms-send'), mailSend = $('#mail-send');
+  if (sendTo) sendTo.oninput = () => {
+    const v = sendTo.value;
+    smsSend.href = smsHref(isMail(v) ? '' : v, messageFor(fresh));
+    mailSend.href = mailHref(v, fresh);
+  };
+  const share = $('#share-msg');
+  if (share) share.onclick = async () => {
+    try { await navigator.share({ title: 'Kjørerapport Pluss', text: messageFor(fresh) }); }
+    catch (e) { if (e && e.name === 'AbortError') return; toast(await copy(messageFor(fresh)) ? 'Meldingen er kopiert' : 'Kunne ikke dele'); }
+  };
+  const sq = $('#show-qr'); if (sq) sq.onclick = () => showQr(fresh);
   const cm = $('#copy-msg'); if (cm) cm.onclick = async () => toast(await copy(messageFor(fresh)) ? 'Meldingen er kopiert' : 'Kunne ikke kopiere');
   const cc = $('#copy-code'); if (cc) cc.onclick = async () => toast(await copy(fresh) ? 'Koden er kopiert' : 'Kunne ikke kopiere');
   const to = $('#to-order'); if (to) to.onclick = () => $('#order-sec').scrollIntoView({ behavior: 'smooth' });
@@ -229,6 +259,7 @@ function wire() {
     if (!b) return;
     const kode = b.dataset.kode, act = b.dataset.act, row = data.koder.find(r => r.kode === kode), st = row && statusOf(row);
     if (act === 'kopier') { toast(await copy(messageFor(kode)) ? 'Meldingen er kopiert' : 'Kunne ikke kopiere'); return; }
+    if (act === 'qr') { showQr(kode); return; }
     if (act === 'steng' && st === 'ubrukt' && !await ask('Trekke tilbake koden?', `${kode} slutter å virke, og tilgangen kommer tilbake i pakken.`, 'Trekk tilbake')) return;
     if (act === 'steng' && st !== 'ubrukt' && !await ask('Stenge koden?', `Eleven mister Pluss innen en uke. Tilgangen teller fortsatt som brukt.`, 'Steng')) return;
     if (act === 'ny-telefon' && !await ask('Ny telefon for eleven?', `${kode} kan tas i bruk på ${data.maks} nye telefoner.`, 'Ny telefon')) return;
