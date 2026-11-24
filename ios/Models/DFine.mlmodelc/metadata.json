@@ -1,7 +1,7 @@
 [
   {
     "metadataOutputVersion" : "3.0",
-    "shortDescription" : "D-FINE (ustc-community\/dfine-small-coco), Apache 2.0. Input 640x640 RGB. Outputs logits [1,300,80], boxes cx,cy,w,h 0-1.",
+    "shortDescription" : "D-FINE (dfine-small-coco norsk-1, finjustert 24. nov. 2026), Apache 2.0. Input 640x640 RGB. Outputs logits [1,300,80] (+0.48 added), boxes cx,cy,w,h 0-1.",
     "outputSchema" : [
       {
         "hasShapeFlexibility" : "0",
@@ -60,7 +60,7 @@
       "Ios16.relu" : 47,
       "Ios17.realDiv" : 1,
       "Ios16.softmax" : 11,
-      "Ios17.add" : 99,
+      "Ios17.add" : 100,
       "Ios17.layerNorm" : 12,
       "Tile" : 2
     },
@@ -95,7 +95,7 @@
       }
     ],
     "userDefinedMetadata" : {
-      "com.github.apple.coremltools.conversion_date" : "2026-11-12",
+      "com.github.apple.coremltools.conversion_date" : "2026-11-24",
       "com.github.apple.coremltools.source" : "torch==2.8.0",
       "com.github.apple.coremltools.version" : "9.0",
       "com.github.apple.coremltools.source_dialect" : "TorchScript"

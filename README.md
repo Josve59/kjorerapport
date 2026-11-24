@@ -143,6 +143,44 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.15 – a car and people model trained on Norwegian road pictures
+
+The owner (24 November) wanted a better car/people model. The details, data and numbers are in `ios/Models/README.md`, and the scripts in `ios/Models/cars-train/`.
+
+**Measured first.** The app's model (D-FINE small) was compared with a large model on 1,306 road pictures from the phone. It found 81 % of the vehicles and 56 % of the people the large model found, about the same in the light and the dark. Medium found 87 % and 73 %.
+
+**Trained.** D-FINE small was trained further, without non-commercial data:
+- the owner's road pictures (FrameLog) and comma10k (MIT), labelled by `dfine-xlarge-coco`;
+- COCO pictures licensed CC BY or with no known copyright, with their real labels.
+
+Three runs:
+1. **Owner's and comma10k pictures only:** better on the road.
+2. **Uncertain boxes counted:** stopped after one round; its two changes went into run 3.
+3. **Uncertain boxes (0.35–0.5) counted, COCO mixed in:** chosen, round 6.
+
+**On the phone:**
+- `ios/Models/DFine.mlmodelc` is the new model, same size and speed.
+- The conversion adds 0.48 to the logits, so the app's thresholds in `road.js` mean the same as before.
+- `RoadDetector.swift` names it «D-FINE small norsk».
+
+**Results on the 23 Nov 19.33 drive (held out of training):**
+
+| | Vehicles | Extra hits | People | People's extra hits |
+|---|---|---|---|---|
+| Before | 86 % | 218 | 54 % | 1 |
+| Now | 87 % | 158 | 60 % | 0 |
+
+At the same number of extra hits, it finds 4–6 points more vehicles.
+
+**COCO val** (real labels): about the same at the same number of wrong hits. The exception is vehicles wider than 70 % of the picture, which the app discards as the car's own bonnet.
+
+**Not checked yet:** a real drive with the new model, and the phone's heat. The size is the same, so the speed should be too.
+
+**Next:**
+- Train again with only bonnet-like boxes left out of the labels.
+- Use more drives in daylight and snow as training pictures.
+- Check the «bil foran» flicker (481 of 637 periods under 0.7 s on 23 Nov 20.45).
+
 ## What's new in 1.0.14 – no calibration needed: a standard that learns from the drives
 
 The owner (24 November) wants people to skip the calibration, and the app to learn as it goes.

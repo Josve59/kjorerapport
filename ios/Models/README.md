@@ -1,6 +1,45 @@
 # D-FINE for the road camera (Core ML)
 
-`DFine.mlmodelc` is **D-FINE small, trained on COCO only** (`ustc-community/dfine-small-coco`, Apache 2.0, 10.3 M parameters, 20 MB) since 1.0.0. It ran on the owner's phone as a test model from 0.13.17 (12 Nov) and became the shipping model for the App Store: medium heated the phone to «serious» within minutes at 5 answers a second, small stayed at normal temperature (measured on the phone, see the heat notes). On 162 COCO val pictures small finds 79 % of the vehicles against 85 % for medium (at least 96 px, the close ones: 91 against 96 %). Convert it with `python convert-dfine.py ustc-community/dfine-small-coco DFine.mlpackage`.
+## Since 1.0.15: D-FINE small «norsk-1», trained further on Norwegian road pictures
+
+`DFine.mlmodelc` is D-FINE small (`ustc-community/dfine-small-coco`), trained further on 24 Nov 2026. The size and speed are the same: 10.3 M parameters, 20 MB, 13 ms per picture on the Mac. The app shows it as «D-FINE small norsk» (`RoadDetector.swift` reads «norsk» from the description).
+
+**Training data.** Nothing non-commercial was used. The app's crop and dark-gamma were used throughout, so training sees what the app sees.
+- **Owner's pictures:** 2,625 road pictures from the phone (FrameLog, 22 Nov 21.30 and 23 Nov 20.45, two cars, mostly dark town). The boxes come from `ustc-community/dfine-xlarge-coco` (Apache 2.0, trained on COCO only) at score 0.35 or more.
+- **comma10k:** 1,978 pictures (MIT), labelled by the same large model.
+- **COCO train2017:** 1,905 pictures with their real labels. Only pictures licensed CC BY or «no known copyright restrictions» were used: NonCommercial, NoDerivs and ShareAlike were left out.
+
+**How.** The scripts are in `cars-train/` and run from `.local-test/bilmodell/`, which is git-ignored and holds the pictures and labels.
+1. `kjor.py` labels the pictures.
+2. `tren.py` trains: AdamW, lr 5e-5 (backbone half of that), batch 8, 6 rounds, EMA weights, flips, crop and light jitter. It takes 90 minutes on MPS with `PYTORCH_ENABLE_MPS_FALLBACK=1`.
+3. `sveip.py` compares at several thresholds.
+
+Round 6 was chosen. The 23 Nov 19.33 drive (478 pictures) was held out of training and used only for measuring.
+
+**The score offset.** The trained model gives lower scores (fewer false hits at the same threshold). The conversion adds 0.48 to the logits:
+
+```
+python convert-dfine.py <model> DFine.mlpackage 0.48 "dfine-small-coco norsk-1, finjustert 24. nov. 2026"
+```
+
+With it, the app's 0.35 means 0.25 in the trained model, so the app's thresholds (`road.js`) are unchanged. Core ML matched PyTorch on 297 of 298 COCO boxes and 140 of 140 road boxes.
+
+**Results on the held-out drive.** «Truth» is two large models: the COCO-only one, and the Objects365 one used for measuring only. Both gave nearly the same numbers.
+
+| | Vehicles found | Extra hits (nothing in the truth) | People found |
+|---|---|---|---|
+| Before, at the app's threshold | 86 % | 218 | 54 % |
+| Norsk-1, at the app's threshold (0.25 inside) | 87 % | 158 | 60 % (0 extra) |
+
+At the same number of extra hits (90–120), it finds 4–6 points more vehicles.
+
+**COCO val** (162 pictures, real labels), at the same number of wrong hits:
+- **About the same:** 65–69 % against 68–70 %. Large vehicles narrower than 70 % of the picture: 78 of 103 against 77.
+- **Weaker on very wide vehicles:** over 70 % of the picture width it finds 20 of 44 against 34. The app throws those boxes away anyway (`roadDets`: the car's own bonnet). The cause is the training labels, which left out all boxes over 70 % of the width. The next training should drop only bonnet-like boxes, at the bottom of the crop.
+
+## D-FINE small, trained on COCO only (1.0.0–1.0.14)
+
+Until 1.0.14 `DFine.mlmodelc` was **D-FINE small, trained on COCO only** (`ustc-community/dfine-small-coco`, Apache 2.0, 10.3 M parameters, 20 MB) since 1.0.0. It ran on the owner's phone as a test model from 0.13.17 (12 Nov) and became the shipping model for the App Store: medium heated the phone to «serious» within minutes at 5 answers a second, small stayed at normal temperature (measured on the phone, see the heat notes). On 162 COCO val pictures small finds 79 % of the vehicles against 85 % for medium (at least 96 px, the close ones: 91 against 96 %). Convert it with `python convert-dfine.py ustc-community/dfine-small-coco DFine.mlpackage`.
 
 Before 1.0.0 the model was **D-FINE medium, trained on COCO only** (`ustc-community/dfine-medium-coco`). Until 0.13.4 it was the same model pretrained on Objects365 and then trained on COCO (`dfine-medium-obj2coco`, COCO AP about 55), and until 0.10.1 xlarge (AP about 59).
 

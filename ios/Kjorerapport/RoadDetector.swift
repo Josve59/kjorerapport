@@ -2,7 +2,8 @@ import CoreImage
 import CoreML
 import QuartzCore
 
-/// Bilgjenkjenning for veikameraet med D-FINE medium (Apache 2.0, Peterande/D-FINE, bare COCO fra 0.13.5) som Core ML,
+/// Bilgjenkjenning for veikameraet med D-FINE small (Apache 2.0, Peterande/D-FINE, bare COCO fra 0.13.5, trent videre på
+/// norske veibilder i 1.0.15: «norsk-1», se ios/Models/README.md) som Core ML,
 /// på telefonens grafikkprosessor eller AI-brikke. Samme utsnitt og tolkning som D-FINE i nettappen (kamera/js/dfine.js):
 /// et kvadrat midt i det stående bildet (rett over dashbordkanten når den er kjent), skalert til 640×640, lysnet med
 /// en gammakurve i mørket. Svarene er i kamerabildets piksler og går til nettappen, som følger bilene mellom svarene.
@@ -67,7 +68,7 @@ nonisolated final class RoadDetector: @unchecked Sendable {
         }
         if let d = models.first?.model.modelDescription.metadata[.description] as? String,
            let size = ["xlarge", "large", "medium", "small", "nano"].first(where: { d.contains("dfine-\($0)") }) {
-            name = "D-FINE \(size)"
+            name = "D-FINE \(size)" + (d.contains("norsk") ? " norsk" : "")   // 1.0.15: den finjusterte, så turrapporten viser hvilken
             ModelPace.lightCars = size == "small" || size == "nano"
         }
         trials = Array(repeating: [], count: models.count)

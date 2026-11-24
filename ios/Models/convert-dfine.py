@@ -8,12 +8,16 @@ def _integral(self, pred_corners, project):
     return torch.matmul(p, project.reshape(-1, 1)).reshape(b, q, 4)
 M.DFineIntegral.forward = _integral   # F.linear med 1D-vekt kan ikke konverteres
 mid, out = sys.argv[1], sys.argv[2]
+# Valgfritt (1.0.15): fast tillegg til logits, så en finjustert modell med lavere score treffer appens grenser,
+# og et navn i beskrivelsen (appen leser størrelsen og «norsk» derfra, RoadDetector.swift)
+offset = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+label = sys.argv[4] if len(sys.argv) > 4 else mid
 model = DFineForObjectDetection.from_pretrained(mid, anchor_image_size=[640, 640]).eval()
 class Wrap(torch.nn.Module):
     def __init__(s, m): super().__init__(); s.m = m
     def forward(s, x):
         o = s.m(pixel_values=x)
-        return o.logits, o.pred_boxes
+        return o.logits + offset, o.pred_boxes
 w = Wrap(model).eval()
 x = torch.rand(1, 3, 640, 640)
 with torch.no_grad():
@@ -23,6 +27,6 @@ print('traced', mid, sum(p.numel() for p in model.parameters()) / 1e6, 'M params
 ml = ct.convert(tr, inputs=[ct.ImageType(name='image', shape=(1, 3, 640, 640), scale=1 / 255.0, color_layout=ct.colorlayout.RGB)],
                 outputs=[ct.TensorType(name='logits'), ct.TensorType(name='boxes')],
                 minimum_deployment_target=ct.target.iOS17, compute_precision=ct.precision.FLOAT16, convert_to='mlprogram')
-ml.short_description = f'D-FINE ({mid}), Apache 2.0. Input 640x640 RGB. Outputs logits [1,300,80], boxes cx,cy,w,h 0-1.'
+ml.short_description = f'D-FINE ({label}), Apache 2.0. Input 640x640 RGB. Outputs logits [1,300,80]' + (f' (+{offset} added)' if offset else '') + ', boxes cx,cy,w,h 0-1.'
 ml.save(out)
 print('saved', out)
