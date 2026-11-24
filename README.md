@@ -148,7 +148,7 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 From the drives on 23 November at 19.33 and 20.45. The report's own calculation gave 13 periods of «eyes off the road» on the 19.33 drive. The owner (24 November) says the driver was looking at the road.
 
 - **What the camera saw:**
-  - Six periods had the head 15–30° down and three had it 16–27° up, for 2–5 s.
+  - Six periods had the head 15–30° up and three had it 16–27° down, for 2–5 s. (Up is the same way as the rear-view mirror in the calibration; the side mirrors are down. A first note here had up and down the wrong way round.)
   - Over the whole drive the head's up/down angle wandered ±20° in long stretches. Its spread was 7°, against 4° on the 20.45 drive.
   - The phone itself did not move: the gravity sensor shows a tilt spread of 2°, and it does not follow the head (correlation 0.16).
   - The other four were a 2.5 s shoulder check, a 2.5 s look in the rear-view mirror, and two looks to the right that the classifier puts nearest the rear-view mirror.
@@ -169,7 +169,7 @@ From the drives on 23 November at 19.33 and 20.45. The report's own calculation 
   | 23 Nov, 20.45 | 3 | 1 |
 
   - The deliberate look away in the tunnel on 19 Nov (20:13, 14° to the side) is still counted.
-  - Two periods on the 19.33 drive remain (41:57 head up 27°, and 51:50 head down 22°). The camera cannot tell those apart from a real look away.
+  - Two periods on the 19.33 drive remain (41:57 head down 27°, and 51:50 head up 22°). The camera cannot tell those apart from a real look away.
 - **Also from the 20.45 drive (no change needed):**
   - The face was found in only 72 % of frames (96 % at 19.33). The head pointed 9° more to the side, with the same driver and calibration, so the phone sat further towards the middle of the car.
   - Lane lines are as good as at 19.33 at the same speed. The heat was lower: «varm» 62 %.
