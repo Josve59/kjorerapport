@@ -148,3 +148,15 @@ test('0.26.3: gangfelt over en sidevei ved et kryss telles ikke som passert', ()
   assert.deepEqual(ev.crossings.map(c => c.t), [10, 40], 'på tvers: passert; langs kjøreretningen: sidevei; punkt 5 m unna: passert; 10 m unna: sidevei');
   assert.deepEqual(ev.bumps.map(b => b.t), [30], 'fartsdemper 9 m unna ruta: en annen veg');
 });
+
+test('1.0.13: blikket borte: opp/ned teller 70 %, speil og skulderblikk teller ikke', async () => {
+  const { eyesOffRoad } = await import('../js/camera.js');
+  const pts = Array.from({ length: 141 }, (_, i) => ({ t: i, lat: 63.43 + i * 1.5e-4, lon: 10.39, kmh: 60 }));
+  // 2,5 s med hodet 18° ned (turen 23. nov.: føreren så på veien), 2,5 s ned mot midtkonsollen, 2,5 s i bakspeilet, 2,5 s skulderblikk
+  const s = series(140, [[20, 2.5, 0, -18], [50, 2.5, 10, -28], [80, 2.5, 22, 14], [110, 2.5, -65, 0]]);
+  const a = eyesOffRoad(s, calib, { points: pts, t0: 0 });
+  assert.equal(a.length, 1, JSON.stringify(a.map(x => [x.t, x.cls])));
+  assert.ok(Math.abs(a[0].t - 50) < 0.3, 'bare blikket ned mot midtkonsollen');
+  // Med de gamle reglene telles alle fire
+  assert.equal(eyesOffRoad(s, calib, { points: pts, t0: 0, pitchW: 1, glances: true }).length, 4);
+});

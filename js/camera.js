@@ -219,8 +219,13 @@ export function detectGlances(samples, calib, { maxGap = 0.35, minDur = 0.35 } =
    Samkjøring med GPS: i svinger følger hodet veien, så perioder der bilen svinger mer enn 4 °/s telles
    ikke. Perioder over 6 s er nesten alltid at føreren sitter annerledes, ikke at blikket er borte, og
    telles heller ikke. Ansikt som forsvinner i under 0,6 s bryter ikke perioden, og ett enkelt bilde
-   rett fram regnes som støy. samples: rå hodedata (opptakstid), points: rapportens punkter (t relativt). */
-export function eyesOffRoad(samples, calib, { points = [], t0 = 0, minDur = 2, maxDur = 6, minKmh = 30, maxTurn = 4, offDeg = 15 } = {}) {
+   rett fram regnes som støy. samples: rå hodedata (opptakstid), points: rapportens punkter (t relativt).
+   1.0.13, etter turen 23. nov. kl. 19.33: 13 perioder, og føreren så på veien (eieren). Hodets helning opp/ned
+   vandret ±20° i lange strekk (sd 7° mot 4° turen etter), uten at telefonen beveget seg. Opp/ned teller nå 70 %
+   (pitchW), så rett opp eller ned må være over 21°. Speil og skulderblikk (glances) teller ikke: de er å følge
+   med på trafikken, og rapporten roser dem andre steder. På 12 turer: 13 → 2, 10 → 3, 11 → 2, 10 → 5, 4 → 0.
+   Den bevisste titten bort i tunnelen 19. nov. (20:13, 14° til siden) telles fortsatt. */
+export function eyesOffRoad(samples, calib, { points = [], t0 = 0, minDur = 2, maxDur = 6, minKmh = 30, maxTurn = 4, offDeg = 15, pitchW = 0.7, glances = false } = {}) {
   if (!calib || !calib.ok || points.length < 3) return [];
   const s = samples.filter(x => Number.isFinite(x.t)).slice().sort((a, b) => a.t - b.t);
   const drift = forwardDrift(s, calib);
@@ -257,7 +262,8 @@ export function eyesOffRoad(samples, calib, { points = [], t0 = 0, minDur = 2, m
     if (!x.ok) { if (cur && t - cur.tEnd > 0.6) close(); continue; }
     const o = drift(x.t), p = { yaw: x.yaw - o.yaw, pitch: x.pitch - o.pitch };
     const c = classifyPose(p, calib);
-    const off = c !== 'forward' && (c !== 'other' || Math.hypot(p.yaw - f.yaw, p.pitch - f.pitch) > offDeg);
+    const glance = c !== 'forward' && c !== 'other';
+    const off = glance ? glances : c !== 'forward' && Math.hypot(p.yaw - f.yaw, pitchW * (p.pitch - f.pitch)) > offDeg;
     if (!off) { fwdRun++; if (fwdRun >= 2) close(); continue; }
     fwdRun = 0;
     if (cur && t - cur.tEnd > 0.6) close();

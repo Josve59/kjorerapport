@@ -143,6 +143,37 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.13 – fewer false «Blikket borte fra veien»
+
+From the drives on 23 November at 19.33 and 20.45. The report's own calculation gave 13 periods of «eyes off the road» on the 19.33 drive. The owner (24 November) says the driver was looking at the road.
+
+- **What the camera saw:**
+  - Six periods had the head 15–30° down and three had it 16–27° up, for 2–5 s.
+  - Over the whole drive the head's up/down angle wandered ±20° in long stretches. Its spread was 7°, against 4° on the 20.45 drive.
+  - The phone itself did not move: the gravity sensor shows a tilt spread of 2°, and it does not follow the head (correlation 0.16).
+  - The other four were a 2.5 s shoulder check, a 2.5 s look in the rear-view mirror, and two looks to the right that the classifier puts nearest the rear-view mirror.
+- **The rule (`eyesOffRoad` in `js/camera.js`, shared with `kamera/js/`):**
+  - Up/down counts 70 % (`pitchW`), so a look straight up or down must be over about 21° (sideways still 15°).
+  - Mirror and shoulder glances (`glances`) no longer count. They are part of watching the traffic, and the report praises them elsewhere.
+  - Looking down towards the console or a phone (for example 10° to the side and 28° down) still counts.
+- **Re-analysis:** the analysis key goes from 19 to 20 in `js/app.js`, so older drives are re-analysed when the report opens.
+- **Checked on 12 exports (16–23 Nov):**
+
+  | Drive | Before | After |
+  |---|---|---|
+  | 23 Nov, 19.33 | 13 | 2 |
+  | 22 Nov, 21.30 | 10 | 3 |
+  | 19 Nov, 22.25 | 11 | 2 |
+  | 19 Nov, 21.02 | 10 | 5 |
+  | 22 Nov, 20.05 | 4 | 0 |
+  | 23 Nov, 20.45 | 3 | 1 |
+
+  - The deliberate look away in the tunnel on 19 Nov (20:13, 14° to the side) is still counted.
+  - Two periods on the 19.33 drive remain (41:57 head up 27°, and 51:50 head down 22°). The camera cannot tell those apart from a real look away.
+- **Also from the 20.45 drive (no change needed):**
+  - The face was found in only 72 % of frames (96 % at 19.33). The head pointed 9° more to the side, with the same driver and calibration, so the phone sat further towards the middle of the car.
+  - Lane lines are as good as at 19.33 at the same speed. The heat was lower: «varm» 62 %.
+
 ## What's new in 1.0.12 – a sign for the road straight on no longer follows a turn
 
 From the drive on 23 November at 19.33 (1.0.11, 53 min, 38.8 km):
