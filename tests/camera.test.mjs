@@ -160,3 +160,38 @@ test('1.0.13: blikket borte: opp/ned teller 70 %, speil og skulderblikk teller i
   // Med de gamle reglene telles alle fire
   assert.equal(eyesOffRoad(s, calib, { points: pts, t0: 0, pitchW: 1, glances: true }).length, 4);
 });
+
+test('1.0.14: standardkalibrering uten kalibrering, og speilene læres av turen', async () => {
+  const { evaluateMirrors, standardCalib, learnMirrors, driveForward, STD_MIRRORS, mirrorOffsets } = await import('../js/camera.js');
+  // Føreren ser rett fram på 12/-3 (telefonen litt til siden), og i venstre speil på bare 14° (mest med øynene)
+  const s = [];
+  for (let t = 0; t < 300; t += 0.15) {
+    const k = Math.floor(t / 6);
+    const glance = k % 2 === 1 && t % 6 < 0.9;     // et speilblikk på 0,9 s hvert 12. sekund
+    s.push({ t, ok: true, yaw: glance ? 12 + 14 : 12 + (Math.random() - 0.5) * 2, pitch: glance ? -3 + 4 : -3 + (Math.random() - 0.5) * 2 });
+  }
+  const pts = Array.from({ length: 301 }, (_, i) => ({ t: i, lat: 63.43 + i * 1.5e-4, lon: 10.39, kmh: 60 }));
+  const f = driveForward(s, pts, 0);
+  assert.ok(Math.abs(f.yaw - 12) < 1.5 && Math.abs(f.pitch + 3) < 1.5, JSON.stringify(f));
+  const sc = standardCalib(f);
+  assert.equal(sc.std, true);
+  assert.equal(sc.left.yaw, f.yaw + STD_MIRRORS.left.yaw);
+  const l = learnMirrors(s, sc, pts, 0);
+  assert.ok(l.learned.left, 'venstre speil funnet');
+  assert.ok(Math.abs(l.learned.left.yaw - 17) < 1.5, `halve veien fra 20 mot 14: ${l.learned.left.yaw}`);
+  assert.ok(!l.learned.right && !l.learned.rear, 'ingen blikk mot de andre speilene');
+  // Hele vurderingen uten kalibrering
+  const e = evaluateMirrors(s, null, { points: pts, t0: 0 });
+  assert.equal(e.calibrated, true);
+  assert.equal(e.std, true);
+  assert.ok(e.counts.left >= 20, `speilblikk funnet: ${e.counts.left}`);
+  assert.ok(Math.abs(e.mirrors.left.yaw - 17) < 1.5);
+  // Det appen har lært fra før, brukes som start
+  const e2 = evaluateMirrors(s, { ok: false, std: true, offsets: { left: { yaw: 15, pitch: 1 } } }, { points: pts, t0: 0 });
+  assert.ok(e2.mirrors.left.yaw < 16 && e2.mirrors.right.yaw === STD_MIRRORS.right.yaw, JSON.stringify(e2.mirrors));
+  // En ekte kalibrering læres ikke (den som har kalibrert, får sin egen)
+  const own = evaluateMirrors(s, { ...standardCalib(f), std: undefined }, { points: pts, t0: 0 });
+  assert.deepEqual(own.learned, {});
+  assert.equal(own.std, false);
+  assert.deepEqual(mirrorOffsets(null), null);
+});

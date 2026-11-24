@@ -918,6 +918,7 @@ function cameraSection(r, ctx = {}) {
         <div><strong>${c.lane.length ? `${laneOk} av ${c.lane.length}` : '–'}</strong><span class="muted small">feltskifter med speil og skulder</span></div>
       </div>
       <p>${verdict}</p>
+      ${c.std ? '<p class="muted small">Uten kalibrering: appen bruker en standard for hvor speilene er, og lærer av turene. Kalibrer for mer nøyaktige tall.</p>' : ''}
       <svg class="cam-timeline" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Tidslinje over blikk gjennom turen">
         ${gap}<line x1="0" x2="${W}" y1="52" y2="52" class="gl-axis"/>${ticks}${lanes}
       </svg>

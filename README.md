@@ -143,6 +143,49 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.14 – no calibration needed: a standard that learns from the drives
+
+The owner (24 November) wants people to skip the calibration, and the app to learn as it goes.
+
+**Background.** The drives so far came from two cars:
+- **Car 1:** the 16–22 Nov drives, one driver.
+- **Car 2:** the 20.45 drive on 23 Nov, with the owner driving. It still used car 1's calibration.
+
+**What was measured on 12 exports:**
+- **Car 1's calibrations are very close.** The four calibrations from different days put the mirrors within 6° of each other, relative to «straight ahead»: left about +20/+5, right −53/+9, rear −36/−9 (head only, degrees).
+- **A standard gives nearly the same numbers.** Using the mean of the *other* days' calibrations gave nearly the same mirror counts and eyes-off-road as the driver's own calibration, head only. On 23 Nov at 19.33:
+
+  | Calibration | Left | Right | Rear | Eyes-off-road |
+  |---|---|---|---|---|
+  | Own | 95 | 14 | 20 | 2 |
+  | Standard | 92 | 10 | 21 | 2 |
+
+- **The left mirror sits lower during driving.** In every drive, in both cars, natural glances at the left mirror turn the head only 13–16°, against 20° when calibrating. People use their eyes more while driving.
+- **The other mirrors are rarely seen.** The right mirror showed as a clear peak twice (−46 to −50°), and the rear-view mirror never: it is mostly looked at with the eyes.
+- **The eye part of the own calibration is unstable.** Its direction flipped between 17 and 19 Nov, so the standard uses the head only.
+
+**How it works (`js/camera.js`, shared with `kamera/js/`):**
+- **Standard calibration (`standardCalib`, `STD_MIRRORS`).** Without a calibration, the report uses the standard. «Straight ahead» comes from the drive itself (`driveForward`: the median at 40 km/h or more).
+- **Learning in each drive (`learnMirrors`):**
+  - It finds steady glances: at least 0.25 s, more than 10° from straight ahead, at 15 km/h or more, and not in turns over 10°/s (turn rate over ±3 GPS points).
+  - It groups them into peaks (mean-shift, 6°).
+  - A mirror with a clear peak moves half the way to it. The peak must be within 15°, have at least 3 s and 5 glances, and be closer to that mirror than to the other mirrors and to straight ahead. The last rule keeps the 19.33 drive's long head-up stretch from pulling the left mirror towards straight ahead.
+- **Learning across drives (`js/app.js`):**
+  - A drive started without a calibration stores `{ ok: false, std: true, key, offsets }` (`stdCalib`). `ok: false` means it never looks like a real calibration.
+  - After the report, `learnCalibFrom` saves the learned mirrors per driver in `settings.calibLearn`. This is only done for fresh drives (two days), and once per drive.
+  - The next drive starts from those mirrors.
+- **Unchanged for those who calibrate.** A real calibration is used as before and is not learned from.
+
+**Texts:**
+- The camera card and the pre-drive check no longer treat «not calibrated» as an error: `calibcheck.js` answers `std`.
+- The report says «Uten kalibrering: appen bruker en standard … og lærer av turene». Help says calibration is not needed.
+- The analysis key goes from 20 to 21, so older drives without a calibration get mirror and shoulder checks when opened.
+
+**Checked:**
+- **The 12 exports:** from the standard (20°), each drive learns the left mirror at 15–17°. Starting from an earlier learned 15°, it settles at 12–14° in every drive. Eyes-off-road counts are the same as with the own calibration, or lower.
+- **In the browser, demo mode:** a test drive with no calibration showed the mirror section with the new note, and the left mirror was saved as 17° after the drive. The test drive was then deleted.
+- **Not checked:** other cars than these two, and how the numbers feel on a real drive.
+
 ## What's new in 1.0.13 – fewer false «Blikket borte fra veien»
 
 From the drives on 23 November at 19.33 and 20.45. The report's own calculation gave 13 periods of «eyes off the road» on the 19.33 drive. The owner (24 November) says the driver was looking at the road.

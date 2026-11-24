@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.13';
+export const APP_VERSION = '1.0.14';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -154,7 +154,8 @@ async function analyzeDrive(drive) {
   // 18 (0.26.3): blikket borte fra veien måles med hodet alene, og kalibreringen flyttes når den ikke passer
   // 19 (0.26.4): øving på plass (practice.js) holdes utenfor poengene, med mindre den skal telles (drive.practiceCount)
   // 20 (1.0.13): blikket borte fra veien: opp/ned teller 70 %, speil og skulderblikk teller ikke (eyesOffRoad)
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|20${drive.noFace ? 'n' : ''}${drive.practiceCount ? 'p' : ''}`;
+  // 21 (1.0.14): turer uten kalibrering får speil og skulderblikk med standardkalibreringen, som lærer av turen
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|21${drive.noFace ? 'n' : ''}${drive.practiceCount ? 'p' : ''}`;
   if (drive.result && drive.resultKey === key) { if (finalizeScore(drive, drive.result)) await putDrive(drive); return drive.result; }
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -181,6 +182,8 @@ async function analyzeDrive(drive) {
       markedLanes: (drive.marks || []).filter(m => m.cat === 'felt').map(m => m.t - result.t0) });
     // Under øving på plass ser føreren seg rundt hele tiden: blikket borte fra veien teller ikke der (0.26.4)
     if (result.camera && result.practiceEvents) result.camera.away = (result.camera.away || []).filter(a => !inSpans(a.t, result.practice));
+    // Speilene appen lærte av turen, tas med til neste tur (1.0.14)
+    try { learnCalibFrom(drive, result.camera); } catch { /* læringen skal aldri stoppe rapporten */ }
   } catch (err) {
     drive.result = null; drive.error = err.message; drive.resultKey = key;
     await putDrive(drive);
@@ -265,13 +268,14 @@ const num = v => (v === '' || v === null || v === undefined ? NaN : Number(Strin
 /* Kamerakortet under Innstillinger (0.12.0, før på Hjem) */
 function updateCamCard() {
   const settings = getSettings(), calibrated = !!getCalib();
-  $('#btn-go-camera').classList.toggle('warn', hasPlus() && !!settings.cameraOn && !calibrated && !roadOnly());
+  // Uten kalibrering er ikke lenger en feil (1.0.14): standardkalibreringen brukes og lærer av turene
+  $('#btn-go-camera').classList.remove('warn');
   $('#cam-card-title').textContent = roadOnly() ? 'Veikamera' : 'Speil og skulderblikk';
   $('#cam-card-text').textContent = !hasPlus() ? 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.'
     : roadOnly() ? (settings.cameraOn ? 'Veikameraet er slått på: bilen foran, feltlinjene og fartsskiltene. Trykk for å teste.' : 'Veikameraet er valgt, men ikke slått på. Trykk for å teste og slå det på.')
     : !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
     : calibrated ? (roadWanted() ? 'Kalibrert og slått på, med veikameraet samtidig. Trykk for å teste.' : 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.')
-    : 'Ikke kalibrert. Trykk her og kalibrer før turen – det tar 30 sekunder.';
+    : 'Slått på. Appen bruker en standardkalibrering som lærer av turene. Kalibrer for mer nøyaktige tall – det tar 30 sekunder.';
 }
 
 /* ---------- Hjem ---------- */
@@ -760,6 +764,26 @@ function getCalib() {
   return Object.values(all).filter(c => c && c.ok).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))[0] || null;
 }
 function saveCalib(c) { const s = getSettings(); saveSettings({ ...s, calib: { ...(s.calib || {}), [calibKey()]: c } }); }
+/* Standardkalibreringen (1.0.14) for føreren som kjører nå, med speilene appen har lært av førerens turer. Den lagres
+   med turen (ok: false, så den aldri ser ut som en ekte kalibrering), og rapporten finner «rett fram» fra turen. */
+function stdCalib() {
+  const key = calibKey(), l = (getSettings().calibLearn || {})[key];
+  return { ok: false, std: true, key, offsets: l && l.offsets ? l.offsets : null };
+}
+/* Etter turen: speilene appen fant i kjøringen, tas med til neste tur for samme fører. Bare ferske turer (to døgn),
+   og hver tur én gang, så det å åpne gamle rapporter ikke drar standarden. */
+function learnCalibFrom(drive, cam) {
+  const c = drive.calib;
+  if (!c || !c.std || !c.key || drive.demo || !cam || !cam.mirrors || !cam.learned || !Object.keys(cam.learned).length) return;
+  const end = Date.parse(drive.endedAt || drive.startedAt);
+  if (!(Date.now() - end < 2 * 86400000)) return;
+  const s = getSettings(), all = s.calibLearn || {}, cur = all[c.key] || {};
+  const from = Array.isArray(cur.from) ? cur.from : [];
+  if (from.includes(drive.id)) return;
+  const offsets = { ...(cur.offsets || c.offsets || {}) };
+  for (const id of Object.keys(cam.learned)) if (cam.mirrors[id]) offsets[id] = cam.mirrors[id];
+  saveSettings({ ...s, calibLearn: { ...all, [c.key]: { offsets, from: [drive.id, ...from].slice(0, 30), at: new Date().toISOString() } } });
+}
 let camUnsub = null;
 let calibForDrive = null;   // tur som skal få kalibreringen når den er ferdig (fra rapporten)
 let noFaceDrive = false;    // «Kjør uten førerkameraet» valgt for turen som startes nå (0.13.13)
@@ -1935,7 +1959,7 @@ function renderPrecheck() {
     if (noFaceDrive) setCheck(camCheck, true, 'Førerkameraet er av for denne turen. Blikk og speilbruk blir ikke vurdert.');
     else setCheck(camCheck, null, 'Førerkameraet er på igjen …');
   };
-  if (camWanted() && !roadOnly()) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Ikke kalibrert – du kan kalibrere her når kameraet er i gang');
+  if (camWanted() && !roadOnly()) setCheck(camCheck, null, getCalib() ? 'Starter når du gir tilgang' : 'Starter når du gir tilgang · standardkalibrering, du kan kalibrere her');
   preCalib.onclick = async () => {
     unlockSpeech();
     await runCalibration();
@@ -2003,7 +2027,7 @@ function renderPrecheck() {
           if (share <= 0.6) { setCheck(camCheck, null, 'Ser ikke ansiktet – juster holderen'); return; }
           const chk = checkCalibration(getCalib(), recent);
           const todo = chk.state === 'moved' || chk.state === 'none';
-          setCheck(camCheck, chk.state === 'ok' || chk.state === 'old' ? true : chk.state === 'wait' ? null : false, chk.text);
+          setCheck(camCheck, chk.state === 'ok' || chk.state === 'old' || chk.state === 'std' ? true : chk.state === 'wait' ? null : false, chk.text);
           camCheck.classList.toggle('todo', todo);
           preCalib.classList.toggle('primary', todo); preCalib.classList.toggle('secondary', !todo);
         });
@@ -2195,7 +2219,7 @@ async function startRecording(replay = null) {
     focus: replay ? [] : (settings.focus || []),
     surface: replay ? '' : currentSurface(),
     noFace: !replay && noFaceDrive,
-    calib: replay ? null : getCalib(),
+    calib: replay ? null : (getCalib() || stdCalib()),
     replay,
     onStatus: st => {
       if (st.replayDone) { finishRecording(); return; }

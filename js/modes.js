@@ -49,7 +49,7 @@ export const archivedStudents = (s = {}) => students(s).filter(x => x.archived).
 export function forgetStudent(s = {}, name) {
   const drop = obj => { if (!obj || typeof obj !== 'object') return obj; const o = { ...obj }; delete o[name]; return o; };
   const out = { ...s, students: students(s).filter(x => x.name !== name), drivers: (s.drivers || []).filter(n => n !== name) };
-  for (const k of ['lessons', 'teacherNotes', 'homework', 'curriculum', 'theory', 'calib', 'messages', 'nextLesson']) if (s[k]) out[k] = drop(s[k]);
+  for (const k of ['lessons', 'teacherNotes', 'homework', 'curriculum', 'theory', 'calib', 'calibLearn', 'messages', 'nextLesson']) if (s[k]) out[k] = drop(s[k]);
   if (out.activeStudent === name) out.activeStudent = (activeStudents(out)[0] || {}).name || '';
   return out;
 }

@@ -22,9 +22,10 @@ export function facePosition(poses) {
 
 /* poses: ansikter sett de siste sekundene. Svarer { state: 'ok' | 'moved' | 'old' | 'none' | 'wait', text } */
 export function checkCalibration(calib, poses, now = Date.now()) {
-  if (!calib || !calib.ok) return { state: 'none', text: 'Ikke kalibrert. Kalibrer nå, det tar 30 sekunder.' };
   const seen = (poses || []).filter(p => p && Number.isFinite(p.yaw));
   if (seen.length < CALIB_CHECK.minSamples) return { state: 'wait', text: 'Ser etter føreren …' };
+  // Uten kalibrering (1.0.14): standardkalibreringen brukes og lærer av turene, så det er ikke en feil
+  if (!calib || !calib.ok) return { state: 'std', text: 'Ser føreren · standardkalibrering som lærer av turene' };
   const pos = facePosition(seen);
   if (calib.pos && pos) {
     const side = Math.hypot(pos.x - calib.pos.x, pos.y - calib.pos.y), depth = Math.abs(pos.z - calib.pos.z);

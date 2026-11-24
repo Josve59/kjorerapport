@@ -57,7 +57,8 @@ test('føre: tiden summeres i kjøreloggen', () => {
 /* ---------- Kalibreringssjekk ---------- */
 const poses = (n, o = {}) => Array.from({ length: n }, () => ({ yaw: 0, pitch: 0, x: 0, y: 0, z: -50, ...o }));
 test('kalibrering: uten kalibrering er det et punkt å gjøre', () => {
-  assert.equal(checkCalibration(null, poses(20)).state, 'none');
+  assert.equal(checkCalibration(null, poses(20)).state, 'std');   // 1.0.14: standardkalibreringen
+  assert.equal(checkCalibration(null, poses(5)).state, 'wait');
 });
 test('kalibrering: ansiktet på samme sted er ok, flyttet holder sies fra om', () => {
   const calib = { ok: true, forward: { yaw: 0, pitch: 0 }, left: { yaw: -40, pitch: 0 }, right: { yaw: 40, pitch: 0 }, rear: { yaw: 20, pitch: 15 }, pos: facePosition(poses(20)), at: new Date().toISOString() };

@@ -309,9 +309,123 @@ export function shiftCalib(calib, s) {
   return out;
 }
 
+/* Standardkalibrering (1.0.14): eieren vil at folk skal slippe å kalibrere. Speilene i forhold til «rett fram»
+   (bare hodet, grader), gjennomsnittet av fire kalibreringer 16.–22. nov. De lå innen 6° av hverandre, og med
+   denne standarden ga turene nesten de samme speiltallene som med førerens egen (turen 23. nov. kl. 19.33:
+   venstre 92 mot 95, høyre 10 mot 14, bak 21 mot 20). «Rett fram» finnes fra turen selv. */
+export const STD_MIRRORS = { left: { yaw: 20, pitch: 5 }, right: { yaw: -53, pitch: 9 }, rear: { yaw: -36, pitch: -9 } };
+export function standardCalib(forward, offsets = STD_MIRRORS) {
+  if (!forward || !Number.isFinite(forward.yaw) || !Number.isFinite(forward.pitch)) return null;
+  const c = { ok: true, std: true, forward: { yaw: forward.yaw, pitch: forward.pitch, n: 0 } };
+  for (const id of MIRRORS) {
+    const o = offsets && offsets[id] && Number.isFinite(offsets[id].yaw) ? offsets[id] : STD_MIRRORS[id];
+    c[id] = { yaw: forward.yaw + o.yaw, pitch: forward.pitch + o.pitch, n: 0 };
+  }
+  return c;
+}
+/* Speilene i forhold til rett fram, til å lagre det appen har lært (1.0.14) */
+export const mirrorOffsets = calib => (calib && calib.ok ? Object.fromEntries(MIRRORS.filter(id => calib[id]).map(id => [id, {
+  yaw: Math.round((calib[id].yaw - calib.forward.yaw) * 10) / 10, pitch: Math.round((calib[id].pitch - calib.forward.pitch) * 10) / 10
+}])) : null);
+
+const kmhAtFn = points => t => {
+  if (!points.length) return 0;
+  let lo = 0, hi = points.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (points[m].t < t) lo = m + 1; else hi = m; }
+  return points[lo].kmh;
+};
+/* «Rett fram» fra turen: medianen i fart (minst 40 km/t, ellers 15), ellers av alle bildene med ansikt */
+export function driveForward(samples, points, t0) {
+  const kmhAt = kmhAtFn(points || []);
+  const ok = samples.filter(x => x.ok && Number.isFinite(x.yaw) && Number.isFinite(x.pitch));
+  for (const [kmh, min] of [[40, 150], [15, 150], [-1, 30]]) {
+    const s = kmh < 0 ? ok : ok.filter(x => kmhAt(x.t - t0) >= kmh);
+    if (s.length >= min) return { yaw: median(s.map(x => x.yaw)), pitch: median(s.map(x => x.pitch)) };
+  }
+  return null;
+}
+
+/* Appen lærer speilene av turen (1.0.14). Under kjøring ser folk mest med øynene: hodet snur seg til venstre speil
+   ofte bare 9–14° mot 20° under kalibreringen, og høyre speil 26–48° mot 53°. Her finnes rolige blikk (minst 0,25 s,
+   over 10° fra rett fram, i minst 15 km/t og ikke i sving over 10 °/s), og de samles i topper (mean-shift, 6°). Har et
+   speil en tydelig topp innen radius av der kalibreringen sier (minst minW s og minN blikk), flyttes speilet halve
+   veien dit (step). Bakspeilet ses mest med øynene og finnes sjelden; da står det som før. På 12 turer i to biler
+   lå venstre speil i kjøringen på 13–16° i hver eneste tur, høyre speil ble funnet én gang.
+   → { calib (kopi), learned: { left: { yaw, pitch, w, n }, … } med speilene som ble flyttet (relativt til rett fram) } */
+export function learnMirrors(samples, calib, points = [], t0 = 0, { minKmh = 15, maxTurn = 10, radius = 15, minW = 3, minN = 5, step = 0.5, minDeg = 10 } = {}) {
+  if (!calib || !calib.ok || !calib.forward) return { calib, learned: {} };
+  const kmhAt = kmhAtFn(points);
+  const R = Math.PI / 180, head = (a, b) => Math.atan2((b.lon - a.lon) * Math.cos(a.lat * R), b.lat - a.lat) / R;
+  // Svingraten over ±3 punkter: over bare ±1 gjorde GPS-støyen nesten alt til «sving» (turen 23. nov. kl. 19.33)
+  const turn = points.map((p, i) => {
+    const a = points[i - 3], b = points[i + 3];
+    if (!a || !b || !Number.isFinite(p.lat) || !Number.isFinite(a.lat) || !Number.isFinite(b.lat)) return 0;
+    const dt = b.t - a.t;
+    if (!(dt > 0)) return 0;
+    let d = head(p, b) - head(a, p); if (d > 180) d -= 360; if (d < -180) d += 360;
+    return Math.abs(d) / (dt / 2);
+  });
+  const turnAt = t => { if (!points.length) return 0; let lo = 0, hi = points.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (points[m].t < t) lo = m + 1; else hi = m; } return turn[lo]; };
+  const F = calib.forward, fix = [];
+  let run = [];
+  const flush = () => {
+    if (run.length >= 2 && run[run.length - 1].t - run[0].t >= 0.25) {
+      const y = median(run.map(x => x.yaw)) - F.yaw, p = median(run.map(x => x.pitch)) - F.pitch;
+      if (Math.hypot(y, p) >= minDeg) fix.push({ y, p, w: run[run.length - 1].t - run[0].t });
+    }
+    run = [];
+  };
+  for (const x of samples.filter(x => Number.isFinite(x.t)).sort((a, b) => a.t - b.t)) {
+    if (!x.ok || !Number.isFinite(x.yaw) || !Number.isFinite(x.pitch)) { flush(); continue; }
+    const t = x.t - t0;
+    if (kmhAt(t) < minKmh || turnAt(t) > maxTurn) { flush(); continue; }
+    const last = run[run.length - 1];
+    if (last && (x.t - last.t > 0.3 || Math.hypot(x.yaw - last.yaw, x.pitch - last.pitch) > 5)) flush();
+    run.push(x);
+  }
+  flush();
+  const modes = [];
+  for (const s of fix) {
+    let c = { y: s.y, p: s.p };
+    for (let k = 0; k < 20; k++) {
+      let sy = 0, sp = 0, sw = 0;
+      for (const q of fix) { const d = Math.hypot(q.y - c.y, q.p - c.p); if (d < 9) { const w = q.w * Math.exp(-(d * d) / 72); sy += w * q.y; sp += w * q.p; sw += w; } }
+      if (!sw) break;
+      const n = { y: sy / sw, p: sp / sw }, moved = Math.hypot(n.y - c.y, n.p - c.p);
+      c = n; if (moved < 0.05) break;
+    }
+    let m = modes.find(m => Math.hypot(m.y - c.y, m.p - c.p) < 4);
+    if (!m) modes.push(m = { y: c.y, p: c.p, w: 0, n: 0 });
+    m.w += s.w; m.n++;
+  }
+  const out = { ...calib }, learned = {};
+  for (const id of MIRRORS) {
+    if (!calib[id]) continue;
+    const cy = calib[id].yaw - F.yaw, cp = calib[id].pitch - F.pitch;
+    // Toppen må ligge nærmere dette speilet enn de andre, så et blikk mot bakspeilet ikke drar høyre speil, og nærmere
+    // speilet enn rett fram: på turen 23. nov. kl. 19.33 lå hodet lenge 12° opp, og det dro ellers venstre speil mot 11°
+    const near = modes.filter(m => m.w >= minW && m.n >= minN && Math.hypot(m.y - cy, m.p - cp) <= radius
+      && Math.hypot(m.y - cy, m.p - cp) < Math.hypot(m.y, m.p)
+      && MIRRORS.every(o => o === id || !calib[o] || Math.hypot(m.y - (calib[o].yaw - F.yaw), m.p - (calib[o].pitch - F.pitch)) > Math.hypot(m.y - cy, m.p - cp)));
+    if (!near.length) continue;
+    const best = near.sort((a, b) => b.w - a.w)[0];
+    const y = cy + step * (best.y - cy), p = cp + step * (best.p - cp);
+    out[id] = { ...calib[id], yaw: F.yaw + y, pitch: F.pitch + p };
+    learned[id] = { yaw: Math.round(y * 10) / 10, pitch: Math.round(p * 10) / 10, w: Math.round(best.w), n: best.n };
+  }
+  return { calib: out, learned };
+}
+
 /* Vurdering mot turen. points: rapportens punkter (t relativt til start), t0: start i opptakstid.
-   laneChanges: rapportens feltskifter. Returnerer tall og sjekker for rapporten. */
-export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChanges = [], markedLanes = [] } = {}) {
+   laneChanges: rapportens feltskifter. Returnerer tall og sjekker for rapporten.
+   1.0.14: uten kalibrering (eller med { std: true, offsets } fra det appen har lært) brukes standardkalibreringen
+   med «rett fram» fra turen, og speilene læres av turen (learn). Ellers som før. */
+export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChanges = [], markedLanes = [], learn = true } = {}) {
+  if (!calib || !calib.ok || calib.std) {
+    const f = driveForward(samples, points, t0);
+    const sc = f ? standardCalib(f, calib && calib.std ? calib.offsets : null) : null;
+    if (sc) calib = sc;
+  }
   // «Blikket borte fra veien» måles med hodet alene (0.26.3). Øynene måles dårlig fra en telefon ved rattet i mørket:
   // turen 19. nov. kl. 20.05 fikk 27 perioder med hode og øyne, mange der hodet sto rett fram og bare øynene «så ned».
   // Med hodet alene: 3 (testen i tunnelen og to til), og 1 og 0 på turene 16. nov. (4 og 1 før).
@@ -324,6 +438,9 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
   const calibOff = calibOffset(valid, calib, points, t0);
   const shift = forwardShift(valid, calib, points, t0);
   if (shift) calib = shiftCalib(calib, shift);
+  // Speilene læres av turen (1.0.14), bare med standardkalibreringen: den som har kalibrert selv, får sin egen
+  let learned = {};
+  if (learn && calib && calib.ok && calib.std) ({ calib, learned } = learnMirrors(valid, calib, points, t0));
   const coverage = valid.filter(x => x.ok).length / valid.length;
   const glances = detectGlances(valid, calib).map(g => ({ ...g, t: g.t - t0, tEnd: g.tEnd - t0 }));
   const mirrors = glances.filter(g => MIRRORS.includes(g.cls));
@@ -377,6 +494,7 @@ export function evaluateMirrors(samples, calib, { points = [], t0 = 0, laneChang
     frontShare: moving > 0 ? Math.round(seenMoving / moving * 100) / 100 : 0,
     longestGap: longest, longestGapAt: longestAt - longest,
     lane, laneSource: marked.length ? 'marks' : 'sensors', start, calibrated: !!(calib && calib.ok),
+    std: !!(calib && calib.std), learned, mirrors: mirrorOffsets(calib),
     drift: Math.round(forwardDrift(valid, calib).max * 10) / 10,
     calibOff, ...(shift ? { shift } : {}),
     ...(calib && calib.close ? { closeMirrors: calib.close } : {}),
