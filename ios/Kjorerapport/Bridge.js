@@ -17,7 +17,10 @@
     // Kjørerapport Pluss (PlusStore.swift): engangskjøp i App Store; endringer kommer som hendelsen «kjplus»
     plusStatus: () => call('plusStatus'), plusBuy: () => call('plusBuy'), plusRestore: () => call('plusRestore'), plusRedeem: () => call('plusRedeem'),
     // Påminnelse om dagens teori (Reminders.swift, 0.24.0): lokale varsler, listen regnes ut i js/remind.js
-    remindAuth: () => call('remindAuth'), remindSet: items => call('remindSet', { items }), remindClear: () => call('remindClear') };
+    remindAuth: () => call('remindAuth'), remindSet: items => call('remindSet', { items }), remindClear: () => call('remindClear'),
+    // Blinklyset (1.1.0, BlinkListener.swift): klikk fra mikrofonen kommer som hendelsen «kjaudio», aldri lyd
+    micAuth: () => call('micAuth'), micStart: () => call('micStart'), micStop: () => call('micStop') };
+  window.__kjAudio = r => { window.dispatchEvent(new CustomEvent('kjaudio', { detail: r })); };
   window.__kjFile = () => { window.dispatchEvent(new Event('kjfile')); };
   window.__kjPlus = owned => { window.dispatchEvent(new CustomEvent('kjplus', { detail: { owned } })); };
   window.__kjCamDets = r => { window.dispatchEvent(new CustomEvent('kjcamdets', { detail: r })); };

@@ -95,6 +95,8 @@
             <div class="chips wrap" id="focus-chips" role="group" aria-label="Dagens øvingsmål"></div>
             <div class="focus-suggest" id="focus-suggest" hidden></div>
           </details>
+          <!-- Prøve-oppkjøring (1.1.0): gjelder bare turen som startes nå -->
+          <label class="toggle mock-toggle"><span><strong>Prøve-oppkjøring</strong><br><span class="muted small">Rapporten vurderer turen slik som på førerprøven. Kjør rundt 25 minutter, gjerne der eleven ikke har kjørt før. Ledsageren sier bare hvor dere skal.</span></span><input type="checkbox" class="switch" id="mockNext"></label>
         </div>
       </li>
       <li class="flow-step" id="step-perm" data-state="active">
@@ -385,6 +387,8 @@
         <label class="toggle"><span><strong>Fartsgrense og veidata</strong><br><span class="muted small">Viser fartsgrensen på skjermen under kjøring. Gir også stoppskilt, vikeplikt og rundkjøringer i rapporten. Fra Statens vegvesen.</span></span><input type="checkbox" class="switch" id="netLimits"></label>
         <label class="toggle"><span><strong>Varsel når farten er for høy</strong><br><span class="muted small">Kanten på skjermen lyser rødt, sterkere jo mer over grensen. Starter når farten er mer enn 3 km/t over grensen (3 % over 100 km/t) i 2 sekunder, samme margin som politiet trekker fra.</span></span><input type="checkbox" class="switch" id="speedWarn"></label>
         <label class="toggle"><span><strong>Lyd når farten er for høy</strong><br><span class="muted small">Pip som kommer tettere jo mer over grensen. Når grensen nettopp har byttet, eller en høyere grense er like foran, venter lyden noen sekunder. Kan også slås av og på med høyttalerknappen under kjøring. <span class="not-android">Høres også når telefonen står på lydløs.</span><span class="android-only">Lyden følger medievolumet: skru det opp før turen.</span></span></span><input type="checkbox" class="switch" id="speedSound"></label>
+        <!-- Blinklyset (1.1.0): bare i iPhone-appen (BlinkListener.swift), av som standard -->
+        <label class="toggle" id="blinkMic-row" hidden><span><strong>Hør etter blinklyset <span class="beta-tag">Ny</span></strong><br><span class="muted small">Mikrofonen lytter etter tikkingen fra blinklyset, så rapporten kan si om dere blinket før feltskifter og svinger. Lyden analyseres på telefonen og lagres eller sendes aldri. Virker best uten radio.</span></span><input type="checkbox" class="switch" id="blinkMic"></label>
         <label class="toggle"><span><strong>Vis føreren under kjøring</strong><br><span class="muted small">Et lite bilde av førerkameraet i hjørnet. Av som standard, så føreren ikke ser seg selv. Kameraet virker likevel, og appen sier fra hvis den ikke ser ansiktet.</span></span><input type="checkbox" class="switch" id="showFace"></label>
       </div>
     </section>
@@ -512,7 +516,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 1.0.16</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 1.1.0</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 

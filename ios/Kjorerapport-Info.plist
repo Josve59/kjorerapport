@@ -11,6 +11,9 @@
 		<key>Kjoretur</key>
 		<string>Kjøreturen trenger nøyaktig posisjon for å måle fart og svinger og finne fartsgrensen. Med omtrentlig posisjon kan ikke turen starte.</string>
 	</dict>
+	<!-- 1.1.0: blinklyset, valgfritt (Innstillinger › Under kjøring) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Valgfritt: mikrofonen lytter etter tikkingen fra blinklyset under kjøreturen, så rapporten kan si om dere blinket før feltskifter og svinger. Lyden analyseres på telefonen og lagres eller sendes aldri.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Bevegelsessensorene måler bremsing, akselerasjon og svinger under kjøreturen. Målingene lagres bare på telefonen.</string>
 	<key>NSCameraUsageDescription</key>

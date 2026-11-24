@@ -14,6 +14,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
     private let motion = CMMotionManager()
     private var watching = false      // nettappen vil ha posisjoner (sjekk før kjøring, opptak)
     private var recording = false     // et opptak pågår
+    private var micWanted = false     // blinklyset (1.1.0): lytt etter det mens opptaket pågår og appen er synlig
     private var inBackground = false
     private var buffer: [[String: Any]] = []   // målinger mens appen er i bakgrunnen
     private var pendingFiles: [(name: String, text: String)] = []   // filer åpnet i appen, til nettappen henter dem (0.18.1; kø fra 0.18.3)
@@ -160,7 +161,19 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         case "recStatus":
             // I bakgrunnen får ikke nettappen nye posisjoner (de samles her), så da gjelder appens egen avstand
             if !inBackground, let d = body["distanceM"] as? Double, d.isFinite { distanceM = d; updateActivity(force: false) }
+        case "micAuth":   // blinklyset (1.1.0, BlinkListener.swift)
+            return (["ok": await BlinkListener.authorize()], nil)
+        case "micStart":
+            BlinkListener.shared.onBatch = { [weak self] js in Task { @MainActor in self?.send(js) } }
+            micWanted = true
+            let why = inBackground ? nil : BlinkListener.shared.start()
+            return (["ok": why == nil, "error": why.map { $0 as Any } ?? NSNull()], nil)
+        case "micStop":
+            micWanted = false
+            BlinkListener.shared.stop()
         case "recStop":
+            micWanted = false
+            BlinkListener.shared.stop()
             recording = false
             endActivity()
             buffer.removeAll()
@@ -399,6 +412,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
 
     @objc private func didEnterBackground() {
         inBackground = true
+        if micWanted { BlinkListener.shared.stop() }   // mikrofonen bare mens appen er synlig (ingen lyd i bakgrunnen)
         lastLocation = nil
         updateActivity(force: true)
         guard recording, motion.isDeviceMotionAvailable else { return }
@@ -421,6 +435,7 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
 
     @objc private func didBecomeActive() {
         inBackground = false
+        if micWanted && recording { _ = BlinkListener.shared.start() }
         motion.stopDeviceMotionUpdates()
         guard !buffer.isEmpty else { return }
         let list = buffer

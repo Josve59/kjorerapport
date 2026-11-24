@@ -21,13 +21,18 @@ final class Beeper {
         let valid = tones.filter { $0.count == 3 && $0[0] > 0 && $0[2] > 0 }
         guard !valid.isEmpty else { return }
         let session = AVAudioSession.sharedInstance()
+        // Lytter mikrofonen etter blinklyset (1.1.0), eier den lydøkten: den spiller også gjennom høyttaleren
+        let listening = BlinkListener.shared.isListening
         do {
-            try session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
-            try session.setActive(true)
+            if !listening {
+                try session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+                try session.setActive(true)
+            }
             if !engine.isRunning { try engine.start() }
         } catch { return }
         let rate = format.sampleRate
         let end = valid.map { $0[1] + $0[2] }.max() ?? 0
+        if listening { BlinkListener.shared.mute(for: end + 0.3) }   // egne pip er ikke blinklys
         let frames = AVAudioFrameCount((end + 0.05) * rate)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames), let data = buffer.floatChannelData?[0] else { return }
         buffer.frameLength = frames
@@ -50,7 +55,7 @@ final class Beeper {
             guard !Task.isCancelled, let self else { return }
             self.player.stop()
             self.engine.stop()
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            if !BlinkListener.shared.isListening { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
         }
     }
 }

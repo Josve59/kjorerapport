@@ -77,6 +77,7 @@ export class Recorder {
     this.surface = typeof opts.surface === 'string' ? opts.surface : '';   // føre (0.12.0)
     this.calib = opts.calib || null;
     this.noFace = !!opts.noFace;   // førerkameraet slått av for denne turen (0.13.13)
+    this.mock = !!opts.mock;       // prøve-oppkjøring (1.1.0): rapporten vurderer turen som på førerprøven
     this.replay = opts.replay || null;        // { data, speed } – utvikleralternativ: spill av demotur
     this.reset();
   }
@@ -84,7 +85,8 @@ export class Recorder {
   reset() {
     this.drive = null;
     this.t0 = 0;
-    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [] };
+    this.lastBlinkLevel = -Infinity;   // blinklyset: lydnivået lagres høyst én gang i sekundet
+    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [], blink: [] };
     this.headOk = 0; this.headN = 0; this.roadN = 0; this.roadLead = 0; this.speed = NaN;
     this.seq = 0;
     this.lastMotionT = -1;
@@ -130,6 +132,7 @@ export class Recorder {
       focus: this.focus,
       surface: this.surface,
       ...(this.noFace ? { noFace: true } : {}),
+      ...(this.mock ? { mock: true } : {}),
       calib: this.calib || null,
       gaps: [],
       marks: [],
@@ -302,6 +305,22 @@ export class Recorder {
     // Øynene (k0.7.6): ex/ey i grader når de er åpne
     this.buf.head.push(pose ? { t, yaw: r1(pose.yaw), pitch: r1(pose.pitch), ...(Number.isFinite(pose.ex) ? { ex: r1(pose.ex), ey: r1(pose.ey) } : {}), ok: true } : { t, ok: false });
   }
+  /* Blinklyset (1.1.0): klikk fra mikrofonen { c: [[ms siden 1970, dB]], db, ts } fra iPhone-appen, aldri lyd.
+     Lagres som { t, s } (klikk) og { t, db } (lydnivået, ett i sekundet); js/blink.js finner blinklyset etterpå. */
+  addBlink(batch) {
+    if (!this.running || this.replay || !batch) return;
+    const t0Epoch = performance.timeOrigin + this.t0;
+    const r3 = v => Math.round(v * 1000) / 1000;
+    for (const c of Array.isArray(batch.c) ? batch.c : []) {
+      const t = (Number(c[0]) - t0Epoch) / 1000;
+      if (t >= 0 && Number.isFinite(c[1])) this.buf.blink.push({ t: r3(t), s: Math.round(c[1] * 10) / 10 });
+    }
+    if (Number.isFinite(batch.db) && Number.isFinite(batch.ts)) {
+      const t = (batch.ts - t0Epoch) / 1000, last = this.lastBlinkLevel;
+      if (t >= 0 && t - last >= 0.95) { this.buf.blink.push({ t: r3(t), db: Math.round(batch.db) }); this.lastBlinkLevel = t; }
+    }
+  }
+
   /* Veikameraet: tall om veien foran (aldri bilder). */
   addRoad(r) {
     if (!this.running) return;
@@ -335,14 +354,15 @@ export class Recorder {
   async checkpoint() {
     if (!this.drive) return;
     const b = this.buf;
-    if (!b.loc.length && !b.gyro.length && !b.grav.length && !b.acc.length && !b.head.length && !b.road.length) return;
-    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [] };
+    if (!b.loc.length && !b.gyro.length && !b.grav.length && !b.acc.length && !b.head.length && !b.road.length && !b.blink.length) return;
+    this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [], blink: [] };
     this.drive.counts.loc += b.loc.length;
     this.drive.counts.gyro += b.gyro.length;
     this.drive.counts.grav += b.grav.length;
     this.drive.counts.acc += b.acc.length;
     this.drive.counts.head = (this.drive.counts.head || 0) + b.head.length;
     this.drive.counts.road = (this.drive.counts.road || 0) + b.road.length;
+    if (b.blink.length) this.drive.counts.blink = (this.drive.counts.blink || 0) + b.blink.length;
     this.drive.marks = this.marks;
     this.drive.distanceM = this.distance;
     this.drive.duration = this.now();

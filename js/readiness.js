@@ -71,7 +71,8 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
   const rb = sum(x => ((x.road && x.road.roundabouts) || (x.res.maneuvers && x.res.maneuvers.roundabouts) || []).length);
   const lc = sum(x => ((x.res.maneuvers && x.res.maneuvers.laneChanges) || []).length);
   const hasRoad = rows.some(x => x.road);
-  const jn = sum(x => ((x.road && x.road.giveway) || []).length + ((x.road && x.road.stops) || []).length);
+  // Kryss uten skilt (1.1.0) teller også: der gjelder høyreregelen
+  const jn = sum(x => ((x.road && x.road.giveway) || []).length + ((x.road && x.road.stops) || []).length + ((x.road && x.road.junctions) || []).length);
   const sitMissing = [rb < READY.roundabouts ? 'rundkjøringer' : null, lc < READY.laneChanges ? 'strekninger med to felt i samme retning' : null, hasRoad && jn < READY.junctions ? 'kryss med vikeplikt' : null].filter(Boolean);
   items.push({ id: 'situations', group: 'Kjøringen', label: 'Rundkjøringer, feltskifte og kryss', ok: !sitMissing.length,
     have: `${rb} ${rb === 1 ? 'rundkjøring' : 'rundkjøringer'} · ${lc} ${lc === 1 ? 'feltskifte' : 'feltskifter'}${hasRoad ? ` · ${jn} kryss` : ''}`, need: `${READY.roundabouts} rundkjøringer · ${READY.laneChanges} feltskifter${hasRoad ? ` · ${READY.junctions} kryss` : ''}`,
@@ -110,10 +111,18 @@ export function readiness(rows, { plan = {}, theory = null } = {}) {
       tip: 'Øv ved bilen med «Øv som på oppkjøringen» under Sikkerhetskontroll.' });
   }
 
+  // Øv i nærheten (1.1.0, nearby.js): det som mangler av steder og veityper
+  const needs = [
+    motor < READY.motorMin * 60 || lc < READY.laneChanges ? 'motorvei' : null,   // to felt i samme retning: motorveien
+    rb < READY.roundabouts ? 'rundkjøring' : null,
+    !hasRoad || jn < READY.junctions ? 'kryss' : null,
+    land < READY.landMin * 60 ? 'landevei' : null,
+    dark < READY.darkMin * 60 ? 'mørke' : null
+  ].filter(Boolean);
   const counted = items.filter(i => i.ok !== null), done = counted.filter(i => i.ok).length;
   const level = rows.length < READY.minDrives ? 'tidlig' : done === counted.length ? 'klar' : done >= counted.length - 2 ? 'nesten' : 'ikke';
   const next = items.filter(i => i.ok === false && i.tip).slice(0, 3);
-  return { items, done, counted: counted.length, level, next };
+  return { items, done, counted: counted.length, level, next, needs };
 }
 
 export const READY_TEXT = {

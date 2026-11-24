@@ -4,7 +4,7 @@
    bare bra hvis speilet ble sjekket først.
    Rene funksjoner uten nettleseravhengighet, så de kan testes i Node. Alle tider er relative til rapporten. */
 
-export const SOURCE_LABEL = { gps: 'GPS', motion: 'Bevegelse', camera: 'Førerkamera', roadcam: 'Veikamera', marks: 'Ledsager', road: 'Veidata' };
+export const SOURCE_LABEL = { gps: 'GPS', motion: 'Bevegelse', camera: 'Førerkamera', roadcam: 'Veikamera', marks: 'Ledsager', road: 'Veidata', mic: 'Mikrofon' };
 export const LEVEL_ORDER = { high: 0, medium: 1, low: 2, ok: 3 };
 const EVENT_TITLE = {
   brake: { brisk: 'Brå nedbremsing', harsh: 'Kraftig nedbremsing' },
@@ -113,6 +113,14 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
     }
   }
 
+  // 3b) Blinklyset (1.1.0): før feltskifter og svinger i kryss, når mikrofonen lyttet (r.blink fra blink.js)
+  for (const c of (r.blink && r.blink.checks) || []) {
+    const what = c.kind === 'lane' ? 'feltskiftet' : `svingen${c.dir ? ' til ' + c.dir : ''}`;
+    add({ t: c.t, kind: 'blink', sources: ['mic', c.kind === 'lane' ? 'motion' : 'gps'], level: c.heard ? 'ok' : 'low',
+      title: c.heard ? `Blinklys før ${what}` : `Hørte ikke blinklyset før ${what}`,
+      text: c.heard ? 'Mikrofonen hørte blinklyset før.' : 'Mikrofonen hørte ikke blinklyset før. Blink i god tid. Noen biler tikker lavt, og radio kan overdøve det.' });
+  }
+
   // 4) Kort avstand til bilen foran (veikamera + GPS). Mellom bildene fra veikameraet er det bygget bro,
   //    så lenge farten vår var nesten den samme.
   for (const c of road ? road.close : []) {
@@ -144,6 +152,27 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
       text: `Opptil ${kmh(g.maxKmh)} de neste 150 m etter skiltet. Barn kan komme ut i veien – ta det rolig.` });
     if (g.kind !== 'barn' && g.events.length) add({ t: g.t, kind: 'sign', sources: ['road', 'gps', 'motion'], level: 'medium', title: 'Farlig sving',
       text: `Brå hendelse etter skiltet Farlig sving (${kmh(g.kmh)} ved skiltet). Senk farten før svingen.` });
+  }
+
+  // 5b) Kryss uten skilt (1.1.0): høyreregelen. Bare når farten var 35 km/t eller mer helt fram til krysset (de siste 30 m).
+  //     NVDB mangler en del skilt på kommunale veger, derfor «trolig».
+  for (const j of nv.junctions || []) {
+    if (j.minKmh < 35) continue;
+    add({ t: j.t, kind: 'junction', sources: ['road', 'gps'], level: j.minKmh >= 45 ? 'high' : 'medium', title: `Kryss uten skilt i ${kmh(j.minKmh)}`,
+      text: `Appen finner ikke vikepliktskilt, lyskryss eller forkjørsvei her, så høyreregelen gjelder trolig. Senk farten før krysset, se til høyre og vær klar til å vike.` });
+  }
+
+  // 5c) Påkjøring til motorvei (1.1.0): farten på akselerasjonsfeltet mot fartsgrensen, og speil og skulderblikk (kamera)
+  for (const m of nv.merges || []) {
+    const lim = Number.isFinite(m.limit) ? m.limit : 80;
+    const lc = camera && camera.calibrated ? (camera.lane || []).find(l => l.t >= m.t - 2 && l.t <= m.tTo + 8) : null;
+    const checks = lc ? (lc.mirror && lc.shoulder ? ' Speil og skulderblikk før dere flettet inn.' : lc.mirror === false || lc.shoulder === false ? ' Husk speil og skulderblikk før dere fletter inn.' : '') : '';
+    const low = m.kmh < lim - 25, slow = m.kmh < lim - 15;
+    add({ t: m.t, kind: 'merge', sources: ['road', 'gps', ...(lc ? ['camera'] : [])],
+      level: low ? 'medium' : slow || (lc && (lc.mirror === false || lc.shoulder === false)) ? 'low' : 'ok',
+      title: `Påkjøring til ${m.type}`,
+      text: (slow ? `Opp i bare ${kmh(m.kmh)} på påkjøringen (fartsgrense ${lim}). Bruk hele akselerasjonsfeltet til å komme opp i samme fart som trafikken.`
+        : `Opp i ${kmh(m.kmh)} før dere kjørte inn (fartsgrense ${lim}).`) + checks });
   }
 
   // 6) Fart over grensen (veidata + GPS), når den ikke allerede er med i en situasjon over

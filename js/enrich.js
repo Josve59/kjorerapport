@@ -19,6 +19,9 @@ const SIGNAL = { type: 89 };      // signalanlegg (lyskryss), strekning
 // 0.18.0: motorveg (595), egenskap Motorvegtype 5378: «Motorveg» eller «Motortrafikkveg». Rundt Trondheim har det
 // meste av E6 og E39 80 eller 70 km/t, så fartsgrensen alene ga for lite motorvei i kjøreloggen.
 const MOTORWAY = { type: 595 };
+// 1.1.0: kryss uten skilt. Veinettet (vegnett, bare for kjørende) gir kryssene som noder; forkjørsveg (596) er strekninger
+const VEGNETT = 'https://nvdbapiles.atlas.vegvesen.no/vegnett/api/v4/veglenkesekvenser/segmentert';
+const PRIORITY = { type: 596 };
 const KARTVERKET = 'https://ws.geonorge.no/adresser/v1/punktsok';
 const CLIENT = 'Kjorerapport (kjorerapport.jo-9fc.workers.dev)';   // identifiserer appen overfor NVDB
 const MATCH_M = 25;            // maks avstand fra GPS-punkt til fartsgrensestrekning
@@ -469,23 +472,85 @@ export function nearRoute(points, items, maxM = 40) {
   return items.filter(it => sample.some(p => Math.abs(p.lat - it.lat) < 0.001 && metres(p, it) <= maxM));
 }
 
+/* Kryss i veinettet (1.1.0): noder der minst tre offentlige kjøreveger møtes (kommunal, fylkes-, riks- og europavei).
+   Private veger (avkjørsler, parkeringsplasser) teller ikke: den som kommer derfra, har vikeplikt uansett. Noder ved
+   rundkjøringer, ramper og ferjer er ikke kryss med høyreregel. segs: [{ ref, a, b, pts, kat, type, level }] fra NVDB.
+   Et segment som begynner midt på en lenke, har en startnode som «0.5052@47852»: bare tall er ekte noder. Ren funksjon. */
+export function junctionNodes(segs) {
+  const nodes = new Map(), seen = new Set();
+  const real = id => /^\d+$/.test(String(id));
+  for (const sg of segs) {
+    if (seen.has(sg.ref) || !Array.isArray(sg.pts) || sg.pts.length < 2) continue;
+    seen.add(sg.ref);
+    // Kjørebanen er nivået bilen kjører på; «Vegtrase» alene er midtlinjen for to løp og har egne noder
+    if (!['Vegtrase og kjørebane', 'Kjørebane'].includes(sg.level)) continue;
+    for (const [id, p] of [[sg.a, sg.pts[0]], [sg.b, sg.pts[sg.pts.length - 1]]]) {
+      if (!real(id)) continue;
+      const n = nodes.get(id) || { lat: p.lat, lon: p.lon, deg: 0, bad: false };
+      if (['K', 'F', 'R', 'E'].includes(sg.kat)) n.deg++;
+      if (['Rundkjøring', 'Rampe', 'Bilferje'].includes(sg.type)) n.bad = true;
+      nodes.set(id, n);
+    }
+  }
+  const r5 = v => Math.round(v * 1e5) / 1e5;
+  return [...nodes.values()].filter(n => n.deg >= 3 && !n.bad).map(n => ({ lat: r5(n.lat), lon: r5(n.lon), deg: n.deg }));
+}
+
+/* Kryss på en forkjørsveg er ikke høyreregelkryss: enten har vi forkjørsrett, eller vi har vikeplikt (1.1.0).
+   lines: [[{lat, lon}]] (forkjørsvegene). Ren funksjon. */
+export function offPriority(nodes, lines, maxM = 8) {
+  return nodes.filter(n => !lines.some(l => {
+    const cos = Math.cos(n.lat * Math.PI / 180);
+    for (let k = 1; k < l.length; k++) {
+      if (Math.abs(l[k].lat - n.lat) > 0.002 && Math.abs(l[k - 1].lat - n.lat) > 0.002) continue;
+      if (segDist(n, l[k - 1], l[k], cos) <= maxM) return true;
+    }
+    return false;
+  }));
+}
+
+/* Kryss uten forkjørsveg langs ruten (1.1.0): veinettet i de samme utsnittene som veidataene, og forkjørsvegene.
+   Svaret er stort i byer (rundt 180 kB komprimert per bykvartal-utsnitt), men hentes bare én gang per tur. */
+export async function fetchJunctions(points, signal) {
+  const boxes = routeBoxes(points);
+  const segs = [];
+  await pool(boxes, 3, async b => {
+    const box = [b.minLon, b.minLat, b.maxLon, b.maxLat].map(v => v.toFixed(5)).join(',');
+    let url = `${VEGNETT}?kartutsnitt=${box}&srid=4326&trafikantgruppe=K&antall=1000`;
+    for (let page = 0; page < 6 && url; page++) {
+      const data = await nvdbPage(url, signal);
+      for (const o of data.objekter || []) {
+        const vs = (o.vegsystemreferanse && o.vegsystemreferanse.vegsystem) || {};
+        segs.push({ ref: o.referanse || `${o.veglenkesekvensid}-${o.veglenkenummer}-${o.segmentnummer}`, a: String(o.startnode), b: String(o.sluttnode),
+          pts: parseWkt(o.geometri && o.geometri.wkt), kat: vs.vegkategori || '', type: o.typeVeg || '', level: o['detaljnivå'] || '' });
+      }
+      const md = data.metadata || {};
+      url = md.returnert && md.returnert >= (md.sidestørrelse || 1000) && md.neste && md.neste.href ? md.neste.href : null;
+    }
+  });
+  const prio = await fetchPoints(points, PRIORITY, false, signal, true);
+  return offPriority(nearRoute(points, junctionNodes(segs), 15), prio.map(x => x.line));
+}
+
 /* Retningen fra a til b i grader fra nord (motorveier langs kjøreretningen) */
 const bearing = (a, b) => (Math.atan2((b.lon - a.lon) * Math.cos(a.lat * Math.PI / 180), b.lat - a.lat) * 180 / Math.PI + 360) % 360;
 
 export async function fetchRoadData(points, signal) {
-  const [stops, giveway, rb, signs, crossings, bumps, signals] = await Promise.all([
+  const [stops, giveway, rb, signs, crossings, bumps, signals, junctions] = await Promise.all([
     fetchPoints(points, SIGN_STOP, false, signal),
     fetchPoints(points, SIGN_GIVEWAY, false, signal),
     fetchPoints(points, ROUNDABOUT, true, signal),
     fetchPoints(points, SIGNS, true, signal),
     fetchPoints(points, CROSSING, false, signal),
     fetchPoints(points, BUMP, true, signal),
-    fetchPoints(points, SIGNAL, true, signal)
+    fetchPoints(points, SIGNAL, true, signal),
+    // Kryss (1.1.0): feiler veinettet, mangler bare kryssene, ikke resten av veidataene
+    fetchJunctions(points, signal).catch(() => null)
   ]);
   const r5 = v => Math.round(v * 1e5) / 1e5;
   const pt = p => ({ lat: r5(p.lat), lon: r5(p.lon) });
   return {
-    v: 4,   // v4 (0.26.3): retningen på gangfelt. Fotobokser og strekningsmåling hentes ikke fra 1.0.4
+    v: 5,   // v4 (0.26.3): retningen på gangfelt. Fotobokser og strekningsmåling hentes ikke fra 1.0.4. v5 (1.1.0): kryss
     stops: stops.map(pt),
     giveway: giveway.map(pt),
     roundabouts: rb.map(p => ({ ...pt(p), d: Number(p.props[1791]) || 25, name: p.props[1073] || '' })),
@@ -497,7 +562,8 @@ export async function fetchRoadData(points, signal) {
     // Signalanlegg: bare lyskryss og lysregulerte gangfelt (bruksområde 1273). Uten bruksområde tas bare punkter med;
     // linjer uten bruksområde er ofte kjørefeltsignaler over motorvegen.
     signals: nearRoute(points, signals.filter(p => ['Vegkryss', 'Gangfelt'].includes(p.props[1273]) || (!p.props[1273] && !p.line))
-      .map(p => ({ ...pt(p), dir: Number.isFinite(p.dir) ? Math.round(p.dir) : null })), 60)
+      .map(p => ({ ...pt(p), dir: Number.isFinite(p.dir) ? Math.round(p.dir) : null })), 60),
+    ...(junctions ? { junctions } : {})
   };
 }
 
@@ -598,7 +664,23 @@ export function evaluateRoad(points, road, events = [], limits = null) {
     out.signs.push({ t: points[i].t, tTo: points[e].t, lat: sg.lat, lon: sg.lon, kind: sg.kind, kmh: Math.round(points[i].kmh), maxKmh: Math.round(maxKmh),
       events: events.filter(ev => ev.t >= points[i].t && ev.t <= points[e].t).map(ev => ev.n) });
   }
-  for (const k of ['crossings', 'bumps', 'signals', 'signs']) out[k].sort((x, y) => x.t - y.t);
+  // Kryss uten skilt (1.1.0): her gjelder høyreregelen. Bare kryss bilen kjørte gjennom (under 10 m fra ruta). Ikke der
+  // et stopp- eller vikepliktskilt, et lyskryss eller en rundkjøring er nær (da er krysset regulert), og ikke over 60-sone.
+  // NVDB mangler en del skilt på kommunale veger, så appen sier «trolig» om høyreregelen.
+  out.junctions = [];
+  const regulated = j => [...(road.stops || []), ...(road.giveway || [])].some(x => metres(x, j) <= 35)
+    || (road.signals || []).some(x => metres(x, j) <= 40) || (road.roundabouts || []).some(x => metres(x, j) <= Math.max(5, x.d / 2) + 20);
+  for (const j of road.junctions || []) {
+    const { i, d } = nearest(j);
+    if (d > 10 || points[i].kmh < 3 || regulated(j)) continue;
+    const lim = limits && Number.isFinite(limits[i]) ? limits[i] : null;
+    // Over 60-sone, eller over 60 km/t der grensen er ukjent: trolig en hovedvei, ikke et kryss med høyreregel
+    if (lim !== null ? lim > 60 : points[i].kmh > 60) continue;
+    const { m } = minIn(before(i, 30), i);
+    out.junctions.push({ t: points[i].t, lat: j.lat, lon: j.lon, kmh: Math.round(points[i].kmh), minKmh: Math.round(m), approachKmh: Math.round(points[before(i, 60)].kmh), limit: lim });
+  }
+  for (const k of ['crossings', 'bumps', 'signals', 'signs', 'junctions']) out[k].sort((x, y) => x.t - y.t);
+  out.junctions = out.junctions.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 4);
   // NVDB har ofte ett gangfelt og én fartsdemper per kjøreretning: det samme stedet innen 4 s er ett
   out.crossings = out.crossings.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 4);
   out.bumps = out.bumps.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 4);
@@ -607,8 +689,36 @@ export function evaluateRoad(points, road, events = [], limits = null) {
   return out;
 }
 
+/* Påkjøring til motorvei eller motortrafikkvei (1.1.0). motor: 0/1/2 per GPS-punkt (matchMotorway), limits: fartsgrensen
+   per punkt. En påkjøring er der bilen kommer inn på motorveien etter minst 20 s utenfor (og ikke i starten av turen).
+   Farten som teller, er den høyeste de første 400 m: akselerasjonsfeltet. I kø (snitt under 50 km/t den neste
+   kilometeren) vurderes den ikke. Ren funksjon. → [{ t, tTo, lat, lon, entryKmh, kmh, limit, type }] */
+export function evaluateMerges(points, motor, limits = null) {
+  const out = [];
+  if (!Array.isArray(motor) || motor.length !== points.length || points.length < 2) return out;
+  const med = a => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor(b.length / 2)] : 0; };
+  for (let i = 1; i < points.length; i++) {
+    if (!(motor[i] > 0) || motor[i - 1] > 0 || points[i].t - points[0].t < 20) continue;
+    let outside = true;
+    for (let k = i - 1; k >= 0 && points[i].t - points[k].t <= 20; k--) if (motor[k] > 0) { outside = false; break; }
+    if (!outside) continue;
+    let e = i, dist = 0;
+    while (e < points.length - 1 && dist < 400) { dist += metres(points[e], points[e + 1]); e++; }
+    let f = i, d2 = 0;
+    const sp = [], lims = [];
+    while (f < points.length - 1 && d2 < 1000) { d2 += metres(points[f], points[f + 1]); sp.push(points[f].kmh); if (limits && Number.isFinite(limits[f])) lims.push(limits[f]); f++; }
+    if (d2 < 600 || med(sp) < 50) { i = f; continue; }   // turen sluttet, eller kø
+    let max = 0;
+    for (let q = i; q <= e; q++) max = Math.max(max, points[q].kmh);
+    out.push({ t: points[i].t, tTo: points[e].t, lat: points[i].lat, lon: points[i].lon, entryKmh: Math.round(points[i].kmh), kmh: Math.round(max),
+      limit: lims.length ? med(lims) : null, type: motor[i] === 2 ? 'motortrafikkvei' : 'motorvei' });
+    i = f;
+  }
+  return out;
+}
+
 /* Henter det som er slått på og mangler, og returnerer et enrich-objekt som lagres på turen. */
-export const ROAD_V = 4;
+export const ROAD_V = 5;   // 5 (1.1.0): kryss uten skilt
 export const LIMITS_V = 4;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet; v3 (0.22.2): aldri gater på tvers; v4 (0.26.5): ikke lånt fra en annen veg
 export const MOTOR_V = 1;    // 0.18.0: motorvei og motortrafikkvei fra NVDB
 /* Bare motorveiene, for eldre turer som mangler dem (kjøreloggen henter dem i bakgrunnen) */
@@ -629,7 +739,7 @@ export async function enrichDrive(r, marks, wants, existing, onProgress = () => 
     // Skiltene kameraet leste legges over på nytt av appen (0.13.9)
     delete enrich.limitsNvdb; delete enrich.limitsCam; delete enrich.camV;
   }
-  if (wants.limits && (!enrich.road || enrich.road.v !== ROAD_V)) {   // v2: skilt, gangfelt, fartsdempere, lyskryss; v3: ATK
+  if (wants.limits && (!enrich.road || enrich.road.v !== ROAD_V)) {   // v2: skilt, gangfelt, fartsdempere, lyskryss; v3: ATK; v5: kryss
     onProgress('Henter skilt og rundkjøringer fra Statens vegvesen …');
     enrich.road = await fetchRoadData(r.points);
     enrich.roadFetchedAt = new Date().toISOString();

@@ -143,6 +143,86 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.1.0 – unsigned junctions, motorway merges, the turn signal, a practice driving test and places to practise
+
+The owner asked on 24 November for five new features right away, without lane position. All five are marked «Ny» and do not change the score.
+
+**1. Unsigned junctions (the right-hand rule).**
+- **Where they come from.** NVDB's road network (`vegnett/…/segmentert`, drivers only) gives the junctions as nodes where at least three public roads meet (`junctionNodes` in `js/enrich.js`).
+- **What doesn't count:**
+  - private roads (driveways, car parks);
+  - nodes at roundabouts, ramps and ferries;
+  - nodes on a priority road (NVDB 596, `offPriority`).
+- **Fetching.** `fetchRoadData` fetches the junctions together with the other road data (`ROAD_V` 5). A city box is about 180 kB compressed. If that request fails, only the junctions are missing.
+- **Evaluation (`evaluateRoad`).** Only junctions the car drove through (under 10 m from the route). Skipped are junctions with a stop or give-way sign within 35 m, traffic lights within 40 m or a roundabout nearby, and above a 60 zone or 60 km/h when the limit is unknown.
+- **Report.** «Kryss uten skilt i X km/t» when the speed in the last 30 m was 35 km/t or more («high» from 45). The text says «trolig» because NVDB lacks some signs on municipal roads.
+- **Readiness.** «Hva må du øve mer på?» counts these junctions too.
+- **Checked on the demo route through Trondheim:** 8 junctions near the route, 6 passed, all real junctions (Kjøpmannsgata, Kirkegata × Bakkegata, Skansegata …).
+
+**2. Joining a motorway (`evaluateMerges`).**
+- **What counts as a merge:** the car comes onto a motorway or motortrafikkvei (`enrich.motor`) after at least 20 s off it, and not at the start of the drive.
+- **The speed:** the highest speed in the first 400 m (the acceleration lane), compared with the speed limit.
+- **Queues:** if the average speed over the next km is under 50 km/t, the merge is not judged.
+- **Report:**
+  - «Påkjøring til motorvei» is OK from limit − 15.
+  - Under limit − 25 it is «medium»: «Bruk hele akselerasjonsfeltet».
+  - If the front camera saw a lane change, it also says whether there were mirror and shoulder checks.
+
+**3. The turn signal, heard with the microphone (`ios/Kjorerapport/BlinkListener.swift`, `js/blink.js`).**
+- **Setting:** «Hør etter blinklyset» under Settings › Under kjøring, iPhone app only, off by default. Microphone access is asked for when it is turned on (`NSMicrophoneUsageDescription`).
+- **When it listens:** only while a recording is running and the app is in the foreground (no audio in the background). It stops in the background and starts again when the app comes back.
+- **On the phone (Swift):**
+  - The audio goes through a 2 kHz high-pass, and the energy is measured in 4 ms chunks against a background level that follows the noise.
+  - A click is at least 9 dB above the background and rising.
+  - Only the click times and strengths and the sound level once a second reach the web app (`window.__kjAudio` → `kjaudio` → `recorder.addBlink`). They are stored as `raw.blink` and are in the export, so the detector can be tuned after the road test.
+- **The app's own beeps** (Beeper) don't count as clicks. While the microphone is listening, Beeper does not change the audio session.
+- **In the web app:**
+  - **What counts as the indicator:** six clicks in a row with the same gap of 0.48–1.05 s, ±12 ms, with one allowed to be missing.
+  - **Tuned against synthetic noise:** with five clicks and ±25 ms, random noise at 3 clicks a second looked like an indicator 24 % of the time; now 0 % (4 % at 5 a second). Indicators were found in 56 of 60 cases with 15 % of the clicks missing.
+  - **When it's judged:** the indicator must tick in the 8 s before a lane change (from the analysis) or a turn at a junction (`findTurns`: 60° within 12 s under 45 km/t, not in a roundabout).
+  - **Not judged:** if it also ticked 8–25 s earlier. If the «indicator» ticks more than 30 % of the drive (radio or music), nothing is judged, and the report says so.
+- **Situations:** «Hørte ikke blinklyset før …» is only «low», because some cars tick quietly. Heard indicators are under «gikk bra».
+
+**4. Practice driving test (`js/mocktest.js`).**
+- **Before the drive:** a «Prøve-oppkjøring» switch in step 1 of «Før du kjører», off every time. It applies only to the drive started from there (`drive.mock`, included in export and import).
+- **In the report:** the card «Prøve-oppkjøring» with seven areas, each «På plass», «Øv mer» or not measured:
+  - fart;
+  - kryss og vikeplikt;
+  - speil og blikk;
+  - feltskifte, påkjøring og blinklys;
+  - avstand;
+  - gangfelt;
+  - jevn kjøring.
+- **Verdict:**
+  - «Ikke klar ennå» for errors that often fail the driving test: 10 km/h or more over the limit, not stopping fully at a stop sign, too fast into an unsigned junction («high»), a long glance away, a hard braking, or any «high» situation.
+  - Otherwise «Nesten» if something needs practice, and «Ser bra ut» if nothing does.
+  - A drive under 20 minutes gets a note.
+- **What it doesn't cover:** the text says it is the app's judgement, not the examiner's, and that the safety check, reversing and parking are not included. The drive list shows the tag «prøve-oppkjøring».
+
+**5. Places to practise nearby (`js/nearby.js`).**
+- **Where:** a card in «Hva må du øve mer på?» that follows what is missing (`readiness(...).needs`):
+  - roundabouts;
+  - junctions with give-way;
+  - motorway (also for lane changes, with two lanes in the same direction);
+  - tips for country roads and darkness.
+- **«Finn steder nær meg»:**
+  - It gets the position once, rounds it to about 100 m, and asks NVDB about a box of about 6 × 6 km around it.
+  - It shows the nearest 2–3 of each with distance and direction («1,3 km øst») and «Vis vei» in Maps (Google Maps on Android).
+  - Junctions get the street name from Kartverket when «Stedsnavn» is on.
+- **Requirements:** «Fartsgrense og veidata» must be on. Speed limits can't be searched by value in NVDB (400), so country roads are a tip and not a place.
+- **Checked from Torvet:** Rv. 706 1.3 km east, E6 2.9 km south-east, the roundabouts at Bakklandet and Nedre Elvehavn, and the nearest give-way junctions, in 2.5 s.
+
+**Privacy:** `personvern/` has a section on the microphone (no audio stored or sent, only click times), and the NVDB row covers the box around you for «Finn steder nær meg». Audio is not collected, so the privacy label is unchanged.
+
+**Checked:**
+- 331 tests pass, 9 of them new in `tests/v110.test.mjs`.
+- The iPhone app compiles in Release.
+- In the browser (the Emma demo): the practice test card in the report, «Kryss uten skilt» in «Det som skjedde», «Øv i nærheten» with a simulated position at Torvet, and the switch in «Før du kjører», in light and dark mode at phone width with no sideways scroll and no script errors.
+
+**Not checked:**
+- **The microphone in a real car.** The detector is tuned on synthetic clicks. It needs a drive with «Hør etter blinklyset» on, then the export, so I can see what the phone heard.
+- **Junctions and merges on the owner's own drives.** The next export will show whether junctions are found where they should be.
+
 ## What's new in 1.0.16 – ready for App Review: the launch review's must-fix list
 
 The owner asked on 24 November for a deep dive before the App Store submission (28 November). Three review agents and my own checks found ten things to fix first. The owner answered the four questions the same day:

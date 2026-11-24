@@ -17,7 +17,7 @@
   <main class="doc">
     <h1>Personvern</h1>
     <p class="lead">Kort fortalt: Kjørerapport har ingen konto og ingen sporing. Turene dine blir liggende på din egen telefon, med mindre du er tester og selv velger å sende en tur til utvikleren.</p>
-    <p class="muted small">Sist oppdatert 24. november 2026. Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
+    <p class="muted small">Sist oppdatert 24. november 2026 (1.1.0). Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
 
     <h2>Hva appen lagrer</h2>
     <p>Når ledsageren starter et opptak, lagrer appen dette på telefonen:</p>
@@ -25,6 +25,7 @@
       <li>Posisjon og fart fra GPS, med tidspunkt.</li>
       <li>Målinger fra akselerometer og gyroskop (bremsing, akselerasjon og svinger).</li>
       <li>Det dere legger inn selv: førernavn, merker under turen, notater, mål og avkrysninger i opplæringsplanen.</li>
+      <li>Hvis «Hør etter blinklyset» er på: tidspunktet for korte klikk i lyden og lydnivået, ikke lyd. Se eget avsnitt under.</li>
       <li>Hvis kameraet er slått på: hodets og øynenes vinkel (hvor føreren ser), og i iPhone-appen tall om veien foran (avstand til bilen foran, plassering i feltet, fartsskilt). Se eget avsnitt under.</li>
     </ul>
     <p>Sensorene brukes bare før og under et opptak. I iPhone-appen fortsetter posisjon og bevegelse å bli målt hvis skjermen låses mens et opptak pågår, så turen ikke får hull. Det stopper når opptaket stoppes, og iPhone viser en blå markering så lenge. Uten et opptak bruker appen ikke sensorene i bakgrunnen.</p>
@@ -36,7 +37,7 @@
       <thead><tr><th>Tjeneste</th><th>Hva den får</th><th>Når</th></tr></thead>
       <tbody>
         <tr><td>Kart fra Kartverket</td><td>Hvilke kartruter som vises, altså omtrent hvor turen gikk</td><td>Når en rapport med kart åpnes. Kan slås av.</td></tr>
-        <tr><td>Veidata fra Statens vegvesen (NVDB)</td><td>Rutens posisjoner, for å hente fartsgrenser, motorveier, vikeplikt, stoppskilt, rundkjøringer, gangfelt, fartsdempere, lyskryss og enkelte skilt. Under kjøring også et område på rundt 4,5 × 4,5 km rundt bilen, for å vise fartsgrensen på skjermen. Med veikameraet på spør appen i tillegg om et lite område på rundt 130 × 130 m rundt bilen, hver 100. meter eller hvert minutt, for å vite hvor mange felt veien har. Spørsmålene har ingen navn eller ID, men området viser omtrent hvor bilen er.</td><td>Når «Fartsgrense og veidata» er på. På som standard, kan slås av under Innstillinger.</td></tr>
+        <tr><td>Veidata fra Statens vegvesen (NVDB)</td><td>Rutens posisjoner, for å hente fartsgrenser, motorveier, vikeplikt, stoppskilt, rundkjøringer, gangfelt, fartsdempere, lyskryss og enkelte skilt. Under kjøring også et område på rundt 4,5 × 4,5 km rundt bilen, for å vise fartsgrensen på skjermen. Med veikameraet på spør appen i tillegg om et lite område på rundt 130 × 130 m rundt bilen, hver 100. meter eller hvert minutt, for å vite hvor mange felt veien har. Trykker du «Finn steder nær meg» under «Hva må du øve mer på?», spør appen om rundkjøringer, kryss og motorvei i et område på rundt 6 × 6 km rundt deg. Spørsmålene har ingen navn eller ID, men området viser omtrent hvor bilen eller du er.</td><td>Når «Fartsgrense og veidata» er på. På som standard, kan slås av under Innstillinger.</td></tr>
         <tr><td>Stedsnavn fra Kartverket</td><td>Posisjonen til hendelser og merker, for å finne gatenavn</td><td>Når «Stedsnavn» er på. På som standard, kan slås av under Innstillinger.</td></tr>
         <tr><td>Skolekode-serveren hos Cloudflare (bare med kode fra trafikkskolen)</td><td>Koden og en tilfeldig nøkkel for denne installasjonen av appen. Serveren lagrer koden, skolens navn, når skolen delte den ut, når den ble tatt i bruk og nøkkelen, ikke elevens navn. Turer får den bare fra testere som selv trykker «Send turen til utvikleren» (se «Testere» under). Som alle nettjenester ser Cloudflare vanlige tekniske opplysninger, som IP-adresse.</td><td>Når koden skrives inn, og så omtrent én gang i uka for å sjekke at den fortsatt gjelder</td></tr>
         <tr><td>Cloudflare (nettversjonen)</td><td>Vanlige tekniske opplysninger når nettversjonen lastes ned, som IP-adresse. iPhone-appen lastes ned fra App Store.</td><td>Når nettversjonen åpnes første gang og ved oppdateringer</td></tr>
@@ -51,6 +52,9 @@
     <p>I nettversjonen kan bare ett kamera brukes om gangen, så der velger dere førerkameraet eller veikameraet under Kamera. Bilgjenkjenningen lastes ned én gang og kjører i nettleseren på telefonen. Bildene forlater ikke telefonen.</p>
     <p>Veikameraet ser også andre biler, syklister og folk langs veien. Bildene av dem behandles et øyeblikk på telefonen for å finne biler og linjer, og blir så borte. Ingen blir gjenkjent.</p>
     <p>Unntak: i utviklerens egne testbygg (ikke i appen fra App Store) kan utvikleren slå på lagring av bilder av veien, for å trene gjenkjenningen. Det er av som standard og finnes ikke i appen du laster ned.</p>
+
+    <h2>Mikrofonen (valgfritt)</h2>
+    <p>I iPhone-appen kan du slå på «Hør etter blinklyset» under Innstillinger › Under kjøring. Da lytter mikrofonen etter tikkingen fra blinklyset mens et opptak pågår og appen er åpen. <strong>Lyden lagres aldri og sendes aldri noe sted.</strong> Telefonen finner korte klikk i lyden med en gang, og bare tidspunktet og styrken på klikkene og lydnivået lagres med turen. Det kan ikke gjøres om til lyd eller tale. Mikrofonen er av til du slår den på, og iPhone viser en oransje prikk så lenge den er i bruk.</p>
 
     <h2>Kjøp i appen (Kjørerapport Pluss)</h2>
     <p>Kjøp i iPhone-appen går gjennom App Store, med Apple-ID-en din. Apple tar seg av betalingen, og appen får bare vite om Pluss er kjøpt. Vi ser ikke hvem som har kjøpt, og får ingen betalingsopplysninger. Apples egne vilkår og personvernregler gjelder for kjøpet.</p>

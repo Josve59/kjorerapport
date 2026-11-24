@@ -137,6 +137,8 @@ Paste into «Notes» under App Review Information (in English, since the reviewe
 >
 > **«Kode fra trafikkskolen» (driving-school code):** Norwegian driving schools buy access for their own pupils from us under a written agreement and give each pupil a personal code (guideline 3.1.3(c): sold directly to organisations for their students, never to individuals). The app shows no school prices and no links to buy outside the App Store; information for schools is only on our website. A code for review: REVIEW_CODE (Pluss screen › «Kode fra trafikkskolen»). It unlocks Pluss, so the cameras and the full theory can be reviewed without a purchase.
 >
+> **Microphone (optional, off by default, 1.1.0):** «Hør etter blinklyset» in Settings listens for the turn-signal ticking while a recording runs and the app is in the foreground. Audio is analysed on the device and never stored or sent; only the times of short clicks are kept with the drive.
+>
 > **Messages between learner and driving teacher:** sent as a file through the iOS share sheet (Messages, Mail, AirDrop) to someone the user already knows. The app has no chat service and no user directory.
 
 Contact information: your name, phone and email. No demo account is needed (no login). Replace REVIEW_CODE with the code in `.local-test/skolekoder/apple-review.txt` (made for Apple on 22 November for the school «Apple Review», 12 months from first use, 5 phones, never in git). It must be a normal school code, not a tester code (a tester code shows «Send turen til utvikleren»): check that it was never marked with `/admin/tester` before submitting.

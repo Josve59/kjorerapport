@@ -1,12 +1,13 @@
 /* Rapportvisning – ren SVG/HTML, ingen nettverk. */
 import { CATS, rating } from './analysis.js';
 import { esc, km, kmh, gee, mss, duration, n0, n1, overTime } from './format.js';
-import { analyzeSpeeding, evaluateRoad } from './enrich.js';
+import { analyzeSpeeding, evaluateRoad, evaluateMerges } from './enrich.js';
 import { icon, MARK_CATS, FOCUS, isRemark, choiceDialog } from './ui.js';
 import { SURFACES, SURFACE_LABEL, surfaceFactor, surfaceDoubt } from './surface.js';
 import { closeMirrorText } from './camera.js';
 import { driveLog, ROAD_LABEL, LIGHT_LABEL } from './log.js';
 import { buildSituations, situationSummary, SOURCE_LABEL, LEVEL_ORDER } from './situations.js';
+import { mockTest, MOCK_TEXT } from './mocktest.js';
 import { refLabel } from './messages.js';
 
 const KIND_COLOR = { brake: 'var(--brake)', accel: 'var(--accel)', turn: 'var(--turn)' };
@@ -227,8 +228,9 @@ export function renderReport(root, r, ctx = {}) {
   // Øving på plass (0.26.4, practice.js): sklitrening og øvelser på en parkeringsplass, holdt utenfor poengene
   const practice = Array.isArray(r.practice) ? r.practice : [], practiceN = (r.practiceEvents || []).length;
   const practiceWhere = practice.map(x => `${mss(x.from)}–${mss(x.to)}`).join(', ');
-  const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events, enrich.limits), fromNvdb: true } : null;
   const motorArr = enrich && Array.isArray(enrich.motor) && enrich.motor.length === r.points.length ? enrich.motor : null;   // 0.18.0
+  // Påkjøring til motorvei (1.1.0) hører til veidataene, så situasjonene får den sammen med kryssene
+  const road = enrich && enrich.road ? { ...evaluateRoad(r.points, enrich.road, r.events, enrich.limits), merges: motorArr ? evaluateMerges(r.points, motorArr, enrich.limits) : [], fromNvdb: true } : null;
   const log = startedAt ? driveLog(r, Date.parse(startedAt), sp ? sp.limits : null, motorArr) : null;
   const focusResults = evaluateFocus(focus, { r, sp, road, marks, log });
   const sits = buildSituations(r, { camera: r.camera, marks, sp, nvdb: road, road: r.road || null });
@@ -255,6 +257,8 @@ export function renderReport(root, r, ctx = {}) {
   const doubt = surf ? surfaceDoubt(r.events, surf) : null;
   if (doubt) quality.push({ sev: 2, text: `Føret var satt til ${SURFACE_LABEL[surf].toLowerCase()}, men bilen bremset, ga gass eller svingte med opptil ${n1(doubt.maxG)} g ${doubt.n} ganger uten å skli. Det går ikke an på ${SURFACE_LABEL[surf].toLowerCase()}, så veien var trolig mindre glatt. Velg føret som stemte, så blir vurderingen riktig.`, act: 'surface' });
   else if (surf && surf !== 'dry') quality.push({ sev: 0, text: `Vurdert for føret «${SURFACE_LABEL[surf]}»: grensene for brå bremsing, gass og sving er ${n0((1 - surfaceFactor(surf)) * 100)}\u00a0% lavere enn på tørr vei.` });
+  // Blinklyset (1.1.0): jevn takt store deler av turen er trolig radio eller musikk
+  if (r.blink && r.blink.music > 0.3) quality.push({ sev: 0, text: `Mikrofonen hørte jevn takt ${Math.round(r.blink.music * 100)} % av tiden (radio eller musikk?), så blinklyset er ikke vurdert. Skru av radioen på turer der blinklyset skal høres.` });
   const qualitySev = quality.reduce((m, q) => Math.max(m, q.sev), 0);
   const qualityCount = quality.filter(q => q.sev > 0).length;
   const reportActions = typeof document !== 'undefined' ? document.getElementById('report-actions') : null;
@@ -315,6 +319,7 @@ export function renderReport(root, r, ctx = {}) {
       </ul>
     </section>
 
+    ${ctx.mock ? mockCard(mockTest(r, { sits, sp, road })) : ''}
     ${ctx.afterLesson ? afterLessonCard(ctx.afterLesson) : ''}
     ${talkCard(ctx.talk)}
 
@@ -775,8 +780,25 @@ export function evaluateFocus(focus, { r, sp = null, road = null, marks = [], lo
   return out;
 }
 
+/* Prøve-oppkjøring (1.1.0, mocktest.js): turen vurdert omtrent som på førerprøven, område for område */
+function mockCard(m) {
+  const t = MOCK_TEXT[m.verdict];
+  const cls = s => (s === 'ok' ? 'ok' : s === 'øv' ? 'no' : 'na');
+  const ico = s => (s === 'ok' ? icon('check', 18) : s === 'øv' ? icon('chev', 18) : icon('info', 18));
+  return `<section class="card mock-card mock-${m.verdict}" id="mock-section">
+      <h2 class="card-title">${icon('flag')}Prøve-oppkjøring <span class="beta-tag">Ny</span></h2>
+      <p class="mock-verdict">${esc(t.title)}</p>
+      <p>${esc(t.text)}</p>
+      ${m.short ? `<p class="muted small">Turen varte ${m.minutes} min. En prøve-oppkjøring bør vare rundt 25 minutter kjøring.</p>` : ''}
+      <ul class="focus-list">${m.areas.map(a => `<li class="f-${cls(a.state)}"><span class="f-ico">${ico(a.state)}</span>
+        <span><strong>${esc(a.label)}</strong><span class="muted small">${esc(a.text)}</span></span>
+        <span class="f-state">${a.state === 'ok' ? 'På plass' : a.state === 'øv' ? 'Øv mer' : ''}</span></li>`).join('')}</ul>
+      <p class="muted small">Appens vurdering ut fra det den kan måle, ikke sensorens. Sikkerhetskontrollen, rygging og parkering er ikke med.</p>
+    </section>`;
+}
+
 /* Samkjøring: det som skjedde, med alle kildene som så det (v0.8.0) */
-const SIT_ICON = { away: 'eye', event: 'warn', lane: 'shift', start: 'play', speed: 'speed' };
+const SIT_ICON = { away: 'eye', event: 'warn', lane: 'shift', start: 'play', speed: 'speed', junction: 'sign', merge: 'lane', blink: 'blink' };   // 1.1.0: kryss, påkjøring, blinklys
 const LEVEL_LABEL = { high: 'Alvorlig', medium: 'Bør øves på', low: 'Liten ting', ok: 'Bra' };
 /* De viktigste først (0.11.5): en tur i byen kan gi 40 punkter (fartsdempere, gangfelt). Fem vises, resten ligger bak «Vis … til». */
 const TOP_SITS = 5;

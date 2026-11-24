@@ -7,7 +7,7 @@ import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck }
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
 import { seedDemo } from './demo.js';
 import { renderReport, closeMapOverlay, trendChart, categoryTrendChart, eventsPer10km, speedingFor, markRows, eventLabel, headline } from './report.js';
-import { enrichDrive, enrichMotorway, evaluateRoad, ROAD_V, LIMITS_V, MOTOR_V } from './enrich.js';
+import { enrichDrive, enrichMotorway, evaluateRoad, fetchPlaceNames, ROAD_V, LIMITS_V, MOTOR_V } from './enrich.js';
 import { suggestFocus, hotspots, sameRoute, curriculumEvidence, CURRICULUM } from './insights.js';
 import { esc, km, n0, n1, date, duration, mss } from './format.js';
 import { icon, toast, confirmDialog, infoDialog, promptDialog, formDialog, routeThumb, scoreBadge, MARK_CATS, FOCUS, speak, stopSpeaking, hasNorwegianVoice } from './ui.js';
@@ -30,6 +30,8 @@ import { normProgress, tagsFromDrives } from './theory.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
 import { hasPlus, hasTheory, hasFeature, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
+import { blinkChecks, findTurns } from './blink.js';
+import { fetchNearby, distText, mapsLink } from './nearby.js';
 import { checkCalibration, facePosition } from './calibcheck.js';
 import { openDevChart } from './devchart.js';
 import { gameState, unlockedBy, BADGES } from './game.js';
@@ -37,7 +39,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.16';
+export const APP_VERSION = '1.1.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -184,6 +186,11 @@ async function analyzeDrive(drive) {
     if (result.camera && result.practiceEvents) result.camera.away = (result.camera.away || []).filter(a => !inSpans(a.t, result.practice));
     // Speilene appen lærte av turen, tas med til neste tur (1.0.14)
     try { learnCalibFrom(drive, result.camera); } catch { /* læringen skal aldri stoppe rapporten */ }
+    // Blinklyset (1.1.0): klikkene fra mikrofonen før feltskifter og svinger i kryss
+    if (raw.blink && raw.blink.length) {
+      try { result.blink = blinkChecks(raw.blink.map(b => ({ ...b, t: b.t - result.t0 })), { laneChanges: result.maneuvers.laneChanges, turns: findTurns(result.points, result.maneuvers.roundabouts) }); }
+      catch { result.blink = null; }
+    }
   } catch (err) {
     drive.result = null; drive.error = err.message; drive.resultKey = key;
     await putDrive(drive);
@@ -335,7 +342,7 @@ async function renderHome() {
   for (const { d, res } of rows) {
     const g = groupLabel(d.startedAt);
     if (g !== lastGroup) { html += `<li class="group-head">${esc(g)}</li>`; lastGroup = g; }
-    const tags = [d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : '', d.excluded ? 'holdt utenfor' : ''].filter(Boolean);
+    const tags = [d.mock ? 'prøve-oppkjøring' : '', d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : '', d.excluded ? 'holdt utenfor' : ''].filter(Boolean);
     const meta = res ? [km(res.stats.km), duration(res.stats.duration)] : ['For lite data'];
     html += `<li>
       <button type="button" class="drive" data-id="${esc(d.id)}">
@@ -1805,9 +1812,56 @@ async function renderReady() {
       ${t.text ? `<p>${esc(t.text)}</p>` : ''}
     </section>
     ${groups.map(g => `<h2 class="group-title">${esc(g)}</h2><section class="card"><ul class="rd-list">${r.items.filter(i => i.group === g).map(i => `<li class="rd-item">${mark(i)}<span><strong>${esc(i.label)}</strong><span class="muted small">${esc(i.have)}${i.need && i.need.length <= 24 ? ` · mål ${esc(i.need)}` : ''}</span>${i.ok === null && i.tip ? `<span class="muted small">${esc(i.tip)}</span>` : ''}${i.ok !== null ? `<span class="goal-bar thin"><span style="width:${Math.round(i.progress * 100)}%"></span></span>` : ''}</span></li>`).join('')}</ul></section>`).join('')}
+    ${nearCard(r.needs || [])}
     <p class="muted small ready-note">Målene er appens egne, satt ut fra vanlige råd for øvelseskjøring. Det er trafikklæreren som vurderer når du er klar for oppkjøring, og ingen app kan love at du består.</p>
     <button type="button" class="btn secondary" id="btn-ready-teacher">${icon('school', 20)}Vis trafikklæreren</button>`;
   $('#btn-ready-teacher').onclick = () => { location.hash = '#/trafikklaerer'; };
+  wireNear(r.needs || []);
+}
+
+/* Øv i nærheten (1.1.0, nearby.js): steder for det som mangler, med veibeskrivelse i Kart. Posisjonen brukes bare når
+   noen trykker, og bare et område rundt den sendes til Statens vegvesen. */
+const NEAR_LABEL = { 'rundkjøring': 'Rundkjøringer', kryss: 'Kryss med vikeplikt', motorvei: 'Motorvei (også for feltskifte)' };
+const NEAR_TIP = { landevei: 'Landevei: kjør ut av byen på en vei med 70- eller 80-grense.', 'mørke': 'Mørke: ta en kveldstur, gjerne på landevei uten gatelys.' };
+const nearWants = needs => needs.filter(n => NEAR_LABEL[n]);
+function nearCard(needs) {
+  if (!needs.length) return '';
+  const wants = nearWants(needs), tips = needs.filter(n => NEAR_TIP[n]).map(n => NEAR_TIP[n]);
+  return `<section class="card near-card">
+      <h2 class="card-title">${icon('pin')}Øv i nærheten <span class="beta-tag">Ny</span></h2>
+      ${wants.length ? `<p class="muted small">Appen finner ${listLower(wants.map(w => NEAR_LABEL[w]), true).replace(/ \(.*\)/, '')} nær der du er nå, med veibeskrivelse i Kart.</p>
+      <button type="button" class="btn secondary" id="btn-near">${icon('pin', 20)}Finn steder nær meg</button>
+      <div id="near-list" aria-live="polite"></div>` : ''}
+      ${tips.length ? `<ul class="near-tips">${tips.map(t => `<li class="muted small">${esc(t)}</li>`).join('')}</ul>` : ''}
+    </section>`;
+}
+function wireNear(needs) {
+  const btn = $('#btn-near'), box = $('#near-list');
+  if (!btn) return;
+  const wants = nearWants(needs);
+  btn.onclick = async () => {
+    if (getSettings().netLimits === false) { box.innerHTML = '<p class="muted small">Slå på «Fartsgrense og veidata» under Innstillinger, så kan appen finne steder.</p>'; return; }
+    btn.disabled = true;
+    box.innerHTML = '<p class="muted small">Finner posisjonen …</p>';
+    let pos;
+    try { pos = await new Promise((ok, err) => navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lon: p.coords.longitude }), err, { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 })); }
+    catch { btn.disabled = false; box.innerHTML = '<p class="muted small">Fikk ikke posisjonen. Gi appen tilgang til posisjon og prøv igjen.</p>'; return; }
+    box.innerHTML = '<p class="muted small">Henter fra Statens vegvesen …</p>';
+    let res;
+    try { res = await fetchNearby(pos, wants); } catch { btn.disabled = false; box.innerHTML = '<p class="muted small">Fikk ikke kontakt med Statens vegvesen. Prøv igjen med nett.</p>'; return; }
+    // Kryss har ingen navn i NVDB: gatenavnet fra Kartverket, når «Stedsnavn» er på
+    if ((res.kryss || []).length && getSettings().netNames !== false) {
+      const names = await fetchPlaceNames(res.kryss).catch(() => []);
+      res.kryss.forEach((k, i) => { if (names[i]) k.name = names[i]; });
+    }
+    btn.disabled = false;
+    const android = isAndroid();
+    box.innerHTML = wants.map(w => {
+      const list = res[w] || [];
+      return `<h3 class="mt">${esc(NEAR_LABEL[w])}</h3>${list.length ? `<ul class="near-list">${list.map(p => `<li><span><strong>${esc(p.name || NEAR_LABEL[w].replace(/ \(.*\)/, ''))}</strong><span class="muted small">${esc(distText(p))}</span></span>
+        <a class="btn secondary small-btn" href="${esc(mapsLink(p, android))}" target="_blank" rel="noopener">${icon('map', 18)}Vis vei</a></li>`).join('')}</ul>` : '<p class="muted small">Ingen innen rundt 3 km.</p>'}`;
+    }).join('') + '<p class="muted small mt">Fra Statens vegvesen (NVDB). Bare et område rundt deg ble sendt, uten navn.</p>';
+  };
 }
 
 /* Teori og sikkerhetskontroll til «Hva må du øve mer på?» (0.14.0) */
@@ -1926,6 +1980,9 @@ function renderPrecheck() {
   setCheck(hold, null, 'Venter på bevegelsesdata');
   renderDriverPicker();
   renderSurfacePicker();
+  // Prøve-oppkjøring (1.1.0): av hver gang, gjelder bare turen som startes herfra
+  mockNext = false;
+  { const el = $('#mockNext'); el.checked = false; el.onchange = () => { mockNext = el.checked; if (el.checked) toast('Prøve-oppkjøring: rapporten vurderer turen som på førerprøven.', { type: 'ok', ms: 2500 }); }; }
   // Lekser fra læreren (0.12.0) blir dagens øvingsmål, én gang per nye lekse
   { const st = getSettings(), hw = isTeacher() ? homeworkFor(st) : receivedHomework(st);
     if (hw && hw.focus && hw.focus.length && st.hwApplied !== hw.setAt) { saveSettings({ ...st, focus: hw.focus.slice(0, 3), hwApplied: hw.setAt }); toast('Leksene fra læreren er valgt som dagens øvingsmål.', { type: 'ok', ms: 2500 }); } }
@@ -2222,6 +2279,7 @@ async function startRecording(replay = null) {
     focus: replay ? [] : (settings.focus || []),
     surface: replay ? '' : currentSurface(),
     noFace: !replay && noFaceDrive,
+    mock: !replay && mockNext,   // prøve-oppkjøring (1.1.0)
     calib: replay ? null : (getCalib() || stdCalib()),
     replay,
     onStatus: st => {
@@ -2342,7 +2400,18 @@ async function startRecording(replay = null) {
   }
   try {
     await recorder.start();
+    mockNext = false;
     vibrate(80);
+    // Blinklyset (1.1.0): mikrofonen lytter mens opptaket pågår, bare i iPhone-appen og når det er valgt
+    if (!replay && settings.blinkMic && window.kjNative && window.kjNative.micStart) {
+      if (onAudio) window.removeEventListener('kjaudio', onAudio);
+      onAudio = e => { if (recorder) recorder.addBlink(e.detail); };
+      window.addEventListener('kjaudio', onAudio);
+      window.kjNative.micStart().then(r => {
+        if (r && r.ok) return;
+        toast(r && r.error === 'tilgang' ? 'Mikrofonen har ikke tilgang, så blinklyset høres ikke. Slå den på under Innstillinger › Apper › Kjørerapport.' : 'Mikrofonen startet ikke, så blinklyset høres ikke denne turen.', { type: 'info', ms: 5000 });
+      }).catch(() => {});
+    }
     // iPhone-appen: opptaket tåler låst skjerm (0.10.1), så si det første gangene
     if (!replay && window.kjNative && (getSettings().lockTipShown || 0) < 3) {
       saveSettings({ ...getSettings(), lockTipShown: (getSettings().lockTipShown || 0) + 1 });
@@ -2353,6 +2422,9 @@ async function startRecording(replay = null) {
     location.hash = '#/';
   }
 }
+
+let mockNext = false;   // prøve-oppkjøring valgt i «Før du kjører» (1.1.0), bare for turen som startes
+let onAudio = null;    // klikkene fra mikrofonen (blinklyset, 1.1.0) mens opptaket pågår
 
 /* Testbygg (Xcode og TestFlight, 0.18.4): da vises testknappene under kjøring som standard. Nettversjonen og App Store: nei. */
 let devBuild = false;
@@ -2694,6 +2766,9 @@ async function finishRecording() {
   const rec = recorder;
   recorder = null;
   vibrate([60, 60, 60]);
+  // Blinklyset (1.1.0): mikrofonen av med en gang turen stoppes
+  if (onAudio) { window.removeEventListener('kjaudio', onAudio); onAudio = null; }
+  if (window.kjNative && window.kjNative.micStop) window.kjNative.micStop();
   $('#record').classList.add('busy');
   $('#record').classList.remove('speeding'); $('#record').style.setProperty('--speed-warn', 0);
   closeCamView();
@@ -2928,7 +3003,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       customThresholds: !!(settings.th),
       driver: drive.driver || '', drivers: isTeacher() ? activeStudents(settings).map(x => x.name) : [],   // bare trafikklæreren flytter turer mellom elever (0.12.0)
       onDriverChange: async name => { await updateDrive(id, { driver: name }); renderDriveReport(id, { keepScroll: true }); },
-      startedAt: drive.startedAt, focus: drive.focus || [],
+      startedAt: drive.startedAt, focus: drive.focus || [], mock: !!drive.mock,
       sameRoute: routeRows,
       onSpeak: text => { if (!speak(text)) toast('Telefonen støtter ikke opplesning.', { type: 'error' }); },
       hasCalib: !!getCalib(),
@@ -3209,6 +3284,15 @@ async function renderSettings() {
   { const el = $('#speedWarn'); el.checked = settings.speedWarn !== false; el.onchange = () => saveSettings({ ...getSettings(), speedWarn: el.checked }); }
   { const el = $('#speedSound'); el.checked = !!settings.speedSound; el.onchange = () => { saveSettings({ ...getSettings(), speedSound: el.checked }); if (el.checked) { unlockSound(); playSound('fart'); } }; }
   { const el = $('#showFace'); el.checked = settings.showFace === true; el.onchange = () => saveSettings({ ...getSettings(), showFace: el.checked }); }
+  // Blinklyset (1.1.0): bare i iPhone-appen. Tilgangen til mikrofonen spørres om når den slås på.
+  { const el = $('#blinkMic'); $('#blinkMic-row').hidden = !(window.kjNative && window.kjNative.micAuth); el.checked = !!settings.blinkMic;
+    el.onchange = async () => {
+      if (el.checked) {
+        const r = await window.kjNative.micAuth().catch(() => null);
+        if (!r || !r.ok) { el.checked = false; toast('Mikrofonen fikk ikke tilgang. Slå den på under Innstillinger › Apper › Kjørerapport.', { type: 'info', ms: 4500 }); return; }
+      }
+      saveSettings({ ...getSettings(), blinkMic: el.checked });
+    }; }
   // Kart og by-tilpasset jevn fart er på som standard
   { const el = $('#autoSpeak'); el.checked = !!settings.autoSpeak; el.onchange = () => { saveSettings({ ...getSettings(), autoSpeak: el.checked }); if (el.checked) speak('Rapporten leses opp når turen er ferdig.'); }; }
   if (navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => {

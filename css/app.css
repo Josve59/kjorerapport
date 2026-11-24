@@ -650,6 +650,19 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .f-no .f-ico { background: var(--turn); color: #fff; }
 .f-state { font-weight: 800; font-size: .85rem; white-space: nowrap; }
 .f-ok .f-state { color: var(--good); } .f-no .f-state { color: var(--turn); }
+/* Prøve-oppkjøring (1.1.0): dommen i farge, områdene som dagens mål */
+.mock-card .mock-verdict { font-size: 1.25rem; font-weight: 800; margin: 0 0 4px; }
+.mock-bra .mock-verdict { color: var(--good); } .mock-nesten .mock-verdict { color: var(--turn); } .mock-ikke .mock-verdict { color: var(--brake); }
+.mock-card .focus-list { margin: 12px 0; }
+.mock-toggle { margin-top: 12px; border-top: 1px solid var(--line); }
+/* Øv i nærheten (1.1.0) */
+.near-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.near-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.near-list li > span { display: flex; flex-direction: column; min-width: 0; }
+.near-list li > span strong { overflow-wrap: anywhere; }
+.near-list .btn { flex: none; }
+.near-tips { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+#btn-near { margin-top: 4px; }
 
 /* Veier og manøvrer */
 .road-mix { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--bg); margin: 4px 0 6px; }
