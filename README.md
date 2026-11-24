@@ -172,6 +172,7 @@ The owner asked on 24 November for a deep dive before the App Store submission (
   - `finishRecording` has try/finally. If saving fails, the camera stops, the screen is not stuck «busy» with a dead stop button, and the app goes to Turer with a message.
   - Imported drives keep their id only if it matches `/^[\w.:-]{1,80}$/`, as shared drives already did. Mark categories and the lead car's class must be short words, and `data-id` in the drive list is escaped.
   - `index.html` has a Content-Security-Policy. Only the app's own scripts run (`'self'`, the hash of the small manifest script, eval and wasm for the models), so a shared file can never run a script or an `onerror=`. `tests/csp.test.mjs` checks the hash.
+- **Org. no. on the privacy page:** the owner gave it the same evening, after the phone install. It is in the App Store build, which is made from the latest commit.
 - **App Review notes** (`appstore/README.md` section 7) are rewritten: no speed cameras or «no server»; the school-code server is named; the camera path is Settings › Kamera; the review code must be a normal school code. `appstore/innsending.md` now names 1.0.16 and says TestFlight has no developer tools.
 
 **Checked:**
