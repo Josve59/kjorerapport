@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Kjørerapport bruker posisjonen under kjøreturen for å måle fart og rute og vise fartsgrensen. Posisjonen lagres bare på telefonen.</string>
+	<string>Kjørerapport bruker posisjonen under kjøreturen for å måle fart og rute og vise fartsgrensen. Turen lagres bare på telefonen. For fartsgrenser, kart og stedsnavn sendes posisjoner langs ruta til Statens vegvesen og Kartverket, uten navn.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Bevegelsessensorene måler bremsing, akselerasjon og svinger under kjøreturen. Målingene lagres bare på telefonen.</string>
 	<key>NSCameraUsageDescription</key>

@@ -1,6 +1,6 @@
 # Slik sender du Kjørerapport til App Store
 
-**22. november: klar til innsending.** To ting gjenstår før du sender inn: én lang prøvetur med versjon 1.0.2 (den er på telefonen din), og helst at en trafikklærer har lest gjennom teorien. Resten er klart. Regn med 1–2 timer arbeid, og så 1–3 dager venting på Apple.
+**24. november: klar til innsending med 1.0.16.** Gjennomgangen 24. november fant ti ting som er rettet i 1.0.16 (utviklerverktøyene, lærervisningen, trafikkskolesiden, tellingen av kjøp, personvern, posisjon, tekster). To ting gjenstår før du sender inn: én lang prøvetur med den nye bilmodellen (1.0.15 og nyere), og helst at en trafikklærer har lest gjennom teorien. Regn med 1–2 timer arbeid, og så 1–3 dager venting på Apple.
 
 Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). Her er rekkefølgen.
 
@@ -9,7 +9,7 @@ Detaljene (tekstene, svarene og begrunnelsene) står i [README.md](README.md). H
 ## Allerede ferdig
 
 - [x] Appen 1.0.0: opptak og rapport, begge kameraene, teorien (420 spørsmål, 123 skilt, prøver, teoribok), sikkerhetskontrollen med quiz, opplæringsplan, trafikklærer med meldinger, Pluss-kjøpet og koder fra trafikkskolen
-- [x] Modellene som selges ligger i appen: bilmodellen D-FINE small og feltmodellen n2 (Audi krediteres under Om appen › Lisenser og kilder)
+- [x] Modellene som selges ligger i appen: bilmodellen «D-FINE small norsk» (1.0.15) og feltmodellen n3 (1.0.5; Audi krediteres under Om appen › Lisenser og kilder)
 - [x] Ikon (lyst og mørkt), tillatelsestekster, personvernmanifest som stemmer med etiketten, eksportsvar (ingen kryptering)
 - [x] App Store-bilder i [`skjermbilder/`](skjermbilder/) (6,9"): 8 nye bilder av 1.0.0 fra 22. november, teorien først
 - [x] Beskrivelse ([`beskrivelse.txt`](beskrivelse.txt)), navn, undertittel, nøkkelord, kampanjetekst (README del 2)
@@ -76,7 +76,7 @@ Last opp `kjop-pluss-review.png` som review-bilde, og lim inn review-notatet.
   - «Kjøp», og at teorien låses opp
   - «Gjenopprett kjøp»
 
-  Kjøp i TestFlight er gratis.
+  Kjøp i TestFlight er gratis. Fra 1.0.16 har TestFlight ikke utviklerdelen (Visning, testknapper, veibilder): Apple tester i det samme miljøet, så TestFlight viser appen slik kundene og Apple ser den. Utviklerdelen finnes bare i bygg fra Xcode (`ios/ship.sh`).
 
 ### 8. Fyll ut appsiden (App Store-fanen)
 | Felt | Hva |

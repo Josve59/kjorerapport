@@ -12,9 +12,11 @@ fi
 RES="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
 DST="$RES/web"
 mkdir -p "$DST"
-rsync -a --delete \
+# 1.0.16: trafikkskolesiden (pakker og faktura) er ikke med i appen, bare på nettsiden: Apple skal ikke se kjøp utenom App Store
+# --delete-excluded: også det som var med i et tidligere bygg (som trafikkskole/), forsvinner fra appen
+rsync -a --delete --delete-excluded \
   --include='/index.html' --include='/manifest.webmanifest' \
-  --include='/css/***' --include='/js/***' --include='/fonts/***' --include='/icons/***' --include='/personvern/***' --include='/hjelp/***' --include='/trafikkskole/***' --include='/lisenser/***' \
+  --include='/css/***' --include='/js/***' --include='/fonts/***' --include='/icons/***' --include='/personvern/***' --include='/hjelp/***' --include='/lisenser/***' \
   --include='/vendor/' --include='/vendor/leaflet/***' --include='/vendor/mediapipe/***' \
   --exclude='*' \
   "$SRC/" "$DST/"

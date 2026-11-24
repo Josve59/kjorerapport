@@ -29,12 +29,18 @@
     coords: { latitude: p.lat, longitude: p.lon, accuracy: p.acc, speed: p.speed, heading: p.heading, altitude: p.alt, altitudeAccuracy: null },
     timestamp: p.ts
   });
+  // «Nøyaktig posisjon» av (1.0.16): appen sier fra med feil 4. Da gis de omtrentlige posisjonene (flere km unna) ikke
+  // videre, bare feilen, til en nøyaktig posisjon kommer igjen.
+  let reduced = false;
   window.__kjGeo = p => {
+    if (reduced && !(p.acc <= 100)) { window.__kjGeoError(4); return; }
+    reduced = false;
     const pos = toPosition(p);
     for (const w of [...watchers.values()]) { try { w.ok(pos); } catch (e) { console.error(e); } }
   };
   window.__kjGeoError = code => {
-    const err = { code, message: code === 1 ? 'Ingen tilgang til posisjon' : 'Fant ikke posisjon', PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 };
+    if (code === 4) reduced = true;
+    const err = { code, message: code === 1 ? 'Ingen tilgang til posisjon' : code === 4 ? 'Bare omtrentlig posisjon' : 'Fant ikke posisjon', PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 };
     for (const w of [...watchers.values()]) { if (w.err) try { w.err(err); } catch (e) { console.error(e); } }
   };
   const geolocation = {

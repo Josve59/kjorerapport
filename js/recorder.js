@@ -209,7 +209,9 @@ export class Recorder {
     const c = pos.coords;
     const t = Number.isFinite(tOverride) ? tOverride : this.now();
     // Oppvarming: gamle eller unøyaktige fikser før første gode posisjon forkastes (ga 416 km/t på første ekte tur).
-    const age = Number.isFinite(pos.timestamp) ? Date.now() - pos.timestamp : NaN;
+    // Målinger fra tiden skjermen var låst (tOverride) er gamle med vilje: der sjekkes bare nøyaktigheten (1.0.16).
+    // Før ble de kastet hvis GPS-en ikke hadde låst seg før skjermen ble låst.
+    const age = Number.isFinite(tOverride) ? NaN : Number.isFinite(pos.timestamp) ? Date.now() - pos.timestamp : NaN;
     if (!this.replay && isStaleStartFix(c.accuracy, age, this.gpsLocked)) { this.diag.staleStartFixes = (this.diag.staleStartFixes || 0) + 1; this.warmup = true; return; }
     this.gpsLocked = true;
     this.warmup = false;

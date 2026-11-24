@@ -17,7 +17,7 @@
   <main class="doc">
     <h1>Personvern</h1>
     <p class="lead">Kort fortalt: Kjørerapport har ingen konto og ingen sporing. Turene dine blir liggende på din egen telefon, med mindre du er tester og selv velger å sende en tur til utvikleren.</p>
-    <p class="muted small">Sist oppdatert 23. november 2026. Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
+    <p class="muted small">Sist oppdatert 24. november 2026. Gjelder Kjørerapport på nett og iPhone-appen, også når kameraet er slått på.</p>
 
     <h2>Hva appen lagrer</h2>
     <p>Når ledsageren starter et opptak, lagrer appen dette på telefonen:</p>
@@ -39,7 +39,6 @@
         <tr><td>Veidata fra Statens vegvesen (NVDB)</td><td>Rutens posisjoner, for å hente fartsgrenser, motorveier, vikeplikt, stoppskilt, rundkjøringer, gangfelt, fartsdempere, lyskryss og enkelte skilt. Under kjøring også et område på rundt 4,5 × 4,5 km rundt bilen, for å vise fartsgrensen på skjermen. Med veikameraet på spør appen i tillegg om et lite område på rundt 130 × 130 m rundt bilen, hver 100. meter eller hvert minutt, for å vite hvor mange felt veien har. Spørsmålene har ingen navn eller ID, men området viser omtrent hvor bilen er.</td><td>Når «Fartsgrense og veidata» er på. På som standard, kan slås av under Innstillinger.</td></tr>
         <tr><td>Stedsnavn fra Kartverket</td><td>Posisjonen til hendelser og merker, for å finne gatenavn</td><td>Når «Stedsnavn» er på. På som standard, kan slås av under Innstillinger.</td></tr>
         <tr><td>Skolekode-serveren hos Cloudflare (bare med kode fra trafikkskolen)</td><td>Koden og en tilfeldig nøkkel for denne installasjonen av appen. Serveren lagrer koden, skolens navn, når skolen delte den ut, når den ble tatt i bruk og nøkkelen, ikke elevens navn. Turer får den bare fra testere som selv trykker «Send turen til utvikleren» (se «Testere» under). Som alle nettjenester ser Cloudflare vanlige tekniske opplysninger, som IP-adresse.</td><td>Når koden skrives inn, og så omtrent én gang i uka for å sjekke at den fortsatt gjelder</td></tr>
-        <tr><td>Samme server, med Pluss kjøpt i iPhone-appen</td><td>Et anonymt kjøpsnummer og den tilfeldige nøkkelen for installasjonen. Kjøpsnummeret lages på telefonen av Apples kjøps-ID, og kan ikke gjøres om til den igjen. Serveren lagrer bare nummeret, nøkkelen og når appen sist meldte seg, for å telle hvor mange telefoner hvert kjøp brukes på. Den vet ikke hvem som har kjøpt.</td><td>Høyst én gang i uka mens Pluss er kjøpt</td></tr>
         <tr><td>Cloudflare (nettversjonen)</td><td>Vanlige tekniske opplysninger når nettversjonen lastes ned, som IP-adresse. iPhone-appen lastes ned fra App Store.</td><td>Når nettversjonen åpnes første gang og ved oppdateringer</td></tr>
       </tbody>
     </table>
@@ -51,11 +50,11 @@
     <p>I iPhone-appen kan bakkameraet se veien samtidig (veikameraet). Gjenkjenningen av biler, feltlinjer og fartsskilt kjører på telefonen, og bare tallene lagres: hvor langt det er til bilen foran, hvor i feltet bilen ligger, og hvilke fartsskilt kameraet leste. Heller ikke her lagres eller sendes bilder. Veikameraet kan slås av for seg under Kamera.</p>
     <p>I nettversjonen kan bare ett kamera brukes om gangen, så der velger dere førerkameraet eller veikameraet under Kamera. Bilgjenkjenningen lastes ned én gang og kjører i nettleseren på telefonen. Bildene forlater ikke telefonen.</p>
     <p>Veikameraet ser også andre biler, syklister og folk langs veien. Bildene av dem behandles et øyeblikk på telefonen for å finne biler og linjer, og blir så borte. Ingen blir gjenkjent.</p>
-    <p>Unntak: utviklerdelen (skjult, for testing) har valget «Testbilder». Er det slått på, lagres noen bilder av veien med turen, og de blir med i eksport og sikkerhetskopi. Det er av som standard.</p>
+    <p>Unntak: i utviklerens egne testbygg (ikke i appen fra App Store) kan utvikleren slå på lagring av bilder av veien, for å trene gjenkjenningen. Det er av som standard og finnes ikke i appen du laster ned.</p>
 
     <h2>Kjøp i appen (Kjørerapport Pluss)</h2>
     <p>Kjøp i iPhone-appen går gjennom App Store, med Apple-ID-en din. Apple tar seg av betalingen, og appen får bare vite om Pluss er kjøpt. Vi ser ikke hvem som har kjøpt, og får ingen betalingsopplysninger. Apples egne vilkår og personvernregler gjelder for kjøpet.</p>
-    <p>Pluss gjelder for den som kjøper det, og deles ikke med familien. For å se om kjøp deles på mange telefoner, melder appen seg høyst én gang i uka med et anonymt kjøpsnummer (se tabellen over). Det brukes bare til å telle telefoner per kjøp. Ingenting stenges, og nummeret kan ikke knyttes til deg.</p>
+    <p>Pluss gjelder for den som kjøper det, og deles ikke med familien. Bruk samme telefon til teorien og kjøreturene.</p>
     <p><strong>Kode fra trafikkskolen.</strong> Har trafikkskolen gitt deg en kode, sjekkes den mot vår server hos Cloudflare (se tabellen over). Serveren vet hvilken skole koden hører til, men ikke hvem du er. Vi ser hvor mange av skolens koder som er tatt i bruk, som grunnlag for fakturaen til skolen, men ikke hvem som bruker dem eller turene deres.</p>
 
     <h2>Testere (bare med testlenke)</h2>
@@ -86,15 +85,33 @@
       <li>Fartsgrenser fra NVDB kan være utdaterte eller mangle. Skiltene langs veien gjelder alltid.</li>
     </ul>
 
-    <h2>Kontakt</h2>
-    <p>Kjørerapport lages av Svendsen Media. Spørsmål om personvern: <a href="mailto:Jo@svendsenmedia.net?subject=Personvern%20i%20Kj%C3%B8rerapport">Jo@svendsenmedia.net</a>.</p>
-    <p class="muted small">Fordi turene bare ligger på din telefon, behandler Svendsen Media ingen personopplysninger om kjøringen din. Du har likevel alltid rett til å klage til Datatilsynet.</p>
+    <h2>Hvem som er ansvarlig</h2>
+    <p>Behandlingsansvarlig er Svendsen Media i Trondheim, som lager Kjørerapport. Turene, navnene og alt annet i appen ligger på din telefon. Der bestemmer du selv, og vi får ikke tak i det. Det vi selv behandler, er bare dette:</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Hva</th><th>Hvorfor (grunnlag i personvernforordningen)</th><th>Hvor lenge</th></tr></thead>
+      <tbody>
+        <tr><td>Kode fra trafikkskolen: koden, skolen, datoene og nøkkelen for installasjonen</td><td>For å gi deg Pluss gjennom avtalen med trafikkskolen og fakturere skolen (berettiget interesse, artikkel 6 nr. 1 f)</td><td>Så lenge koden gjelder, og slettes senest ett år etter at den gikk ut</td></tr>
+        <tr><td>Turer som testere selv sender</td><td>Samtykke: du trykker selv og sier ja (artikkel 6 nr. 1 a)</td><td>Til testingen er ferdig, eller før hvis du ber om det</td></tr>
+        <tr><td>E-post du sender oss</td><td>For å svare deg (berettiget interesse, artikkel 6 nr. 1 f)</td><td>Til saken er ferdig, og høyst ett år etter</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><strong>Cloudflare</strong> driver serveren for skolekodene og testturene for oss, som databehandler. Cloudflare kan behandle opplysningene i USA, etter EUs regler for overføring (EU–US Data Privacy Framework og EUs standardavtaler). <strong>Statens vegvesen og Kartverket</strong> får spørsmålene om veidata, kart og stedsnavn rett fra telefonen, uten navn, og har egne personvernerklæringer. <strong>Apple</strong> står for kjøpet i App Store etter sine egne regler.</p>
 
-    <p class="btn-row"><a class="btn secondary" href="../" data-app="">Åpne appen</a><a class="btn secondary" href="../trafikkskole/">For trafikkskoler</a><a class="btn secondary" href="../lisenser/">Lisenser og kilder</a></p>
+    <h2>Rettighetene dine</h2>
+    <p>Du kan be om innsyn i, retting av og sletting av opplysninger vi har om deg, og om å få dem utlevert. Du kan også protestere mot behandlingen. Det du har i appen, ser, endrer og sletter du selv der. Serveren vet ikke hvem du er, så vil du at vi skal finne opplysningene om en kode eller en testtur, må du oppgi koden. Du har alltid rett til å klage til <a href="https://www.datatilsynet.no/" target="_blank" rel="noopener">Datatilsynet</a>.</p>
+
+    <h2>Kontakt</h2>
+    <p>Spørsmål om personvern: <a href="mailto:Jo@svendsenmedia.net?subject=Personvern%20i%20Kj%C3%B8rerapport">Jo@svendsenmedia.net</a>. Vi svarer innen 30 dager.</p>
+
+    <p class="btn-row"><a class="btn secondary" href="../" data-app="">Åpne appen</a><a class="btn secondary" href="../trafikkskole/" data-web>For trafikkskoler</a><a class="btn secondary" href="../lisenser/">Lisenser og kilder</a></p>
   </main>
 </div>
 <footer><div class="wrap narrow"><span>© 2026 Svendsen Media</span><a href="mailto:Jo@svendsenmedia.net">Jo@svendsenmedia.net</a></div></footer>
 <script>/* 1.0.10: nettsiden på svendsenmedia.net lenker ikke til nettversjonen (eieren vil ikke gjøre koden lett å finne). I iPhone-appen går «Åpne appen» tilbake til appen. */
-if (location.hostname.endsWith('svendsenmedia.net')) document.querySelectorAll('a[data-app]').forEach(a => a.remove());</script>
+if (location.hostname.endsWith('svendsenmedia.net')) document.querySelectorAll('a[data-app]').forEach(a => a.remove());
+/* 1.0.16: i iPhone-appen ingen lenke til trafikkskolesiden (den er ikke med i appen) */
+if (window.kjNative) document.querySelectorAll('[data-web]').forEach(el => el.remove());</script>
 </body>
 </html>

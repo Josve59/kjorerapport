@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { normalizeCode, formatCode, signPass, schoolId } from '../server/skolekoder/worker.js';
-import { verifyPass, looksLikeCode, normalizeCode as appNormalize, PUBLIC_KEY, codeFromUrl, reportPlusUse } from '../js/skolekode.js';
+import { verifyPass, looksLikeCode, normalizeCode as appNormalize, PUBLIC_KEY, codeFromUrl } from '../js/skolekode.js';
 import { setSchoolPass, hasPlus, hasTheory, schoolPass } from '../js/plus.js';
 
 const memKV = () => { const m = new Map(); return {
@@ -203,41 +203,6 @@ test('serveren teller telefoner per Pluss-kjøp, og skriver høyst én gang i uk
   assert.equal(sum.naa['4+'], 1);
   assert.equal(sum.liste[0].kjop, KJOP.slice(0, 6), 'bare starten av nummeret vises');
   assert.equal(sum.liste[0].telefoner, 5);
-});
-
-test('appen melder Pluss-kjøpet høyst én gang i uka, bare når App Store sier at det er kjøpt', async () => {
-  const { env } = await setup();
-  const store = new Map();
-  const oldLS = globalThis.localStorage, oldFetch = globalThis.fetch;
-  globalThis.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
-  let calls = 0, now = T0;
-  globalThis.fetch = (u, o) => { calls++; return worker.fetch(new Request(u, o), env, {}, now); };
-  try {
-    const owned = { native: true, owned: true, kjop: KJOP };
-    assert.equal(await reportPlusUse({ ...owned, native: false }, { now, online: true }), null, 'nettversjonen melder seg ikke');
-    assert.equal(await reportPlusUse({ ...owned, owned: false }, { now, online: true }), null, 'ikke kjøpt');
-    assert.equal(await reportPlusUse({ ...owned, kjop: null }, { now, online: true }), null, 'uten kjøpsnummer');
-    assert.equal(await reportPlusUse(owned, { now, online: false }), null, 'uten nett');
-    assert.equal(calls, 0);
-    assert.equal(await reportPlusUse(owned, { now, online: true }), true);
-    assert.equal(calls, 1);
-    now = T0 + 2 * DAY;
-    assert.equal(await reportPlusUse(owned, { now, online: true }), null, 'to dager etter: ikke igjen');
-    assert.equal(calls, 1);
-    now = T0 + 8 * DAY;
-    assert.equal(await reportPlusUse(owned, { now, online: true }), true, 'etter en uke: igjen');
-    assert.equal(calls, 2);
-    const both = await Promise.all([reportPlusUse(owned, { now: T0 + 16 * DAY, online: true }), reportPlusUse(owned, { now: T0 + 16 * DAY, online: true })]);
-    assert.deepEqual(both, [true, true]);
-    assert.equal(calls, 3, 'to Pluss-endringer på rad gir én melding');
-    const sum = await (await worker.fetch(new Request('https://koder.test/admin/pluss', { headers: { Authorization: 'Bearer ' + env.ADMIN_SECRET } }), env, {}, T0 + 16 * DAY)).json();
-    assert.equal(sum.naa[1], 1, 'én telefon');
-    globalThis.fetch = () => Promise.reject(new Error('nett'));
-    assert.equal(await reportPlusUse(owned, { now: T0 + 30 * DAY, online: true }), null, 'feil på nettet stopper ingenting');
-  } finally {
-    globalThis.fetch = oldFetch;
-    if (oldLS === undefined) delete globalThis.localStorage; else globalThis.localStorage = oldLS;
-  }
 });
 
 /* Skolesiden (1.0.8): skolen deler ut tilganger fra en pakke, uten konto og uten elevnavn */

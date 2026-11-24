@@ -2,6 +2,10 @@
 <html lang="nb">
 <head>
   <meta charset="utf-8">
+  <!-- 1.0.16: bare appens egne skript kjøres, ikke skript eller onerror= fra en delt fil. Hashen er det lille skriptet for
+       manifestet under; endres det, må hashen endres (tests/csp.test.mjs sjekker). 'unsafe-eval' og 'wasm-unsafe-eval':
+       bilgjenkjenningen i nettversjonen (onnxruntime) og ansiktsgjenkjenningen (wasm). -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'sha256-XQn57crBWFutkIrPhc7/8NNM4PSKJyUDMeRVyu7pnkM=' 'unsafe-eval' 'wasm-unsafe-eval' blob:; object-src 'none'; base-uri 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="robots" content="noindex"><!-- 1.0.10: nettversjonen skal ikke dukke opp i søk -->
   <title>Kjørerapport</title>
@@ -357,8 +361,8 @@
 
     <h2 class="group-title"><span data-icon="user"></span>Deg og mål</h2>
     <section class="card">
-      <!-- Hvem bruker appen (0.18.4): trafikklærer er et valg i appen, ikke bare i testbyggene -->
-      <div class="field" id="role-field"><span>Jeg bruker appen som</span>
+      <!-- Hvem bruker appen (0.18.4). 1.0.16: bare i testbyggene til trafikklærerne får en egen lærerkode (app.js) -->
+      <div class="field" id="role-field" hidden><span>Jeg bruker appen som</span>
         <div class="segment" role="radiogroup" aria-label="Jeg bruker appen som">
           <label><input type="radio" name="role" value="elev"><span>Elev eller ledsager</span></label>
           <label><input type="radio" name="role" value="laerer"><span>Trafikklærer</span></label>
@@ -386,7 +390,7 @@
     </section>
 
     <h2 class="group-title"><span data-icon="camera"></span>Kamera</h2>
-    <button type="button" class="card cam-card" id="btn-go-camera"><span class="cam-card-ico" data-icon="mirror"></span><span class="cam-card-body"><strong id="cam-card-title">Speil og skulderblikk</strong><span class="muted small" id="cam-card-text">Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.</span></span><span class="cam-chev" data-icon="chev"></span></button>
+    <button type="button" class="card cam-card" id="btn-go-camera"><span class="cam-card-ico" data-icon="mirror"></span><span class="cam-card-body"><strong id="cam-card-title">Speil og skulderblikk</strong><span class="muted small" id="cam-card-text">Se hva kameraet oppfatter før dere tar det med på tur. Kalibrering trengs ikke.</span></span><span class="cam-chev" data-icon="chev"></span></button>
 
     <h2 class="group-title"><span data-icon="volume"></span>Rapporten</h2>
     <section class="card">
@@ -395,7 +399,7 @@
         <label class="toggle"><span><strong>Stedsnavn</strong><br><span class="muted small">Gatenavn der noe skjedde.</span></span><input type="checkbox" class="switch" id="netNames"></label>
         <label class="toggle"><span><strong>Les opp rapporten</strong><br><span class="muted small">Telefonen leser opp det viktigste når dere har stoppet.</span></span><input type="checkbox" class="switch" id="autoSpeak"></label>
       </div>
-      <p class="muted small">For fartsgrenser, kart og stedsnavn sendes rutens posisjoner til Statens vegvesen og Kartverket. Ingenting annet sendes, og turene lagres bare på denne telefonen.</p>
+      <p class="muted small">For fartsgrenser, kart og stedsnavn sendes posisjoner langs ruta til Statens vegvesen og Kartverket, uten navn. Turene lagres bare på denne telefonen. Mer under Personvern.</p>
     </section>
 
     <h2 class="group-title"><span data-icon="shield"></span>Sikkerhetskopi</h2>
@@ -420,7 +424,6 @@
         <a class="btn secondary" href="./personvern/" target="_blank" rel="noopener"><span data-icon="shield"></span>Personvern</a>
       </div>
       <p class="small mt"><a href="./hjelp/" target="_blank" rel="noopener">Hjelp og vanlige spørsmål</a></p>
-      <p class="small"><a href="./trafikkskole/" target="_blank" rel="noopener">Informasjon for trafikkskoler</a></p>
       <p class="small"><a href="./lisenser/" target="_blank" rel="noopener">Lisenser og kilder</a></p>
     </section>
 
@@ -509,7 +512,7 @@
     </details>
 
     <p class="muted small center about">Turene lagres bare på denne telefonen. Målingene er veiledende og erstatter ikke ledsager eller trafikklærer.</p>
-    <p class="muted small center" id="version">Kjørerapport versjon 1.0.15</p>
+    <p class="muted small center" id="version">Kjørerapport versjon 1.0.16</p>
     <p class="center"><button type="button" class="link" id="btn-check-update">Se etter ny versjon</button></p>
   </section>
 
@@ -577,13 +580,13 @@
     </section>
     <section class="intro-page">
       <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="target"></span></div>
-      <h2>Fest telefonen og kalibrer én gang</h2>
-      <p>Sett telefonen i holderen der den står under kjøring, med føreren i førersetet. Kalibreringen tar 30 sekunder: telefonen leser opp hvor du skal se.</p>
+      <h2>Fest telefonen i holderen</h2>
+      <p>Sett telefonen der den står under kjøring, med skjermen mot føreren. Kalibrering trengs ikke: appen lærer hvor speilene er fra turene.</p>
     </section>
     <section class="intro-page">
       <div class="intro-hero" aria-hidden="true"><div class="start-road"></div><span class="intro-ico" data-icon="check"></span></div>
       <h2>Appen sier fra når det trengs</h2>
-      <p>Før hver tur sjekker appen at kalibreringen fortsatt stemmer. Har holderen flyttet seg, kommer det som et punkt i «Før du kjører». Kameraet slås av og på under Innstillinger › Kamera.</p>
+      <p>Før hver tur sjekker appen at kameraet ser føreren. Vil du at speilene skal stemme fra første tur, kan du kalibrere under Kamera på 30 sekunder. Kameraet slås av og på under Innstillinger › Kamera.</p>
     </section>
   </div>
   <div class="intro-foot">

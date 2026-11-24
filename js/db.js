@@ -130,7 +130,7 @@ export async function importSharedDrive(sd, { from = '', at = new Date().toISOSt
     // Sendt på nytt (0.18.3): en tur mottakeren har flyttet til en annen elev, blir der
     driver: old ? (old.driver || '') : String(driver !== null ? driver : (from || sd.driver || '')).slice(0, 40),   // hos eleven: '' (egne turer)
     note: typeof sd.note === 'string' ? sd.note.slice(0, 500) : '',
-    marks: Array.isArray(sd.marks) ? sd.marks.filter(m => m && Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
+    marks: Array.isArray(sd.marks) ? sd.marks.filter(m => m && Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: markCat(m.cat) })) : [],
     focus: Array.isArray(sd.focus) ? sd.focus.filter(x => typeof x === 'string').slice(0, 3) : [], surface: typeof sd.surface === 'string' ? sd.surface.slice(0, 10) : '',
     ...(sd.noFace ? { noFace: true } : {}), result, resultKey: 'delt', enrich: sd.enrich && typeof sd.enrich === 'object' ? sd.enrich : null,
     cameraPlan: sd.cameraPlan && typeof sd.cameraPlan === 'object' ? sd.cameraPlan : null,
@@ -154,12 +154,13 @@ export async function importDrive(payload, { keepId = false } = {}) {
     loc: input.loc.map(p => ({ t: num(p.t), lat: num(p.lat), lon: num(p.lon), speed: num(p.speed), bearing: num(p.bearing), acc: num(p.acc) })),
     gyro: xyz(input.gyro), grav: xyz(input.grav), acc: xyz(input.acc),
     head: (input.head || []).map(h => ({ t: num(h.t), yaw: num(h.yaw), pitch: num(h.pitch), ...(Number.isFinite(num(h.ex)) ? { ex: num(h.ex), ey: num(h.ey) } : {}), ok: !!h.ok })),
-    road: (input.road || []).map(r => ({ t: num(r.t), cars: num(r.cars) || 0, people: num(r.people) || 0, lead: r.lead && Number.isFinite(num(r.lead.dist)) ? { cls: String(r.lead.cls || 'car'), dist: num(r.lead.dist), wpx: num(r.lead.wpx), ...(r.lead.src === 'baklys' ? { src: 'baklys' } : {}) } : null,
+    road: (input.road || []).map(r => ({ t: num(r.t), cars: num(r.cars) || 0, people: num(r.people) || 0, lead: r.lead && Number.isFinite(num(r.lead.dist)) ? { cls: /^[a-z_]{1,16}$/.test(r.lead.cls) ? r.lead.cls : 'car', dist: num(r.lead.dist), wpx: num(r.lead.wpx), ...(r.lead.src === 'baklys' ? { src: 'baklys' } : {}) } : null,
       lane: r.lane ? { l: !!r.lane.l, r: !!r.lane.r, offset: Number.isFinite(num(r.lane.offset)) ? num(r.lane.offset) : null, ...(Number.isFinite(num(r.lane.k)) ? { k: num(r.lane.k) } : {}), ...(Number.isFinite(num(r.lane.lw)) ? { lw: num(r.lane.lw) } : {}) } : null, lum: Number.isFinite(num(r.lum)) ? num(r.lum) : null, ...(r.night ? { night: true } : {}), ...(Number.isFinite(num(r.best)) ? { best: num(r.best) } : {}),
       ...(typeof r.img === 'string' && r.img.startsWith('data:image/jpeg;base64,') && r.img.length < 250000 ? { img: r.img } : {}) }))
   };
   const meta = payload && payload.drive ? payload.drive : {};
-  const id = keepId && typeof meta.id === 'string' && meta.id ? meta.id : newId();
+  // Id-en havner i adresser og HTML: bare bokstaver, tall og . : _ - (1.0.16, som for delte turer)
+  const id = keepId && typeof meta.id === 'string' && /^[\w.:-]{1,80}$/.test(meta.id) ? meta.id : newId();
   if (keepId && await getDrive(id)) return { skipped: true, id };
   const drive = {
     id,
@@ -171,7 +172,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     interrupted: !!meta.interrupted,
     note: typeof meta.note === 'string' ? meta.note : '',
     gaps: Array.isArray(meta.gaps) ? meta.gaps : [],
-    marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: typeof m.cat === 'string' ? m.cat : 'annet' })) : [],
+    marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: markCat(m.cat) })) : [],
     focus: Array.isArray(meta.focus) ? meta.focus.filter(f => typeof f === 'string').slice(0, 3) : [],
     surface: typeof meta.surface === 'string' ? meta.surface.slice(0, 10) : '',
     ...(meta.noFace ? { noFace: true } : {}),
@@ -190,6 +191,8 @@ export async function importDrive(payload, { keepId = false } = {}) {
   return drive;
 }
 const num = v => (v === null || v === undefined || v === '' ? NaN : Number(v));
+/* Kategorien på et merke fra en fil (1.0.16): et kort ord, ellers «annet», så den aldri blir HTML */
+const markCat = c => (typeof c === 'string' && /^[a-z_]{1,20}$/.test(c) ? c : 'annet');
 
 /* Eksportformat for én tur (brukes av eksport og sikkerhetskopi). */
 export async function exportPayload(drive) {

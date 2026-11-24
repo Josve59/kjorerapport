@@ -1,7 +1,7 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
 import { practiceSpans, rescore, inSpans } from './practice.js';
-import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, reportPlusUse, SEND_ERROR, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
+import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, SEND_ERROR, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
 import { isAndroid, installHelp, permissionHelp, screenLockHelp } from './platform.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
@@ -37,7 +37,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.0.15';
+export const APP_VERSION = '1.0.16';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -273,7 +273,7 @@ function updateCamCard() {
   $('#cam-card-title').textContent = roadOnly() ? 'Veikamera' : 'Speil og skulderblikk';
   $('#cam-card-text').textContent = !hasPlus() ? 'Med Pluss: speil- og skulderblikk, og bilen foran og feltlinjene med veikameraet.'
     : roadOnly() ? (settings.cameraOn ? 'Veikameraet er slått på: bilen foran, feltlinjene og fartsskiltene. Trykk for å teste.' : 'Veikameraet er valgt, men ikke slått på. Trykk for å teste og slå det på.')
-    : !settings.cameraOn ? 'Kalibrer og se hva kameraet oppfatter, før dere tar det med på tur.'
+    : !settings.cameraOn ? 'Se hva kameraet oppfatter før dere tar det med på tur. Kalibrering trengs ikke.'
     : calibrated ? (roadWanted() ? 'Kalibrert og slått på, med veikameraet samtidig. Trykk for å teste.' : 'Kalibrert og slått på. Trykk for å teste eller kalibrere på nytt.')
     : 'Slått på. Appen bruker en standardkalibrering som lærer av turene. Kalibrer for mer nøyaktige tall – det tar 30 sekunder.';
 }
@@ -338,7 +338,7 @@ async function renderHome() {
     const tags = [d.demo ? 'demo' : '', d.imported ? 'importert' : '', d.interrupted ? 'avbrutt' : '', d.excluded ? 'holdt utenfor' : ''].filter(Boolean);
     const meta = res ? [km(res.stats.km), duration(res.stats.duration)] : ['For lite data'];
     html += `<li>
-      <button type="button" class="drive" data-id="${d.id}">
+      <button type="button" class="drive" data-id="${esc(d.id)}">
         ${routeThumb(res ? res.points : null)}
         <span class="drive-main"><strong>${esc(shortDay(d.startedAt))}</strong>
           <span class="muted small">${meta.map(esc).join(SEP)}</span>
@@ -695,7 +695,7 @@ async function renderPlus(feature = null) {
       ${webFree && codesEnabled() ? '<button type="button" class="btn secondary" id="plus-school">Jeg har en kode fra trafikkskolen</button>' : ''}
       ${owned ? `<button type="button" class="btn secondary" id="plus-back">Tilbake</button>` : `
       <button type="button" class="btn primary plus-buy" id="plus-buy"${st.native && !st.available && st.loaded ? ' aria-describedby="plus-note"' : ''}>${price}</button>
-      <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse.'}</p>`}
+      <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse. Pluss er for én person og deles ikke med familien. Bruk samme telefon til teorien og kjøreturene, så ligger alt samlet.'}</p>`}
       ${owned ? '' : `
       <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><span class="plus-codes"><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button>${codesEnabled() && st.native ? '<button type="button" class="link" id="plus-appcode">App Store-kode</button>' : ''}</span></div>`}
       ${st.native ? `<p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>` : ''}`;
@@ -838,7 +838,7 @@ async function renderCamera() {
   const video = $('#cam-video'), label = $('#cam-label'), nums = $('#cam-nums'), status = $('#cam-status'), log = $('#cam-log');
   const calibInfo = () => {
     const c = getCalib();
-    $('#cam-calib-status').innerHTML = c ? `${icon('check', 18)} Kalibrert${c.at ? ' ' + esc(date(c.at)) : ''}. ${c.close ? `${esc(closeMirrorText(c.close))}: kalibrer gjerne på nytt og snu hodet tydeligere.` : 'Kalibrer på nytt hvis holderen er flyttet.'}` : `${icon('info', 18)} Ikke kalibrert ennå. Sett telefonen i holderen der den skal stå under kjøring, og trykk «Kalibrer».`;
+    $('#cam-calib-status').innerHTML = c ? `${icon('check', 18)} Kalibrert${c.at ? ' ' + esc(date(c.at)) : ''}. ${c.close ? `${esc(closeMirrorText(c.close))}: kalibrer gjerne på nytt og snu hodet tydeligere.` : 'Kalibrer på nytt hvis holderen er flyttet.'}` : `${icon('info', 18)} Ikke kalibrert. Det trengs ikke: appen lærer hvor speilene er fra turene. Vil du at det skal stemme fra første tur, sett telefonen i holderen og trykk «Kalibrer».`;   // 1.0.16, som i 1.0.14
     $('#btn-cam-calib').lastChild.textContent = c ? 'Kalibrer på nytt' : 'Kalibrer';
   };
   calibInfo();
@@ -1532,8 +1532,8 @@ async function renderStudentList() {
       <p class="muted small center">${list.length} ${list.length === 1 ? 'elev' : 'elever'}${studentQuery ? ` med «${esc(studentQuery)}»` : ''}. Poengene er snittet av de fem siste turene, og pilen er endringen fra turene før dem (opptil fem).</p>`
       : `<div class="empty card"><span class="empty-ico">${icon('users', 40)}</span><strong>${studentQuery ? 'Ingen elever med det navnet' : 'Ingen elever ennå'}</strong><span class="muted small">Legg til elevene dine, eller åpne en melding fra en elev.</span></div>`;
     // Testelevene (0.18.3): bare når lista er tom eller har testelever, så en lærer med ekte elever ikke får dem ved et uhell
-    root.insertAdjacentHTML('beforeend', act.some(x => x.test) ? '<button type="button" class="link center-link" id="btn-test-students-del">Fjern testelevene</button>'
-      : act.length ? '' : '<button type="button" class="link center-link" id="btn-test-students">Legg inn tre testelever med turer og en melding</button>');
+    root.insertAdjacentHTML('beforeend', act.some(x => x.test) ? '<button type="button" class="link center-link" id="btn-test-students-del">Fjern eksempelelevene</button>'
+      : act.length ? '' : '<button type="button" class="link center-link" id="btn-test-students">Se hvordan det ser ut med tre eksempelelever</button>');
     root.querySelectorAll('.st-row').forEach(b => b.onclick = () => { location.hash = studentHash(b.dataset.name); });
     const t = $('#btn-test-students'), td = $('#btn-test-students-del');
     if (t) t.onclick = async () => { t.disabled = true; t.textContent = 'Lager turer …'; await addTestStudents(); renderStudentList(); };
@@ -2056,7 +2056,7 @@ function renderPrecheck() {
       await requestLocationOnce();
       setCheck(gps, null, 'Venter på god nok nøyaktighet …');
     } catch (err) {
-      setCheck(gps, false, err.code === 1 ? `Posisjonstilgang avslått. ${permissionHelp('location')}` : isAndroid() ? 'Fikk ikke posisjon. Er Posisjon slått på? Dra ned fra toppen av skjermen og slå på Posisjon.' : 'Fikk ikke posisjon. Prøv der telefonen ser himmelen.');
+      setCheck(gps, false, err.code === 1 ? `Posisjonstilgang avslått. ${permissionHelp('location')}` : err.code === 4 ? GPS_REDUCED : isAndroid() ? 'Fikk ikke posisjon. Er Posisjon slått på? Dra ned fra toppen av skjermen og slå på Posisjon.' : 'Fikk ikke posisjon. Prøv der telefonen ser himmelen.');
     }
     if (leftDuringStart('#/sjekk')) return;
     btnPerm.hidden = true;
@@ -2070,7 +2070,7 @@ function renderPrecheck() {
     fixMotion.onclick = async () => { const r = await requestMotionPermission(); if (r === 'granted') { motion = 'granted'; fixMotion.hidden = true; setCheck(mot, null, 'Venter på data …'); } else setCheck(mot, false, `Tilgang avslått. ${permissionHelp('motion')}`); };
     stopPrecheck = startPrecheck(st => {
       const waited = (performance.now() - since) / 1000;
-      if (st.gpsError) setCheck(gps, false, st.gpsError.code === 1 ? 'Posisjonstilgang avslått' : 'Ingen GPS-signal');
+      if (st.gpsError) setCheck(gps, false, st.gpsError.code === 1 ? 'Posisjonstilgang avslått' : st.gpsError.code === 4 ? GPS_REDUCED : 'Ingen GPS-signal');
       else if (Number.isFinite(st.acc)) setCheck(gps, st.gpsOk, `${n0(st.acc)} m nøyaktighet${st.gpsOk ? '' : ' (må være 20 m eller bedre' + (waited > 10 ? ' – blir ofte bedre når bilen står stille ute)' : ')')}`);
       // Ingen data etter 3 s (f.eks. når siden ble åpnet uten trykk): én knapp som ber om tilgangen i et trykk
       const noMotion = !st.motionSeen && waited > 3 && motion !== 'unsupported';
@@ -2111,6 +2111,9 @@ async function renderFocusSuggestions() {
   el.hidden = false;
   $('#btn-use-sug').onclick = () => { saveSettings({ ...getSettings(), focus: sug.map(x => x.id) }); renderFocusChips(); toast('Dagens mål er satt.', { type: 'ok', ms: 1800 }); };
 }
+
+/* «Nøyaktig posisjon» av (1.0.16, feil 4 fra iPhone-appen): posisjonen er flere km unna, så turen kan ikke starte */
+const GPS_REDUCED = 'Nøyaktig posisjon er slått av. Slå den på under Innstillinger › Apper › Kjørerapport › Posisjon.';
 
 /* «Rundkjøringer, speil og skulderblikk»: bare første ord med stor bokstav (all = også det første med liten) */
 const listLower = (labels, all = false) => labels.map((s, i) => (i || all ? s.charAt(0).toLowerCase() + s.slice(1) : s)).join(', ');
@@ -2700,12 +2703,25 @@ async function finishRecording() {
   // calibLog (0.26.1): kalibreringsforsøkene fra de siste 12 timene, så eksporten viser hvor kalibreringen stoppet
   const calibLog = (getSettings().calibLog || []).filter(x => Date.now() - Date.parse(x.at) < 12 * 3600000);
   const camInfo = cs.road ? { mode: cs.roadOnly ? 'vei' : 'begge', roadSize: cs.roadSize, roadBottom: cs.roadBottom, model: cs.roadModel, perf: cs.perf, ...(calibLog.length ? { calibLog } : {}) } : null;
-  const drive = await rec.stop();
-  if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
-  if (camInfo) { await updateDrive(drive.id, { cameraPlan: camInfo }); drive.cameraPlan = camInfo; }
-  if (camUnsub) { camUnsub(); camUnsub = null; }
-  cam.stopCamera();
-  $('#record').classList.remove('busy');
+  // 1.0.16: feiler lagringen (full lagring, databasen stengt), skal skjermen ikke henge med en stoppknapp som ikke
+  // virker. Det som alt er lagret underveis, ligger i turen.
+  let drive = null;
+  try {
+    drive = await rec.stop();
+    if (rec.liveLimits && rec.liveLimits.length) { await updateDrive(drive.id, { liveLimits: rec.liveLimits }); drive.liveLimits = rec.liveLimits; }
+    if (camInfo) { await updateDrive(drive.id, { cameraPlan: camInfo }); drive.cameraPlan = camInfo; }
+  } catch (err) {
+    console.error('Turen ble ikke lagret helt', err);
+  } finally {
+    if (camUnsub) { camUnsub(); camUnsub = null; }
+    cam.stopCamera();
+    $('#record').classList.remove('busy');
+  }
+  if (!drive || !drive.id || drive.status !== 'done') {
+    toast('Turen ble ikke lagret helt. Det som ble lagret underveis, ligger under Turer.', { type: 'error', ms: 6000 });
+    location.hash = '#/logg';
+    return;
+  }
   if (getSettings().autoSpeak) speakNext = drive.id;
   location.hash = '#/rapport/' + drive.id;
   askForReview(drive);
@@ -3322,7 +3338,12 @@ function renderDriverSettings() {
   $('#goals-title').hidden = false;
   inp.value = s.name || s.activeDriver || '';
   inp.onchange = () => saveSettings({ ...getSettings(), name: inp.value.trim().slice(0, 40) });
-  // Elev eller trafikklærer (0.18.4): et vanlig valg for alle, ikke bare i testbyggene. Bytter visning med en gang.
+  // Elev eller trafikklærer (0.18.4). Bytter visning med en gang. 1.0.16: trafikklærerversjonen skal åpnes med en egen
+  // lærerkode fra Kjørerapport (eieren lager den per skole og lærer, kommer senere). Til da bare i testbyggene, for den
+  // ga hele Pluss gratis. Den som alt er trafikklærer, ser valget og kan bytte tilbake.
+  const roleField = $('#role-field');
+  roleField.hidden = !isTeacher();
+  if (!isTeacher()) viewModesAllowed().then(ok => { roleField.hidden = !ok; }).catch(() => {});
   document.querySelectorAll('input[name=role]').forEach(r => {
     r.checked = (r.value === 'laerer') === isTeacher();
     r.onchange = async () => {
@@ -3531,7 +3552,7 @@ function openIntro(id = 'intro') {
   const pagesEl = q('.intro-pages'), pages = [...pagesEl.children], dots = q('.intro-dots');
   const next = q('.intro-next'), skip = q('.intro-skip'), alt = q('.intro-demo');
   const seenKey = id === 'intro' ? 'introSeen' : 'camIntroSeen';
-  const lastText = id === 'intro' ? 'Kom i gang' : 'Kalibrer kameraet';
+  const lastText = id === 'intro' ? 'Kom i gang' : 'Prøv kameraet';   // 1.0.16: kalibrering trengs ikke (1.0.14)
   const opener = document.activeElement;
   dots.innerHTML = pages.map((_, i) => `<button type="button" aria-label="Side ${i + 1} av ${pages.length}"></button>`).join('');
   let cur = -1;
@@ -3725,9 +3746,8 @@ function init() {
   // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke
   // låse opp Pluss i App Store-utgaven (0.11.4).
   const wantedMode = modeFromLegacy(getSettings());
-  // Trafikklærer er et valg for alle (0.18.4); de andre visningene (gratis, Pluss, skole) bare i testbyggene
-  const modeReady = wantedMode === 'teacher' ? Promise.resolve().then(() => { applyViewMode('teacher'); route(); })
-    : wantedMode !== 'app' ? viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
+  // Alle visningene, også trafikklærer (1.0.16, til lærerkoden kommer), bare i testbyggene
+  const modeReady = wantedMode !== 'app' ? viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
   // Fil åpnet i iPhone-appen (0.18.1): når appen startes av filen, og når den kommer mens appen er åpen.
   // Etter visningen, så en melding til læreren havner i lærervisningen.
   modeReady.then(() => setTimeout(openIncomingFile, 300));
@@ -3744,8 +3764,6 @@ function init() {
   let plusWas = hasPlus();
   onPlusChange(plus => {
     updatePlusMarks();
-    // Telling av telefoner per kjøp (1.0.7): bare når App Store sier at Pluss er kjøpt, høyst én gang i uka
-    reportPlusUse(plusState()).catch(() => {});
     if (plus === plusWas) return;
     plusWas = plus;
     if (plus) setTimeout(maybeCamIntro, 600);

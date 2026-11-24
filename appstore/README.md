@@ -2,6 +2,8 @@
 
 Everything that will go into App Store Connect and the app's settings file when the iPhone app is built (phase 1). It is written for a native app in SwiftUI that records with the phone's own sensors and reuses today's analysis and report (see «Architecture» at the bottom). Today's web app is unchanged.
 
+**Status, 24 November 2026 (app 1.0.16):** the launch review of 24 November found ten things to fix before submission, all done in 1.0.16: developer tools only in Xcode builds (not TestFlight, which App Review shares), teacher mode only in test builds until teachers get their own code, the driving-school page out of the app, no purchase counting, new privacy texts, precise location, calibration texts, Android text out of the in-app help, and small data and security fixes (see «What's new in 1.0.16» in the main README). The lanes are now `n3` (1.0.5) and the car model «D-FINE small norsk» (1.0.15); the table below is from 22 November.
+
 **Status, 22 November 2026 (app 1.0.0): ready to submit once the owner's developer account exists, after one road test.** The owner decided on 22 November: the name stays Kjørerapport, the lane model is `n2` (trained on comma10k and Audi's A2D2, with credit to Audi on the licence page, see «Models» below), messaging is «yes» in the age rating, and the privacy label is the one in section 4. The owner has a sole proprietorship (ENK) ready.
 
 | # | What | Status |
@@ -82,16 +84,15 @@ Ready-to-use snippet: [`Info-tillatelser.plist`](Info-tillatelser.plist).
 
 ## 4. Privacy label («App Privacy» in App Store Connect)
 
-**Decided 22 November 2026 (the owner said yes); Purchases added 23 November (app 1.0.7, counting phones per purchase).** Answer «Yes, we collect data» with these four types. For each: purpose **App Functionality**, **not linked** to the user's identity, **not used for tracking**.
+**Decided 22 November 2026 (the owner said yes).** Purchases was added on 23 November (1.0.7, counting phones per purchase) and removed again on 24 November (1.0.16: the counting is gone, the owner said yes). Answer «Yes, we collect data» with these three types. For each: purpose **App Functionality**, **not linked** to the user's identity, **not used for tracking**.
 
 | Type in App Store Connect | What leaves the phone | Why |
 | --- | --- | --- |
 | Location › Precise Location | Positions along the route, sent to Statens vegvesen (NVDB) and Kartverket | Speed limits, road data, maps and place names. Answered right away; nothing is kept. |
 | Identifiers › User ID | The access code from the driving school, only if the user enters one | The school-code server checks that the code is valid and how many phones use it. |
-| Identifiers › Device ID | A random key the app makes for this installation, with a school code or with Pluss bought | So one pupil's code works on at most two phones, and to count phones per Pluss purchase. It is not the advertising ID. |
-| Purchases › Purchase History | With Pluss bought: an anonymous purchase number (SHA-256 of Apple's original transaction ID, made on the phone), at most once a week | To count how many phones use each purchase (Pluss is per person). Nothing is blocked; the server cannot look the purchase up at Apple. |
+| Identifiers › Device ID | A random key the app makes for this installation, only with a school code | So one pupil's code works on a limited number of phones. It is not the advertising ID. |
 
-Not collected: drives, marks, notes, the training plan, camera data and theory progress all stay on the phone, and payment goes through Apple. «Send turen til utvikleren» exists only in the web version and in test builds (TestFlight, Xcode), never in the App Store build (`devBuild` in app.js), so tester drives are not part of this label. `ios/Kjorerapport/PrivacyInfo.xcprivacy` lists the same four types.
+Not collected: drives, marks, notes, the training plan, camera data and theory progress all stay on the phone, and payment goes through Apple. «Send turen til utvikleren» exists only for testers with a tester code, in the web version and in Xcode builds (from 1.0.16 not in TestFlight), never in the App Store build, so tester drives are not part of this label. `ios/Kjorerapport/PrivacyInfo.xcprivacy` lists the same three types.
 
 **Must be checked again** before a version that adds analytics, third-party crash reporting, an account, cloud backup, iCloud sharing for the teacher messages (planned), or sending data to driving schools or insurers.
 
@@ -118,29 +119,27 @@ Apple works out the rating from the answers, so it will probably be higher than 
 
 ## 7. Notes for App Review
 
-Paste into «Notes» under App Review Information (in English, since the reviewers write in English):
+Paste into «Notes» under App Review Information (in English, since the reviewers write in English). Rewritten 24 November 2026 for 1.0.16:
 
-> Kjørerapport is a practice aid for Norwegian learner drivers (age 16+) who practise with a licensed companion («ledsager»), as required by Norwegian law.
+> Kjørerapport is a practice aid for Norwegian learner drivers (age 16+) who practise with a licensed companion («ledsager»), as required by Norwegian law, and a theory trainer for the class B test.
 >
-> **Safety by design:** the phone sits in a car mount. The companion in the passenger seat starts and stops recording; the driver never touches the phone. During a drive the screen shows only the current speed limit and a large stop button; speed camera warnings are audible. All feedback comes after the drive.
+> **Safety by design:** the phone sits in a car mount. The companion in the passenger seat starts and stops recording; the driver never touches the phone. During a drive the screen shows the speed, the current speed limit and a large stop button. An optional speeding warning lights the screen edge and can beep. All feedback comes after the drive.
 >
 > **How to review without driving:** on the home screen tap «Se en demotur» to open a full sample report (map, events, practice suggestions). Settings (gear icon) › «Avansert» › «Spill av en demotur» replays a simulated 5-minute drive through the recorder at 10× speed (about 30 seconds), with the speed limit sign on screen. It stops by itself and opens the report.
 >
-> **Background location:** used only while a recording that the user started is running, so the drive is not cut off when the screen locks. Authorization is «While Using»; no «Always» permission is requested.
+> **Location:** «While Using» only; no «Always» permission is requested. Background location is used only while a recording that the user started is running, so the drive is not cut off when the screen locks. Precise location is needed to measure a drive; if it is off, the app asks for it once and otherwise explains where to turn it on.
 >
-> **No account, no server, no tracking.** Drives stay on the device. Speed limits and maps are looked up from the Norwegian Public Roads Administration (NVDB) and the Norwegian Mapping Authority (Kartverket).
+> **No account, no ads, no tracking.** Drives stay on the device. Speed limits, road data, maps and place names are looked up from the Norwegian Public Roads Administration (NVDB) and the Norwegian Mapping Authority (Kartverket). Our only server checks driving-school codes (the code and a random install key; no name or drive data).
 >
-> **Camera (optional):** off by default. When enabled, face and road analysis run on-device; no images or video are stored or transmitted.
+> **Cameras (optional, part of Pluss):** off by default. The front camera checks mirror and shoulder glances, the back camera sees the car ahead and the lane lines. All analysis runs on-device; no images or video are stored or transmitted. Calibration is optional: the app uses a standard and learns from the drives. On a real device: Settings (gear icon) › «Kamera» › «Speil og skulderblikk» › «Start kamera». The cameras are only useful with the phone mounted in a car.
 >
-> **In-app purchase.** One non-consumable, «Kjørerapport Pluss» (one-time, Family Sharing off, no trial). It unlocks the full theory practice and the safety check (with a 59-question quiz), the cameras, the training plan, the driving-teacher summary, «Hva må du øve mer på?» and reports for drives older than the 10 latest. Free for everyone: recording, the report, the map, speed limits, data export, and 10 theory questions (tab «Opplæring» › «Teori og sikkerhet» › «Prøv 10 gratis spørsmål»). Every locked theory tile opens the Pluss screen; it is also under Settings (gear icon) › «Kjørerapport Pluss». «Gjenopprett kjøp» (Restore) and «App Store-kode» (Apple offer codes) are on the same screen.
+> **In-app purchase.** One non-consumable, «Kjørerapport Pluss» (one-time, per person, Family Sharing off, no trial). It unlocks the full theory practice and the safety check (with a 59-question quiz), the cameras, the training plan, «Hva må du øve mer på?» and reports for drives older than the 10 latest. Free for everyone: recording, the report, the map, speed limits, data export, and 10 theory questions (tab «Opplæring» › «Teori og sikkerhet» › «Prøv 10 gratis spørsmål»). Every locked tile opens the Pluss screen; it is also under Settings › «Kjørerapport Pluss». «Gjenopprett kjøp» (Restore) and «App Store-kode» (Apple offer codes) are on the same screen.
 >
-> **«Kode fra trafikkskolen» (driving-school code):** Norwegian driving schools buy access for their own pupils from us under a written agreement and give each pupil a personal code (guideline 3.1.3(c): sold directly to organisations for their students, never to individuals). The app shows no school prices and no links to buy outside the App Store. A code for review: REVIEW_CODE (Pluss screen › «Kode fra trafikkskolen»).
+> **«Kode fra trafikkskolen» (driving-school code):** Norwegian driving schools buy access for their own pupils from us under a written agreement and give each pupil a personal code (guideline 3.1.3(c): sold directly to organisations for their students, never to individuals). The app shows no school prices and no links to buy outside the App Store; information for schools is only on our website. A code for review: REVIEW_CODE (Pluss screen › «Kode fra trafikkskolen»). It unlocks Pluss, so the cameras and the full theory can be reviewed without a purchase.
 >
-> **Messages between learner and driving teacher:** sent as a file through the iOS share sheet (Messages, Mail, AirDrop) to someone the user already knows. The app has no chat service, no server and no user directory.
->
-> **Cameras on the simulator or without a car:** the cameras need a real device mounted in a car to be useful. They can be started under Home › «Kamera: speil- og skulderblikk» › «Start kamera».
+> **Messages between learner and driving teacher:** sent as a file through the iOS share sheet (Messages, Mail, AirDrop) to someone the user already knows. The app has no chat service and no user directory.
 
-Contact information: your name, phone and email. No demo account is needed (no login). Replace REVIEW_CODE with the code in `.local-test/skolekoder/apple-review.txt` (made for Apple, 5 phones, never in git).
+Contact information: your name, phone and email. No demo account is needed (no login). Replace REVIEW_CODE with the code in `.local-test/skolekoder/apple-review.txt` (made for Apple on 22 November for the school «Apple Review», 12 months from first use, 5 phones, never in git). It must be a normal school code, not a tester code (a tester code shows «Send turen til utvikleren»): check that it was never marked with `/admin/tester` before submitting.
 
 ---
 

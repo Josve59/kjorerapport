@@ -143,6 +143,45 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.0.16 – ready for App Review: the launch review's must-fix list
+
+The owner asked on 24 November for a deep dive before the App Store submission (28 November). Three review agents and my own checks found ten things to fix first. The owner answered the four questions the same day:
+- Teachers will get Pluss, but through their own teacher code from the owner that opens the teacher version. That code comes later, with a dashboard where the owner adds the school and the teacher's name.
+- Pluss stays at one person, one phone: Family Sharing off.
+- Purchase counting goes.
+- The owner is already VAT registered, so «inkl. mva» prices are fine.
+
+**What changed:**
+- **Developer tools only in Xcode builds** (`devTools()` in `NativeRecorder.swift`). Before, a TestFlight build, and so App Review (same sandbox), got «Visning (midlertidig)» with a free-Pluss switch, the test buttons, the road-picture switch and «Send turen til utvikleren». Now only DEBUG builds and builds with `embedded.mobileprovision` (Xcode, `ios/ship.sh`, also `KJ_CONFIG=Release`) have them. The answer is known at once, without asking App Store.
+- **Teacher mode only in test builds.** «Jeg bruker appen som» is hidden unless the view modes are allowed (`viewModesAllowed`), and a saved `viewMode: 'teacher'` is only applied there. Before, anyone could pick «Trafikklærer» and get all of Pluss free (`plusFor('teacher')`). Someone who is already a teacher in a test build sees the choice and can switch back.
+- **The driving-school page is out of the app.** `ios/copy-web.sh` no longer copies `trafikkskole/` and uses `--delete-excluded`, so it also disappears from earlier builds. The link in Settings is gone. The «For trafikkskoler» buttons on the help and privacy pages carry `data-web` and are removed inside the app (`window.kjNative`). The page with packages and invoices could look like buying outside the App Store (guideline 3.1.1/3.1.3).
+- **No purchase counting.** `reportPlusUse`, its test and the anonymous purchase number in `PlusStore.swift` are gone, and Purchase History is out of the privacy manifest and label (three types now). Apple asks for consent even for anonymous data (5.1.1). The server endpoint `/v1/pluss` is still there but gets nothing.
+- **Privacy texts:**
+  - The location text in Info.plist says «posisjoner langs ruta» instead of «omtrentlig område».
+  - Settings no longer says «Ingenting annet sendes».
+  - `personvern/` has new sections, «Hvem som er ansvarlig» (a table with basis and retention) and «Rettighetene dine», and covers Cloudflare as processor, NVDB, Kartverket and Apple. Purchase counting is removed from it.
+- **Precise location.** With «Nøyaktig posisjon» off, a drive could never start: positions several km off never reach 20 m. The app now asks once per start for temporary full accuracy (`requestTemporaryFullAccuracyAuthorization`, purpose key `Kjoretur` in `NSLocationTemporaryUsageDescriptionDictionary`). If the answer is no, the bridge sends error 4 instead of the coarse positions, and «Før du kjører» says where to turn it on.
+- **Calibration texts** follow 1.0.14:
+  - The camera intro says calibration is not needed, and its last button is «Prøv kameraet».
+  - The camera screen and the camera card say it is optional.
+- **Help in the app** no longer mentions Android (the web text stays on the website).
+- **The teacher's sample pupils** are called «eksempelelever», not «testelever».
+- **Pluss screen:** «Pluss er for én person og deles ikke med familien. Bruk samme telefon til teorien og kjøreturene.»
+- **Small data and security fixes:**
+  - GPS points from the time the screen was locked are no longer thrown away as «old» when the GPS had not locked before. `handlePosition` skips the age check for backfill; accuracy is still checked.
+  - `finishRecording` has try/finally. If saving fails, the camera stops, the screen is not stuck «busy» with a dead stop button, and the app goes to Turer with a message.
+  - Imported drives keep their id only if it matches `/^[\w.:-]{1,80}$/`, as shared drives already did. Mark categories and the lead car's class must be short words, and `data-id` in the drive list is escaped.
+  - `index.html` has a Content-Security-Policy. Only the app's own scripts run (`'self'`, the hash of the small manifest script, eval and wasm for the models), so a shared file can never run a script or an `onerror=`. `tests/csp.test.mjs` checks the hash.
+- **App Review notes** (`appstore/README.md` section 7) are rewritten: no speed cameras or «no server»; the school-code server is named; the camera path is Settings › Kamera; the review code must be a normal school code. `appstore/innsending.md` now names 1.0.16 and says TestFlight has no developer tools.
+
+**Checked:**
+- 322 tests pass.
+- The web version in the browser: ten screens with no CSP blocks or script errors. The pre-drive check shows the precise-location message at phone width (simulated error 4), with no sideways scroll.
+- The iPhone app compiles in Release.
+
+**Not checked:**
+- The precise-location question and the missing developer tools on a real phone in a TestFlight build. They only show in a TestFlight or App Store build, after the developer account exists.
+
 ## What's new in 1.0.15 – a car and people model trained on Norwegian road pictures
 
 The owner (24 November) wanted a better car/people model. The details, data and numbers are in `ios/Models/README.md`, and the scripts in `ios/Models/cars-train/`.

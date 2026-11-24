@@ -4,7 +4,13 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Kjørerapport bruker posisjonen under kjøreturen for å måle fart og rute og vise fartsgrensen. Turen lagres bare på telefonen. For å hente fartsgrenser og kart sendes omtrentlig område til Statens vegvesen og Kartverket, uten navn.</string>
+	<string>Kjørerapport bruker posisjonen under kjøreturen for å måle fart og rute og vise fartsgrensen. Turen lagres bare på telefonen. For fartsgrenser, kart og stedsnavn sendes posisjoner langs ruta til Statens vegvesen og Kartverket, uten navn.</string>
+	<!-- 1.0.16: med «Nøyaktig posisjon» av spør appen om nøyaktig posisjon for denne gangen (NativeRecorder.askFullAccuracy) -->
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>Kjoretur</key>
+		<string>Kjøreturen trenger nøyaktig posisjon for å måle fart og svinger og finne fartsgrensen. Med omtrentlig posisjon kan ikke turen starte.</string>
+	</dict>
 	<key>NSMotionUsageDescription</key>
 	<string>Bevegelsessensorene måler bremsing, akselerasjon og svinger under kjøreturen. Målingene lagres bare på telefonen.</string>
 	<key>NSCameraUsageDescription</key>

@@ -5,7 +5,7 @@
    Appen viser aldri pris eller hvor koden kjøpes (Apples regler). Ingen personopplysninger sendes: bare koden og en
    tilfeldig nøkkel for denne installasjonen av appen.
    Lagres i innstillingene: skolekode { kode, bevis, sjekket } og installId. */
-import { getSettings, saveSettings, isDemoMode } from './db.js';
+import { getSettings, saveSettings } from './db.js';
 import { setSchoolPass } from './plus.js';
 
 /* Serveren (Cloudflare Workers, satt opp 20. nov. 2026 med tools/skolekoder-oppsett.mjs). Tom: kodefeltet vises ikke.
@@ -113,26 +113,8 @@ export async function loadSchoolPass({ now = Date.now(), online = typeof navigat
   return p;
 }
 
-/* Telling av Pluss-kjøp (1.0.7). Pluss kjøpes per person. For å se om kjøp deles på mange telefoner, melder appen seg
-   høyst én gang i uka med det anonyme kjøpsnummeret (laget på telefonen, PlusStore.swift) og installasjonsnøkkelen.
-   Serveren teller bare telefoner per kjøp; ingenting stenges. Ikke i demoen: den har egne innstillinger og ville
-   talt som en egen telefon. st: plusState(). → true når serveren fikk tallet, ellers null. */
-let plusSending = null;   // Pluss-endringer kommer ofte flere på rad ved start: bare én melding om gangen
-export function reportPlusUse(st, { now = Date.now(), online = typeof navigator === 'undefined' || navigator.onLine } = {}) {
-  if (!st || !st.native || !st.owned || !/^[0-9a-f]{32}$/.test(st.kjop || '') || !online || !codesEnabled() || isDemoMode()) return Promise.resolve(null);
-  const last = getSettings().plussTelt;
-  if (last && last.kjop === st.kjop && now - (last.t || 0) < RECHECK_MS) return Promise.resolve(null);
-  if (plusSending) return plusSending;
-  plusSending = (async () => {
-    try {
-      const r = await fetch(serverUrl() + '/v1/pluss', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kjop: st.kjop, install: installId() }) });
-      if (!r.ok) return null;
-    } catch { return null; }
-    saveSettings({ ...getSettings(), plussTelt: { kjop: st.kjop, t: now } });
-    return true;
-  })().finally(() => { plusSending = null; });
-  return plusSending;
-}
+/* Telling av Pluss-kjøp (1.0.7–1.0.15) er tatt ut i 1.0.16: Apple krever samtykke også for et anonymt kjøpsnummer.
+   Serveren har fortsatt /v1/pluss, men appen sender ingenting dit. */
 
 /* «Send turen til utvikleren» (0.27.5): bare for testere (testkode), og bare når de trykker. Turen sendes som den
    eksporteres (samme JSON som «Eksporter»), gzip-komprimert der nettleseren kan. → { ok } eller { error } */
