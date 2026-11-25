@@ -12,6 +12,7 @@ import { haversine } from '../js/sensors.js';
 import { createSpeedWarn, createDropGrace } from '../js/speedwarn.js';
 import { createCamLimit } from '../js/signs.js';
 import { n0, n1, hms, duration, date } from '../js/format.js';
+import { periodicAt, carPeriod, forPeriod, BLINK } from '../js/blink.js';
 
 const pct = (a, b) => (b ? `${n0((100 * a) / b)} %` : '–');
 const ms = v => `${n0(v)} ms`;
@@ -252,6 +253,14 @@ function report(drive, input, file, exportVersion) {
     if (perf && perf.signMissed) more(`lest uten å bli godtatt: ${n0(perf.signMissed)}${(perf.signMissLog || []).length ? ` (${perf.signMissLog.slice(0, 8).map(m => `${Number.isFinite(m.at) && t0 ? `${hms0((m.at - t0) / 1000)} ` : ''}${m.limit} lest ${m.reads} ganger, ${m.w} piksler${Number.isFinite(m.at) && t0 ? `, kart ${mapNear((m.at - t0) / 1000) ?? '–'}` : ''}`).join(' · ')})` : ''}`);
   }
   const sw = speedWarnings(loc, drive.liveLimits || []);
+  // Blinklyset (1.1.2): klikk fra mikrofonen, bilens takt og hvor ofte blinklyset ble hørt
+  const bl = (input.blink || []).filter(x => Number.isFinite(x.s)).sort((a, b) => a.t - b.t), blv = (input.blink || []).filter(x => Number.isFinite(x.db));
+  if (blv.length) {
+    const P = carPeriod(bl), o = forPeriod(P), eps = [];
+    for (let t = bl.length ? Math.ceil(bl[0].t) : 0; bl.length && t <= bl[bl.length - 1].t + 1; t += 0.5) { if (!periodicAt(bl, t, o).on) continue; const e = eps[eps.length - 1]; if (e && t - e.to <= 1.5) e.to = t; else eps.push({ from: t, to: t }); }
+    line('Blinklys', `mikrofonen lyttet ${duration(blv.length)}, ${n0(bl.length)} klikk (${n1(bl.length / Math.max(1, blv.length))} i sekundet) · ${P ? `bilens takt ${String(P).replace('.', ',')} s (${n0(60 / P)} i minuttet)` : 'fant ikke bilens takt'}`);
+    more(`hørt ${eps.length} ${eps.length === 1 ? 'gang' : 'ganger'}${eps.length ? ': ' + eps.slice(0, 12).map(e => hms(e.from)).join(', ') + (eps.length > 12 ? ' …' : '') : ''}`);
+  }
   const n = sw.episodes.length;
   if (!sw.hasLimits) line('Fartsvarsler', 'ingen fartsgrenser lagret (Veidata av, eller ingen nett)');
   else if (!n) line('Fartsvarsler', 'ingen (regnet ut på nytt fra GPS-farten og lagrede fartsgrenser)');

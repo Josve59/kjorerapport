@@ -116,8 +116,16 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
   // 3b) Blinklyset (1.1.0): før feltskifter og svinger i kryss, når mikrofonen lyttet (r.blink fra blink.js)
   // Svinger i en rundkjøring fra veidataene teller ikke (1.1.1): der blinker du ut, ikke inn
   const inRb = t => (nv.roundabouts || []).some(x => t >= x.tFrom - 5 && t <= x.tTo + 5);
+  // Bare svinger i et kryss (1.1.2): på små, svingete veier ble vanlige svinger i veien tatt som svinger uten blinklys.
+  // Kryssene kommer fra Statens vegvesen (nodes); uten dem vurderes ikke svingene, bare feltskiftene.
+  const atJunction = t => {
+    const p = pointAt(pts, t);
+    if (!p || !Array.isArray(nv.nodes)) return false;
+    const k = Math.cos(p.lat * Math.PI / 180);
+    return nv.nodes.some(n => Math.hypot((n.lat - p.lat) * 110540, (n.lon - p.lon) * 111320 * k) <= 30);
+  };
   for (const c of (r.blink && r.blink.checks) || []) {
-    if (c.kind === 'turn' && inRb(c.t)) continue;
+    if (c.kind === 'turn' && (inRb(c.t) || !atJunction(c.tMid ?? c.t))) continue;
     const what = c.kind === 'lane' ? 'feltskiftet' : `svingen${c.dir ? ' til ' + c.dir : ''}`;
     add({ t: c.t, kind: 'blink', sources: ['mic', c.kind === 'lane' ? 'motion' : 'gps'], level: c.heard ? 'ok' : 'low',
       title: c.heard ? `Blinklys før ${what}` : `Hørte ikke blinklyset før ${what}`,

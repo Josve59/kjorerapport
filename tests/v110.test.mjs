@@ -107,7 +107,9 @@ import { periodicAt, blinkChecks, findTurns, heardBetween } from '../js/blink.js
 let rng;
 const seed = n => { let x = n; rng = () => (x = (x * 16807) % 2147483647) / 2147483647; };
 const noise = (from, to, perSec) => { const out = []; for (let t = from; t < to; t += -Math.log(1 - rng()) / perSec) out.push({ t, s: 8 + rng() * 6 }); return out; };
-const indicator = (from, to, C = 0.7, tock = true) => { const out = []; for (let t = from; t < to; t += C) { out.push({ t: t + (rng() - 0.5) * 0.006, s: 14 }); if (tock) out.push({ t: t + C / 2 + (rng() - 0.5) * 0.006, s: 11 }); } return out; };
+// Som på telefonen (1.1.2): klikkene finnes i biter på 4 ms, og reléet er nesten helt jevnt (bilen 25. nov.: 0–4 ms)
+const q4 = t => Math.round(t / 0.004) * 0.004;
+const indicator = (from, to, C = 0.7, tock = true) => { const out = []; for (let t = from; t < to; t += C) { out.push({ t: q4(t + (rng() - 0.5) * 0.002), s: 14 }); if (tock) out.push({ t: q4(t + C / 2 + (rng() - 0.5) * 0.002), s: 11 }); } return out; };
 const sorted = a => a.sort((x, y) => x.t - y.t);
 const levels = (from, to) => { const out = []; for (let t = Math.ceil(from); t <= to; t++) out.push({ t, db: -50 }); return out; };
 
@@ -243,4 +245,30 @@ test('HTML i en delt tur blir aldri HTML i rapporten, og prøve-oppkjøringen f�
   assert.equal(r.crest.crests[0].sight, 40, 'tall står som før');
   assert.deepEqual(cleanDeep({ a: [1, 'x"y', { 'b<c': 1, ok: NaN }] }), { a: [1, 'xy', { ok: null }] });
   assert.equal(shareDrive({ id: 'a', startedAt: '2026-11-25T10:00:00', mock: true }).mock, true);
+});
+
+// 1.1.2: bilens egen blinklystakt (eksportene 25. nov.): en annen jevn lyd med en annen takt og mer slingring teller ikke
+import { carPeriod } from '../js/blink.js';
+test('blinklys: bilens takt læres, og en annen jevn lyd (vindusviskere, radio) teller ikke', () => {
+  seed(5);
+  const wobbly = (from, to, C) => { const out = []; for (let t = from; t < to; t += C) out.push({ t: q4(t + (rng() - 0.5) * 0.014), s: 12 }); return out; };
+  const clicks = sorted([...noise(0, 300, 1.5), ...indicator(20, 30, 0.72, false), ...indicator(60, 68, 0.72, false), ...indicator(120, 127, 0.72, false), ...wobbly(180, 290, 0.91)]);
+  assert.ok(Math.abs(carPeriod(clicks) - 0.72) <= 0.005, `takten: ${carPeriod(clicks)}`);
+  const raw = [...clicks, ...levels(0, 300)];
+  const res = blinkChecks(raw, { laneChanges: [{ t: 30, tFrom: 29, dir: 'høyre' }, { t: 230, tFrom: 229, dir: 'venstre' }] });
+  assert.equal(res.period, carPeriod(clicks));
+  assert.deepEqual(res.checks.map(c => c.heard), [true, false], 'den andre lyden er ikke blinklyset');
+});
+
+test('blinklys i svinger vurderes bare i kryss (1.1.2)', () => {
+  const pts = Array.from({ length: 60 }, (_, i) => ({ t: i, lat: 63.43 + i * 0.0001, lon: 10.40, kmh: 20 }));
+  const r = { points: pts, events: [], blink: { checks: [{ t: 20, tMid: 22, kind: 'turn', dir: 'høyre', heard: false }, { t: 40, tMid: 42, kind: 'turn', dir: 'venstre', heard: false }, { t: 50, kind: 'lane', dir: 'høyre', heard: true }] } };
+  const node = { lat: pts[22].lat, lon: pts[22].lon };
+  const kinds = sits => sits.filter(s => s.kind === 'blink').map(s => s.title);
+  assert.deepEqual(kinds(buildSituations(r, { nvdb: { nodes: [node] } })), ['Hørte ikke blinklyset før svingen til høyre', 'Blinklys før feltskiftet'], 'svingen uten kryss tas bort');
+  assert.deepEqual(kinds(buildSituations(r, { nvdb: null })), ['Blinklys før feltskiftet'], 'uten kryssdata: bare feltskiftet');
+  // junctionNodes med any: også kryss med privat vei
+  const segs = [seg('a', '1', '9', [P(63.43, 10.4), P(63.431, 10.4)]), seg('b', '1', '8', [P(63.43, 10.4), P(63.43, 10.401)]), seg('c', '1', '7', [P(63.43, 10.4), P(63.429, 10.4)], 'P')];
+  assert.equal(junctionNodes(segs).length, 0);
+  assert.equal(junctionNodes(segs, { any: true }).length, 1);
 });

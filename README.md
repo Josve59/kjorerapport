@@ -143,6 +143,36 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.1.2 – the turn signal tuned on the first real drives
+
+The owner sent three exports from 25 November (1.1.1): drive 1 (25 min) and drive 3 (12 min) on small, odd roads, and a test standing still in between where they used the turn signal 8 times.
+
+**What the microphone heard (checked with scripts on the exports, no positions):**
+- **The relay in this car** ticks every 0.72 s (83 a minute), one click per flash. The gap between clicks varies 0 ms (median), at most 4 ms (90th percentile).
+- **Background:** about 1.5–2 random clicks a second, at −50 to −57 dB.
+- **In the standing test,** the detector found 6 of the 8 blinks. The other two look like only 2–3 ticks.
+- **Something else with a steady beat.** On drive 3, from about 6 minutes in, another sound kept a steady 0.91 s beat (wipers or radio?). The 1.1.1 detector took it for the turn signal 12 times. Drive 1 had a few at 0.99–1.03 s. Those chains vary 6–8 ms.
+- **Bends counted as turns.** On small, twisty roads, ordinary bends were counted as turns. Drive 1 had 20 «turns», of which 5 were heard and 10 not heard. The turn signal was heard 21 times in all.
+
+**Changes (`js/blink.js`):**
+- **Steadiness (`maxMad` 3 ms).** A chain only counts when the gap between its clicks varies at most 3 ms on average from the chain's own period. `periodicAt` now gives the chain's own period (`c`, to the millisecond) and its steadiness (`mad`).
+- **The car's own rhythm (`carPeriod`).** It is found from the steadiest chains on the drive (at most 1.5 ms deviation), and the checks then count only that rhythm, ±20 ms. Five clicks are then enough instead of six (`forPeriod`). On the three exports it was 0.72 s every time:
+  - Drive 3: 5 blinks and none of the 0.91 sound (was 12).
+  - Drive 1: 21 blinks, all at the car's rhythm.
+  - Random noise almost never triggers it any more (6 of 7,170 seconds).
+- **The click ceiling is back at 48 per 6 s.** 1.1.1's 30 dropped turn signals that tick twice per flash; the steadiness test now keeps noise out.
+- **Three seconds into the turn count.** The turn signal keeps ticking through the turn. Drive 3's blink at 6:44 now lands on the turn at 6:43.
+- **Only turns at a junction.** The road-data fetch keeps every junction near the route (`nodes`: three or more roads, also with signs, lights or a private road; `junctionNodes(segs, { any: true })`, `ROAD_V` 6). The report (`situations.js`) only judges the turn signal for turns within 30 m of such a junction. Without junction data, only lane changes are judged.
+- **Analysis key 23.** Older drives get the new judgement.
+
+**The drive report tool (`tools/turrapport.mjs`)** has a «Blinklys» line: how long the microphone listened, clicks per second, the car's rhythm, and when the turn signal was heard.
+
+**Checked:**
+- 340 tests pass. The synthetic clicks now use 4 ms steps, as on the phone.
+- New tests: a second steady sound doesn't count; the car's rhythm is learned; a turn is only judged at a junction; `junctionNodes` with private roads.
+
+**Not checked:** the unsigned junctions on these drives. That needs the road network for the owner's own route, and I don't send that from the Mac. The report on the phone shows it.
+
 ## What's new in 1.1.1 – the safety check step by step, and fixes from four review agents
 
 The owner (25 November): «Lag visualiseringer til sikkerhetsspørsmål om hvordan man sjekker … ta det med overalt når det forklarer», then four agents: features, bugs, new ideas, and code efficiency.

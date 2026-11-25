@@ -476,7 +476,7 @@ export function nearRoute(points, items, maxM = 40) {
    Private veger (avkjørsler, parkeringsplasser) teller ikke: den som kommer derfra, har vikeplikt uansett. Noder ved
    rundkjøringer, ramper og ferjer er ikke kryss med høyreregel. segs: [{ ref, a, b, pts, kat, type, level }] fra NVDB.
    Et segment som begynner midt på en lenke, har en startnode som «0.5052@47852»: bare tall er ekte noder. Ren funksjon. */
-export function junctionNodes(segs) {
+export function junctionNodes(segs, { any = false } = {}) {
   const nodes = new Map(), seen = new Set();
   const real = id => /^\d+$/.test(String(id));
   for (const sg of segs) {
@@ -486,14 +486,16 @@ export function junctionNodes(segs) {
     if (!['Vegtrase og kjørebane', 'Kjørebane'].includes(sg.level)) continue;
     for (const [id, p] of [[sg.a, sg.pts[0]], [sg.b, sg.pts[sg.pts.length - 1]]]) {
       if (!real(id)) continue;
-      const n = nodes.get(id) || { lat: p.lat, lon: p.lon, deg: 0, bad: false };
+      const n = nodes.get(id) || { lat: p.lat, lon: p.lon, deg: 0, all: 0, bad: false };
       if (['K', 'F', 'R', 'E'].includes(sg.kat)) n.deg++;
+      n.all++;   // også private veier: å svinge inn til en parkeringsplass er også en sving i et kryss
       if (['Rundkjøring', 'Rampe', 'Bilferje'].includes(sg.type)) n.bad = true;
       nodes.set(id, n);
     }
   }
   const r5 = v => Math.round(v * 1e5) / 1e5;
-  return [...nodes.values()].filter(n => n.deg >= 3 && !n.bad).map(n => ({ lat: r5(n.lat), lon: r5(n.lon), deg: n.deg }));
+  // any (1.1.2): alle kryss, også med skilt, lys og private veier, til blinklyset i svinger
+  return [...nodes.values()].filter(n => (any ? n.all >= 3 : n.deg >= 3 && !n.bad)).map(n => ({ lat: r5(n.lat), lon: r5(n.lon), deg: n.deg }));
 }
 
 /* Kryss på en forkjørsveg er ikke høyreregelkryss: enten har vi forkjørsrett, eller vi har vikeplikt (1.1.0).
@@ -529,7 +531,9 @@ export async function fetchJunctions(points, signal) {
     }
   });
   const prio = await fetchPoints(points, PRIORITY, false, signal, true);
-  return offPriority(nearRoute(points, junctionNodes(segs), 15), prio.map(x => x.line));
+  // nodes (1.1.2): alle kryss langs ruten, så blinklyset bare vurderes i svinger i kryss og ikke i svinger i veien
+  return { junctions: offPriority(nearRoute(points, junctionNodes(segs), 15), prio.map(x => x.line)),
+    nodes: nearRoute(points, junctionNodes(segs, { any: true }), 20).map(({ lat, lon }) => ({ lat, lon })) };
 }
 
 /* Retningen fra a til b i grader fra nord (motorveier langs kjøreretningen) */
@@ -552,7 +556,8 @@ export async function fetchRoadData(points, signal) {
   return {
     // v4 (0.26.3): retningen på gangfelt. Fotobokser og strekningsmåling hentes ikke fra 1.0.4. v5 (1.1.0): kryss.
     // Feilet veinettet, lagres v4 (1.1.1), så veidataene hentes på nytt neste gang i stedet for å mangle kryss for alltid.
-    v: junctions ? 5 : 4,
+    // v6 (1.1.2): alle kryss (nodes) til blinklyset
+    v: junctions ? 6 : 4,
     stops: stops.map(pt),
     giveway: giveway.map(pt),
     roundabouts: rb.map(p => ({ ...pt(p), d: Number(p.props[1791]) || 25, name: p.props[1073] || '' })),
@@ -565,7 +570,7 @@ export async function fetchRoadData(points, signal) {
     // linjer uten bruksområde er ofte kjørefeltsignaler over motorvegen.
     signals: nearRoute(points, signals.filter(p => ['Vegkryss', 'Gangfelt'].includes(p.props[1273]) || (!p.props[1273] && !p.line))
       .map(p => ({ ...pt(p), dir: Number.isFinite(p.dir) ? Math.round(p.dir) : null })), 60),
-    ...(junctions ? { junctions } : {})
+    ...(junctions ? { junctions: junctions.junctions, nodes: junctions.nodes } : {})
   };
 }
 
@@ -689,6 +694,7 @@ export function evaluateRoad(points, road, events = [], limits = null) {
     out.junctions.push({ t: points[i].t, lat: j.lat, lon: j.lon, kmh: Math.round(points[i].kmh), minKmh: Math.round(m), approachKmh: Math.round(points[before(i, 60)].kmh), limit: lim });
   }
   for (const k of ['crossings', 'bumps', 'signals', 'signs', 'junctions']) out[k].sort((x, y) => x.t - y.t);
+  out.nodes = Array.isArray(road.nodes) ? road.nodes : null;   // alle kryss (1.1.2), null når de ikke er hentet
   out.junctions = out.junctions.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 4);
   // NVDB har ofte ett gangfelt og én fartsdemper per kjøreretning: det samme stedet innen 4 s er ett
   out.crossings = out.crossings.filter((g, k, arr) => !k || g.t - arr[k - 1].t > 4);
@@ -727,7 +733,7 @@ export function evaluateMerges(points, motor, limits = null) {
 }
 
 /* Henter det som er slått på og mangler, og returnerer et enrich-objekt som lagres på turen. */
-export const ROAD_V = 5;   // 5 (1.1.0): kryss uten skilt
+export const ROAD_V = 6;   // 5 (1.1.0): kryss uten skilt; 6 (1.1.2): alle kryss til blinklyset
 export const LIMITS_V = 4;   // v0.9.9: fartsgrense langs kjøreretningen, korte hopp glattet; v3 (0.22.2): aldri gater på tvers; v4 (0.26.5): ikke lånt fra en annen veg
 export const MOTOR_V = 1;    // 0.18.0: motorvei og motortrafikkvei fra NVDB
 /* Bare motorveiene, for eldre turer som mangler dem (kjøreloggen henter dem i bakgrunnen) */
