@@ -360,6 +360,7 @@ export function renderPractice(root, ctx) {
       ${q.wimg && !play ? `<div class="q-fig q-wfig q-zoom" role="button" tabindex="0" aria-label="Vis tegningen større" data-fig="${esc(q.wimg)}">${figure(q.wimg)}</div>` : ''}
       ${play ? `<div class="cx-player"><button type="button" class="btn secondary cx-playbtn" data-play="${play}">${icon('play', 20)}Se hvem som kjører først</button></div>` : ''}
       <p class="q-rule">${esc(rule)}</p>${rest ? `<p>${esc(rest)}</p>` : ''}
+      ${q.task && stepsFor(q.task) ? `<p class="howto-title">${icon('wrench', 18)}Slik sjekker du det</p>${howtoStrip(stepsFor(q.task))}` : ''}
       <p class="muted small">${icon('book', 16)} ${esc(q.ref)}</p>
       ${more ? `<button type="button" class="link q-more" id="q-more">${icon('book', 18)}<span>Les mer i teoriboka: ${esc(bookSection(more).title)}</span>${icon('chev', 16)}</button>` : ''}
     </section>
@@ -422,6 +423,17 @@ function splitRule(text) {
   const m = String(text).match(/^(.+?[.!?])\s+(?=[A-ZÆØÅ«0-9])/);
   return m ? [m[1], text.slice(m[0].length)] : [text, ''];
 }
+/* Slik gjør du det, steg for steg (1.1.1, HOWTO i safety-check.js): tegningene etter hverandre med nummer og kort tekst.
+   Trykk på en tegning for å se den større. */
+const SAFETY_BY_ID = new Map(SAFETY.map(t => [t.id, t]));
+function howtoStrip(steps) {
+  if (!steps || !steps.length) return '';
+  return `<ol class="howto" aria-label="Slik gjør du det, steg for steg">${steps.map((s, i) => `<li>
+    <span class="howto-fig q-zoom" role="button" tabindex="0" aria-label="Steg ${i + 1}: ${esc(s.cap)}. Vis tegningen større" data-fig="${esc(s.fig)}">${figure(s.fig)}</span>
+    <span class="howto-cap"><b>${i + 1}</b>${esc(s.cap)}</span></li>`).join('')}</ol>`;
+}
+const stepsFor = taskId => (SAFETY_BY_ID.get(taskId) || {}).steps || null;
+
 /* Trykk på en tegning: vis den stor i et ark (0.21.0) */
 function wireZoom(root) {
   root.querySelectorAll('.q-zoom').forEach(el => {
@@ -1018,7 +1030,7 @@ export function renderSafetyHub(root, ctx) {
       if (!items.length) return '';
       return `<h2 class="group-title">${icon(a.icon, 16)}${esc(a.title)}</h2><section class="card s-area">${items.map(t => `
         <details class="s-task" data-id="${t.id}"><summary><span class="s-state ${known(t.id) ? 'ok' : ''}">${known(t.id) ? icon('check', 16) : ''}</span><span>${esc(t.task)}</span>${icon('chev', 18)}</summary>
-          ${t.img ? `<div class="s-lamp">${figure(t.img)}</div>` : ''}<ol class="s-how">${t.how.map(h => `<li>${esc(h)}</li>`).join('')}</ol>
+          ${t.steps ? howtoStrip(t.steps) : t.img ? `<div class="s-lamp">${figure(t.img)}</div>` : ''}<ol class="s-how">${t.how.map(h => `<li>${esc(h)}</li>`).join('')}</ol>
           <p class="s-fault"><strong>Hvis noe er feil:</strong> ${esc(t.fault)}</p>
           <div class="btn-row"><button type="button" class="btn small-btn secondary" data-know="1" aria-pressed="${known(t.id)}">${icon('check', 18)}Kan denne</button><button type="button" class="btn small-btn secondary" data-know="0">Øv mer</button></div>
         </details>`).join('')}</section>`;
@@ -1042,6 +1054,7 @@ export function renderSafetyHub(root, ctx) {
     renderSafetyHub(root, ctx);
     window.scrollTo(0, y);
   });
+  wireZoom(root);   // tegningene steg for steg kan forstørres (1.1.1)
 }
 
 export function renderSafetyDrill(root, ctx) {
@@ -1072,6 +1085,7 @@ export function renderSafetyDrill(root, ctx) {
     </section>
     ${D.shown ? `<section class="card q-why">
       <p class="q-verdict">${icon('wrench', 20)}Slik gjør du det</p>
+      ${howtoStrip(t.steps)}
       <ol class="s-how">${t.how.map(h => `<li>${esc(h)}</li>`).join('')}</ol>
       <p class="s-fault"><strong>Hvis noe er feil:</strong> ${esc(t.fault)}</p>
     </section>
@@ -1085,5 +1099,6 @@ export function renderSafetyDrill(root, ctx) {
   const yes = root.querySelector('#d-yes'), no = root.querySelector('#d-no');
   if (yes) yes.onclick = () => mark(true);
   if (no) no.onclick = () => mark(false);
+  wireZoom(root);
 }
 

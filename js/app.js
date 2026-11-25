@@ -39,7 +39,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.1.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -157,7 +157,8 @@ async function analyzeDrive(drive) {
   // 19 (0.26.4): øving på plass (practice.js) holdes utenfor poengene, med mindre den skal telles (drive.practiceCount)
   // 20 (1.0.13): blikket borte fra veien: opp/ned teller 70 %, speil og skulderblikk teller ikke (eyesOffRoad)
   // 21 (1.0.14): turer uten kalibrering får speil og skulderblikk med standardkalibreringen, som lærer av turen
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|21${drive.noFace ? 'n' : ''}${drive.practiceCount ? 'p' : ''}`;
+  // 22 (1.1.1): blinklyset: ingen vurdering uten klikk, og ikke under øving på plass
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|22${drive.noFace ? 'n' : ''}${drive.practiceCount ? 'p' : ''}`;
   if (drive.result && drive.resultKey === key) { if (finalizeScore(drive, drive.result)) await putDrive(drive); return drive.result; }
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);
@@ -188,7 +189,9 @@ async function analyzeDrive(drive) {
     try { learnCalibFrom(drive, result.camera); } catch { /* læringen skal aldri stoppe rapporten */ }
     // Blinklyset (1.1.0): klikkene fra mikrofonen før feltskifter og svinger i kryss
     if (raw.blink && raw.blink.length) {
-      try { result.blink = blinkChecks(raw.blink.map(b => ({ ...b, t: b.t - result.t0 })), { laneChanges: result.maneuvers.laneChanges, turns: findTurns(result.points, result.maneuvers.roundabouts) }); }
+      // Øving på plass (svinger rundt på en parkeringsplass) teller ikke, som for blikket (1.1.1)
+      const inTraffic = x => drive.practiceCount || !inSpans(x.t, result.practice);
+      try { result.blink = blinkChecks(raw.blink.map(b => ({ ...b, t: b.t - result.t0 })), { laneChanges: result.maneuvers.laneChanges.filter(inTraffic), turns: findTurns(result.points, result.maneuvers.roundabouts).filter(inTraffic) }); }
       catch { result.blink = null; }
     }
   } catch (err) {
@@ -696,7 +699,7 @@ async function renderPlus(feature = null) {
       <section class="plus-hero">
         <span class="plus-badge">${icon('check', 18)}Pluss</span>
         <h2>${school ? (school.tester ? 'Du tester Kjørerapport' : 'Du har Pluss fra trafikkskolen') : webFree ? 'Nettversjonen' : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
-        <p>${school ? (school.tester ? `Full tilgang til ${esc(longDay(school.exp))}. Takk for at du tester!` : `Fra ${esc(school.skole)}, til ${esc(longDay(school.exp))}. Alt i appen er låst opp.`) : webFree ? 'Her er alt gratis, unntatt teorien. Teorien får du i iPhone-appen med Pluss, eller med en kode fra trafikkskolen.' : owned ? 'Alt i appen er låst opp.' : 'Ett kjøp, ikke abonnement. Gjelder til førerkortet er i boks.'}</p>
+        <p>${school ? (school.tester ? `Full tilgang til ${esc(longDay(school.exp))}. Takk for at du tester!` : `Fra ${esc(school.skole)}, til ${esc(longDay(school.exp))}. Alt i appen er låst opp.`) : webFree ? 'Her er alt gratis, unntatt teorien. Teorien får du i iPhone-appen med Pluss, eller med en kode fra trafikkskolen.' : owned ? 'Alt i appen er låst opp.' : 'Ett kjøp, ikke abonnement, og det går aldri ut.'}</p>
       </section>
       <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${hasIt(k) ? `<span class="plus-ok">${icon('check', 18)}</span>` : owned ? `<span class="lock-tag">${icon('lock', 14)}Kode</span>` : ''}</div>`; }).join('')}</section>
       ${webFree && codesEnabled() ? '<button type="button" class="btn secondary" id="plus-school">Jeg har en kode fra trafikkskolen</button>' : ''}
@@ -792,6 +795,7 @@ function learnCalibFrom(drive, cam) {
   saveSettings({ ...s, calibLearn: { ...all, [c.key]: { offsets, from: [drive.id, ...from].slice(0, 30), at: new Date().toISOString() } } });
 }
 let camUnsub = null;
+let camRoadOff = null;   // veikameraet på kameraskjermen (1.1.1: ryddes når skjermen forlates, se route)
 let calibForDrive = null;   // tur som skal få kalibreringen når den er ferdig (fra rapporten)
 let noFaceDrive = false;    // «Kjør uten førerkameraet» valgt for turen som startes nå (0.13.13)
 
@@ -881,15 +885,14 @@ async function renderCamera() {
     if (cam.state().running) await startCam();   // start på nytt med eller uten veikameraet
   };
   const roadBox = $('#cam-road'), roadVideo = $('#cam-road-video'), roadTxt = $('#cam-road-text');
-  let roadUnsubCam = null;
   const showRoad = async () => {
-    if (roadUnsubCam) { roadUnsubCam(); roadUnsubCam = null; }
+    if (camRoadOff) { camRoadOff(); camRoadOff = null; }
     roadBox.hidden = !cam.state().road;
     if (!cam.state().road) return;
     await cam.attachRoadVideo(roadVideo);
     roadTxt.textContent = roadText(null);
     let n = 0;
-    roadUnsubCam = cam.onRoad(r => { if (++n % 5 === 0) roadTxt.textContent = roadText(r); });
+    camRoadOff = cam.onRoad(r => { if (++n % 5 === 0) roadTxt.textContent = roadText(r); });
   };
   video.closest('.cam-view').onclick = () => openCamView('user');
   roadBox.onclick = () => openCamView('environment');
@@ -930,7 +933,7 @@ async function renderCamera() {
     }
   };
   $('#btn-cam-start').onclick = startCam;
-  $('#btn-cam-stop').onclick = () => { cam.stopCamera(); if (camUnsub) camUnsub(); camUnsub = null; if (roadUnsubCam) roadUnsubCam(); roadUnsubCam = null; $('#cam-stage').hidden = true; $('#btn-cam-start').hidden = false; $('#btn-cam-stop').hidden = true; status.textContent = 'Kameraet er av.'; calibInfo(); };
+  $('#btn-cam-stop').onclick = () => { cam.stopCamera(); if (camUnsub) camUnsub(); camUnsub = null; if (camRoadOff) camRoadOff(); camRoadOff = null; $('#cam-stage').hidden = true; $('#btn-cam-start').hidden = false; $('#btn-cam-stop').hidden = true; status.textContent = 'Kameraet er av.'; calibInfo(); };
   $('#btn-cam-calib').onclick = async () => {
     unlockSpeech();
     if (!cam.state().running && !(await startCam())) return;
@@ -1484,11 +1487,14 @@ async function renderTeacher(opts = {}) {
   const teacher = s.teacherName || (schoolInfo(s) || {}).teacher || '';
   $('#teacher-title').textContent = 'Til trafikklæreren';
   $('#teacher .page-actions').hidden = false;
+  // Meldingene (1.1.1): læreren kan bare åpne dem i trafikklærerversjonen, som kommer med lærerkoden. Til da bare i
+  // testbyggene, eller når det alt finnes en samtale (fra en sikkerhetskopi).
+  const talk = teacherMsgs || thread.length > 0;
   $('#teacher-top').innerHTML = `${isSchool() ? schoolCardHtml(s) : homeworkCardHtml(receivedHomework(s), false)}
-    ${threadCardHtml(thread, { title: teacher ? `Meldinger med ${teacher}` : 'Meldinger med trafikklæreren', mine: 'elev', all: !!opts.all,
-      empty: 'Spør om noe, eller legg ved en tur du vil ha tilbakemelding på. Svaret fra læreren kommer som en fil du åpner her.' })}`;
-  wireThread(TEACHER_THREAD, o => renderTeacher(o), { driver: null });
-  if (unread(thread, 'elev')) saveThread(TEACHER_THREAD, markRead(threadOf(getSettings(), TEACHER_THREAD), 'elev'));   // lest når den er vist
+    ${talk ? threadCardHtml(thread, { title: teacher ? `Meldinger med ${teacher}` : 'Meldinger med trafikklæreren', mine: 'elev', all: !!opts.all,
+      empty: 'Spør om noe, eller legg ved en tur du vil ha tilbakemelding på. Svaret fra læreren kommer som en fil du åpner her.' }) : ''}`;
+  if (talk) wireThread(TEACHER_THREAD, o => renderTeacher(o), { driver: null });
+  if (talk && unread(thread, 'elev')) saveThread(TEACHER_THREAD, markRead(threadOf(getSettings(), TEACHER_THREAD), 'elev'));   // lest når den er vist
   // Samtalen er gratis (0.18.3); oppsummeringen av øvingen hører til Pluss
   if (!hasPlus()) {
     $('#teacher .page-actions').hidden = true;
@@ -1845,7 +1851,7 @@ function wireNear(needs) {
     box.innerHTML = '<p class="muted small">Finner posisjonen …</p>';
     let pos;
     try { pos = await new Promise((ok, err) => navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lon: p.coords.longitude }), err, { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 })); }
-    catch { btn.disabled = false; box.innerHTML = '<p class="muted small">Fikk ikke posisjonen. Gi appen tilgang til posisjon og prøv igjen.</p>'; return; }
+    catch (err) { btn.disabled = false; box.innerHTML = `<p class="muted small">${err && err.code === 4 ? GPS_REDUCED : 'Fikk ikke posisjonen. Gi appen tilgang til posisjon og prøv igjen.'}</p>`; return; }
     box.innerHTML = '<p class="muted small">Henter fra Statens vegvesen …</p>';
     let res;
     try { res = await fetchNearby(pos, wants); } catch { btn.disabled = false; box.innerHTML = '<p class="muted small">Fikk ikke kontakt med Statens vegvesen. Prøv igjen med nett.</p>'; return; }
@@ -2233,7 +2239,9 @@ async function startRecording(replay = null) {
   show('record');
   const settings = getSettings();
   // Fartsvarsel (0.12.0): rød kant (og pip hvis valgt) når farten er for høy. Varselet om fotobokser er tatt ut (1.0.4)
-  const speedWarn = settings.speedWarn !== false || settings.speedSound ? createSpeedWarn() : null;
+  // Prøve-oppkjøring (1.1.1): rolig skjerm som på førerprøven, uten fartsskilt og fartsvarsel. Fartsgrensene lagres likevel.
+  const mockQuiet = !replay && mockNext;
+  const speedWarn = !mockQuiet && (settings.speedWarn !== false || settings.speedSound) ? createSpeedWarn() : null;
   let speedBeep = !!settings.speedSound;
   const dropGrace = createDropGrace();   // kartet alene senker grensen: varselet venter litt (0.13.11)
   if (speedBeep) unlockSound();
@@ -2271,7 +2279,7 @@ async function startRecording(replay = null) {
   const limitBox = $('#rec-limit'), limitSign = $('#rec-limit-sign'), limitNote = $('#rec-limit-note'), speedEl = $('#rec-speed');
   // Demoturen (v0.9.19) har egne fartsgrenser langs den tenkte ruta, så skiltet vises også under avspilling
   const demoLimits = replay && replay.data && replay.data.limits ? replay.data.limits : null;
-  limitBox.hidden = !live && !demoLimits;
+  limitBox.hidden = (!live && !demoLimits) || mockQuiet;
   recorder = new Recorder({
     sensitivity: settings.sensitivity,
     appVersion: APP_VERSION,
@@ -2418,12 +2426,19 @@ async function startRecording(replay = null) {
       toast('Du kan låse skjermen. Opptaket fortsetter, og tiden vises på låseskjermen.', { type: 'ok', ms: 5000 });
     }
   } catch (err) {
+    // 1.1.1: ingen opptaker igjen som «går», og kamera, mikrofon og opptaket på iPhone stoppes
+    recorder = null; mockNext = false;
+    if (camUnsub) { camUnsub(); camUnsub = null; }
+    cam.stopCamera();
+    if (onAudio) { window.removeEventListener('kjaudio', onAudio); onAudio = null; }
+    if (window.kjNative && window.kjNative.recStop) window.kjNative.recStop();
     infoDialog({ title: 'Kunne ikke starte opptaket', text: err.message });
     location.hash = '#/';
   }
 }
 
 let mockNext = false;   // prøve-oppkjøring valgt i «Før du kjører» (1.1.0), bare for turen som startes
+let teacherMsgs = false;   // meldinger med læreren (1.1.1): bare i testbyggene til lærerkoden finnes (init)
 let onAudio = null;    // klikkene fra mikrofonen (blinklyset, 1.1.0) mens opptaket pågår
 
 /* Testbygg (Xcode og TestFlight, 0.18.4): da vises testknappene under kjøring som standard. Nettversjonen og App Store: nei. */
@@ -2439,7 +2454,8 @@ function renderMarkGrid() {
   };
   const grid = $('#mark-grid');
   // Testknappene (Feltskifte, Feil grense) bare i testbyggene eller når de er slått på (0.18.4)
-  const testMarks = getSettings().devMarks ?? devBuild;
+  // 1.1.1: i App Store-utgaven aldri testknappene, heller ikke for testere med testkode (utviklerverktøy bare i Xcode-bygg)
+  const testMarks = (getSettings().devMarks ?? devBuild) && (devBuild || !window.kjNative);
   grid.innerHTML = Object.entries(MARK_CATS).filter(([, c]) => !c.neutral || testMarks).map(([k, c]) => `<button type="button" class="mark-btn" data-cat="${k}" aria-label="Merk: ${c.label}">${icon(c.icon, 26)}<span>${c.label}</span><span class="mark-n" aria-hidden="true"></span></button>`).join('');
   grid.querySelectorAll('.mark-btn').forEach(b => b.onclick = () => {
     if (!recorder || !recorder.running) return;
@@ -2946,8 +2962,10 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
     const wants = enrichWants(settings);
     const missing = enrichMissing(drive, wants);
     // Nytt på denne turen (0.12.0): merker, nivå og rekorder øverst i rapporten
-    const unlock = await unlockHtml(drive);
-    if (stale()) return;
+    // 1.1.1: rapporten tegnes med en gang; kortet kommer når alle turene er regnet gjennom. Før ventet rapporten på det,
+    // rundt 1,4 s med 30 lange turer.
+    let unlock = '';
+    const unlockReady = unlockHtml(drive).catch(() => '');
     const drawBase = (status) => renderReport(root, r, {
       prevScore: prev ? prev.overall : null, prev,
       noFace: !!drive.noFace, hasHead: !!(drive.counts && drive.counts.head > 20),
@@ -3043,7 +3061,14 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
       const hero = root.querySelector('.hero');
       if (hero) hero.insertAdjacentHTML('afterend', unlock);   // under resultatet (0.19.0): poengene er det viktigste
     };
-    if (unlock) { const cur = getSettings(), seen = cur.celebrated || {}; if (!seen[id]) { saveSettings({ ...cur, celebrated: { ...seen, [id]: 1 } }); setTimeout(celebrate, 400); } }
+    unlockReady.then(html => {
+      if (stale() || !html) return;
+      unlock = html;
+      const hero = root.querySelector('.hero');
+      if (hero && !root.querySelector('.unlock-card')) hero.insertAdjacentHTML('afterend', unlock);
+      const cur = getSettings(), seen = cur.celebrated || {};
+      if (!seen[id]) { saveSettings({ ...cur, celebrated: { ...seen, [id]: 1 } }); setTimeout(celebrate, 400); }
+    });
     let enriching = false;
     const runEnrich = async (manual) => {
       if (enriching || !missing || !navigator.onLine) return;
@@ -3092,6 +3117,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
 /* Meldingene om en tur, og «Spør trafikklæreren» / «Gi tilbakemelding» i rapporten (0.18.0) */
 function talkFor(drive, r, s) {
   if (drive.demo || drive.imported || !r || !r.points || r.points.length < 2) return null;
+  if (!isTeacher() && !teacherMsgs) return null;   // 1.1.1: meldinger bare der læreren kan åpne dem (se renderTeacher)
   const key = isTeacher() ? (drive.driver || '') : TEACHER_THREAD;
   return { messages: key ? threadOf(s, key).filter(m => m.ref && m.ref.driveId === drive.id) : [], mine: me(),
     ask: isTeacher() ? 'Gi tilbakemelding' : 'Spør trafikklæreren', onAsk: preset => askAbout(drive, r, preset) };
@@ -3775,6 +3801,8 @@ function route() {
   if (stopPrecheck && h !== '#/sjekk') { stopPrecheck(); stopPrecheck = null; }
   if (!h.startsWith('#/rapport/') && h !== '#/kamera' && h !== '#/sjekk') stopSpeaking();
   if (h !== '#/kamera') calibForDrive = null;
+  // Veikameraets lytter på kameraskjermen (1.1.1): før ble det en ny for hvert besøk
+  if (h !== '#/kamera' && camRoadOff) { camRoadOff(); camRoadOff = null; }
   // Kameraet står bare på i kameratesten, før kjøring og under opptak
   if (!['#/kamera', '#/sjekk', '#/opptak'].includes(h) && cam.state().running && !(recorder && recorder.running)) { cam.stopCamera(); if (camUnsub) { camUnsub(); camUnsub = null; } }
   // Pluss (0.11.0): skjermene som hører til Pluss viser Pluss-siden i stedet, med den funksjonen øverst
@@ -3830,6 +3858,11 @@ function init() {
   // «Pluss (test)» gjelder bare der utviklerdelen finnes (Xcode og TestFlight). En innstilling fra TestFlight skal ikke
   // låse opp Pluss i App Store-utgaven (0.11.4).
   const wantedMode = modeFromLegacy(getSettings());
+  // Siden er nettopp lastet, så ingen tur tas opp nå (1.1.1). Krasjet siden under en tur, ville iPhone-appen ellers fortsatt
+  // med GPS i bakgrunnen, mikrofonen og turen på låseskjermen, uten at noe ble lagret.
+  if (window.kjNative && window.kjNative.recStop) window.kjNative.recStop();
+  // Meldinger med læreren følger trafikklærerversjonen (1.1.1): bare i testbyggene til lærerkoden kommer
+  viewModesAllowed().then(ok => { teacherMsgs = ok; }).catch(() => {});
   // Alle visningene, også trafikklærer (1.0.16, til lærerkoden kommer), bare i testbyggene
   const modeReady = wantedMode !== 'app' ? viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
   // Fil åpnet i iPhone-appen (0.18.1): når appen startes av filen, og når den kommer mens appen er åpen.

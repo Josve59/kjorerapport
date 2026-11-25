@@ -114,7 +114,10 @@ export function buildSituations(r, { camera = null, marks = [], sp = null, road 
   }
 
   // 3b) Blinklyset (1.1.0): før feltskifter og svinger i kryss, når mikrofonen lyttet (r.blink fra blink.js)
+  // Svinger i en rundkjøring fra veidataene teller ikke (1.1.1): der blinker du ut, ikke inn
+  const inRb = t => (nv.roundabouts || []).some(x => t >= x.tFrom - 5 && t <= x.tTo + 5);
   for (const c of (r.blink && r.blink.checks) || []) {
+    if (c.kind === 'turn' && inRb(c.t)) continue;
     const what = c.kind === 'lane' ? 'feltskiftet' : `svingen${c.dir ? ' til ' + c.dir : ''}`;
     add({ t: c.t, kind: 'blink', sources: ['mic', c.kind === 'lane' ? 'motion' : 'gps'], level: c.heard ? 'ok' : 'low',
       title: c.heard ? `Blinklys før ${what}` : `Hørte ikke blinklyset før ${what}`,

@@ -154,5 +154,20 @@ struct WebAppView: UIViewRepresentable {
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             webView.reload()
         }
+
+        /// Siden lastet ikke (1.1.1): den lokale serveren kan være midt i en omstart når appen kommer fram igjen. Prøv på nytt
+        /// litt senere, høyst fem ganger på rad, i stedet for å bli stående med en blank skjerm.
+        private var loadRetries = 0
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            guard loadRetries < 5, (error as NSError).code != NSURLErrorCancelled else { return }
+            loadRetries += 1
+            let url = webView.url ?? URL(string: "http://127.0.0.1:\(WebServer.port)/index.html")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak webView] in
+                guard let webView, let url else { return }
+                webView.load(URLRequest(url: url))
+            }
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loadRetries = 0 }
     }
 }

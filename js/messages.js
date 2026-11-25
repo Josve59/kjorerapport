@@ -59,7 +59,7 @@ export function refLabel(ref) {
    sensorene. Det holder filen liten (noen hundre kB) og læreren ser det samme som eleven. */
 export function shareDrive(d) {
   return { id: d.id, startedAt: d.startedAt, endedAt: d.endedAt || null, driver: d.driver || '', note: d.note || '', marks: d.marks || [],
-    focus: d.focus || [], surface: d.surface || '', ...(d.noFace ? { noFace: true } : {}), ...(d.excluded ? { excluded: d.excluded } : {}),
+    focus: d.focus || [], surface: d.surface || '', ...(d.noFace ? { noFace: true } : {}), ...(d.mock ? { mock: true } : {}), ...(d.excluded ? { excluded: d.excluded } : {}),
     result: d.result || null, enrich: d.enrich ? { ...d.enrich, error: null } : null, cameraPlan: d.cameraPlan || null };
 }
 

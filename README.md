@@ -143,6 +143,76 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.1.1 – the safety check step by step, and fixes from four review agents
+
+The owner (25 November): «Lag visualiseringer til sikkerhetsspørsmål om hvordan man sjekker … ta det med overalt når det forklarer», then four agents: features, bugs, new ideas, and code efficiency.
+
+**Step-by-step drawings for the safety check:**
+- **The drawings.** 37 new drawings (`slik:` in `js/trafficsvg.js`, the `SLIK` object) in the same style as the `bil:` drawings: fixed colours, the same in light and dark mode, and a screen-reader text that says what you see.
+- **The building blocks:** a car from above, from behind and from the side, a pedal with a foot, a magnified tank with MIN/MAX, a thermometer, snow and sun, and green ticks and red crosses.
+- **The steps.** `HOWTO` in `js/safety-check.js` gives 22 tasks 1–4 steps each: a drawing (new `slik:` or existing `bil:`, `lamp:`, `cap:`, `diagram:`) and a short caption that follows the task's «how» text.
+- **Examples:**
+  - Engine oil: flat ground and 5 minutes; dipstick out and wiped; in and out again; MIN–MAX.
+  - Coolant: the tank; cold engine; level; never open it warm.
+  - Tread depth: measure in the middle ¾; read the gauge; 1.6 mm summer and 3 mm winter.
+  - Brake lights: back up to a wall and see the reflection; a helper; all three lit.
+  - Brake servo: pump 4–5 times with the engine off; hold and start; the pedal sinks.
+  - Also mirrors, defroster, seat and head restraint, warning triangle with vest, charging cable, parking brake, steering play and tyre pressure.
+- **Where they are shown** (`howtoStrip` in `js/theoryui.js`): a row you can swipe, numbered, and tap to enlarge (`wireZoom`):
+  - in the overview (instead of the single picture);
+  - in «Øv som på oppkjøringen» after «Vis svaret»;
+  - in the safety quiz after the answer, as «Slik sjekker du det» for the task the question belongs to.
+- **Test (`tests/v110.test.mjs`).** Every step's drawing exists, has a screen-reader text and a caption of at most 60 characters; every task id is real; every `slik:` drawing is used.
+
+**Fixed after four review agents (features, bugs, ideas, code):**
+- **Data safety:**
+  - **A failed save no longer loses data.** `checkpoint` puts the measurements back and tries again next time, instead of dropping 10 s of sensor data.
+  - **A lost database connection is reopened.** The IndexedDB connection reopens after WebKit drops it (`db.onclose`, plus `withDb` retrying once on a new connection for `putDrive` and `putChunk`).
+  - **A failed start leaves nothing running.** If the first save fails, the recorder stops and the app tidies up (camera, mic, native recording) instead of locking on a dead recording screen.
+- **The iPhone side:**
+  - **Nothing records after a page crash.** A fresh page load calls `recStop`, so a crashed page no longer leaves background GPS, the microphone and the lock-screen drive running.
+  - **The microphone survives interruptions.** A phone call, Siri, a new audio route or a media-services reset restarts it (a new `AVAudioEngine` each time, and only while the app is visible). `onBatch` is read under the lock.
+  - **Precise location is asked for again on the next drive.** Apple ends the temporary precise access when the app leaves the foreground.
+  - **Locked-screen data goes to the page in pieces of 4,000** (about 72,000 entries an hour).
+  - **A failed page load is retried**, up to five times, instead of a blank screen.
+- **Turn signal:**
+  - **Fewer false «heard».** The click ceiling is 30 per 6 s (was 48). On an hour of random clicks, false «heard» dropped from 7–14 % of lane changes to 0–1 of 119.
+  - **Nothing is judged:**
+    - when no clicks at all were heard («hørte ingen klikk», shown in the data notes);
+    - during parking-lot practice;
+    - for turns inside roundabouts from the road data.
+  - **The clock.** Times use the wall clock at the start (`startEpoch`), not `performance.timeOrigin`.
+  - **The setting** is labelled «Test».
+  - **The analysis key** is 22.
+- **Data from files:**
+  - `cleanDeep` strips `< > " \`` from every text in a shared drive's analysis, `enrich`, `cameraPlan`, `calib` and `diag`. Before, a number swapped for HTML came straight into the report as a link.
+  - The practice-test flag now follows a drive sent to the teacher.
+  - The backup keeps `practiceCount`, `afterSent`, `sentToDev` and the marks' `after`.
+- **Junctions.** A failed road-network fetch is stored as road data v4, so it is retried.
+- **Practice driving test:**
+  - **«For lite målt»** when speed and junctions weren't measured or fewer than 4 areas were known. Before, almost no data gave «Ser bra ut». The card says «Appen målte X av 7 områder».
+  - **A quiet screen during the drive**, with no speed-limit sign and no speed warning. The limits are still stored.
+  - **The switch text** says «omtrent som på førerprøven, i det appen kan måle».
+- **Messages with the driving teacher** only in test builds (`teacherMsgs`), like teacher mode. Teachers can only open them in the teacher version, which comes with the teacher code. The lesson summary stays. The App Store description is updated: no messages, but the new features.
+- **Also:**
+  - Test buttons never show in the App Store build, not even with a tester code.
+  - «Øv i nærheten» shows the precise-location text for error 4.
+  - The Pluss text says «Ett kjøp, ikke abonnement, og det går aldri ut».
+  - The road camera's listener on the camera screen is cleared when you leave it.
+
+**Faster (the code agent's safe quick wins, the same results):**
+- **Road data lookups.** `evaluateRoad` finds the nearest point through a grid (about 110 × 100 m) instead of scanning the whole drive for every road object. On the demo route with 600 objects, the result is the same and the time went from 4.0 to 1.5 ms. An hour in town takes about 65 ms in the agent's measurement, now a fraction of that. It runs for every drive on Home, the report and readiness.
+- **Lane-change search (`js/analysis.js`).** It finds where a candidate starts by binary search instead of filtering the whole drive. 120 min on the motorway went from 478 to 144 ms with identical output. This is a speed fix, not a change to the engine.
+- **Reports appear right away.** A report is drawn immediately; the «Nytt på denne turen» card is added when all drives have been gone through. Before, the report waited for that: about 1.4 s with 30 long drives. In the browser it now takes about 0.1 s.
+
+**Left for later (from the code agent, with numbers):**
+- **Home after an analysis-key change.** Home waits until all drives are re-analysed. It should draw at once and re-analyse in the background.
+- **Backup.** It builds one string of about 19 MB per hour of driving, and will crash for those who drive the most. It should write one drive at a time to a file on the native side.
+- **Drive records.** They grow with `road.follow`, and `listDrives` loads all of them. The fix is 2 Hz or columns, and a slim summary.
+- **The iPhone app empties WebKit's cache on every launch**, so map tiles are downloaded again each time. It should clear the cache only when the web version changes.
+- **Camera frames.** The driver camera pulls 10 frames a second while face detection uses 5–8. The road camera pulls 10 a second while the car stands still. Matching the rates saves battery and heat; this has to be measured on the phone.
+- **Code.** Lazy loading of the theory (38 % of the JS), splitting app.js, shared geo helpers, unused CSS.
+
 ## What's new in 1.1.0 – unsigned junctions, motorway merges, the turn signal, a practice driving test and places to practise
 
 The owner asked on 24 November for five new features right away, without lane position. All five are marked «Ny» and do not change the score.

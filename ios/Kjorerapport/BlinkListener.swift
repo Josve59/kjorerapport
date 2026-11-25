@@ -8,17 +8,36 @@ import AVFoundation
 nonisolated final class BlinkListener: @unchecked Sendable {
     static let shared = BlinkListener()
     private let lock = NSLock()
-    private let queue = DispatchQueue(label: "kjorerapport.blink")
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()        // ny for hver start (1.1.1): en motor som har vært avbrutt, kan henge
     private var running = false
+    private var wanted = false                  // lytt når appen er synlig (settes av start/want/stop)
+    private var paused = false                  // appen er i bakgrunnen: ingen mikrofon der
     private var muteUntil = 0.0                 // egne pip: klikk før dette tidspunktet (s siden 1970) teller ikke
     private var pending: [[Double]] = []        // [tid ms siden 1970, styrke dB]
     private var lastSent = 0.0
     private var noiseDb = -120.0
-    /// Kalles på hovedtråden omtrent to ganger i sekundet med JavaScript til nettappen
-    var onBatch: (@Sendable (String) -> Void)?
+    private var batchSink: (@Sendable (String) -> Void)?
+    /// Kalles på hovedtråden omtrent to ganger i sekundet med JavaScript til nettappen. Leses og skrives under låsen
+    /// (1.1.1): lydtråden leser den mens hovedtråden kan sette en ny.
+    var onBatch: (@Sendable (String) -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return batchSink }
+        set { lock.lock(); batchSink = newValue; lock.unlock() }
+    }
 
     var isListening: Bool { lock.lock(); defer { lock.unlock() }; return running }
+
+    private init() {
+        // 1.1.1: en telefonsamtale, Siri eller ny lydrute stopper motoren. Før trodde appen at den fortsatt lyttet, og
+        // mikrofonen var død resten av turen. Nå startes den på nytt når avbruddet er over.
+        let center = NotificationCenter.default
+        center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            guard let self, let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+            if type == .began { self.halt() } else { self.restart() }
+        }
+        center.addObserver(forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main) { [weak self] _ in self?.restart() }
+        center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in self?.restart() }
+    }
 
     /// Egne pip (Beeper) skal ikke høres som klikk
     func mute(for seconds: Double) {
@@ -31,6 +50,38 @@ nonisolated final class BlinkListener: @unchecked Sendable {
 
     /// Starter lyttingen. Svar: nil når den går, ellers en kort grunn («tilgang», «lydøkt», «mikrofon»)
     func start() -> String? {
+        lock.lock(); wanted = true; paused = false; lock.unlock()
+        return begin()
+    }
+
+    /// Lyttingen er ønsket, men appen er i bakgrunnen: den starter når appen er synlig igjen (resume)
+    func want() { lock.lock(); wanted = true; paused = true; lock.unlock() }
+
+    /// Slutter å lytte (turen er ferdig eller mikrofonen er slått av)
+    func stop() {
+        lock.lock(); wanted = false; lock.unlock()
+        halt()
+        // Lydøkten tilbake til bare avspilling, så andre apper ikke dempes av mikrofonen
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// Appen gikk i bakgrunnen: lytt ikke, men husk at lyttingen er ønsket
+    func pause() { lock.lock(); paused = true; lock.unlock(); halt() }
+
+    /// Appen er synlig igjen: start igjen hvis lyttingen er ønsket
+    @discardableResult func resume() -> String? {
+        lock.lock(); paused = false; let w = wanted; lock.unlock()
+        return w ? begin() : nil
+    }
+
+    /// Etter et avbrudd eller en ny lydrute: ny motor, men bare når appen er synlig og lyttingen ønsket
+    private func restart() {
+        halt()
+        lock.lock(); let go = wanted && !paused; lock.unlock()
+        if go { _ = begin() }
+    }
+
+    private func begin() -> String? {
         guard AVAudioApplication.shared.recordPermission == .granted else { return "tilgang" }
         if isListening { return nil }
         let session = AVAudioSession.sharedInstance()
@@ -40,25 +91,24 @@ nonisolated final class BlinkListener: @unchecked Sendable {
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers, .allowBluetoothA2DP])
             try session.setActive(true)
         } catch { return "lydøkt" }
-        let input = engine.inputNode
+        let fresh = AVAudioEngine()
+        let input = fresh.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { return "mikrofon" }
         let detector = ClickDetector(rate: format.sampleRate)
         // Tidspunktet for lyden: maskinklokka (hostTime) gjøres om til vanlig klokke én gang
         let offset = Date().timeIntervalSince1970 - AVAudioTime.seconds(forHostTime: mach_absolute_time())
         input.installTap(onBus: 0, bufferSize: 2048, format: format, block: Self.tapBlock(detector: detector, offset: offset, owner: self))
-        do { try engine.start() } catch { input.removeTap(onBus: 0); return "mikrofon" }
-        lock.lock(); running = true; pending.removeAll(); lastSent = Date().timeIntervalSince1970; lock.unlock()
+        do { try fresh.start() } catch { input.removeTap(onBus: 0); return "mikrofon" }
+        lock.lock(); engine = fresh; running = true; pending.removeAll(); lastSent = Date().timeIntervalSince1970; lock.unlock()
         return nil
     }
 
-    func stop() {
-        lock.lock(); let was = running; running = false; pending.removeAll(); lock.unlock()
+    private func halt() {
+        lock.lock(); let was = running; running = false; pending.removeAll(); let e = engine; lock.unlock()
         guard was else { return }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        // Lydøkten tilbake til bare avspilling, så andre apper ikke dempes av mikrofonen
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        e.inputNode.removeTap(onBus: 0)
+        e.stop()
     }
 
     /// Blokken lages utenfor hovedtråden-isolasjonen: den kalles på lydtråden
@@ -83,7 +133,7 @@ nonisolated final class BlinkListener: @unchecked Sendable {
         lock.unlock()
         guard let json = try? JSONSerialization.data(withJSONObject: ["c": batch, "db": db, "ts": (now * 1000).rounded()]) else { return }
         let js = "window.__kjAudio && window.__kjAudio(\(String(decoding: json, as: UTF8.self)))"
-        let send = onBatch
+        let send = onBatch   // under låsen (se onBatch)
         DispatchQueue.main.async { send?(js) }
     }
 }

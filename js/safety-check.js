@@ -196,4 +196,33 @@ const LIST = [
     'Systemet ser ikke alt, og virker dårligere i mørke, regn og snø. Du er alltid ansvarlig for avstanden.')
 ];
 
-export const SAFETY = LIST.map(t => (LAMP_FOR[t.id] ? { ...t, img: LAMP_FOR[t.id] } : t));
+/* Slik gjør du det, steg for steg (1.1.1): tegningene (slik:, bil:, lamp:, cap: og diagram: i trafficsvg.js) med en
+   kort tekst. De vises med oppgaven i oversikten, i «Øv som på oppkjøringen» og etter svaret i quizen. Tekstene
+   følger «how» over; der en oppgave bare er én del av bilen, holder tegningen i «img». */
+const S = (fig, cap) => ({ fig, cap });
+export const HOWTO = {
+  'vaeske-olje': [S('slik:flatt', 'Flatt underlag, motoren av i noen minutter'), S('slik:pinne-ut', 'Trekk ut pinnen og tørk den av'), S('slik:pinne-inn', 'Stikk den helt inn, og trekk den ut igjen'), S('bil:peilepinne', 'Nivået skal være mellom MIN og MAX')],
+  'vaeske-kjole': [S('bil:kjolevaeske', 'Finn ekspansjonstanken'), S('slik:kald', 'Sjekk når motoren er kald'), S('slik:niva-kjole', 'Nivået mellom MIN og MAX'), S('slik:varm-lokk', 'Åpne aldri lokket når motoren er varm')],
+  'brems-vaeske': [S('bil:bremsevaeske', 'Beholderen med bremsesymbol'), S('slik:niva-brems', 'Nivået mellom MIN og MAX')],
+  'vaeske-spyler': [S('cap:spyler', 'Lokket med spylersymbol'), S('slik:spyler-fyll', 'Vinterspylervæske når det kan bli frost'), S('slik:spyler-test', 'Prøv at strålene treffer ruta')],
+  'dekk-monster': [S('slik:dybde-sone', 'Mål i hovedrillene på midten av slitebanen'), S('bil:dybdemaler', 'Les av i millimeter'), S('slik:dybde-krav', 'Minst 1,6 mm om sommeren og 3 mm om vinteren')],
+  'dekk-trykk': [S('bil:lufttrykk', 'Riktig trykk står ofte i dørkarmen'), S('slik:trykkmaler', 'Mål når dekkene er kalde'), S('lamp:dekk', 'Vis dekktrykksvarselet i bilen')],
+  'dekk-skader': [S('bil:hjul-skade', 'Kutt, sprekker og buler på siden'), S('slik:slitasje', 'Ujevn slitasje'), S('slik:spiker', 'Spiker eller skruer i slitebanen')],
+  'lys-naer': [S('bil:lysbryter', 'Vri lysbryteren til nærlys'), S('lamp:naerlys', 'Symbolet lyser i instrumentpanelet'), S('slik:rundt', 'Gå rundt bilen og se at lyktene lyser')],
+  'lys-blink': [S('lamp:blink', 'Kontrollampen blinker i vanlig takt'), S('bil:nodblink', 'Nødsignallys med den røde trekantknappen'), S('slik:rundt-blink', 'Gå rundt og sjekk alle blinklysene')],
+  'lys-brems': [S('slik:refleks', 'Rygg mot en vegg og se refleksen i speilet'), S('slik:hjelper', 'Eller be noen stå bak bilen'), S('bil:bremselys', 'Alle tre bremselysene skal lyse')],
+  'lys-andre': [S('bil:lysbryter', 'Slå på parkeringslyset og gå rundt bilen'), S('slik:revers', 'Revers med bremsen inne: ryggelys og skiltlys')],
+  'lys-horn': [S('slik:horn', 'Trykk kort midt på rattet')],
+  'brems-fot': [S('slik:pedal-fast', 'Pedalen skal være fast og ikke synke helt ned'), S('slik:brems-rett', 'Brems sakte: bilen skal stanse rett')],
+  'brems-servo': [S('slik:servo-pump', 'Motoren av: trå pedalen 4–5 ganger'), S('slik:servo-start', 'Hold pedalen inne og start motoren'), S('slik:servo-synk', 'Pedalen synker litt: servoen virker')],
+  'brems-park': [S('slik:pbrems', 'Sett på parkeringsbremsen: lampen tennes'), S('slik:pbrems-test', 'Prøv forsiktig: bilen skal ikke rikke seg')],
+  'styr-slark': [S('slik:hjul-rett', 'Bilen på og hjulene rett fram'), S('bil:ratt-slark', 'Vri litt fram og tilbake: hjulene skal følge med en gang')],
+  'sikt-speil': [S('slik:innerspeil', 'Innerspeilet: hele bakruta'), S('slik:sidespeil', 'Sidespeilene: så vidt egen bil i kanten'), S('diagram:blindsone', 'Blindsonen dekker du med skulderblikk')],
+  'sikt-rute': [S('slik:defrost', 'Defroster for frontruta og bakruta'), S('slik:skrape', 'Skrap is fra alle ruter og speil')],
+  'sikt-belte': [S('bil:belte', 'Lås beltet og sjekk at låsen holder'), S('slik:rykk', 'Rykk raskt: beltet skal låse seg')],
+  'utstyr-trekant': [S('slik:vest', 'Nødsignallys og refleksvest før du går ut'), S('diagram:trekant', 'Trekanten godt bak bilen, om mulig minst 150 m')],
+  'utstyr-hodestotte': [S('slik:sete', 'Litt bøyde knær og armer'), S('slik:hodestotte', 'Hodestøtten i høyde med toppen av hodet')],
+  'el-lading': [S('bil:lader', 'Koble til og fra i ladeluken'), S('slik:kabel', 'Sjekk kabel og plugg. Ingen skjøteledning')]
+};
+
+export const SAFETY = LIST.map(t => ({ ...t, ...(LAMP_FOR[t.id] ? { img: LAMP_FOR[t.id] } : {}), ...(HOWTO[t.id] ? { steps: HOWTO[t.id] } : {}) }));

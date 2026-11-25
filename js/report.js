@@ -258,6 +258,7 @@ export function renderReport(root, r, ctx = {}) {
   if (doubt) quality.push({ sev: 2, text: `Føret var satt til ${SURFACE_LABEL[surf].toLowerCase()}, men bilen bremset, ga gass eller svingte med opptil ${n1(doubt.maxG)} g ${doubt.n} ganger uten å skli. Det går ikke an på ${SURFACE_LABEL[surf].toLowerCase()}, så veien var trolig mindre glatt. Velg føret som stemte, så blir vurderingen riktig.`, act: 'surface' });
   else if (surf && surf !== 'dry') quality.push({ sev: 0, text: `Vurdert for føret «${SURFACE_LABEL[surf]}»: grensene for brå bremsing, gass og sving er ${n0((1 - surfaceFactor(surf)) * 100)}\u00a0% lavere enn på tørr vei.` });
   // Blinklyset (1.1.0): jevn takt store deler av turen er trolig radio eller musikk
+  if (r.blink && r.blink.silent) quality.push({ sev: 0, text: 'Mikrofonen hørte ingen klikk på turen, så blinklyset er ikke vurdert. Noen biler tikker for lavt til at telefonen hører det.' });
   if (r.blink && r.blink.music > 0.3) quality.push({ sev: 0, text: `Mikrofonen hørte jevn takt ${Math.round(r.blink.music * 100)} % av tiden (radio eller musikk?), så blinklyset er ikke vurdert. Skru av radioen på turer der blinklyset skal høres.` });
   const qualitySev = quality.reduce((m, q) => Math.max(m, q.sev), 0);
   const qualityCount = quality.filter(q => q.sev > 0).length;
@@ -789,7 +790,7 @@ function mockCard(m) {
       <h2 class="card-title">${icon('flag')}Prøve-oppkjøring <span class="beta-tag">Ny</span></h2>
       <p class="mock-verdict">${esc(t.title)}</p>
       <p>${esc(t.text)}</p>
-      ${m.short ? `<p class="muted small">Turen varte ${m.minutes} min. En prøve-oppkjøring bør vare rundt 25 minutter kjøring.</p>` : ''}
+      <p class="muted small">Appen målte ${m.known} av ${m.total} områder.${m.short ? ` Turen varte ${m.minutes} min. En prøve-oppkjøring bør vare rundt 25 minutter kjøring.` : ''}</p>
       <ul class="focus-list">${m.areas.map(a => `<li class="f-${cls(a.state)}"><span class="f-ico">${ico(a.state)}</span>
         <span><strong>${esc(a.label)}</strong><span class="muted small">${esc(a.text)}</span></span>
         <span class="f-state">${a.state === 'ok' ? 'På plass' : a.state === 'øv' ? 'Øv mer' : ''}</span></li>`).join('')}</ul>

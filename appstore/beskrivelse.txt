@@ -13,6 +13,7 @@ Spørsmålene er appens egne, skrevet ut fra vegtrafikkloven, trafikkreglene og 
 
 SIKKERHETSKONTROLLEN
 Alle 46 oppgavene sensor kan gi deg før kjøringen på oppkjøringen, med hvordan du gjør det og hva en feil kan føre til. Tilpasset elbil, bensin og diesel, eller hybrid.
+• Tegninger steg for steg av hvordan du sjekker olje, kjølevæske, mønsterdybde, bremselys, speil og mer.
 • Quiz med 59 spørsmål og tegninger av bilen, øvd som teorien.
 
 SLIK FUNGERER ØVELSESKJØRINGEN
@@ -25,7 +26,8 @@ RAPPORTEN ETTER HVER TUR
 • Poeng for bremsing, akselerasjon, svinger, jevn fart og fart.
 • Brå hendelser vist på kartet, med fart og sted.
 • Tid over fartsgrensen, med grenser fra Statens vegvesen.
-• Rundkjøringer, feltskifter, stoppskilt og vikeplikt dere har kjørt gjennom.
+• Rundkjøringer, feltskifter, stoppskilt og vikeplikt dere har kjørt gjennom, kryss der høyreregelen gjelder og påkjøring til motorveien.
+• Prøve-oppkjøring: turen vurdert omtrent som på førerprøven, i det appen kan måle.
 • «Neste øvingstur»: to konkrete ting å øve på, med hvordan og hvor.
 
 FØLG FREMGANGEN
@@ -33,10 +35,10 @@ FØLG FREMGANGEN
 • Kjørelogg til forsikringen: kilometerne mot 2 000 km, som PDF eller skjermbilde. Mange forsikringsselskap gir høyere startbonus etter 2 000 km øvelseskjøring.
 • Kjøreutviklingen fra 0 til 100, og steder der det gjentatte ganger skjer noe.
 • Opplæringsplan etter læreplanen for klasse B, der appen viser hva dere har øvd på.
-• «Hva må du øve mer på?» før oppkjøringen. Det er trafikklæreren som avgjør når du er klar.
+• «Hva må du øve mer på?» før oppkjøringen, med steder i nærheten for det som mangler. Det er trafikklæreren som avgjør når du er klar.
 
 TIL TRAFIKKLÆREREN
-Én side med alt som er øvd siden forrige kjøretime. Eleven og læreren kan sende hverandre meldinger og oppsummeringer som filer, uten konto.
+Én side med alt som er øvd siden forrige kjøretime, klar til å vise fram eller dele med læreren.
 
 KAMERAENE (VALGFRITT)
 Frontkameraet ser om føreren sjekker speil og gjør skulderblikk. Bakkameraet kan samtidig se bilen foran, feltlinjene og fartsskiltene. Analysen skjer på telefonen. Bilder lagres og sendes aldri.

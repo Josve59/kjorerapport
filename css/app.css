@@ -652,7 +652,7 @@ dialog.sheet[open] { animation: sheet-in .22s var(--ease); }
 .f-ok .f-state { color: var(--good); } .f-no .f-state { color: var(--turn); }
 /* Prøve-oppkjøring (1.1.0): dommen i farge, områdene som dagens mål */
 .mock-card .mock-verdict { font-size: 1.25rem; font-weight: 800; margin: 0 0 4px; }
-.mock-bra .mock-verdict { color: var(--good); } .mock-nesten .mock-verdict { color: var(--turn); } .mock-ikke .mock-verdict { color: var(--brake); }
+.mock-bra .mock-verdict { color: var(--good); } .mock-nesten .mock-verdict { color: var(--turn); } .mock-ikke .mock-verdict { color: var(--brake); } .mock-ukjent .mock-verdict { color: var(--muted); }
 .mock-card .focus-list { margin: 12px 0; }
 .mock-toggle { margin-top: 12px; border-top: 1px solid var(--line); }
 /* Øv i nærheten (1.1.0) */

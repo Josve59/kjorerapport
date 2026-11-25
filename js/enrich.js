@@ -550,7 +550,9 @@ export async function fetchRoadData(points, signal) {
   const r5 = v => Math.round(v * 1e5) / 1e5;
   const pt = p => ({ lat: r5(p.lat), lon: r5(p.lon) });
   return {
-    v: 5,   // v4 (0.26.3): retningen på gangfelt. Fotobokser og strekningsmåling hentes ikke fra 1.0.4. v5 (1.1.0): kryss
+    // v4 (0.26.3): retningen på gangfelt. Fotobokser og strekningsmåling hentes ikke fra 1.0.4. v5 (1.1.0): kryss.
+    // Feilet veinettet, lagres v4 (1.1.1), så veidataene hentes på nytt neste gang i stedet for å mangle kryss for alltid.
+    v: junctions ? 5 : 4,
     stops: stops.map(pt),
     giveway: giveway.map(pt),
     roundabouts: rb.map(p => ({ ...pt(p), d: Number(p.props[1791]) || 25, name: p.props[1073] || '' })),
@@ -577,9 +579,16 @@ export function evaluateRoad(points, road, events = [], limits = null) {
   if (!road || points.length < 2) return out;
   const cum = [0];
   for (let i = 1; i < points.length; i++) cum.push(cum[i - 1] + metres(points[i - 1], points[i]));
+  // 1.1.1: rutenett (ca. 110 × 100 m) over punktene, så bare naboruter søkes. Alle terskler under er 35 m eller mindre,
+  // så nærmeste punkt innen terskelen er det samme som før (lavest indeks ved likt). En times bykjøring: 65 → rundt 15 ms.
+  const CELL = 0.001, grid = new Map(), cellKey = (la, lo) => la * 100000 + lo;
+  for (let i = 0; i < points.length; i++) { const k = cellKey(Math.floor(points[i].lat / CELL), Math.floor(points[i].lon / CELL / 2)); const c = grid.get(k); if (c) c.push(i); else grid.set(k, [i]); }
   const nearest = p => {
     let bi = -1, bd = Infinity;
-    for (let i = 0; i < points.length; i++) { const d = metres(points[i], p); if (d < bd) { bd = d; bi = i; } }
+    const cy = Math.floor(p.lat / CELL), cx = Math.floor(p.lon / CELL / 2), cand = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const c = grid.get(cellKey(cy + dy, cx + dx)); if (c) for (const i of c) cand.push(i); }
+    cand.sort((x, y) => x - y);
+    for (const i of cand) { const d = metres(points[i], p); if (d < bd) { bd = d; bi = i; } }
     return { i: bi, d: bd };
   };
   const window = (i, m) => { let a = i, b = i; while (a > 0 && cum[i] - cum[a - 1] <= m) a--; while (b < points.length - 1 && cum[b + 1] - cum[i] <= m) b++; return [a, b]; };

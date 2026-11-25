@@ -87,11 +87,16 @@ export function mockTest(r, { sits = [], sp = null, road = null } = {}) {
   const minutes = Math.round((r.stats.duration || 0) / 60);
   const serious = areas.some(a => a.serious) || sits.some(s => s.level === 'high');
   const work = areas.some(a => a.state === 'øv');
-  return { verdict: serious ? 'ikke' : work ? 'nesten' : 'bra', areas, minutes, short: minutes < MOCK_MIN };
+  // «Ser bra ut» bare når fart og kryss er målt og minst fire områder er kjent (1.1.1): uten nett og kamera visste
+  // appen nesten ingenting, men sa likevel «bra»
+  const known = areas.filter(a => a.state !== 'ukjent').length;
+  const enough = known >= 4 && ['speed', 'junctions'].every(id => areas.find(a => a.id === id).state !== 'ukjent');
+  return { verdict: serious ? 'ikke' : work ? 'nesten' : enough ? 'bra' : 'ukjent', areas, minutes, short: minutes < MOCK_MIN, known, total: areas.length };
 }
 
 export const MOCK_TEXT = {
   bra: { title: 'Ser bra ut', text: 'Appen fant ingen feil som ofte gir stryk. Sensor på førerprøven ser mer enn appen, så snakk med trafikklæreren om hvor klar eleven er.' },
   nesten: { title: 'Nesten', text: 'Ingen alvorlige feil, men noe å øve mer på før oppkjøringen.' },
-  ikke: { title: 'Ikke klar ennå', text: 'Appen fant feil som ofte gir stryk på førerprøven. Øv på dem og ta en ny prøve-oppkjøring.' }
+  ikke: { title: 'Ikke klar ennå', text: 'Appen fant feil som ofte gir stryk på førerprøven. Øv på dem og ta en ny prøve-oppkjøring.' },
+  ukjent: { title: 'For lite målt', text: 'Appen fant ingen feil, men fikk ikke målt nok til å si om turen ville holdt. Slå på «Fartsgrense og veidata», og bruk gjerne kameraet.' }
 };

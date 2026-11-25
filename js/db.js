@@ -28,10 +28,28 @@ function open() {
         c.createIndex('driveId', 'driveId');
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      // 1.1.1: mister WebKit forbindelsen (etter lang tid i bakgrunnen), åpnes en ny neste gang. Før feilet alle
+      // lagringer resten av turen.
+      db.onclose = () => { dbPromise = null; };
+      db.onversionchange = () => { db.close(); dbPromise = null; };
+      resolve(db);
+    };
+    req.onerror = () => { dbPromise = null; reject(req.error); };
   });
   return dbPromise;
+}
+
+/* Skriving med ett nytt forsøk på en ny forbindelse når den gamle er stengt (1.1.1) */
+const lostConnection = e => !!e && /InvalidState|UnknownError|connection|closing/i.test(`${e.name} ${e.message}`);
+async function withDb(fn) {
+  try { return await fn(await open()); }
+  catch (e) {
+    if (!lostConnection(e)) throw e;
+    dbPromise = null;
+    return fn(await open());
+  }
 }
 
 function tx(db, stores, mode, fn) {
@@ -56,8 +74,7 @@ export function newId() {
 }
 
 export async function putDrive(drive) {
-  const db = await open();
-  await tx(db, ['drives'], 'readwrite', t => t.objectStore('drives').put(drive));
+  await withDb(db => tx(db, ['drives'], 'readwrite', t => t.objectStore('drives').put(drive)));
   return drive;
 }
 
@@ -73,8 +90,7 @@ export async function listDrives() {
 }
 
 export async function putChunk(driveId, seq, data) {
-  const db = await open();
-  await tx(db, ['chunks'], 'readwrite', t => t.objectStore('chunks').put({ driveId, seq, ...data }));
+  await withDb(db => tx(db, ['chunks'], 'readwrite', t => t.objectStore('chunks').put({ driveId, seq, ...data })));
 }
 
 export async function getRaw(driveId) {
@@ -102,8 +118,22 @@ export async function updateDrive(id, patch) {
 /* Analysen i en tur fra en fil (0.18.3): den er laget på en annen telefon og kan være ødelagt eller endret. Tall må være
    tall og lister må være lister, så rapporten verken krasjer eller viser tekst fra filen som HTML. Null hvis den er ubrukelig. */
 const finOr = (v, d = 0) => (Number.isFinite(v) ? v : d);
-export function cleanResult(r) {
-  if (!r || typeof r !== 'object' || !Array.isArray(r.points) || r.points.length < 2) return null;
+/* Tekst fra en fil blir aldri HTML (1.1.1): alle tekster i objekter fra en fil mister < > " og `, også dypt inne
+   (veikameraet, bakketopper, kameratid). Før kom tall som var byttet ut med HTML, rett inn i rapporten. Tall som ikke
+   er endelige blir null, og svært dype objekter kuttes. */
+export function cleanDeep(v, depth = 0) {
+  if (typeof v === 'string') return v.replace(/[<>"`]/g, '');
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (v === null || typeof v === 'boolean') return v;
+  if (depth > 10 || typeof v !== 'object') return null;
+  if (Array.isArray(v)) return v.map(x => cleanDeep(x, depth + 1));
+  const o = {};
+  for (const [k, x] of Object.entries(v)) if (/^[\wæøåÆØÅ.:-]{1,60}$/.test(k)) o[k] = cleanDeep(x, depth + 1);
+  return o;
+}
+export function cleanResult(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.points) || raw.points.length < 2) return null;
+  const r = cleanDeep(raw);
   const points = r.points.filter(p => p && Number.isFinite(p.t) && Number.isFinite(p.lat) && Number.isFinite(p.lon));
   if (points.length < 2) return null;
   const arr = v => (Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : []);
@@ -130,10 +160,10 @@ export async function importSharedDrive(sd, { from = '', at = new Date().toISOSt
     // Sendt på nytt (0.18.3): en tur mottakeren har flyttet til en annen elev, blir der
     driver: old ? (old.driver || '') : String(driver !== null ? driver : (from || sd.driver || '')).slice(0, 40),   // hos eleven: '' (egne turer)
     note: typeof sd.note === 'string' ? sd.note.slice(0, 500) : '',
-    marks: Array.isArray(sd.marks) ? sd.marks.filter(m => m && Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: markCat(m.cat) })) : [],
+    marks: Array.isArray(sd.marks) ? sd.marks.filter(m => m && Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: markCat(m.cat), ...(m.after ? { after: true } : {}) })) : [],
     focus: Array.isArray(sd.focus) ? sd.focus.filter(x => typeof x === 'string').slice(0, 3) : [], surface: typeof sd.surface === 'string' ? sd.surface.slice(0, 10) : '',
-    ...(sd.noFace ? { noFace: true } : {}), result, resultKey: 'delt', enrich: sd.enrich && typeof sd.enrich === 'object' ? sd.enrich : null,
-    cameraPlan: sd.cameraPlan && typeof sd.cameraPlan === 'object' ? sd.cameraPlan : null,
+    ...(sd.noFace ? { noFace: true } : {}), ...(sd.mock ? { mock: true } : {}), result, resultKey: 'delt', enrich: sd.enrich && typeof sd.enrich === 'object' ? cleanDeep(sd.enrich) : null,
+    cameraPlan: sd.cameraPlan && typeof sd.cameraPlan === 'object' ? cleanDeep(sd.cameraPlan) : null,
     shared: { from: String(from || '').slice(0, 40), at }, counts: { loc: sd.result.points.length }, appVersion: 3
   };
   // Holdt utenfor hos avsenderen, eller av mottakeren selv (0.18.3: mottakerens valg blir stående når turen kommer på nytt)
@@ -174,7 +204,7 @@ export async function importDrive(payload, { keepId = false } = {}) {
     interrupted: !!meta.interrupted,
     note: typeof meta.note === 'string' ? meta.note : '',
     gaps: Array.isArray(meta.gaps) ? meta.gaps : [],
-    marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: markCat(m.cat) })) : [],
+    marks: Array.isArray(meta.marks) ? meta.marks.filter(m => Number.isFinite(m.t)).map(m => ({ t: m.t, note: typeof m.note === 'string' ? m.note : '', cat: markCat(m.cat), ...(m.after ? { after: true } : {}) })) : [],
     focus: Array.isArray(meta.focus) ? meta.focus.filter(f => typeof f === 'string').slice(0, 3) : [],
     surface: typeof meta.surface === 'string' ? meta.surface.slice(0, 10) : '',
     ...(meta.mock ? { mock: true } : {}),   // prøve-oppkjøring (1.1.0)
@@ -183,9 +213,13 @@ export async function importDrive(payload, { keepId = false } = {}) {
     ...(meta.excluded && typeof meta.excluded === 'object' ? { excluded: { at: String(meta.excluded.at || ''), reason: String(meta.excluded.reason || '').slice(0, 80) } } : {}),
     liveLimits: Array.isArray(meta.liveLimits) ? meta.liveLimits.filter(x => x && Number.isFinite(x.t)).map(x => ({ t: x.t, limit: Number.isFinite(x.limit) ? x.limit : null, ...(x.src === 'kamera' ? { src: 'kamera', ...(Number.isFinite(x.ahead) ? { ahead: x.ahead } : {}) } : {}) })).slice(0, 5000) : [],
     counts: { loc: raw.loc.length, gyro: raw.gyro.length, grav: raw.grav.length, acc: raw.acc.length, head: raw.head.length, road: raw.road.length, ...(raw.blink.length ? { blink: raw.blink.length } : {}) },
-    calib: meta.calib && typeof meta.calib === 'object' ? meta.calib : null,
-    cameraPlan: meta.cameraPlan && typeof meta.cameraPlan === 'object' ? meta.cameraPlan : null,
-    diag: meta.diag && typeof meta.diag === 'object' ? meta.diag : null,
+    calib: meta.calib && typeof meta.calib === 'object' ? cleanDeep(meta.calib) : null,
+    cameraPlan: meta.cameraPlan && typeof meta.cameraPlan === 'object' ? cleanDeep(meta.cameraPlan) : null,
+    diag: meta.diag && typeof meta.diag === 'object' ? cleanDeep(meta.diag) : null,
+    // Med i sikkerhetskopien (1.1.1): «ta med øvingen på plass», og om turen alt er sendt til læreren eller utvikleren
+    ...(meta.practiceCount ? { practiceCount: true } : {}),
+    ...(typeof meta.afterSent === 'string' ? { afterSent: meta.afterSent.slice(0, 40) } : {}),
+    ...(typeof meta.sentToDev === 'string' ? { sentToDev: meta.sentToDev.slice(0, 40) } : {}),
     driver: typeof meta.driver === 'string' ? meta.driver.slice(0, 40) : '',
     appVersion: 3
   };
@@ -200,13 +234,14 @@ const markCat = c => (typeof c === 'string' && /^[a-z_]{1,20}$/.test(c) ? c : 'a
 /* Eksportformat for én tur (brukes av eksport og sikkerhetskopi). */
 export async function exportPayload(drive) {
   // Delt tur (0.18.0): har ingen rådata, så analysen tas med
-  if (drive.shared) return { sharedDrive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, driver: drive.driver || '', note: drive.note || '', marks: drive.marks || [], focus: drive.focus || [], surface: drive.surface || '', ...(drive.noFace ? { noFace: true } : {}), ...(drive.excluded ? { excluded: drive.excluded } : {}), result: drive.result, enrich: drive.enrich || null, cameraPlan: drive.cameraPlan || null }, shared: drive.shared };
+  if (drive.shared) return { sharedDrive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, driver: drive.driver || '', note: drive.note || '', marks: drive.marks || [], focus: drive.focus || [], surface: drive.surface || '', ...(drive.noFace ? { noFace: true } : {}), ...(drive.mock ? { mock: true } : {}), ...(drive.excluded ? { excluded: drive.excluded } : {}), result: drive.result, enrich: drive.enrich || null, cameraPlan: drive.cameraPlan || null }, shared: drive.shared };
   const raw = await getRaw(drive.id);
   return {
     drive: { id: drive.id, startedAt: drive.startedAt, endedAt: drive.endedAt || null, sensitivity: drive.sensitivity, gaps: drive.gaps || [],
       marks: drive.marks || [], demo: !!drive.demo, interrupted: !!drive.interrupted, imported: !!drive.imported, note: drive.note || '',
       diag: drive.diag || null, counts: drive.counts || null, driver: drive.driver || '', focus: drive.focus || [], surface: drive.surface || '', calib: drive.calib || null, cameraPlan: drive.cameraPlan || null, liveLimits: drive.liveLimits || [],
-      ...(drive.noFace ? { noFace: true } : {}), ...(drive.mock ? { mock: true } : {}), ...(drive.excluded ? { excluded: drive.excluded } : {}) },   // med i kopien (0.18.0)
+      ...(drive.noFace ? { noFace: true } : {}), ...(drive.mock ? { mock: true } : {}), ...(drive.practiceCount ? { practiceCount: true } : {}),
+      ...(drive.afterSent ? { afterSent: drive.afterSent } : {}), ...(drive.sentToDev ? { sentToDev: drive.sentToDev } : {}), ...(drive.excluded ? { excluded: drive.excluded } : {}) },   // med i kopien (0.18.0)
     input: raw
   };
 }

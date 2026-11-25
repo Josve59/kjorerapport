@@ -926,6 +926,171 @@ Object.assign(DIAGRAMS, {
 /* Hver tegning får egne id-er (0.22.0). Pilspisser og utsnitt pekes til med id, og når samme id finnes i en skjult
    skjerm lenger opp i dokumentet, viser nettleseren ikke pilspissen. */
 let uid = 0;
+/* ==================== Slik sjekker du (1.1.1): sikkerhetskontrollen steg for steg ====================
+   Små tegninger av hvordan en kontroll gjøres, i samme stil som bil: (faste farger, like i lys og mørk modus). De vises
+   etter hverandre med en kort tekst under (HOWTO i safety-check.js, howtoStrip i theoryui.js). 'slik:<navn>'. */
+const OKC = '#1f8f4e', NOC = '#d9472b', AMB = '#ffb020', FLOOR = '#9aa1a7';
+const hOk = (x, y, r = 9) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${OKC}" stroke="#fff" stroke-width="1.5"/><path d="M${x - r * .45} ${y + r * .02} L${x - r * .1} ${y + r * .38} L${x + r * .48} ${y - r * .34}" fill="none" stroke="#fff" stroke-width="${(r * .28).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+const hNo = (x, y, r = 9) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${NOC}" stroke="#fff" stroke-width="1.5"/><path d="M${x - r * .38} ${y - r * .38} L${x + r * .38} ${y + r * .38} M${x + r * .38} ${y - r * .38} L${x - r * .38} ${y + r * .38}" stroke="#fff" stroke-width="${(r * .28).toFixed(1)}" stroke-linecap="round"/>`;
+/* Bil sett ovenfra med fronten opp. front: lysene foran på, rear: 'lys' eller 'brems', blink: alle blinklys, reverse: ryggelys */
+function hTop(cx, cy, { k = 1, rot = 0, front = false, rear = null, blink = false, reverse = false, wheels = false } = {}) {
+  const glow = [
+    front ? '<path d="M-13 -31 L-24 -62 H-4 L-7 -31 Z M13 -31 L24 -62 H4 L7 -31 Z" fill="#fff4b8" opacity=".75"/>' : '',
+    rear === 'brems' ? '<ellipse cx="-10" cy="33" rx="11" ry="7" fill="#ff3b30" opacity=".45"/><ellipse cx="10" cy="33" rx="11" ry="7" fill="#ff3b30" opacity=".45"/>' : '',
+    reverse ? '<path d="M-12 31 L-21 56 H-5 Z M12 31 L21 56 H5 Z" fill="#fff" opacity=".7"/>' : '',
+    blink ? [[-15, -29], [15, -29], [-15, 29], [15, 29], [-20, -8], [20, -8]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="6.5" fill="${AMB}" opacity=".45"/>`).join('') : ''
+  ].join('');
+  const wh = wheels ? '<g fill="#2a2f33"><rect x="-19" y="-24" width="5" height="12" rx="2"/><rect x="14" y="-24" width="5" height="12" rx="2"/><rect x="-19" y="12" width="5" height="12" rx="2"/><rect x="14" y="12" width="5" height="12" rx="2"/></g>' : '';
+  return `<g transform="translate(${cx} ${cy}) rotate(${rot}) scale(${k})">${glow}${wh}
+    <rect x="-16" y="-31" width="32" height="62" rx="9" fill="${BODY}"/><path d="M-12 -15 Q0 -19 12 -15 L10 -4 H-10 Z" fill="${GLASS}"/>
+    <rect x="-11" y="-3" width="22" height="18" rx="3" fill="${BODY2}"/><path d="M-10 16 H10 L12 23 Q0 26 -12 23 Z" fill="${GLASS}"/>
+    <rect x="-20" y="-10" width="5" height="4" rx="1.5" fill="${BODY2}"/><rect x="15" y="-10" width="5" height="4" rx="1.5" fill="${BODY2}"/>
+    <g fill="${front ? '#fffbe0' : W2}"><rect x="-14" y="-31" width="8" height="3" rx="1.5"/><rect x="6" y="-31" width="8" height="3" rx="1.5"/></g>
+    <g fill="${rear ? '#ff3b30' : '#a8321b'}"><rect x="-14" y="28" width="8" height="3" rx="1.5"/><rect x="6" y="28" width="8" height="3" rx="1.5"/></g>
+    ${reverse ? '<g fill="#fff"><rect x="-6" y="28" width="3" height="3" rx="1"/><rect x="3" y="28" width="3" height="3" rx="1"/></g>' : ''}
+    ${blink ? `<g fill="${AMB}">${[[-15, -29], [15, -29], [-15, 29], [15, 29], [-20, -8], [20, -8]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.6"/>`).join('')}</g>` : ''}</g>`;
+}
+/* Bil sett bakfra (som bil:bremselys): brake, reverse og plate er lys som lyser */
+const hRear = ({ brake = false, reverse = false, plate = false } = {}) => `<rect y="104" width="120" height="16" fill="${FLOOR}"/>
+  <path d="M22 58 L32 30 H88 L98 58 Z" fill="${BODY2}"/><path d="M34 37 H86 L93 55 H27 Z" fill="${GLASS}"/>
+  <rect x="14" y="56" width="92" height="38" rx="8" fill="${BODY}"/><rect x="18" y="94" width="16" height="10" rx="3" fill="#2a2f33"/><rect x="86" y="94" width="16" height="10" rx="3" fill="#2a2f33"/>
+  ${brake ? '<g fill="#ff3b30" opacity=".35"><ellipse cx="25" cy="66" rx="16" ry="11"/><ellipse cx="95" cy="66" rx="16" ry="11"/><ellipse cx="60" cy="33" rx="22" ry="6"/></g>' : ''}
+  ${reverse ? '<g fill="#fff" opacity=".7"><ellipse cx="27" cy="82" rx="13" ry="8"/><ellipse cx="93" cy="82" rx="13" ry="8"/></g>' : ''}
+  <g fill="${brake ? '#ff3b30' : '#a8321b'}"><rect x="16" y="61" width="19" height="10" rx="2.5"/><rect x="85" y="61" width="19" height="10" rx="2.5"/>${brake ? '<rect x="47" y="31" width="26" height="4" rx="2"/>' : ''}</g>
+  <g fill="${reverse ? '#ffffff' : '#c9ced3'}"><rect x="22" y="79" width="10" height="5" rx="1.5"/><rect x="88" y="79" width="10" height="5" rx="1.5"/></g>
+  ${plate ? '<ellipse cx="60" cy="76" rx="20" ry="7" fill="#fff8d0" opacity=".8"/>' : ''}<rect x="45" y="77" width="30" height="10" rx="1.5" fill="#fff" stroke="#2a2f33"/>`;
+/* Bil sett fra siden med fronten mot høyre, hjulene står på y */
+const hSide = (x, y, k = 1) => `<g transform="translate(${x} ${y}) scale(${k})"><path d="M-40 -7 V-12 Q-40 -16 -36 -17 L-22 -19 L-12 -31 Q-10 -33 -6 -33 H14 Q18 -33 20 -30 L28 -19 L38 -16 Q42 -15 42 -11 V-7 Q42 -3 38 -3 H-36 Q-40 -3 -40 -7 Z" fill="${BODY}"/>
+  <path d="M-9 -29 H3 V-20 H-17 Z M7 -29 H13 Q16 -29 17 -27 L23 -20 H7 Z" fill="${GLASS}"/>${[-24, 26].map(c => `<circle cx="${c}" cy="-3" r="8" fill="#2a2f33"/><circle cx="${c}" cy="-3" r="3.5" fill="${METAL}"/>`).join('')}</g>`;
+/* Pedal sett fra siden med festet øverst til høyre; a < 0 er trådd inn. Foten med sko og bukseben når foot er sann. */
+function hPedal(a, { foot = false, ghost = false } = {}) {
+  const r = a * Math.PI / 180, px = 84 + (-5 * Math.cos(r) - 56 * Math.sin(r)), py = 14 + (-5 * Math.sin(r) + 56 * Math.cos(r));
+  const shoe = foot ? `<g transform="translate(${px.toFixed(1)} ${py.toFixed(1)}) rotate(${(a - 24).toFixed(1)})"><path d="M-46 -10 L-62 -40" stroke="#3b4f74" stroke-width="15" stroke-linecap="round"/><path d="M-40 -14 Q-50 -6 -44 3 L6 4 Q13 2 10 -5 L-2 -12 Z" fill="#7a5233"/></g>` : '';
+  return `<g ${ghost ? 'opacity=".3"' : ''}><g transform="translate(84 14) rotate(${a})"><path d="M0 0 L-5 54" stroke="#3a4148" stroke-width="5" stroke-linecap="round"/><rect x="-17" y="51" width="24" height="9" rx="3" fill="#2a2f33" transform="rotate(-18 -5 55)"/></g>${shoe}</g>`;
+}
+const hPedalBox = body => pict(`${tileBg()}<rect x="0" y="100" width="120" height="20" fill="${FLOOR}"/><rect x="92" y="6" width="22" height="16" rx="3" fill="#c4cdd8"/>${body}`, '');
+/* Tank forstørret med MAX og MIN, nivået midt mellom */
+const hLevel = (id, fluid, label) => pict(`${tileBg(BAY)}${tank(id, 26, 16, 52, 92, 10, 58, fluid, 40, 84)}
+  ${arrowTo(98, 72, 84, 62, 2.4, YEL)}${hOk(98, 104, 10)}`, label);
+const hPerson = (x, y, { vest = false, k = 1 } = {}) => `<g transform="translate(${x} ${y}) scale(${k})"><circle cx="0" cy="-34" r="7" fill="${SKIN}"/><path d="M-10 -24 Q0 -28 10 -24 L12 0 H-12 Z" fill="${vest ? '#d6ff3a' : '#2a6fc0'}"/>${vest ? '<path d="M-11 -14 H11 M-11 -8 H11" stroke="#c9ced3" stroke-width="2.5"/>' : ''}<path d="M-7 0 V20 M7 0 V20" stroke="#14213d" stroke-width="6" stroke-linecap="round"/></g>`;
+const hSnow = (x, y, r = 7, col = '#4a9dff') => `<g stroke="${col}" stroke-width="1.8" stroke-linecap="round" transform="translate(${x} ${y})">${[0, 60, 120].map(a => `<line x1="0" y1="${-r}" x2="0" y2="${r}" transform="rotate(${a})"/>`).join('')}</g>`;
+const hSun = (x, y, r = 6) => `<g transform="translate(${x} ${y})"><circle r="${r}" fill="${YEL}"/><g stroke="${YEL}" stroke-width="1.8" stroke-linecap="round">${[0, 45, 90, 135, 180, 225, 270, 315].map(a => `<line x1="0" y1="${-r - 3}" x2="0" y2="${-r - 6}" transform="rotate(${a})"/>`).join('')}</g></g>`;
+const hThermo = (x, y, hot) => `<g transform="translate(${x} ${y})"><rect x="-5" y="-30" width="10" height="34" rx="5" fill="#fff" stroke="${INK}" stroke-width="1.5"/><circle cx="0" cy="8" r="8" fill="${hot ? NOC : '#4a9dff'}" stroke="${INK}" stroke-width="1.5"/><rect x="-2" y="${hot ? -26 : -6}" width="4" height="${hot ? 30 : 10}" fill="${hot ? NOC : '#4a9dff'}"/></g>`;
+const hTread = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="#2a2f33"/><g fill="#15191c">${[0.22, 0.42, 0.62, 0.82].map(f => `<rect x="${(x + w * f - 2).toFixed(1)}" y="${y}" width="4" height="${h}"/>`).join('')}</g>`;
+const SLIK = {
+  /* Motorolje */
+  flatt: () => pict(`${tileBg()}<rect x="0" y="86" width="120" height="34" fill="${FLOOR}"/>${hSide(56, 86, 1)}
+    <rect x="30" y="98" width="52" height="12" rx="6" fill="#e9f0d4" stroke="#6b7177"/><circle cx="56" cy="104" r="4" fill="#a7d04a"/><path d="M50 98 V110 M62 98 V110" stroke="#6b7177"/>
+    <circle cx="96" cy="26" r="15" fill="#fff" stroke="${INK}" stroke-width="2"/><path d="M96 26 V16 M96 26 L104 30" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/>${tx(96, 50, '5 min', 8.5, INK)}`,
+    'En bil som står på flatt underlag, et vater og en klokke'),
+  'pinne-ut': () => pict(`${tileBg(BAY)}<g transform="rotate(-38 40 70)"><rect x="34" y="20" width="3.5" height="88" rx="1.7" fill="${METAL}"/><circle cx="35.7" cy="14" r="8" fill="none" stroke="#f2c230" stroke-width="4"/><rect x="32" y="80" width="7" height="22" fill="#b07a1a" opacity=".9"/></g>
+    <path d="M70 84 Q84 70 102 80 Q108 92 96 100 Q80 106 70 96 Z" fill="#e9eef6"/><path d="M76 88 Q86 82 96 88" stroke="#c4cdd8" stroke-width="2" fill="none"/>
+    ${curveArrow('M38 52 Q26 40 22 24', 22, 24, -20, 2.6, YEL)}`, 'Peilepinnen trekkes ut og tørkes av med en klut'),
+  'pinne-inn': () => pict(`${tileBg(BAY)}<rect x="18" y="74" width="84" height="40" rx="8" fill="#1c2126"/><rect x="54" y="56" width="12" height="22" fill="#15191c"/>
+    <rect x="58.3" y="10" width="3.4" height="80" rx="1.7" fill="${METAL}"/><circle cx="60" cy="8" r="7" fill="none" stroke="#f2c230" stroke-width="4"/>
+    ${arrowTo(36, 26, 36, 60, 3, YEL)}${tx(36, 18, '1', 10, YEL)}${arrowTo(84, 60, 84, 26, 3, YEL)}${tx(84, 68, '2', 10, YEL)}`, 'Peilepinnen stikkes helt inn og trekkes ut igjen'),
+  /* Kjølevæske */
+  kald: () => pict(`${tileBg()}${hThermo(36, 62, false)}${hSnow(36, 22, 8)}${hOk(84, 64, 18)}${tx(84, 98, 'kald motor', 8.5, INK)}`, 'Et termometer som viser kaldt, og et grønt merke'),
+  'varm-lokk': () => pict(`${tileBg(BAY)}<rect x="34" y="62" width="52" height="46" rx="8" fill="#ebe8de"/><rect x="40" y="44" width="40" height="18" rx="5" fill="#1f2328"/>
+    <g fill="none" stroke="#e9eef6" stroke-width="2.4" stroke-linecap="round" opacity=".85"><path d="M48 38 q-6 -8 0 -14 q6 -8 0 -16"/><path d="M60 36 q-6 -8 0 -14 q6 -8 0 -16"/><path d="M72 38 q-6 -8 0 -14 q6 -8 0 -16"/></g>
+    ${hThermo(18, 78, true)}${hNo(96, 34, 14)}`, 'Lokket på kjølevæsketanken med damp, et varmt termometer og et rødt kryss'),
+  'niva-kjole': () => hLevel('cnk', '#e0609a', 'Kjølevæsketanken forstørret: nivået står mellom MAX og MIN'),
+  'niva-brems': () => hLevel('cnb', '#e3b341', 'Bremsevæskebeholderen forstørret: nivået står mellom MAX og MIN'),
+  /* Spylervæske */
+  'spyler-fyll': () => pict(`${tileBg(BAY)}<rect x="30" y="74" width="60" height="38" rx="6" fill="#2f6fb5" opacity=".9"/><rect x="50" y="62" width="20" height="14" fill="#2f6fb5" opacity=".9"/>
+    <g transform="rotate(-35 38 30)"><rect x="18" y="16" width="34" height="40" rx="6" fill="#4a9dff"/><rect x="22" y="8" width="12" height="10" rx="2" fill="#2a6fc0"/><rect x="24" y="30" width="22" height="14" rx="2" fill="#fff"/></g>
+    <path d="M56 50 Q60 56 60 64" stroke="#4a9dff" stroke-width="4" fill="none" stroke-linecap="round"/>${hSnow(96, 24, 9, '#9fd0ff')}${tx(96, 44, '−25 °C', 8, W2)}`, 'En kanne med vinterspylervæske helles på beholderen'),
+  'spyler-test': () => pict(clipTile('csp', `<rect width="120" height="120" fill="#dbe5ef"/><path d="M0 98 L14 80 H106 L120 98 V120 H0 Z" fill="${BODY}"/>
+    <path d="M17 80 L32 18 Q60 12 88 18 L103 80 Z" fill="${GLASS}" stroke="#4a5d78" stroke-width="3" stroke-linejoin="round"/><rect x="14" y="80" width="92" height="7" fill="#2a2f33"/>
+    <g fill="#4a9dff">${[[40, 76], [42, 64], [45, 52], [48, 42], [52, 34], [80, 76], [78, 64], [75, 52], [72, 42], [68, 34]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.8"/>`).join('')}</g>
+    <g fill="#4a9dff" opacity=".35"><ellipse cx="54" cy="32" rx="9" ry="6"/><ellipse cx="66" cy="32" rx="9" ry="6"/></g>${hOk(100, 104, 10)}`, '#dbe5ef'), 'Spylerstrålene treffer frontruta'),
+  /* Dekk */
+  'dybde-sone': () => pict(`${tileBg()}${hTread(22, 10, 76, 100)}<rect x="31.5" y="10" width="57" height="100" fill="${YEL}" opacity=".22"/>
+    <path d="M31.5 10 V110 M88.5 10 V110" stroke="${YEL}" stroke-width="2" stroke-dasharray="4 3"/>${tx(60, 60, '¾', 22, '#fff')}
+    <rect x="${(22 + 76 * .42 - 2).toFixed(1)}" y="80" width="4" height="9" fill="${NOC}"/>${arrowTo(58, 104, 54, 92, 2.4, NOC)}`, 'Slitebanen på et dekk sett ovenfra. Den midterste delen er merket.'),
+  'dybde-krav': () => pict(`${tileBg()}${hSun(32, 22)}${hSnow(88, 22, 9)}
+    <rect x="16" y="44" width="32" height="56" rx="3" fill="#fff"/><rect x="16" y="84" width="32" height="16" fill="#2a2f33"/><rect x="16" y="44" width="32" height="56" rx="3" fill="none" stroke="#6b7177" stroke-width="1.5"/>
+    <rect x="72" y="44" width="32" height="56" rx="3" fill="#fff"/><rect x="72" y="70" width="32" height="30" fill="#2a2f33"/><rect x="72" y="44" width="32" height="56" rx="3" fill="none" stroke="#6b7177" stroke-width="1.5"/>
+    <path d="M14 84 H50 M70 70 H106" stroke="${NOC}" stroke-width="2"/>${tx(32, 110, '1,6 mm', 9, INK)}${tx(88, 110, '3 mm', 9, INK)}`,
+    'Krav til mønsterdybde: sommer og vinter'),
+  trykkmaler: () => pict(`${tileBg()}<circle cx="46" cy="64" r="44" fill="#2a2f33"/><circle cx="46" cy="64" r="27" fill="#aeb5bc"/><circle cx="46" cy="64" r="8" fill="${METAL}"/>
+    <rect x="60" y="78" width="5" height="12" rx="1" fill="#15191c" transform="rotate(35 62 84)"/>
+    <g transform="rotate(35 70 92)"><rect x="66" y="58" width="14" height="38" rx="4" fill="#f2c230" stroke="${INK}" stroke-width="1.2"/><rect x="69" y="64" width="8" height="12" rx="1.5" fill="#1c2126"/></g>${tx(73, 70, '2,3', 6, '#7cf27c')}
+    ${hThermo(104, 46, false)}`, 'En trykkmåler satt på ventilen på hjulet, og et kaldt termometer'),
+  slitasje: () => pict(`${tileBg()}<path d="M12 46 Q12 34 24 34 H96 Q108 34 108 46 V96 H12 Z" fill="#2a2f33"/>
+    <path d="M12 46 Q12 34 24 34 H40 L34 54 Q22 58 12 58 Z" fill="${TILE}"/><g fill="${TILE}">${[46, 62, 78].map(x => `<rect x="${x}" y="34" width="6" height="14"/>`).join('')}</g>
+    <path d="M12 58 Q22 58 34 54 L40 34" fill="none" stroke="${NOC}" stroke-width="2.5" stroke-dasharray="4 3"/>${tx(60, 108, 'innerkant slitt', 8.5, INK)}`, 'Et dekk sett i snitt, der den ene kanten er mer slitt enn resten'),
+  spiker: () => pict(`${tileBg()}${hTread(18, 10, 84, 100)}<circle cx="58" cy="56" r="7" fill="${METAL}" stroke="#6b7177" stroke-width="1.5"/><path d="M54 56 H62 M58 52 V60" stroke="#6b7177" stroke-width="1.6"/>
+    <circle cx="58" cy="56" r="16" fill="none" stroke="${NOC}" stroke-width="2.4" stroke-dasharray="4 3"/>`, 'En skrue i slitebanen på et dekk'),
+  /* Lys */
+  refleks: () => pict(`${tileBg()}<rect x="0" y="0" width="120" height="22" fill="#c4cdd8"/><path d="M0 22 H120" stroke="#8a9097" stroke-width="2"/>
+    <g fill="#ff3b30" opacity=".5"><ellipse cx="48" cy="20" rx="12" ry="5"/><ellipse cx="72" cy="20" rx="12" ry="5"/></g>${hTop(60, 66, { rot: 180, rear: 'brems' })}
+    <path d="M60 64 L60 26 M60 26 L56 34" stroke="${YEL}" stroke-width="1.8" stroke-dasharray="3 3" fill="none"/>${arrowTo(96, 86, 96, 46, 3, '#2e7dd1')}`,
+    'En bil sett ovenfra rygger mot en vegg. Bremselysene lyser rødt på veggen.'),
+  hjelper: () => pict(clipTile('chj', `${hRear({ brake: true })}${hPerson(104, 84, { k: .8 })}`, '#dfe6ee'), 'Bil sett bakfra med bremselysene på, og en person som står bak og ser'),
+  rundt: () => pict(`${tileBg()}<ellipse cx="60" cy="60" rx="44" ry="52" fill="none" stroke="#8a9097" stroke-width="2" stroke-dasharray="5 4"/>
+    ${hTop(60, 60, { front: true, rear: 'lys' })}${hPerson(104, 70, { k: .5 })}${curveArrow('M100 36 Q108 46 106 56', 106, 56, 170, 2.2, '#2e7dd1')}`,
+    'Bil sett ovenfra med lysene på, og en stiplet vei rundt bilen'),
+  'rundt-blink': () => pict(`${tileBg()}<ellipse cx="60" cy="60" rx="44" ry="52" fill="none" stroke="#8a9097" stroke-width="2" stroke-dasharray="5 4"/>
+    ${hTop(60, 60, { blink: true })}${hPerson(104, 70, { k: .5 })}`, 'Bil sett ovenfra med alle blinklysene på, og en stiplet vei rundt bilen'),
+  revers: () => pict(clipTile('crev', `${hRear({ reverse: true, plate: true })}<rect x="92" y="6" width="22" height="22" rx="5" fill="#2a2f33"/>${tx(103, 17.5, 'R', 13, '#fff')}`, '#dfe6ee'),
+    'Bil sett bakfra med ryggelysene og skiltlyset på'),
+  horn: () => pict(`${tileBg()}<g transform="translate(56 66)"><circle r="40" fill="none" stroke="#2a2f33" stroke-width="9"/><path d="M-36 4 H-14 M14 4 H36 M0 16 V36" stroke="#2a2f33" stroke-width="8"/>
+    <rect x="-16" y="-12" width="32" height="28" rx="9" fill="#3a4148"/></g><path d="M44 54 Q56 46 68 54 L66 74 H46 Z" fill="${SKIN}"/>
+    <g fill="none" stroke="#2e7dd1" stroke-width="2.4" stroke-linecap="round"><path d="M86 24 q8 6 0 14"/><path d="M94 18 q12 12 0 26"/><path d="M102 12 q16 18 0 38"/></g>`, 'En hånd trykker midt på rattet, og lyd kommer ut'),
+  /* Bremser */
+  'pedal-fast': () => hPedalBox(`${hPedal(-44, { ghost: true })}${hNo(112, 92, 7)}${hPedal(-12, { foot: true })}${hOk(26, 24, 12)}`).replace('aria-label=""', 'aria-label="En fot trår på bremsepedalen, som stopper høyt og fast"'),
+  'brems-rett': () => pict(`${tileBg()}<rect x="30" y="0" width="60" height="120" fill="#5a6066"/><path d="M60 0 V120" stroke="#f4f4f4" stroke-width="2" stroke-dasharray="8 8"/>
+    <rect x="30" y="18" width="60" height="4" fill="#f4f4f4"/>${hTop(45, 58, { k: .7, rear: 'brems' })}${arrowTo(45, 104, 45, 88, 3, YEL)}${hOk(102, 30, 10)}`, 'En bil som bremser og stanser rett før en stopplinje'),
+  'servo-pump': () => hPedalBox(`${hPedal(-8, { foot: true })}<path d="M98 50 V80" stroke="#2e7dd1" stroke-width="3"/><polygon points="94,52 98,44 102,52" fill="#2e7dd1"/><polygon points="94,78 98,86 102,78" fill="#2e7dd1"/>
+    ${tx(26, 24, '×5', 14, INK)}<circle cx="26" cy="50" r="11" fill="#fff" stroke="${INK}" stroke-width="1.5"/><path d="M21 45 L31 55" stroke="${NOC}" stroke-width="2.4"/>${tx(26, 68, 'motor av', 7.5, INK)}`).replace('aria-label=""', 'aria-label="En fot pumper bremsepedalen fem ganger med motoren av"'),
+  'servo-start': () => hPedalBox(`${hPedal(-14, { foot: true })}<rect x="10" y="10" width="36" height="36" rx="18" fill="#2a2f33" stroke="${METAL}" stroke-width="2"/>${tx(28, 24, 'START', 6.5, '#fff')}${tx(28, 34, 'STOP', 6.5, '#fff')}<circle cx="28" cy="28" r="20" fill="none" stroke="${OKC}" stroke-width="2.5"/>`).replace('aria-label=""', 'aria-label="Foten holder bremsepedalen inne mens startknappen trykkes"'),
+  'servo-synk': () => hPedalBox(`${hPedal(-14, { ghost: true })}${hPedal(-24, { foot: true })}${arrowTo(104, 62, 108, 78, 2.4, OKC)}${hOk(26, 24, 12)}`).replace('aria-label=""', 'aria-label="Bremsepedalen synker litt ned når motoren starter"'),
+  pbrems: () => pict(`${tileBg(BAY)}<rect x="22" y="40" width="48" height="56" rx="12" fill="#3a4148"/><rect x="28" y="46" width="36" height="44" rx="9" fill="#20252b"/>
+    <g fill="none" stroke="${W2}" stroke-width="2.4"><circle cx="46" cy="68" r="11"/><path d="M33 58 A17 17 0 0 0 33 78 M59 58 A17 17 0 0 1 59 78"/></g>${tx(46, 68.5, 'P', 11, W2)}
+    ${curveArrow('M46 30 Q46 22 54 20', 54, 20, 80, 2.4, YEL)}
+    <g transform="translate(94 32)"><circle r="14" fill="#15191c"/><g fill="none" stroke="#ff453a" stroke-width="2"><circle r="6.5"/><path d="M-10 -6 A11 11 0 0 0 -10 6 M10 -6 A11 11 0 0 1 10 6"/></g>${tx(0, 0.5, 'P', 7, '#ff453a')}</g>`,
+    'En bryter for elektrisk parkeringsbrems, og varsellampen med P som lyser rødt'),
+  'pbrems-test': () => pict(`${tileBg()}<rect x="0" y="92" width="120" height="28" fill="${FLOOR}"/>${hSide(54, 92, 1)}
+    ${arrowTo(80, 64, 106, 64, 3, '#2e7dd1')}<rect x="104" y="48" width="5" height="32" rx="2" fill="${NOC}"/>${hOk(22, 22, 11)}`, 'En bil som står stille selv om den prøver å kjøre fram'),
+  /* Styring */
+  'hjul-rett': () => pict(`${tileBg()}<path d="M51 0 V120 M69 0 V120" stroke="#c4cdd8" stroke-width="1.5" stroke-dasharray="4 4"/>${hTop(60, 66, { k: 1.3, wheels: true })}${hOk(100, 22, 10)}`, 'Bil sett ovenfra med forhjulene rett fram'),
+  /* Sikt */
+  innerspeil: () => pict(`${tileBg()}<rect x="56" y="4" width="8" height="16" rx="2" fill="#2a2f33"/><rect x="10" y="20" width="100" height="44" rx="16" fill="#2a2f33"/>
+    <clipPath id="cis"><rect x="14" y="24" width="92" height="36" rx="13"/></clipPath><g clip-path="url(#cis)"><rect x="14" y="24" width="92" height="36" fill="#6b7a8c"/>
+    <path d="M24 60 L30 30 H90 L96 60 Z" fill="${GLASS}"/><path d="M60 60 V34" stroke="#f4f4f4" stroke-width="1.5" stroke-dasharray="3 3"/></g>${hOk(98, 92, 11)}${tx(54, 92, 'hele bakruta', 9, INK)}`,
+    'Innerspeilet: hele bakruta synes i speilet'),
+  sidespeil: () => pict(`${tileBg()}<path d="M14 30 Q14 18 28 18 H96 Q108 18 108 32 V74 Q108 90 92 90 H30 Q14 90 14 74 Z" fill="#2a2f33"/>
+    <clipPath id="css"><path d="M19 32 Q19 23 30 23 H94 Q103 23 103 34 V72 Q103 85 90 85 H32 Q19 85 19 72 Z"/></clipPath><g clip-path="url(#css)"><rect x="14" y="18" width="94" height="72" fill="#cfe0ee"/>
+    <rect x="14" y="56" width="94" height="34" fill="#5a6066"/><path d="M40 90 L58 56 M88 90 L66 56" stroke="#f4f4f4" stroke-width="2"/><rect x="88" y="18" width="20" height="72" fill="${BODY}"/></g>
+    ${arrowTo(98, 108, 98, 92, 2.4, YEL)}${hOk(24, 104, 10)}`, 'Sidespeilet: så vidt litt av egen bil i kanten, ellers veien bak'),
+  defrost: () => pict(`${tileBg(BAY)}<rect x="10" y="34" width="46" height="46" rx="10" fill="#3a4148"/><rect x="64" y="34" width="46" height="46" rx="10" fill="#3a4148"/>
+    <g fill="none" stroke="${W2}" stroke-width="2" stroke-linecap="round"><path d="M20 52 Q33 44 46 52 L44 62 H22 Z"/><path d="M27 70 q2 -4 0 -7 M33 70 q2 -4 0 -7 M39 70 q2 -4 0 -7"/>
+      <rect x="74" y="46" width="26" height="16" rx="2"/><path d="M81 74 q2 -4 0 -7 M87 74 q2 -4 0 -7 M93 74 q2 -4 0 -7"/></g>
+    <rect x="27" y="38" width="12" height="3" rx="1.5" fill="${AMB}"/><rect x="81" y="38" width="12" height="3" rx="1.5" fill="${AMB}"/>`,
+    'To knapper: defroster for frontruta og for bakruta, begge slått på'),
+  skrape: () => pict(clipTile('cskr', `<rect width="120" height="120" fill="#dbe5ef"/><rect x="10" y="10" width="100" height="84" rx="10" fill="#e9f3fb" stroke="#4a5d78" stroke-width="3"/>
+    <g fill="#ffffff" opacity=".9">${[[24, 22], [40, 30], [60, 20], [82, 28], [96, 40], [30, 54], [52, 62], [76, 70], [92, 80], [22, 80]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="7"/>`).join('')}</g>
+    <path d="M40 96 L62 10" stroke="${GLASS}" stroke-width="16"/><g transform="rotate(15 70 90)"><rect x="58" y="70" width="28" height="9" rx="2" fill="#2e7dd1"/><rect x="68" y="78" width="8" height="30" rx="3" fill="#1d5fa6"/></g>`, '#dbe5ef'),
+    'En isskrape fjerner is fra ruta'),
+  /* Utstyr */
+  vest: () => pict(`${tileBg()}${hPerson(42, 84, { vest: true, k: 1.4 })}<g transform="translate(94 40)"><polygon points="0,-16 15,10 -15,10" fill="none" stroke="#ff453a" stroke-width="4" stroke-linejoin="round"/><polygon points="0,-6 7,6 -7,6" fill="none" stroke="#ff453a" stroke-width="2" stroke-linejoin="round"/></g>`,
+    'En person med refleksvest, og symbolet for nødsignallys'),
+  sete: () => pict(`${tileBg()}<path d="M30 96 L24 46 Q24 38 32 38 Q38 40 38 46 L42 86 H82 Q88 86 88 92 V98 H34 Z" fill="#4b5560"/><rect x="24" y="22" width="14" height="14" rx="5" fill="#4b5560"/>
+    <circle cx="36" cy="30" r="7" fill="${SKIN}"/><path d="M34 40 L40 76 H70" stroke="#2a6fc0" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M70 76 L82 62 L102 76" stroke="#14213d" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M40 48 L58 58 L78 44" stroke="${SKIN}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="84" cy="38" r="14" fill="none" stroke="#2a2f33" stroke-width="4" transform="rotate(-20 84 38)"/>
+    <path d="M104 76 L108 94" stroke="#3a4148" stroke-width="4"/>`, 'En fører i setet med litt bøyde knær og armer'),
+  hodestotte: () => pict(`${tileBg()}<path d="M30 118 L24 60 Q24 52 32 52 L52 52 Q58 54 56 62 L52 118 Z" fill="#4b5560"/><rect x="24" y="14" width="22" height="30" rx="8" fill="#4b5560"/><path d="M31 44 V52 M39 44 V52" stroke="#8a9097" stroke-width="2.5"/>
+    <circle cx="60" cy="34" r="17" fill="${SKIN}"/><path d="M43 30 Q46 15 62 16 Q74 18 76 28 Q66 22 56 24 Q48 26 43 30 Z" fill="#5b3a29"/><path d="M48 52 L54 76 H78" stroke="#2a6fc0" stroke-width="14" stroke-linecap="round" fill="none"/>
+    <path d="M14 16 H100" stroke="${YEL}" stroke-width="2" stroke-dasharray="4 3"/>${hOk(96, 62, 11)}`, 'Hodestøtten er i høyde med toppen av hodet og nær bakhodet'),
+  rykk: () => pict(clipTile('cryk', `<path d="M-6 -8 L60 58" stroke="#4b5560" stroke-width="13"/><path d="M-6 -8 L60 58" stroke="#6a7682" stroke-width="1.2" stroke-dasharray="3 3"/>
+    ${arrowTo(62, 60, 92, 90, 4, '#2e7dd1')}<g transform="translate(36 86)"><rect x="-10" y="-4" width="20" height="16" rx="4" fill="#2a2f33"/><path d="M-6 -4 V-10 A6 6 0 0 1 6 -10 V-4" fill="none" stroke="#2a2f33" stroke-width="3"/></g>${hOk(96, 24, 11)}`),
+    'Et bilbelte som rykkes raskt, og en lås: beltet skal låse seg'),
+  kabel: () => pict(`${tileBg()}<path d="M8 88 Q40 70 52 50" stroke="#1f2328" stroke-width="7" fill="none"/><g transform="translate(58 42) rotate(-40)"><rect x="-10" y="-12" width="36" height="24" rx="8" fill="#2a2f35"/><rect x="-15" y="-10" width="7" height="20" rx="2" fill="#3a4148"/></g>
+    <circle cx="66" cy="38" r="22" fill="none" stroke="#2e7dd1" stroke-width="4"/><path d="M82 54 L98 70" stroke="#2e7dd1" stroke-width="6" stroke-linecap="round"/>
+    <g transform="translate(96 100)"><circle r="12" fill="#ff8a3d"/><circle r="4" fill="#3a4148"/></g>${hNo(108, 86, 8)}`, 'Ladekabelen og pluggen sees over med lupe. En skjøteledning er krysset ut.')
+};
 function uniqueIds(s) {
   const ids = new Set([...s.matchAll(/ id="([^"]+)"/g)].map(m => m[1]));
   if (!ids.size) return s;
@@ -947,6 +1112,7 @@ function figureRaw(key) {
   if (kind === 'cap' && CAPS[a]) return CAPS[a]();
   if (kind === 'diagram' && DIAGRAMS[a]) return DIAGRAMS[a]();
   if (kind === 'bil' && BIL[a]) return b === 'anon' ? BIL[a]().replace(/aria-label="[^"]*"/, 'aria-label="Tegning av en del av bilen"') : BIL[a]();
+  if (kind === 'slik' && SLIK[a]) return SLIK[a]();
   return '';
 }
 
@@ -954,5 +1120,5 @@ export const FIGURE_KEYS = [
   ...Object.keys(SIGNS).map(k => 'sign:' + k), ...Object.keys(LINES).map(k => 'line:' + k),
   ...Object.keys(LIGHTS).map(k => 'light:' + k), ...Object.keys(SCENES).map(k => 'scene:' + k), ...Object.keys(LAMPS).map(k => 'lamp:' + k),
   ...Object.keys(VIEWS).map(k => 'view:' + k), ...Object.keys(PICTS).map(k => 'pict:' + k), ...Object.keys(CAPS).map(k => 'cap:' + k),
-  ...Object.keys(DIAGRAMS).map(k => 'diagram:' + k), ...Object.keys(BIL).map(k => 'bil:' + k)
+  ...Object.keys(DIAGRAMS).map(k => 'diagram:' + k), ...Object.keys(BIL).map(k => 'bil:' + k), ...Object.keys(SLIK).map(k => 'slik:' + k)
 ];

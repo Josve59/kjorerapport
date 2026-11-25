@@ -166,7 +166,8 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
         case "micStart":
             BlinkListener.shared.onBatch = { [weak self] js in Task { @MainActor in self?.send(js) } }
             micWanted = true
-            let why = inBackground ? nil : BlinkListener.shared.start()
+            var why: String? = nil
+            if inBackground { BlinkListener.shared.want() } else { why = BlinkListener.shared.start() }
             return (["ok": why == nil, "error": why.map { $0 as Any } ?? NSNull()], nil)
         case "micStop":
             micWanted = false
@@ -412,7 +413,9 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
 
     @objc private func didEnterBackground() {
         inBackground = true
-        if micWanted { BlinkListener.shared.stop() }   // mikrofonen bare mens appen er synlig (ingen lyd i bakgrunnen)
+        if micWanted { BlinkListener.shared.pause() }   // mikrofonen bare mens appen er synlig (ingen lyd i bakgrunnen)
+        // Midlertidig nøyaktig posisjon gjelder bare mens appen er i bruk (1.1.1): spør igjen før neste tur
+        if !recording { askedFullAccuracy = false }
         lastLocation = nil
         updateActivity(force: true)
         guard recording, motion.isDeviceMotionAvailable else { return }
@@ -435,12 +438,16 @@ final class NativeRecorder: NSObject, CLLocationManagerDelegate, WKScriptMessage
 
     @objc private func didBecomeActive() {
         inBackground = false
-        if micWanted && recording { _ = BlinkListener.shared.start() }
+        if micWanted && recording { BlinkListener.shared.resume() }
         motion.stopDeviceMotionUpdates()
         guard !buffer.isEmpty else { return }
         let list = buffer
         buffer.removeAll()
-        send("window.__kjBackfill && window.__kjBackfill(\(json(list)))")
+        // I biter på 4 000 (1.1.1): en time med låst skjerm er rundt 72 000 målinger, og alt i ett kall kunne ta knekken
+        // på nettsiden
+        stride(from: 0, to: list.count, by: 4000).forEach { i in
+            send("window.__kjBackfill && window.__kjBackfill(\(json(Array(list[i..<min(i + 4000, list.count)]))))")
+        }
     }
 
     // MARK: Filer åpnet i appen (0.18.1)

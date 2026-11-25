@@ -12,7 +12,9 @@ export const BLINK = {
   chain: 6,                              // seks klikk på rad med samme avstand (ett kan mangle). Med fem og 25 ms
                                          // ga tilfeldig støy (3 klikk i sekundet) «blinklys» 24 % av tiden, nå 0 %
   win: 6,                                // sekunder bakover fra tidspunktet som vurderes
-  maxClicks: 48,                         // flere klikk enn dette på 6 s (8 i sekundet): for mye støy til å si noe
+  maxClicks: 30,                         // flere klikk enn dette på 6 s (5 i sekundet): for mye støy til å si noe. Med 48
+                                         // ga tilfeldig støy (4–5 klikk i sekundet) «hørte blinklyset» i 7–14 % av
+                                         // feltskiftene over en time; med 30 i 0–1 av 119 (1.1.1, agenten som lette etter feil)
   before: 8,                             // så mange sekunder før manøveren teller blinklyset
   music: 0.3                             // «blinklys» mer enn 30 % av tiden: radio eller musikk
 };
@@ -110,6 +112,9 @@ export function blinkChecks(raw, { laneChanges = [], turns = [] } = {}, opt = BL
   const music = n ? Math.round(on / n * 100) / 100 : 0;
   const listened = levels.length;
   if (music > opt.music) return { checks: [], music, listened };
+  // Ingen klikk i det hele tatt på over et minutt (1.1.1): mikrofonen hørte ikke noe som ligner, så «blinket ikke» ville
+  // vært gjetning. Da vurderes det ikke.
+  if (listened >= 60 && clicks.length < 5) return { checks: [], music, listened, silent: true };
   const checks = [];
   const check = (kind, tStart, tEnd, dir) => {
     const a = tStart - opt.before;

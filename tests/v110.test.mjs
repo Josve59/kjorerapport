@@ -177,7 +177,8 @@ test('prøve-oppkjøring: dom og områder', () => {
   assert.equal(merge.verdict, 'nesten');
   // Uten kamera og veidata: ukjent, ikke feil
   const bare = mockTest({ ...r, camera: null, road: null, stats: { km: 3, duration: 600 } }, { sits: [], sp: null, road: null });
-  assert.equal(bare.verdict, 'bra');
+  assert.equal(bare.verdict, 'ukjent', 'uten fart og kryss målt: «For lite målt», ikke «Ser bra ut»');
+  assert.ok(bare.known < 4);
   assert.equal(bare.short, true);
   assert.ok(['speed', 'junctions', 'observe', 'distance'].every(id => bare.areas.find(a => a.id === id).state === 'ukjent'));
 });
@@ -202,4 +203,44 @@ test('øv i nærheten: avstand, retning, navn og lenker', () => {
   // Ingen turer: alt mangler
   const r = readiness([]);
   assert.deepEqual(r.needs, ['motorvei', 'rundkjøring', 'kryss', 'landevei', 'mørke']);
+});
+
+// Slik gjør du det (1.1.1): tegningene steg for steg i sikkerhetskontrollen
+import { SAFETY, HOWTO } from '../js/safety-check.js';
+import { figure as fig2, FIGURE_KEYS as KEYS2 } from '../js/trafficsvg.js';
+test('steg-tegningene finnes, har tekst og hører til ekte oppgaver', () => {
+  const ids = new Set(SAFETY.map(t => t.id)), keys = new Set(KEYS2);
+  assert.ok(Object.keys(HOWTO).length >= 20);
+  for (const [id, steps] of Object.entries(HOWTO)) {
+    assert.ok(ids.has(id), `ukjent oppgave ${id}`);
+    assert.ok(steps.length >= 1 && steps.length <= 4, id);
+    for (const s of steps) {
+      assert.ok(keys.has(s.fig), `${id}: tegningen ${s.fig} finnes ikke`);
+      assert.ok(s.cap && s.cap.length <= 60, `${id}: teksten er for lang: ${s.cap}`);
+      assert.match(fig2(s.fig), /aria-label="[^"]+"/, `${id}: ${s.fig} mangler skjermlesertekst`);
+    }
+    assert.deepEqual(SAFETY.find(t => t.id === id).steps, steps);
+  }
+  // Alle slik:-tegningene er i bruk
+  const used = new Set(Object.values(HOWTO).flat().map(s => s.fig));
+  for (const k of KEYS2.filter(k => k.startsWith('slik:'))) assert.ok(used.has(k), `${k} brukes ikke`);
+});
+
+test('blinklys: ingen klikk i det hele tatt gir ingen vurdering (1.1.1)', () => {
+  const lv = []; for (let t = 0; t <= 120; t++) lv.push({ t, db: -60 });
+  const res = blinkChecks(lv, { laneChanges: [{ t: 60, tFrom: 58, dir: 'høyre' }] });
+  assert.equal(res.silent, true);
+  assert.equal(res.checks.length, 0);
+});
+
+// 1.1.1: funnet av funksjonsagenten
+import { cleanResult, cleanDeep } from '../js/db.js';
+import { shareDrive } from '../js/messages.js';
+test('HTML i en delt tur blir aldri HTML i rapporten, og prøve-oppkjøringen følger turen', () => {
+  const evil = '<a href="x">klikk</a>';
+  const r = cleanResult({ points: [{ t: 0, lat: 63, lon: 10 }, { t: 1, lat: 63.001, lon: 10 }], events: [], road: { medianDist: evil, close: [] }, crest: { crests: [{ kmh: evil, sight: 40 }] }, scores: {} });
+  assert.ok(!JSON.stringify(r).includes('<'), 'ingen < igjen');
+  assert.equal(r.crest.crests[0].sight, 40, 'tall står som før');
+  assert.deepEqual(cleanDeep({ a: [1, 'x"y', { 'b<c': 1, ok: NaN }] }), { a: [1, 'xy', { ok: null }] });
+  assert.equal(shareDrive({ id: 'a', startedAt: '2026-11-25T10:00:00', mock: true }).mock, true);
 });

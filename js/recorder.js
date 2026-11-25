@@ -121,8 +121,9 @@ export class Recorder {
   async start() {
     this.reset();
     this.t0 = performance.now();
+    this.startEpoch = Date.now();   // klokketid ved start: blinklyset fra iPhone-appen har klokketid (1.1.1)
     this.running = true;
-    this.drive = {
+    const drive = {
       id: newId(),
       startedAt: new Date().toISOString(),
       status: 'recording',
@@ -139,7 +140,11 @@ export class Recorder {
       counts: { loc: 0, gyro: 0, grav: 0, acc: 0, head: 0, road: 0 },
       appVersion: 3
     };
-    await putDrive(this.drive);
+    this.drive = drive;
+    // 1.1.1: feiler den første lagringen (full lagring, databasen stengt), står ikke opptakeren igjen som «går»: før
+    // ble appen låst på en død opptaksskjerm
+    try { await putDrive(this.drive); }
+    catch (err) { this.running = false; throw err; }
 
     // Tiden fra selve hendelsen (k0.7.3 / v0.9.9), ikke fra når appen rakk å behandle den: mens bildegjenkjenningen
     // holdt appen opptatt, ble målingene liggende og fikk feil tid (turen 2. nov. kl. 20.32: 43 % av tiden i hull)
@@ -309,7 +314,8 @@ export class Recorder {
      Lagres som { t, s } (klikk) og { t, db } (lydnivået, ett i sekundet); js/blink.js finner blinklyset etterpå. */
   addBlink(batch) {
     if (!this.running || this.replay || !batch) return;
-    const t0Epoch = performance.timeOrigin + this.t0;
+    // Klokketiden ved start, ikke performance.timeOrigin: siden kan ha levd i dager, og den klokka står når telefonen sover
+    const t0Epoch = this.startEpoch;
     const r3 = v => Math.round(v * 1000) / 1000;
     for (const c of Array.isArray(batch.c) ? batch.c : []) {
       const t = (Number(c[0]) - t0Epoch) / 1000;
@@ -356,6 +362,7 @@ export class Recorder {
     const b = this.buf;
     if (!b.loc.length && !b.gyro.length && !b.grav.length && !b.acc.length && !b.head.length && !b.road.length && !b.blink.length) return;
     this.buf = { loc: [], gyro: [], grav: [], acc: [], head: [], road: [], blink: [] };
+    const before = { counts: { ...this.drive.counts }, seq: this.seq };
     this.drive.counts.loc += b.loc.length;
     this.drive.counts.gyro += b.gyro.length;
     this.drive.counts.grav += b.grav.length;
@@ -368,12 +375,20 @@ export class Recorder {
     this.drive.duration = this.now();
     this.drive.gaps = this.gaps;
     this.drive.diag = this.diagSummary();
+    let saved = false;
     try {
       await putChunk(this.drive.id, this.seq++, b);
+      saved = true;
       await putDrive(this.drive);
       this.lastCheckpoint = this.now();
     } catch (err) {
       console.error('Sjekkpunkt feilet', err);
+      // 1.1.1: lagringen feilet: målingene legges tilbake og prøves igjen ved neste sjekkpunkt, i stedet for å forsvinne
+      if (!saved) {
+        for (const k of Object.keys(b)) this.buf[k] = b[k].concat(this.buf[k] || []);
+        this.drive.counts = before.counts;
+        this.seq = before.seq;
+      }
     }
   }
 
