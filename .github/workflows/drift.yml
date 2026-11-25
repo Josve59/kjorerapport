@@ -1,0 +1,29 @@
+# Driftssjekk (25. nov. 2026): hver morgen spør GitHub skolekode-serveren og nettsiden om de svarer.
+# Feiler en sjekk, sender GitHub e-post til den som sist endret tidsplanen under (eieren, når det pushes fra
+# GitHub Desktop). Kan også startes for hånd under Actions › Driftssjekk › Run workflow.
+# NB: GitHub slår av tidsplanen hvis repoet står uten endringer i 60 dager; da må den slås på igjen under Actions.
+name: Driftssjekk
+
+on:
+  schedule:
+    - cron: '23 5 * * *'   # 06.23 norsk vintertid, etter slettingen på serveren kl. 04.17
+  workflow_dispatch:
+
+jobs:
+  sjekk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Skolekode-serveren (lagring, signering og nattens sletting)
+        run: |
+          svar=$(curl -sS --retry 3 --retry-delay 30 --retry-all-errors -w '\n%{http_code}' https://kjorerapport-skolekoder.jo-9fc.workers.dev/v1/helse)
+          echo "$svar"
+          kode=$(echo "$svar" | tail -n 1)
+          test "$kode" = "200"
+          echo "$svar" | head -n 1 | grep -q '"ok":true'
+      - name: Nettsiden, nettversjonen og sidene for skoler og elever
+        run: |
+          for u in https://svendsenmedia.net/kjorerapport/ https://svendsenmedia.net/kjorerapport/app/ https://svendsenmedia.net/kjorerapport/skole/ https://svendsenmedia.net/kjorerapport/elev/ https://svendsenmedia.net/kjorerapport/personvern/; do
+            curl -fsS -o /dev/null --retry 3 --retry-delay 30 --retry-all-errors "$u"
+            echo "ok $u"
+          done

@@ -176,8 +176,16 @@ test('turer uten kode avvises, også med testbygg-hodet fra 0.27.9 (0.28.0)', as
 /* Telling av Pluss-kjøp (1.0.7): Pluss er per person, og serveren teller telefoner per kjøp uten å stenge noe */
 const KJOP = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const DAY = 86400000;
-test('serveren teller telefoner per Pluss-kjøp, og skriver høyst én gang i uka per telefon', async () => {
+test('kjøpstellingen er av (1.0.16): serveren lagrer ingenting og svarer 410', async () => {
   const { env } = await setup();
+  const r = await call(env, 'POST', '/v1/pluss', { kjop: KJOP, install: 'telefon-aaaa-1111' }, { now: T0 });
+  assert.equal(r.status, 410);
+  assert.equal((await env.CODES.list({ prefix: 'pluss:' })).keys.length, 0);
+});
+
+test('serveren teller telefoner per Pluss-kjøp, og skriver høyst én gang i uka per telefon (bare med PLUSS_TELLING)', async () => {
+  const { env } = await setup();
+  env.PLUSS_TELLING = '1';
   const plus = (kjop, install, now) => call(env, 'POST', '/v1/pluss', { kjop, install }, { now });
   assert.equal((await plus('ikke-et-nummer', 'telefon-aaaa-1111', T0)).status, 400);
   assert.equal((await plus(KJOP, 'kort', T0)).status, 400);
@@ -296,4 +304,69 @@ test('skolesiden ser nye koder med en gang, selv om listen hos Cloudflare ligger
   assert.deepEqual([o.ubrukt, o.igjen, o.koder.length], [2, 1, 2]);
   await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 3000);
   assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 4000)).status, 409, 'pakken kan ikke overskrides mens listen henger etter');
+});
+
+/* Drift (25. nov. 2026): sletting ett år etter at koden gikk ut, og helsesjekk */
+const YEAR = 365 * DAY;
+test('sletting: en brukt kode slettes ett år etter at tilgangen gikk ut, og skolens telling står', async () => {
+  const { env } = await setup();
+  const { token } = await (await call(env, 'POST', '/admin/skole', { navn: 'Rydd Trafikkskole', antall: 3, maaneder: 12 }, { admin: true, now: T0 })).json();
+  const brukt = (await (await asSchool(env, token, 'POST', '/v1/skole/ny', null, T0)).json()).kode;
+  const trukket = (await (await asSchool(env, token, 'POST', '/v1/skole/ny', null, T0)).json()).kode;
+  await call(env, 'POST', '/v1/aktiver', { kode: brukt, install: 'telefon-aaaa-1111' }, { now: T0 });
+  await asSchool(env, token, 'POST', '/v1/skole/steng', { kode: trukket }, T0 + 10 * DAY);   // ubrukt: trekkes tilbake
+  const ubrukt = (await (await asSchool(env, token, 'POST', '/v1/skole/ny', null, T0)).json()).kode;
+  const ov0 = await (await asSchool(env, token, 'GET', '/v1/skole', null, T0 + 20 * DAY)).json();
+  assert.deepEqual([ov0.brukt, ov0.ubrukt, ov0.igjen], [1, 1, 1]);
+  const til = T0 + 12 * 30.44 * DAY;
+  // Ett døgn før fristen for den brukte: bare den trukne slettes (trukket 10 dager etter start)
+  let r = await (await call(env, 'POST', '/admin/rydd', {}, { admin: true, now: til + YEAR - DAY })).json();
+  assert.equal(r.koder, 1, 'bare den trukne koden, ett år etter at den ble trukket');
+  assert.ok(await env.CODES.get('kode:' + normalizeCode(brukt)), 'den brukte står ennå');
+  // Prøvekjøring teller uten å slette
+  r = await (await call(env, 'POST', '/admin/rydd', { prov: true }, { admin: true, now: til + YEAR + DAY })).json();
+  assert.equal(r.koder, 1);
+  assert.ok(await env.CODES.get('kode:' + normalizeCode(brukt)), 'prøvekjøring sletter ikke');
+  r = await (await call(env, 'POST', '/admin/rydd', {}, { admin: true, now: til + YEAR + DAY })).json();
+  assert.equal(r.koder, 1);
+  assert.equal(await env.CODES.get('kode:' + normalizeCode(brukt)), null, 'den brukte er slettet');
+  assert.ok(await env.CODES.get('kode:' + normalizeCode(ubrukt)), 'en ubrukt, åpen kode har ingen opplysninger om noen og står');
+  const ov1 = await (await asSchool(env, token, 'GET', '/v1/skole', null, til + YEAR + DAY)).json();
+  assert.deepEqual([ov1.brukt, ov1.ubrukt, ov1.igjen], [1, 1, 1], 'skolen får ikke tilbake tilgangen som ble brukt');
+  assert.equal(ov1.koder.length, 1, 'den slettede vises ikke lenger');
+  // En kode stengt før tiden: ett år etter at den ble stengt
+  const { koder } = await (await call(env, 'POST', '/admin/koder', { skole: 'Steng', antall: 1, maaneder: 12 }, { admin: true, now: T0 })).json();
+  await call(env, 'POST', '/v1/aktiver', { kode: koder[0], install: 'telefon-bbbb-2222' }, { now: T0 });
+  await call(env, 'POST', '/admin/steng', { kode: koder[0] }, { admin: true, now: T0 + 30 * DAY });
+  r = await (await call(env, 'POST', '/admin/rydd', {}, { admin: true, now: T0 + 30 * DAY + YEAR + DAY })).json();
+  assert.equal(r.koder, 1);
+  assert.equal(await env.CODES.get('kode:' + normalizeCode(koder[0])), null);
+});
+
+test('sletting: det som var lagret av kjøpstellingen, slettes', async () => {
+  const { env } = await setup();
+  env.PLUSS_TELLING = '1';
+  await call(env, 'POST', '/v1/pluss', { kjop: KJOP, install: 'telefon-aaaa-1111' }, { now: T0 });
+  delete env.PLUSS_TELLING;
+  const r = await (await call(env, 'POST', '/admin/rydd', {}, { admin: true, now: T0 + DAY })).json();
+  assert.equal(r.pluss, 1);
+  assert.equal((await env.CODES.list({ prefix: 'pluss:' })).keys.length, 0);
+});
+
+test('helsesjekk: svarer 503 til slettingen har gått, så 200, og 503 igjen når den har stått stille i 36 timer', async () => {
+  const { env } = await setup();
+  let r = await call(env, 'GET', '/v1/helse', null, { now: T0 });
+  assert.equal(r.status, 503);
+  assert.equal((await r.json()).ryddOk, false);
+  let waited = null;
+  await worker.scheduled({ scheduledTime: T0 }, env, { waitUntil: p => { waited = p; } });
+  await waited;
+  r = await call(env, 'GET', '/v1/helse', null, { now: T0 + 3600000 });
+  const h = await r.json();
+  assert.equal(r.status, 200);
+  assert.deepEqual([h.ok, h.kv, h.signering, h.ryddOk], [true, true, true, true]);
+  assert.equal((await call(env, 'GET', '/v1/helse', null, { now: T0 + 37 * 3600000 })).status, 503);
+  // Uten signeringsnøkkel: feil
+  const bad = { ...env, SIGN_KEY: '{}' };
+  assert.equal((await (await call(bad, 'GET', '/v1/helse', null, { now: T0 + 3600000 })).json()).signering, false);
 });

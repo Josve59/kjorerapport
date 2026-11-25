@@ -49,13 +49,26 @@
    POST /admin/skole       { navn, antall, maaneder, maks } → { id, token }
    POST /admin/skole/pakke { id|navn, antall }           → { kjopt }
    POST /admin/skole/ny-lenke { id|navn }                → { token }   (den gamle lenken slutter å virke)
-   GET  /admin/skoler                                    → { skoler: [{ id, navn, kjopt, brukt, ubrukt, igjen, bestillinger }] } */
+   GET  /admin/skoler                                    → { skoler: [{ id, navn, kjopt, brukt, ubrukt, igjen, bestillinger }] }
+
+   Drift (25. nov. 2026):
+   - Sletting hver natt (Cron Trigger, `scheduled`): personvernerklæringen lover at koden, skolen, datoene og nøkkelen
+     for installasjonen «slettes senest ett år etter at den gikk ut». En kode går ut når tilgangen er slutt (første bruk
+     + måneder) eller når den ble stengt (stengtT). Ubrukte, åpne koder har ingen opplysninger om noen og blir stående.
+     Sletter vi en brukt kode fra en skole, telles den videre i skolens arkivBrukt, så skolen ikke får tilgangen tilbake.
+     Kjøpstellingen fra 1.0.7 er tatt ut av appen og personvernerklæringen (1.0.16): /v1/pluss lagrer ingenting lenger,
+     og det som var lagret («pluss:…»), slettes.
+   - GET  /v1/helse      → { ok, kv, signering, rydd: { sist, slettet } } (503 når noe er galt). Leser bare, skriver aldri.
+     En GitHub Action (.github/workflows/drift.yml) spør hver morgen, og GitHub sender e-post når den feiler.
+   POST /admin/rydd     { prov: true } bare ser hva som ville blitt slettet → { koder, pluss, skoler, igjen } */
 
 export const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';   // uten 0/O, 1/I/L, så kodene er lette å skrive av
 export const CODE_LEN = 12;
 const MONTH = 30.44 * 86400000;
 const MAX_TRIP = 20 * 1024 * 1024;   // KV tar 25 MiB per verdi
 const TRIPS_PER_DAY = 30;            // per installasjon
+const YEAR = 365 * 86400000;
+const RYDD_MAKS = 400;               // slettinger per kjøring: Cloudflare tillater 1000 KV-operasjoner per kall, resten tas neste natt
 
 export const normalizeCode = s => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');   // mellomrom og bindestreker spiller ingen rolle
 export const formatCode = c => (c.match(/.{1,4}/g) || []).join('-');
@@ -229,6 +242,8 @@ const activeNow = (rec, now) => rec.installs.filter(x => now - x.sist <= PLUS_AC
 const bucket = n => (n >= 4 ? '4+' : String(n));
 
 async function countPlus(req, env, now) {
+  // 25. nov. 2026: tatt ut av appen og personvernerklæringen i 1.0.16, så ingenting lagres. Gamle appversjoner får 410.
+  if (!env.PLUSS_TELLING) return json({ error: 'fjernet' }, 410);
   const { kjop, install } = await readJson(req);
   if (typeof kjop !== 'string' || !/^[0-9a-f]{32}$/.test(kjop)) return json({ error: 'kjop' }, 400);
   if (typeof install !== 'string' || install.length < 8 || install.length > 64) return json({ error: 'install' }, 400);
@@ -304,20 +319,20 @@ async function schoolRows(env, school, now) {
 }
 /* En tilgang er brukt når eleven har tatt den i bruk, og opptatt når den er delt ut men ikke tatt i bruk.
    En ubrukt kode som er stengt (trukket tilbake), gir tilgangen tilbake. */
-const counts = (rows, kjopt) => {
-  const brukt = rows.filter(r => r.forst).length, ubrukt = rows.filter(r => !r.forst && !r.stengt).length;
+const counts = (rows, kjopt, arkiv = 0) => {
+  const brukt = rows.filter(r => r.forst).length + (arkiv || 0), ubrukt = rows.filter(r => !r.forst && !r.stengt).length;
   return { brukt, ubrukt, igjen: Math.max(0, kjopt - brukt - ubrukt) };
 };
 async function schoolOverview(env, school, now) {
   const rows = await schoolRows(env, school, now);
   rows.sort((a, b) => (b.utdelt || 0) - (a.utdelt || 0));
   const open = (school.bestillinger || []).filter(b => !b.ferdig);
-  return { navn: school.navn, kjopt: school.kjopt, ...counts(rows, school.kjopt), maaneder: school.maaneder, maks: school.maks, bestilt: open.length ? open[open.length - 1] : null, koder: rows };
+  return { navn: school.navn, kjopt: school.kjopt, ...counts(rows, school.kjopt, school.arkivBrukt), maaneder: school.maaneder, maks: school.maks, bestilt: open.length ? open[open.length - 1] : null, koder: rows };
 }
 const touch = (school, c, now) => { school.nylig = [...(school.nylig || []).filter(n => now - n.t < RECENT_MS && n.k !== c), { k: c, t: now }].slice(-100); };
 
 async function schoolNewCode(env, school, now) {
-  const { igjen } = counts(await schoolRows(env, school, now), school.kjopt);
+  const { igjen } = counts(await schoolRows(env, school, now), school.kjopt, school.arkivBrukt);
   if (igjen <= 0) return json({ error: 'tomt' }, 409);
   let c;
   do { c = randomCode(); } while (await getCode(env, c));
@@ -336,10 +351,10 @@ async function schoolChange(req, env, school, now, action) {
     if (!rec.forst) return json({ error: 'ubrukt' }, 409);
     rec.installs = [];
   } else if (action === 'steng') {
-    if (!rec.stengt) { rec.stengt = true; if (!rec.forst) { rec.trukket = true; tilbake = true; } }
+    if (!rec.stengt) { rec.stengt = true; rec.stengtT = now; if (!rec.forst) { rec.trukket = true; tilbake = true; } }
   } else if (action === 'apne') {
     if (rec.trukket) return json({ error: 'trukket' }, 409);   // tilgangen er gitt tilbake: del ut en ny
-    rec.stengt = false;
+    rec.stengt = false; delete rec.stengtT;
   }
   await putCode(env, c, rec);
   touch(school, c, now);
@@ -411,7 +426,7 @@ async function adminSchools(env, now) {
     const page = await env.CODES.list({ prefix: 'skole:', cursor });
     for (const k of page.keys) {
       const s = await getSchool(env, k.name.slice(6));
-      if (s) skoler.push({ id: s.id, navn: s.navn, kjopt: s.kjopt, laget: s.laget, ...counts(rowsBy.get(s.id) || [], s.kjopt), bestillinger: (s.bestillinger || []).filter(x => !x.ferdig) });
+      if (s) skoler.push({ id: s.id, navn: s.navn, kjopt: s.kjopt, laget: s.laget, ...counts(rowsBy.get(s.id) || [], s.kjopt, s.arkivBrukt), bestillinger: (s.bestillinger || []).filter(x => !x.ferdig) });
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
@@ -419,7 +434,73 @@ async function adminSchools(env, now) {
   return json({ skoler });
 }
 
+/* Når gikk koden ut? Brukt: tilgangen slutt eller stengt, det som kom først. Stengt uten tidspunkt (før 25. nov. 2026):
+   slutten på tilgangen, eller da den ble laget. Ubrukt og åpen: aldri (ingen opplysninger om noen). */
+export function codeEnd(rec) {
+  const til = until(rec);
+  if (rec.stengt) return Math.min(til || Infinity, rec.stengtT || til || rec.laget || 0);
+  return til;
+}
+
+/* Nattens sletting. prov: bare tell. → { koder, pluss, skoler, igjen } */
+export async function cleanup(env, now, { prov = false } = {}) {
+  const out = { koder: 0, pluss: 0, skoler: 0, igjen: false };
+  const arkiv = new Map();   // skoleId → brukte koder som slettes
+  let ops = 0, cursor;
+  const room = () => ops < RYDD_MAKS;
+  do {
+    const page = await env.CODES.list({ prefix: 'kode:', cursor }); ops++;
+    for (const k of page.keys) {
+      if (!room()) { out.igjen = true; break; }
+      const m = k.metadata || {};
+      // Fra metadataen: åpen og ubrukt, eller brukt og fortsatt innenfor ett år etter slutten, trenger ikke leses
+      if (!m.s && !m.f) continue;
+      if (!m.s && m.f && m.m && m.f + m.m * MONTH + YEAR > now) continue;
+      const rec = await getCode(env, k.name.slice(5)); ops++;
+      const end = rec && codeEnd(rec);
+      if (!rec || !end || end + YEAR > now) continue;
+      out.koder++;
+      if (rec.skoleId && rec.forst) arkiv.set(rec.skoleId, (arkiv.get(rec.skoleId) || 0) + 1);
+      if (!prov) { await env.CODES.delete(k.name); ops++; }
+    }
+    cursor = page.list_complete || !room() ? null : page.cursor;
+    if (!page.list_complete && !room()) out.igjen = true;
+  } while (cursor);
+  for (const [id, n] of arkiv) {
+    out.skoler++;
+    if (prov) continue;
+    const s = await getSchool(env, id); ops++;
+    if (s) { s.arkivBrukt = (s.arkivBrukt || 0) + n; await putSchool(env, s); ops++; }
+  }
+  cursor = undefined;
+  do {
+    if (!room()) { out.igjen = true; break; }
+    const page = await env.CODES.list({ prefix: 'pluss:', cursor }); ops++;
+    for (const k of page.keys) {
+      if (!room()) { out.igjen = true; break; }
+      out.pluss++;
+      if (!prov) { await env.CODES.delete(k.name); ops++; }
+    }
+    cursor = page.list_complete || !room() ? null : page.cursor;
+  } while (cursor);
+  if (!prov) await env.CODES.put('drift:rydd', JSON.stringify({ t: now, ...out }));
+  return out;
+}
+
+/* Helse: lagringen svarer, nøkkelen kan signere, og slettingen har gått det siste døgnet (+ 12 t slakk) */
+async function health(env, now) {
+  let kv = false, signering = false, rydd = null;
+  try { const v = await env.CODES.get('drift:rydd'); kv = true; rydd = v ? JSON.parse(v) : null; } catch { /* kv false */ }
+  try { signering = !!(await signPass(env, { v: 0, helse: 1 })); } catch { /* signering false */ }
+  const ryddOk = !!(rydd && now - rydd.t < 36 * 3600000);
+  const ok = kv && signering && ryddOk;
+  return json({ ok, kv, signering, rydd: rydd ? { sist: new Date(rydd.t).toISOString(), slettet: { koder: rydd.koder, pluss: rydd.pluss }, igjen: rydd.igjen } : null, ryddOk }, ok ? 200 : 503);
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(cleanup(env, event.scheduledTime || Date.now()));
+  },
   async fetch(req, env, ctx, now = Date.now()) {
     const url = new URL(req.url);
     if (req.method === 'OPTIONS') return cors(new Response(null, { status: 204 }));
@@ -440,9 +521,9 @@ export default {
         if (!isAdmin(req, env)) return json({ error: 'nei' }, 401);
         if (req.method === 'POST' && url.pathname === '/admin/koder') return await createCodes(req, env, now);
         if (req.method === 'GET' && url.pathname === '/admin/koder') return await listCodes(url, env);
-        if (req.method === 'POST' && url.pathname === '/admin/steng') return await changeCode(req, env, r => { r.stengt = true; });
+        if (req.method === 'POST' && url.pathname === '/admin/steng') return await changeCode(req, env, r => { if (!r.stengt) { r.stengt = true; r.stengtT = now; } });
         if (req.method === 'POST' && url.pathname === '/admin/nullstill') return await changeCode(req, env, r => { r.installs = []; });
-        if (req.method === 'POST' && url.pathname === '/admin/apne') return await changeCode(req, env, r => { r.stengt = false; });   // 0.27.4: angre «steng»
+        if (req.method === 'POST' && url.pathname === '/admin/apne') return await changeCode(req, env, r => { r.stengt = false; delete r.stengtT; });   // 0.27.4: angre «steng»
         if (req.method === 'POST' && url.pathname === '/admin/tester') { const b = await req.clone().json().catch(() => ({})); return await changeCode(req, env, r => { r.tester = b.tester !== false; }); }
         if (req.method === 'GET' && url.pathname === '/admin/turer') return await listTrips(env);
         if (req.method === 'GET' && url.pathname === '/admin/tur') return await getTrip(url, env);
@@ -452,7 +533,9 @@ export default {
         if (req.method === 'POST' && url.pathname === '/admin/skole/pakke') return await adminSchoolPack(req, env, now);
         if (req.method === 'POST' && url.pathname === '/admin/skole/ny-lenke') return await adminNewLink(req, env);
         if (req.method === 'GET' && url.pathname === '/admin/skoler') return await adminSchools(env, now);
+        if (req.method === 'POST' && url.pathname === '/admin/rydd') { const b = await readJson(req); return json(await cleanup(env, now, { prov: b.prov === true })); }
       }
+      if (req.method === 'GET' && url.pathname === '/v1/helse') return await health(env, now);
       if (url.pathname === '/') return json({ tjeneste: 'Kjørerapport skolekoder', ok: true });
       return json({ error: 'finnes ikke' }, 404);
     } catch (err) {

@@ -88,6 +88,27 @@ Gratisnivået hos Cloudflare Workers holder godt: 100 000 forespørsler og 1 000
 
 Før `SERVER` er satt, går «Kode fra trafikkskolen» i appen til Apples tilbudskoder som før. De passer til gratis prøveskoler.
 
+## Drift: sletting og varsling (25. november 2026)
+
+**Sletting hver natt.** Personvernerklæringen lover at kodedataene «slettes senest ett år etter at den gikk ut». Serveren gjør det selv nå:
+- **Når:** en Cron Trigger kjører `cleanup` kl. 03.17 UTC. `tools/skolekoder-oppsett.mjs` setter den opp, og kjører slettingen én gang med en gang.
+- **Når en kode går ut:**
+  - en brukt kode går ut når tilgangen er slutt;
+  - en stengt kode går ut da den ble stengt (`stengtT`, lagres fra nå av);
+  - en ubrukt, åpen kode går aldri ut. Den har ingen opplysninger om noen.
+- **Skolens telling:** sletter serveren en brukt kode fra en skole, øker `arkivBrukt` i skolens oppføring. Skolen får altså ikke tilgangen tilbake, og tallene på skolesiden står.
+- **Kjøpstellingen fra 1.0.7:** den er tatt ut av appen og personvernerklæringen i 1.0.16. `/v1/pluss` svarer nå 410 og lagrer ingenting. Det som var lagret, ble slettet 25. november, og det var én oppføring.
+- **Grense per natt:** høyst 400 slettinger, resten tas natten etter.
+- **For hånd:** `POST /admin/rydd { "prov": true }` viser hva som ville blitt slettet, uten å slette.
+
+**Varsling.**
+- **Helsesjekken:** `GET /v1/helse` svarer 200 når tre ting er i orden: lagringen svarer, nøkkelen kan signere, og slettingen har gått de siste 36 timene. Ellers svarer den 503. Den leser bare og skriver aldri.
+- **Daglig sjekk:** `.github/workflows/drift.yml` kjører på GitHub hver morgen kl. 06.23 norsk tid. Den spør helsesjekken og åpner fem sider: forsiden, nettversjonen, skolesiden, elevsiden og personvern.
+- **E-post:** feiler en sjekk, sender GitHub e-post til den som sist endret tidsplanen. Det er eieren, siden det pushes fra GitHub Desktop.
+- **NB:** GitHub slår av tidsplanen etter 60 dager uten endringer i repoet. Da må den slås på igjen under Actions.
+
+Gratisplanen hos Cloudflare tåler rundt 1 000 lagringer i døgnet. Ta Workers Paid (rundt 5 dollar i måneden) før skolene deler ut hundrevis av tilganger samme dag.
+
 ## Bruk
 
 ```

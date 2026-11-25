@@ -60,6 +60,9 @@ form.append('metadata', new Blob([JSON.stringify({
 form.append('worker.js', new Blob([code], { type: 'application/javascript+module' }), 'worker.js');
 await cf('PUT', `/accounts/${acc.id}/workers/scripts/${SCRIPT}`, form);
 console.log('Serveren er lastet opp.');
+// Slettingen hver natt (25. nov. 2026): kl. 03.17 UTC, se cleanup i worker.js
+await cf('PUT', `/accounts/${acc.id}/workers/scripts/${SCRIPT}/schedules`, [{ cron: '17 3 * * *' }]);
+console.log('Slettingen hver natt er satt opp.');
 
 // 4. Adressen på workers.dev: kontoen trenger et underdomene først (velges én gang)
 let sub = null;
@@ -82,4 +85,13 @@ for (let i = 0; i < 30 && !ok; i++) {
   if (!ok) await new Promise(res => setTimeout(res, 5000));
 }
 console.log(ok ? `Serveren svarer på ${url}` : `Serveren er lastet opp til ${url}, men svarer ikke ennå. Prøv igjen om noen minutter.`);
+// Kjør slettingen én gang med en gang, så helsesjekken (/v1/helse) har noe å vise før første natt
+if (ok) {
+  try {
+    const r = await (await fetch(url + '/admin/rydd', { method: 'POST', headers: { Authorization: `Bearer ${admin}`, 'Content-Type': 'application/json' }, body: '{}' })).json();
+    console.log(`Slettet nå: ${r.koder} koder som gikk ut for over et år siden, ${r.pluss} fra den gamle kjøpstellingen${r.igjen ? ' (resten tas i natt)' : ''}.`);
+    const h = await (await fetch(url + '/v1/helse')).json();
+    console.log(h.ok ? 'Helsesjekken svarer ok.' : `Helsesjekken svarer ikke ok: ${JSON.stringify({ kv: h.kv, signering: h.signering, ryddOk: h.ryddOk })}`);
+  } catch (e) { console.log('Klarte ikke å kjøre slettingen nå: ' + e.message); }
+}
 console.log('Adressen er lagret i .local-test/skolekoder/url.txt.');
