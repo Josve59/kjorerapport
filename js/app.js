@@ -39,7 +39,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.2.1';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -671,8 +671,8 @@ async function renderPlus(feature = null) {
     const price = st.price ? `Kjøp for ${esc(st.price)}` : 'Kjøp Pluss';
     // Kode fra trafikkskolen (0.27.0, skolekode.js): elevens kode låser opp Pluss, også teorien i nettversjonen.
     // Før serveren er satt opp (codesEnabled), går «Kode fra trafikkskolen» til App Store-kodene som før.
-    const schoolCode = async btn => {
-      const v = await promptDialog({ title: 'Kode fra trafikkskolen', text: 'Har trafikkskolen gitt deg en kode? Skriv den her, med eller uten bindestreker.', placeholder: 'XXXX-XXXX-XXXX', ok: 'Bruk koden', maxLength: 20 });
+    const schoolCode = async (btn, preset = '') => {
+      const v = preset || await promptDialog({ title: 'Kode fra trafikkskolen', text: 'Har trafikkskolen gitt deg en kode? Skriv den her, med eller uten bindestreker. En lærerkode skrives også her.', placeholder: 'XXXX-XXXX-XXXX', ok: 'Bruk koden', maxLength: 20 });
       if (v === null || !v.trim()) return;
       if (btn) { btn.disabled = true; }
       const r = await activateCode(v);
@@ -682,6 +682,8 @@ async function renderPlus(feature = null) {
         if (r.laerer) { await offerTeacherMode(r); if (location.hash === '#/pluss') draw(); return; }   // lærerkode (1.2.0)
         toast(unlockedText(r), { type: 'ok', ms: 4000 }); if (gateFor(location.hash)) route(); else draw(); return;
       }
+      // Den gamle koden er fortsatt avsluttet: knappen forsvinner
+      if (preset && ['fullfort', 'stengt', 'utlopt', 'ukjent'].includes(r.error)) { const { forrigeKode, ...rest } = getSettings(); saveSettings(rest); draw(); }
       infoDialog({ title: 'Koden virket ikke', text: CODE_ERROR[r.error] || CODE_ERROR.server });
     };
     // Nettversjonen (0.23.0): resten er gratis der, men teorien hører til Pluss i iPhone-appen og kan ikke kjøpes her
@@ -702,12 +704,15 @@ async function renderPlus(feature = null) {
     // familien med Familiedeling», som ikke stemmer på Android eller i en nettleser.
     const webFree = !st.native && !school && st.dev !== true;   // testversjonen/«Visning: Pluss» har alt (0.27.9)
     const hasIt = k => owned && !(webFree && k === 'theory');
+    // 1.2.1: koden som ble avsluttet hos skolen. Har skolen åpnet den igjen (trykket ved en feil), brukes den med ett
+    // trykk. Vises i 30 dager, så den som har fått lappen, ikke ser den for alltid.
+    const prev = getSettings().forrigeKode, oldCode = prev && prev.kode && Date.now() - (prev.t || 0) < 30 * 86400000 ? prev.kode : '';
     root.innerHTML = `
       <section class="plus-hero">
         <span class="plus-badge">${icon('check', 18)}Pluss</span>
         <h2>${school ? (school.laerer ? 'Du har trafikklærerversjonen' : school.tester ? 'Du tester Kjørerapport' : 'Du har Pluss fra trafikkskolen') : webFree ? 'Nettversjonen' : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
         <p>${school ? (school.laerer ? `Lærerkode fra ${esc(school.skole)}${school.navn ? ` til ${esc(school.navn)}` : ''}. Pluss og trafikklærerversjonen er låst opp${isTeacher() ? '' : ': velg «Trafikklærer» under Innstillinger'}.` : school.tester ? `Full tilgang til ${esc(longDay(school.slutt))}. Takk for at du tester!` : `Fra ${esc(school.skole)}, ${school.varig ? 'til du har fått lappen' : `til ${esc(longDay(school.slutt))}`}. Alt i appen er låst opp.`) : webFree ? 'Her er alt gratis, unntatt teorien. Teorien får du i iPhone-appen med Pluss, eller med en kode fra trafikkskolen.' : owned ? 'Alt i appen er låst opp.' : 'Ett kjøp, ikke abonnement, og det går aldri ut.'}</p>
-        ${school && school.kode ? `<p class="muted small">${school.laerer ? 'Lærerkoden din' : 'Koden din'}: <strong class="plus-code">${esc(formatCode(school.kode))}</strong>${school.laerer ? '' : '. Skolen kjenner deg igjen på den.'}</p>` : ''}
+        ${st.school && st.school.kode ? `<p class="muted small">${st.school.laerer ? 'Lærerkoden din' : school ? 'Koden din' : `Kode fra ${esc(st.school.skole)}`}: <strong class="plus-code">${esc(formatCode(st.school.kode))}</strong>${st.school.laerer ? '' : '. Skolen kjenner deg igjen på den.'}</p>` : ''}
       </section>
       <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${hasIt(k) ? `<span class="plus-ok">${icon('check', 18)}</span>` : owned ? `<span class="lock-tag">${icon('lock', 14)}Kode</span>` : ''}</div>`; }).join('')}</section>
       ${webFree && codesEnabled() ? '<button type="button" class="btn secondary" id="plus-school">Jeg har en kode fra trafikkskolen</button>' : ''}
@@ -716,10 +721,13 @@ async function renderPlus(feature = null) {
       <p class="muted small center" id="plus-note">${st.native && st.loaded && !st.available ? 'Får ikke kontakt med App Store akkurat nå. Prøv igjen med nett.' : 'Betales med Apple-ID-en din. Ingen automatisk fornyelse. Pluss er for én person og deles ikke med familien. Bruk samme telefon til teorien og kjøreturene, så ligger alt samlet.'}</p>`}
       ${owned ? '' : `
       <div class="plus-links"><button type="button" class="link" id="plus-restore">Gjenopprett kjøp</button><span class="plus-codes"><button type="button" class="link" id="plus-code">Kode fra trafikkskolen</button>${codesEnabled() && st.native ? '<button type="button" class="link" id="plus-appcode">App Store-kode</button>' : ''}</span></div>`}
+      ${owned && !webFree && codesEnabled() && !(st.school && st.school.laerer) ? `<div class="plus-links"><button type="button" class="link" id="plus-code">${st.school ? 'Ny kode fra trafikkskolen' : 'Lærerkode eller kode fra trafikkskolen'}</button></div>` : ''}
+      ${!st.school && oldCode && codesEnabled() ? `<div class="plus-links"><button type="button" class="link" id="plus-oldcode">Bruk koden ${esc(formatCode(oldCode))} igjen</button></div>` : ''}
       ${st.native ? `<p class="muted small plus-free">Gratis for alle: opptak, rapport, kart, fartsgrense, kjørelogg, rapportene for de ${FREE_REPORTS} siste turene og 10 teorispørsmål å prøve. Turene dine er alltid dine: de kan eksporteres og tas kopi av, også uten Pluss.</p>` : ''}`;
     const back = root.querySelector('#plus-back');
     if (back) back.onclick = () => goBack();
     const sc = root.querySelector('#plus-school'); if (sc) sc.onclick = () => schoolCode(sc);
+    const oc = root.querySelector('#plus-oldcode'); if (oc) oc.onclick = () => schoolCode(oc, oldCode);
     const act = async (btn, fn, okText) => {
       btn.disabled = true; const old = btn.textContent; btn.textContent = 'Venter på App Store …';
       const r = await fn();
@@ -3510,6 +3518,10 @@ async function afterPassCheck() {
     applyViewMode('app');
     if (getSettings().skoleSlutt) saveSettings({ ...getSettings(), viewMode: 'app', devPlus: '' });
     route();
+  } else if (!isTeacher() && teacherPass() && getSettings().viewMode === 'teacher' && !(recorder && recorder.running)) {
+    // 1.2.1: lærerkoden var utløpt uten nett og er fornyet nå: lærervisningen kommer tilbake uten omstart
+    applyViewMode('teacher');
+    route();
   }
   showSchoolEnd();
 }
@@ -3519,10 +3531,12 @@ function showSchoolEnd() {
   schoolEndOpen = true;
   const from = end.skole ? ` fra ${end.skole}` : '';
   const passed = end.grunn === 'fullfort' && !end.laerer;
+  // 1.2.1: den som har kjøpt Pluss selv, beholder det; bare tilgangen fra skolen er slutt
+  const bought = plusState().native && plusState().owned;   // nettversjonen regner seg alltid som «kjøpt»
   // I testbyggene blir lærervisningen stående (afterPassCheck), så da sies ikke at appen er tilbake for elev
   const text = end.laerer ? `Lærerkoden${from} virker ikke lenger${isTeacher() ? '' : ', så appen er tilbake som for elev og ledsager'}. Elevene og meldingene ligger fortsatt på telefonen. Spør skolen hvis dette er feil.`
-    : passed ? `${end.skole || 'Trafikkskolen'} har avsluttet tilgangen din til Kjørerapport Pluss nå som du har fått lappen. Turene, rapportene og kjøreloggen ligger fortsatt i appen, og du kan eksportere dem når du vil. God tur videre!`
-    : `Tilgangen til Kjørerapport Pluss${from} er avsluttet. Turene og rapportene ligger fortsatt i appen. Spør trafikkskolen hvis dette er feil.`;
+    : passed ? `${end.skole || 'Trafikkskolen'} har avsluttet ${bought ? 'tilgangen fra skolen' : 'tilgangen din til Kjørerapport Pluss'} nå som du har fått lappen.${bought ? ' Du har fortsatt Pluss, som du har kjøpt selv.' : ''} Turene, rapportene og kjøreloggen ligger fortsatt i appen, og du kan eksportere dem når du vil. God tur videre!`
+    : `${bought ? `Tilgangen${from} er avsluttet. Du har fortsatt Pluss, som du har kjøpt selv.` : `Tilgangen til Kjørerapport Pluss${from} er avsluttet.`} Turene og rapportene ligger fortsatt i appen. Spør trafikkskolen hvis dette er feil.`;
   if (passed) vibrate([30, 60, 30]);
   infoDialog({ title: passed ? 'Gratulerer med lappen!' : end.laerer ? 'Lærerkoden er avsluttet' : 'Tilgangen fra skolen er avsluttet', text }).then(() => {
     const { skoleSlutt, ...rest } = getSettings();
@@ -3625,9 +3639,18 @@ async function restoreBackup(payload) {
   let restoredSettings = false;
   if (payload.settings && typeof payload.settings === 'object' && await confirmDialog({ title: 'Gjenopprette innstillingene også?', text: 'Førere, mål, følsomhet, terskler og andre valg fra sikkerhetskopien erstatter de du har nå.', ok: 'Ja, gjenopprett', cancel: 'Behold mine' })) {
     const cur = getSettings();
-    saveSettings({ ...cur, ...payload.settings, lastBackupAt: cur.lastBackupAt });
+    // Skolekoden, beviset og nøkkelen for denne installasjonen hører til telefonen, ikke til kopien (1.2.0; eldre kopier har dem)
+    const { skolekode, installId, skoleSlutt, skolekodeKopi, ...rest } = payload.settings;
+    saveSettings({ ...cur, ...rest, lastBackupAt: cur.lastBackupAt });
     applyTheme();
     restoredSettings = true;
+    const code = skolekodeKopi || (skolekode && skolekode.kode) || '';
+    if (code && !getSettings().skolekode && codesEnabled() && await confirmDialog({ title: 'Koden fra trafikkskolen', text: `Kopien har koden ${formatCode(code)}. Vil du bruke den på denne telefonen? Den kan brukes på to telefoner.`, ok: 'Bruk koden', cancel: 'Ikke nå' })) {
+      const r = await activateCode(code);
+      if (r.ok && r.laerer) await offerTeacherMode(r);
+      else if (r.ok) toast(unlockedText(r), { type: 'ok', ms: 4000 });
+      else await infoDialog({ title: 'Koden virket ikke', text: CODE_ERROR[r.error] || CODE_ERROR.server });
+    }
   }
   // En eldre kopi kan ha elever i arkivet (0.18.0–0.18.1): de har fått lappen og slettes igjen
   const gone = restoredSettings ? await purgeArchivedStudents() : 0;
@@ -3697,7 +3720,10 @@ async function exportDrive(id) {
 async function backupAll(drives) {
   const items = [];
   for (const d of drives) items.push(await exportPayload(d));
-  const { lastBackupAt, backupSnoozeUntil, ...settings } = getSettings();
+  // Beviset for skolekoden og nøkkelen for installasjonen følger ikke med (1.2.0): ellers virket koden på alle telefoner
+  // kopien ble gjenopprettet på. Bare koden selv, så den kan tas i bruk på nytt (og teller som en ny telefon).
+  const { lastBackupAt, backupSnoozeUntil, skolekode, installId, skoleSlutt, ...settings } = getSettings();
+  if (skolekode && skolekode.kode) settings.skolekodeKopi = skolekode.kode;
   const payload = { app: 'Kjørerapport', version: APP_VERSION, exportedAt: new Date().toISOString(), settings, drives: items };
   const saved = await shareFile(toJSON(payload), `kjorerapport-sikkerhetskopi-${new Date().toISOString().slice(0, 10)}.json`);
   if (!saved) { toast('Sikkerhetskopien ble ikke lagret.', { type: 'info' }); return; }

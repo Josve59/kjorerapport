@@ -95,7 +95,7 @@ export async function activateCode(code) {
   const p = await verifyPass(r.bevis, { install });
   if (!p) return { error: 'server' };
   const f = passFields(p, code);
-  const { skoleSlutt, ...rest } = getSettings();   // en ny kode: den gamle slutten er ikke lenger noe å si fra om
+  const { skoleSlutt, forrigeKode, ...rest } = getSettings();   // en ny kode: den gamle slutten er ikke lenger noe å si fra om
   saveSettings({ ...rest, skolekode: { kode: f.kode, bevis: r.bevis, sjekket: Date.now(), ...(f.laerer ? { rolle: 'laerer' } : {}) } });
   setSchoolPass(f);
   return { ok: true, skole: f.skole, til: f.slutt, varig: f.varig, laerer: f.laerer, navn: f.navn };
@@ -103,8 +103,17 @@ export async function activateCode(code) {
 
 /* Ved oppstart: sjekk det lagrede beviset (uten nett), og spør serveren igjen når det er gått en uke (med nett).
    Stengt eller utløpt kode: tilgangen fjernes. Uten svar fra serveren gjelder beviset til det går ut. */
-/* onLocal (1.2.0): kalles når beviset på telefonen er sjekket, før serveren spørres, så lærervisningen ikke venter på nettet */
-export async function loadSchoolPass({ now = Date.now(), online = typeof navigator === 'undefined' || navigator.onLine, onLocal = null } = {}) {
+/* onLocal (1.2.0): kalles når beviset på telefonen er sjekket, før serveren spørres, så lærervisningen ikke venter på nettet.
+   1.2.1: bare én sjekk om gangen (oppstart og hver gang appen kommer fram), og et svar for en kode som er byttet ut
+   mens serveren svarte, brukes ikke. Ellers kunne et gammelt «stengt» slette en lærerkode som nettopp var skrevet inn,
+   og «Gratulerer med lappen» kunne komme to ganger. */
+let checking = null;
+export function loadSchoolPass(opts = {}) {
+  if (checking) { if (opts.onLocal) checking.then(() => opts.onLocal(null), () => opts.onLocal(null)); return checking; }
+  checking = checkSchoolPass(opts).finally(() => { checking = null; });
+  return checking;
+}
+async function checkSchoolPass({ now = Date.now(), online = typeof navigator === 'undefined' || navigator.onLine, onLocal = null } = {}) {
   const s = getSettings(), sk = s.skolekode;
   if (!sk || !sk.bevis) { setSchoolPass(null); if (onLocal) onLocal(null); return null; }
   const install = installId();
@@ -114,13 +123,16 @@ export async function loadSchoolPass({ now = Date.now(), online = typeof navigat
   // Bevis fra før 0.27.5 mangler «t» (testkode eller ikke): da spørres serveren med en gang, ikke først etter en uke
   if (online && codesEnabled() && (!p || now - (sk.sjekket || 0) > RECHECK_MS || !('t' in p))) {
     const r = await ask(sk.kode, install);
+    const cur = getSettings().skolekode;
+    if (!cur || cur.kode !== sk.kode) return null;   // en annen kode er skrevet inn i mellomtiden
     if (r.bevis) {
       const p2 = await verifyPass(r.bevis, { install, now });
-      if (p2) { saveSettings({ ...getSettings(), skolekode: { ...sk, bevis: r.bevis, sjekket: now, ...(p2.r === 'laerer' ? { rolle: 'laerer' } : {}) } }); p = p2; setSchoolPass(passFields(p2, sk.kode)); }
+      if (p2) { saveSettings({ ...getSettings(), skolekode: { ...cur, bevis: r.bevis, sjekket: now, ...(p2.r === 'laerer' ? { rolle: 'laerer' } : {}) } }); p = p2; setSchoolPass(passFields(p2, sk.kode)); }
     } else if (r.gone || r.error === 'ukjent') {
-      // Avsluttet (fikk lappen), stengt eller utløpt: appen sier det én gang (skoleSlutt), så det ikke bare blir borte
+      // Avsluttet (fikk lappen), stengt eller utløpt: appen sier det én gang (skoleSlutt), så det ikke bare blir borte.
+      // forrigeKode (1.2.1): åpner skolen koden igjen (trykket ved en feil), kan den brukes igjen med ett trykk under Pluss.
       const { skolekode, ...rest } = getSettings();
-      saveSettings({ ...rest, skoleSlutt: { skole: r.skole || (p && p.s) || '', grunn: r.error, laerer: sk.rolle === 'laerer' || !!(p && p.r === 'laerer'), t: now } });
+      saveSettings({ ...rest, forrigeKode: { kode: sk.kode, t: now }, skoleSlutt: { skole: r.skole || (p && p.s) || '', grunn: r.error, laerer: sk.rolle === 'laerer' || !!(p && p.r === 'laerer'), t: now } });
       setSchoolPass(null);
       p = null;
     }

@@ -33,7 +33,7 @@ function readToken() {
 const remember = () => { try { localStorage.setItem(KEY, token); } catch { /* privat modus */ } };
 const token = readToken();
 const keyP = token && globalThis.crypto && crypto.subtle ? labelKey(token).catch(() => null) : Promise.resolve(null);
-let data = null, fresh = null, filter = 'alle', search = '';
+let data = null, fresh = null, filter = 'alle', search = '', nameTimer = null;
 
 async function api(method, path, body) {
   let r;
@@ -173,7 +173,8 @@ function teachersHtml() {
   const askMail = mailto(`Lærerkoder til ${data.navn}`, 'Hei!\n\nVi vil ha lærerkoder til disse trafikklærerne:\n\n\nHilsen\n');
   const rows = data.laerere.map(t => {
     const st = t.stengt ? 'stengt' : t.forst ? 'i-bruk' : 'ubrukt', [label, cls] = LABEL[st];
-    const acts = st === 'stengt' ? [['apne', 'Åpne igjen']] : [...(t.telefoner ? [['ny-telefon', 'Ny telefon']] : []), ['steng', 'Steng']];
+    // En lærerkode som ble stengt før den ble tatt i bruk (før 1.2.1), kan ikke åpnes igjen: be om en ny
+    const acts = st === 'stengt' ? (t.trukket ? [] : [['apne', 'Åpne igjen']]) : [...(t.telefoner ? [['ny-telefon', 'Ny telefon']] : []), ['steng', 'Steng']];
     return `<li><div class="row-top"><span class="row-who"><span class="row-name">${esc(t.navn || 'Trafikklærer')}</span><span class="code sub">${esc(t.kode)}</span></span><span class="pill ${cls}">${label}</span></div>
       <p class="meta">${esc([t.forst ? `tatt i bruk ${day(t.forst)}` : 'ikke tatt i bruk ennå', t.forst && !t.stengt ? `${t.telefoner} av 2 telefoner` : null].filter(Boolean).join(' · '))}</p>
       <div class="actions">${acts.map(([a, x]) => `<button type="button" class="btn secondary small" data-act="${a}" data-kode="${esc(t.kode)}" data-laerer="1" aria-label="${x}: ${esc(t.navn)}">${x}</button>`).join('')}</div></li>`;
@@ -187,6 +188,8 @@ function teachersHtml() {
 }
 
 function render() {
+  // 1.2.1: tegnes siden på nytt (tilbake fra Meldinger eller e-posten), beholdes det som er skrevet i kortet for den nye koden
+  const box = $('#fresh'), kept = box && box.dataset.kode === fresh ? { to: $('#send-to').value, name: $('#fresh-name').value } : null;
   const n = f => data.koder.filter(r => inFilter(r, f)).length;
   const full = data.nye >= data.grense;
   const nowLine = data.denneMnd ? `Så langt i ${monthName(data.mnd)} har ${elever(data.denneMnd)} tatt koden i bruk (${kr(data.denneMnd * data.pris)} inkl. mva). Det kommer på fakturaen i ${monthName(nextMonth(data.mnd))}.` : `Ingen nye elever har tatt koden i bruk i ${monthName(data.mnd)} ennå.`;
@@ -201,11 +204,11 @@ function render() {
     <button type="button" class="btn ${fresh ? 'secondary' : 'yellow'} wide" id="give"${full ? ' disabled' : ''}>${fresh ? 'Gi en elev til tilgang' : 'Gi en elev tilgang'}</button>
     ${full ? `<p class="notice">Dere har laget ${data.nye} koder i ${monthName(data.mnd)}, som er grensen per måned. Trenger dere flere, send en e-post til ${contactLink()}.</p>` : ''}
     ${fresh ? `
-    <section class="card" id="fresh" aria-labelledby="h-fresh" style="margin-top:16px">
+    <section class="card" id="fresh" data-kode="${esc(fresh)}" aria-labelledby="h-fresh" style="margin-top:16px">
       <h2 id="h-fresh">Klar til å sende</h2>
       <p class="muted small" style="margin:0">Koden</p>
       <div class="code-line"><p class="code">${esc(fresh)}</p><button type="button" class="linkbtn" id="copy-code">Kopier koden</button></div>
-      <label class="field" for="fresh-name">Elevens navn <span class="muted small">(valgfritt, bare dere kan lese det)</span>
+      <label class="field" for="fresh-name">Elevens navn <span class="muted small">(valgfritt, lagres kryptert)</span>
         <input type="text" id="fresh-name" maxlength="${MAX_LABEL}" autocomplete="off" placeholder="Navn eller elevnummer" value="${esc(nameOf(data.koder.find(r => r.kode === fresh) || {}))}"></label>
       <div class="msg">${esc(messageFor(fresh))}</div>
       <label class="field" for="send-to">Elevens mobil eller e-post <span class="muted small">(valgfritt, lagres ikke)</span>
@@ -244,11 +247,12 @@ function render() {
         <ul class="steps">
           <li>Koden gjelder til eleven har fått lappen, men høyst ${data.maaneder} måneder fra eleven tar den i bruk. Den virker på ${data.maks} telefoner. Har eleven fått ny telefon og brukt opp plassene, trykk «Ny telefon».</li>
           <li>Tar eleven aldri koden i bruk, kan dere trekke den tilbake. Trykk «Steng» når en elev slutter uten å ta lappen.</li>
-          <li>Elevens navn krypteres i nettleseren med nøkkelen i lenken deres. Kjørerapport lagrer bare den krypterte teksten og ikke nøkkelen, så vi kan ikke lese navnene. Får dere en ny lenke, kan navnene ikke leses med den, og må skrives på nytt.</li>
+          <li>Elevens navn krypteres i nettleseren med nøkkelen i lenken deres. Kjørerapport lagrer bare den krypterte teksten, ikke lenken eller nøkkelen. Får dere en ny lenke, kan navnene ikke leses med den, og må skrives på nytt.</li>
           <li>Lenken til denne siden er nøkkelen deres. Lagre den som bokmerke, og ikke del den utenfor skolen. Har den kommet på avveie, send en e-post til ${contactLink()}, så får dere en ny.</li>
         </ul>
       </details>
     </section>`;
+  if (kept) { $('#send-to').value = kept.to; $('#fresh-name').value = kept.name; }
   renderList();
   wire();
 }
@@ -275,14 +279,23 @@ function wire() {
     const f = $('#fresh'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const done = $('#fresh-done'); if (done) done.onclick = () => { fresh = null; render(); };
+  // Navnet lagres litt etter at det er skrevet, og med en gang når feltet forlates (da med beskjed), så det ikke går tapt
+  // når skolen går til Meldinger rett fra feltet
   const fn = $('#fresh-name');
-  if (fn) fn.onchange = async () => { if (await saveName(fresh, fn.value)) { toast(fn.value.trim() ? 'Navnet er lagret' : 'Navnet er fjernet'); renderList(); } };
+  if (fn) {
+    const save = async loud => { clearTimeout(nameTimer); const k = fresh, v = fn.value; if (await saveName(k, v)) { if (loud) toast(v.trim() ? 'Navnet er lagret' : 'Navnet er fjernet'); renderList(); } };
+    fn.oninput = () => { clearTimeout(nameTimer); nameTimer = setTimeout(() => save(false), 900); };
+    fn.onchange = () => save(true);
+  }
   const sendTo = $('#send-to'), smsSend = $('#sms-send'), mailSend = $('#mail-send');
-  if (sendTo) sendTo.oninput = () => {
-    const v = sendTo.value;
-    smsSend.href = smsHref(isMail(v) ? '' : v, messageFor(fresh));
-    mailSend.href = mailHref(v, fresh);
-  };
+  if (sendTo) {
+    sendTo.oninput = () => {
+      const v = sendTo.value;
+      smsSend.href = smsHref(isMail(v) ? '' : v, messageFor(fresh));
+      mailSend.href = mailHref(v, fresh);
+    };
+    if (sendTo.value) sendTo.oninput();   // tatt vare på fra før siden ble tegnet på nytt
+  }
   const share = $('#share-msg');
   if (share) share.onclick = async () => {
     try { await navigator.share({ title: 'Kjørerapport Pluss', text: messageFor(fresh) }); }

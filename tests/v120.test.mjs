@@ -92,7 +92,8 @@ test('lærerkoder: eieren lager dem, og beviset låser opp trafikklærerversjone
   assert.equal((await req(env, 'POST', '/v1/skole/steng', { kode: t.kode }, { auth: s2.token })).status, 200);
   assert.equal((await activate(env, t.kode, 'laerer-telefon-1')).status, 410);
   // En skole uten egen side: koden knyttes til navnet
-  const free = await jsonOf(await admin(env, 'POST', '/admin/laerer', { skole: 'Pilotskolen', navn: 'Ola' }));
+  assert.equal((await admin(env, 'POST', '/admin/laerer', { skole: 'Pilotskolen', navn: 'Ola' })).status, 404, '1.2.1: en skole uten side må tvinges');
+  const free = await jsonOf(await admin(env, 'POST', '/admin/laerer', { skole: 'Pilotskolen', navn: 'Ola', tving: true }));
   assert.deepEqual([free.skole, free.skoleId], ['Pilotskolen', null]);
 });
 

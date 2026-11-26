@@ -130,13 +130,15 @@ export async function signPass(env, payload) {
   return `${body}.${b64u(sig)}`;
 }
 
-async function readJson(req) { try { return await req.json(); } catch { return {}; } }
+/* 1.2.1: en tom, ødelagt eller rar kropp (null, en liste, et tall) blir {}, så rutene svarer 400 og ikke 500 */
+async function readJson(req) { try { const v = await req.json(); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; } }
 const isAdmin = (req, env) => !!env.ADMIN_SECRET && req.headers.get('Authorization') === `Bearer ${env.ADMIN_SECRET}`;
 const getCode = async (env, c) => { const v = await env.CODES.get('kode:' + c); return v ? JSON.parse(v) : null; };
 /* Metadata (1.0.8): nok til at skolesiden kan liste kodene uten å lese hver av dem. s: 0 åpen, 1 stengt, 2 trukket tilbake */
 /* 1.2.0: v varig (til lappen), d fullført (tidspunkt), r lærerkode med nv navnet, e det krypterte navnet, t testkode */
 const codeMeta = rec => ({ skole: rec.skole, sid: rec.skoleId || undefined, u: rec.utdelt || undefined, f: rec.forst || undefined, n: rec.installs.length, s: rec.trukket ? 2 : rec.stengt ? 1 : 0, m: rec.maaneder,
-  v: rec.varig ? 1 : undefined, d: rec.fullfort || undefined, r: rec.rolle === 'laerer' ? 1 : undefined, nv: rec.rolle === 'laerer' ? rec.navn : undefined, e: rec.merke || undefined, t: rec.tester ? 1 : undefined });
+  v: rec.varig ? 1 : undefined, d: rec.fullfort || undefined, r: rec.rolle === 'laerer' ? 1 : undefined, nv: rec.rolle === 'laerer' ? rec.navn : undefined, e: rec.merke || undefined, t: rec.tester ? 1 : undefined,
+  st: rec.stengt ? rec.stengtT || undefined : undefined, pp: rec.forhand ? 1 : undefined });   // 1.2.1: st (stengt) til slettingen, pp forhåndsbetalt
 const putCode = (env, c, rec) => env.CODES.put('kode:' + c, JSON.stringify(rec), { metadata: codeMeta(rec) });
 const until = rec => (rec.forst ? rec.forst + rec.maaneder * MONTH : null);
 const isTeacherCode = rec => rec.rolle === 'laerer';
@@ -336,8 +338,8 @@ async function schoolFromReq(req, env) {
 
 /* Én rad på skolesiden, fra koden selv eller fra metadataen i listen */
 const rowOf = (c, r) => ({ kode: formatCode(c), utdelt: r.utdelt || null, forst: r.forst || null, til: r.forst ? r.forst + r.maaneder * MONTH : null, telefoner: r.telefoner, stengt: !!r.stengt, trukket: !!r.trukket,
-  fullfort: r.fullfort || null, varig: !!r.varig, laerer: r.rolle === 'laerer', navn: r.rolle === 'laerer' ? r.navn || '' : undefined, merke: r.merke || '' });
-const metaRow = (c, m, maaneder) => rowOf(c, { utdelt: m.u, forst: m.f, maaneder: m.m || maaneder, telefoner: m.n || 0, stengt: m.s >= 1, trukket: m.s === 2, fullfort: m.d, varig: !!m.v, rolle: m.r ? 'laerer' : '', navn: m.nv, merke: m.e });
+  fullfort: r.fullfort || null, varig: !!r.varig, laerer: r.rolle === 'laerer', navn: r.rolle === 'laerer' ? r.navn || '' : undefined, merke: r.merke || '', tester: !!r.tester, forhand: !!r.forhand });
+const metaRow = (c, m, maaneder) => rowOf(c, { utdelt: m.u, forst: m.f, maaneder: m.m || maaneder, telefoner: m.n || 0, stengt: m.s >= 1, trukket: m.s === 2, fullfort: m.d, varig: !!m.v, rolle: m.r ? 'laerer' : '', navn: m.nv, merke: m.e, tester: !!m.t, forhand: !!m.pp });
 async function schoolRows(env, school, now) {
   const rows = new Map();
   let cursor;
@@ -362,11 +364,15 @@ const capMonths = school => Math.max(school.maaneder || 0, CAP_MONTHS);   // eld
 const priceOf = school => (Number.isFinite(school.pris) ? school.pris : PRIS);
 const limitOf = school => (Number.isFinite(school.grense) ? school.grense : GRENSE);
 /* Tallene for én skole: i bruk, sendt, fikk lappen, og hvor mange som ble tatt i bruk denne og forrige måned (fakturaen) */
+/* Forhåndsbetalte plasser (pakkene før 1.2.0) brukes opp før noe faktureres (1.2.1). En plass er tatt av en kode fra
+   pakken (uten varig) eller en forhåndsbetalt kode (forhand) som er tatt i bruk eller delt ut og ikke trukket tilbake. */
+const prepaidLeft = (school, elever) => Math.max(0, (school.kjopt || 0) - (school.arkivForhand || 0) - elever.filter(r => (!r.varig || r.forhand) && !r.tester && (r.forst || !r.stengt)).length);
+const billed = r => r.varig && !r.forhand && !r.tester;   // det samme som fakturaen (adminInvoice)
 function schoolNumbers(school, rows, now) {
   const elever = rows.filter(r => !r.laerer), mnd = monthOf(now), forrige = prevMonth(mnd);
-  const taken = m => elever.filter(r => r.forst && r.varig && monthOf(r.forst) === m).length;
+  const taken = m => elever.filter(r => r.forst && billed(r) && monthOf(r.forst) === m).length;
   const nye = elever.filter(r => r.utdelt && monthOf(r.utdelt) === mnd).length, grense = limitOf(school);
-  return { pris: priceOf(school), grense, nye, mnd, forrige, denneMnd: taken(mnd), forrigeMnd: taken(forrige),
+  return { pris: priceOf(school), grense, nye, mnd, forrige, denneMnd: taken(mnd), forrigeMnd: taken(forrige), forhand: prepaidLeft(school, elever),
     iBruk: elever.filter(r => r.forst && !r.stengt && !(r.til && r.til <= now)).length, ferdig: elever.filter(r => r.fullfort).length, ...counts(elever, school.arkivBrukt),
     laerere: rows.filter(r => r.laerer).length, igjen: Math.max(0, grense - nye) };   // igjen: skolesiden fra før 1.2.0 viser den
 }
@@ -376,16 +382,16 @@ async function schoolOverview(env, school, now) {
   const laerere = rows.filter(r => r.laerer).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
   return { navn: school.navn, ...n, kjopt: n.brukt + n.ubrukt + n.igjen, maaneder: capMonths(school), maks: school.maks, koder, laerere };
 }
-const touch = (school, c, now) => { school.nylig = [...(school.nylig || []).filter(n => now - n.t < RECENT_MS && n.k !== c), { k: c, t: now }].slice(-100); };
+const touch = (school, c, now) => { school.nylig = [...(school.nylig || []).filter(n => now - n.t < RECENT_MS && n.k !== c), { k: c, t: now }].slice(-300); };   // 300: mer enn grensen per måned, så den holder også når listen henger etter
 
 /* Ny elevkode (1.2.0): uten pakke, høyst grense nye per måned. Gjelder til lappen. merke: elevens navn, kryptert. */
 async function schoolNewCode(req, env, school, now) {
   const merke = cleanSeal((await readJson(req)).merke);
-  const { nye, grense } = schoolNumbers(school, await schoolRows(env, school, now), now);
+  const { nye, grense, forhand } = schoolNumbers(school, await schoolRows(env, school, now), now);
   if (nye >= grense) return json({ error: 'grense', grense }, 429);
   let c;
   do { c = randomCode(); } while (await getCode(env, c));
-  await putCode(env, c, { skole: school.navn, skoleId: school.id, maaneder: capMonths(school), maks: school.maks, laget: now, utdelt: now, forst: null, installs: [], stengt: false, tester: false, varig: true, ...(merke ? { merke } : {}) });
+  await putCode(env, c, { skole: school.navn, skoleId: school.id, maaneder: capMonths(school), maks: school.maks, laget: now, utdelt: now, forst: null, installs: [], stengt: false, tester: false, varig: true, ...(forhand > 0 ? { forhand: true } : {}), ...(merke ? { merke } : {}) });
   touch(school, c, now);
   await putSchool(env, school);
   return json({ kode: formatCode(c), grense, igjen: grense - nye - 1, maaneder: capMonths(school), maks: school.maks });
@@ -400,7 +406,8 @@ async function schoolChange(req, env, school, now, action) {
     if (!rec.forst) return json({ error: 'ubrukt' }, 409);
     rec.installs = [];
   } else if (action === 'steng') {
-    if (!rec.stengt) { rec.stengt = true; rec.stengtT = now; if (!rec.forst) { rec.trukket = true; tilbake = true; } }
+    // Trukket tilbake gjelder elevkoder (de faktureres ikke); en lærerkode som stenges, kan åpnes igjen (1.2.1)
+    if (!rec.stengt) { rec.stengt = true; rec.stengtT = now; if (!rec.forst && !isTeacherCode(rec)) { rec.trukket = true; tilbake = true; } }
   } else if (action === 'apne') {
     if (rec.trukket) return json({ error: 'trukket' }, 409);   // tilgangen er gitt tilbake: del ut en ny
     rec.stengt = false; delete rec.stengtT; delete rec.fullfort;   // også «Fikk lappen» ved en feil
@@ -433,13 +440,27 @@ async function teacherComplete(req, env, now) {
   return json({ ok: true, kode: formatCode(pc) });
 }
 
+/* Et tall fra eieren: null, '' og manglende betyr «ikke oppgitt» (null ble før 0 kr) */
+const given = v => (v === null || v === '' ? undefined : v);
 async function adminNewSchool(req, env, now) {
   const b = await readJson(req);
   const name = String(b.navn || '').trim().slice(0, 80), id = schoolId(name);
   if (!name || !id) return json({ error: 'Oppgi navnet på skolen.' }, 400);
   if (await getSchool(env, id)) return json({ error: 'finnes' }, 409);
   const token = newToken();
-  const school = { id, navn: name, maaneder: clampInt(b.maaneder, 1, 60, CAP_MONTHS), maks: clampInt(b.maks, 1, 5, 2), pris: clampInt(b.pris, 0, 5000, PRIS), grense: clampInt(b.grense, 1, 5000, GRENSE), laget: now, tokenHash: await sha256hex(token), nylig: [] };
+  const school = { id, navn: name, maaneder: clampInt(given(b.maaneder), CAP_MONTHS, 60, CAP_MONTHS), maks: clampInt(given(b.maks), 1, 5, 2), pris: clampInt(given(b.pris), 0, 5000, PRIS), grense: clampInt(given(b.grense), 1, 5000, GRENSE), laget: now, tokenHash: await sha256hex(token), nylig: [] };
+  // Lærerkoder laget med «--uten-side» til en skole med samme navn, hører til skolen fra nå (1.2.1), så skolen ser og kan stenge dem
+  let cursor;
+  do {
+    const page = await env.CODES.list({ prefix: 'kode:', cursor });
+    for (const k of page.keys) {
+      const m = k.metadata;
+      if (!m || m.sid || !m.r || String(m.skole).toLowerCase() !== name.toLowerCase()) continue;
+      const rec = await getCode(env, k.name.slice(5));
+      if (rec && !rec.skoleId) { rec.skoleId = id; await putCode(env, k.name.slice(5), rec); touch(school, k.name.slice(5), now); }
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
   await env.CODES.put('skoletoken:' + school.tokenHash, id);
   await putSchool(env, school);
   return json({ id, navn: name, maaneder: school.maaneder, maks: school.maks, pris: school.pris, grense: school.grense, token });
@@ -453,10 +474,10 @@ async function adminFindSchool(req, env) {
 async function adminSchoolEdit(req, env) {
   const { b, school } = await adminFindSchool(req, env);
   if (!school) return json({ error: 'ukjent' }, 404);
-  if (b.pris !== undefined) school.pris = clampInt(b.pris, 0, 5000, priceOf(school));
-  if (b.grense !== undefined) school.grense = clampInt(b.grense, 1, 5000, limitOf(school));
-  if (b.maks !== undefined) school.maks = clampInt(b.maks, 1, 5, school.maks);
-  if (b.maaneder !== undefined) school.maaneder = clampInt(b.maaneder, 1, 60, school.maaneder);
+  if (given(b.pris) !== undefined) school.pris = clampInt(b.pris, 0, 5000, priceOf(school));
+  if (given(b.grense) !== undefined) school.grense = clampInt(b.grense, 1, 5000, limitOf(school));
+  if (given(b.maks) !== undefined) school.maks = clampInt(b.maks, 1, 5, school.maks);
+  if (given(b.maaneder) !== undefined) school.maaneder = clampInt(b.maaneder, CAP_MONTHS, 60, capMonths(school));   // til lappen: minst 36
   await putSchool(env, school);
   return json({ id: school.id, navn: school.navn, pris: priceOf(school), grense: limitOf(school), maks: school.maks, maaneder: capMonths(school) });
 }
@@ -467,6 +488,8 @@ async function adminTeacher(req, env, now) {
   const school = wanted ? (await getSchool(env, wanted)) || (await getSchool(env, schoolId(wanted))) : null;
   const skole = school ? school.navn : wanted;
   if (!navn || !skole) return json({ error: 'Oppgi skolen og navnet på læreren.' }, 400);
+  // 1.2.1: en skrivefeil i skolenavnet ga en lærerkode skolen ikke ser og ikke kan stenge. Uten egen side bare med tving.
+  if (!school && b.tving !== true) return json({ error: `Fant ikke skolen «${skole}». Lag skolen først med «skole», eller bruk --uten-side.` }, 404);
   let c;
   do { c = randomCode(); } while (await getCode(env, c));
   await putCode(env, c, { skole, ...(school ? { skoleId: school.id } : {}), rolle: 'laerer', navn, maaneder: clampInt(b.maaneder, 1, 120, 60), maks: clampInt(b.maks, 1, 5, 2), laget: now, utdelt: now, forst: null, installs: [], stengt: false, tester: false, varig: true });
@@ -476,14 +499,16 @@ async function adminTeacher(req, env, now) {
 /* Fakturagrunnlaget (1.2.0): elevkodene som ble tatt i bruk i måneden mnd (norsk tid), per skole. Bare koder «til
    lappen» fra skolesiden: lærerkoder og testkoder faktureres ikke, og koder fra pakkene før 1.2.0 var betalt på forhånd. */
 async function adminInvoice(url, env, now) {
-  const q = url.searchParams.get('mnd') || '', mnd = /^\d{4}-(0[1-9]|1[0-2])$/.test(q) ? q : prevMonth(monthOf(now));
+  const q = url.searchParams.get('mnd') || '';
+  if (q && !/^\d{4}-(0[1-9]|1[0-2])$/.test(q)) return json({ error: 'mnd' }, 400);   // 1.2.1: før kom forrige måned i stedet
+  const mnd = q || prevMonth(monthOf(now));
   const by = new Map();
   let cursor;
   do {
     const page = await env.CODES.list({ prefix: 'kode:', cursor });
     for (const k of page.keys) {
       const m = k.metadata;
-      if (!m || !m.sid || !m.v || m.r || m.t || !m.f || monthOf(m.f) !== mnd) continue;
+      if (!m || !m.sid || !m.v || m.r || m.t || m.pp || !m.f || monthOf(m.f) !== mnd) continue;   // pp: forhåndsbetalt
       if (!by.has(m.sid)) by.set(m.sid, []);
       by.get(m.sid).push({ kode: formatCode(k.name.slice(5)), forst: m.f });
     }
@@ -543,10 +568,14 @@ export function codeEnd(rec) {
   return til;
 }
 
-/* Nattens sletting. prov: bare tell. → { koder, pluss, skoler, igjen } */
+/* Nattens sletting. prov: bare tell. → { koder, pluss, skoler, igjen }
+   1.2.1: koder som er stengt eller har fått lappen, leses ikke før de er ett år over tiden (st og d i metadataen), så
+   mange avsluttede koder ikke bruker opp nattens kvote. Ubrukte koder med navn (lærerkode, eller navnet skolen skrev)
+   slettes to år etter at de ble delt ut. Lærerkoder teller ikke i skolens «brukt». */
+const UNUSED_KEEP = 2 * YEAR;
 export async function cleanup(env, now, { prov = false } = {}) {
   const out = { koder: 0, pluss: 0, skoler: 0, igjen: false };
-  const arkiv = new Map();   // skoleId → brukte koder som slettes
+  const arkiv = new Map();   // skoleId → { n: brukte elevkoder som slettes, pp: av dem forhåndsbetalte }
   let ops = 0, cursor;
   const room = () => ops < RYDD_MAKS;
   do {
@@ -554,24 +583,31 @@ export async function cleanup(env, now, { prov = false } = {}) {
     for (const k of page.keys) {
       if (!room()) { out.igjen = true; break; }
       const m = k.metadata || {};
-      // Fra metadataen: åpen og ubrukt, eller brukt og fortsatt innenfor ett år etter slutten, trenger ikke leses
-      if (!m.s && !m.f) continue;
-      if (!m.s && m.f && m.m && m.f + m.m * MONTH + YEAR > now) continue;
+      // Fra metadataen: det som ikke kan være ferdig ennå, trenger ikke leses
+      if (!m.s && !m.f) { if (!((m.r || m.e) && (m.u || 0) + UNUSED_KEEP <= now)) continue; }
+      else if (!m.s) { if (m.m && m.f + m.m * MONTH + YEAR > now) continue; }
+      else if (m.st || m.d) { if (Math.min(m.f && m.m ? m.f + m.m * MONTH : Infinity, m.st || m.d) + YEAR > now) continue; }
       const rec = await getCode(env, k.name.slice(5)); ops++;
-      const end = rec && codeEnd(rec);
-      if (!rec || !end || end + YEAR > now) continue;
+      if (!rec) continue;
+      const unused = !rec.forst && !rec.stengt;
+      const end = unused ? (isTeacherCode(rec) || rec.merke ? (rec.utdelt || rec.laget || 0) + UNUSED_KEEP - YEAR : 0) : codeEnd(rec);
+      if (!end || end + YEAR > now) continue;
       out.koder++;
-      if (rec.skoleId && rec.forst) arkiv.set(rec.skoleId, (arkiv.get(rec.skoleId) || 0) + 1);
+      if (rec.skoleId && rec.forst && !isTeacherCode(rec)) {
+        const a = arkiv.get(rec.skoleId) || { n: 0, pp: 0 };
+        a.n++; if (!rec.varig || rec.forhand) a.pp++;
+        arkiv.set(rec.skoleId, a);
+      }
       if (!prov) { await env.CODES.delete(k.name); ops++; }
     }
     cursor = page.list_complete || !room() ? null : page.cursor;
     if (!page.list_complete && !room()) out.igjen = true;
   } while (cursor);
-  for (const [id, n] of arkiv) {
+  for (const [id, a] of arkiv) {
     out.skoler++;
     if (prov) continue;
     const s = await getSchool(env, id); ops++;
-    if (s) { s.arkivBrukt = (s.arkivBrukt || 0) + n; await putSchool(env, s); ops++; }
+    if (s) { s.arkivBrukt = (s.arkivBrukt || 0) + a.n; s.arkivForhand = (s.arkivForhand || 0) + a.pp; await putSchool(env, s); ops++; }
   }
   cursor = undefined;
   do {
@@ -584,18 +620,26 @@ export async function cleanup(env, now, { prov = false } = {}) {
     }
     cursor = page.list_complete || !room() ? null : page.cursor;
   } while (cursor);
-  if (!prov) await env.CODES.put('drift:rydd', JSON.stringify({ t: now, ...out }));
+  if (!prov) {
+    // igjenSiden (1.2.1): har slettingen ikke blitt ferdig på en uke, varsler helsesjekken
+    let prev = null;
+    try { prev = JSON.parse(await env.CODES.get('drift:rydd') || 'null'); } catch { /* første gang */ }
+    const igjenSiden = out.igjen ? (prev && prev.igjen && prev.igjenSiden ? prev.igjenSiden : now) : null;
+    await env.CODES.put('drift:rydd', JSON.stringify({ t: now, ...out, ...(igjenSiden ? { igjenSiden } : {}) }));
+  }
   return out;
 }
 
-/* Helse: lagringen svarer, nøkkelen kan signere, og slettingen har gått det siste døgnet (+ 12 t slakk) */
+/* Helse: lagringen svarer, nøkkelen kan signere, og slettingen har gått det siste døgnet (+ 12 t slakk) og har ikke
+   hatt mer igjen enn den rakk i over en uke (1.2.1) */
 async function health(env, now) {
   let kv = false, signering = false, rydd = null;
   try { const v = await env.CODES.get('drift:rydd'); kv = true; rydd = v ? JSON.parse(v) : null; } catch { /* kv false */ }
   try { signering = !!(await signPass(env, { v: 0, helse: 1 })); } catch { /* signering false */ }
-  const ryddOk = !!(rydd && now - rydd.t < 36 * 3600000);
+  const henger = !!(rydd && rydd.igjenSiden && now - rydd.igjenSiden > 7 * 86400000);
+  const ryddOk = !!(rydd && now - rydd.t < 36 * 3600000) && !henger;
   const ok = kv && signering && ryddOk;
-  return json({ ok, kv, signering, rydd: rydd ? { sist: new Date(rydd.t).toISOString(), slettet: { koder: rydd.koder, pluss: rydd.pluss }, igjen: rydd.igjen } : null, ryddOk }, ok ? 200 : 503);
+  return json({ ok, kv, signering, rydd: rydd ? { sist: new Date(rydd.t).toISOString(), slettet: { koder: rydd.koder, pluss: rydd.pluss }, igjen: rydd.igjen, ...(rydd.igjenSiden ? { igjenSiden: new Date(rydd.igjenSiden).toISOString() } : {}) } : null, ryddOk }, ok ? 200 : 503);
 }
 
 export default {
@@ -624,7 +668,7 @@ export default {
         if (req.method === 'GET' && url.pathname === '/admin/koder') return await listCodes(url, env);
         if (req.method === 'POST' && url.pathname === '/admin/steng') return await changeCode(req, env, r => { if (!r.stengt) { r.stengt = true; r.stengtT = now; } });
         if (req.method === 'POST' && url.pathname === '/admin/nullstill') return await changeCode(req, env, r => { r.installs = []; });
-        if (req.method === 'POST' && url.pathname === '/admin/apne') return await changeCode(req, env, r => { r.stengt = false; delete r.stengtT; });   // 0.27.4: angre «steng»
+        if (req.method === 'POST' && url.pathname === '/admin/apne') return await changeCode(req, env, r => { r.stengt = false; delete r.stengtT; delete r.fullfort; });   // 0.27.4: angre «steng» (1.2.1: også «Fikk lappen»)
         if (req.method === 'POST' && url.pathname === '/admin/tester') { const b = await req.clone().json().catch(() => ({})); return await changeCode(req, env, r => { r.tester = b.tester !== false; }); }
         if (req.method === 'GET' && url.pathname === '/admin/turer') return await listTrips(env);
         if (req.method === 'GET' && url.pathname === '/admin/tur') return await getTrip(url, env);

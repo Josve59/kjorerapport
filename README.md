@@ -143,6 +143,52 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.2.1 – fixes after two test agents
+
+Two agents tested 1.2.0 before anything was published. One drove the server end to end with scripts; the other reviewed the code and the user flows. All their findings are fixed here.
+
+**App:**
+- **Entering a teacher code with Pluss already unlocked:** a teacher who already had Pluss, bought or from a pupil code, had nowhere to type a teacher code. The Pluss screen now always has «Lærerkode eller kode fra trafikkskolen».
+- **Backups:** the backup no longer carries the school pass or the install key. Before, a restored backup unlocked Pluss on any phone, and a teacher's backup unlocked the teacher view. It now holds only the code, and on restore the app offers to use it, which counts as a new phone.
+- **Code check:** only one check of the school code runs at a time. An answer for a code that was replaced while the server was answering is ignored. Before, a slow «stengt» could delete a teacher code just typed in, and «Gratulerer» could come twice.
+- **Teacher view after renewal:** if the teacher code expired offline and is then renewed, the teacher view comes back without a restart.
+- **Pluss bought yourself:** the text now says you keep Pluss when the school ends its access, and the Pluss screen shows the school code too.
+- **«Fikk lappen» by mistake:** if the school reopens the code, the Pluss screen offers «Bruk koden … igjen» for 30 days.
+
+**School page:**
+- What was typed in the new-code card (phone or e-mail, and the pupil's name) stays when the page reloads after Meldinger or Mail.
+- The name is now saved shortly after typing, not only when the field is left.
+- A teacher code closed before it was used can be reopened.
+- Wording: names are «lagret kryptert», and we don't store the link or the key. The old text said we «can't read» them, but the owner sees the link once when making the school.
+
+**Server:**
+- **«Fikk lappen» undone by the owner:** `apne` also undoes «Fikk lappen».
+- **Nightly deletion:**
+  - Closed and completed codes are not read before they are due, so many completed pupils no longer use up the nightly quota.
+  - The health check fails if deletion has had work left for over a week.
+  - Unused codes with a name (teacher codes, or a name from the school) are deleted two years after they were given out. This is now on the privacy page.
+  - Teacher codes no longer count as used pupil seats.
+- **Prepaid seats:** seats from a pack bought before 1.2.0 are used up before anything is invoiced (`forhand`). Only the owner's test school has a pack.
+- **Teacher codes need the school to exist:**
+  - A school name that doesn't exist is refused unless `--uten-side` is given.
+  - A school page created later with the same name takes over those teacher codes.
+- **Input checks:**
+  - An invalid month gives 400.
+  - Empty, `null` or odd JSON bodies give 400, not 500.
+  - `pris: null` no longer sets the price to 0 kr.
+  - The longest time per school is at least 36 months.
+- **Monthly limit:** it holds at 200 even when Cloudflare's list lags. The list of recent codes now keeps 300.
+- **Test codes:** they count the same on the school page and in the invoice (none).
+- **Names:** an emoji is never cut in half when a name is shortened to 60 characters.
+
+**Tested:**
+- 9 new tests in `tests/v121.test.mjs`; all 359 tests pass.
+- In the browser:
+  - the Pluss screen with Pluss unlocked;
+  - the school page keeping the phone number and name across a reload, with the name saved.
+
+**Not tested:** the live server until it is deployed.
+
 ## What's new in 1.2.0 – teacher codes, access until the licence, invoice the month after
 
 The owner's answers to the driving-school review (26 November): **1** teachers get their own codes now, **2** a pupil keeps access until the teacher marks «fikk lappen», **4** schools make codes themselves and are invoiced the month after, **6** a good way to know which code is whose. **3** (agreement, terms, data processing agreement, billing wording) waits.

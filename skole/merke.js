@@ -17,7 +17,8 @@ export async function labelKey(token) {
 
 /* «Emma Hansen» → «iv.tekst» (base64url). Tomt navn: '' (navnet fjernes). */
 export async function sealLabel(key, text) {
-  const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, MAX_LABEL);
+  // Høyst 60 tegn, talt som tegn og ikke som UTF-16, så en emoji ikke deles i to (1.2.1)
+  const t = Array.from(String(text || '').replace(/\s+/g, ' ').trim()).slice(0, MAX_LABEL).join('');
   if (!t) return '';
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(t)));

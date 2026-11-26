@@ -22,9 +22,10 @@
                                                            til skolen; den er skolens nøkkel). Pris i kr per elev inkl.
                                                            mva, grense: nye koder per måned
    node tools/skolekoder.mjs skole-endre "Skolens navn" pris=400 grense=300 maks=2
-   node tools/skolekoder.mjs laerer "Skolens navn" "Kari Nilsen"
+   node tools/skolekoder.mjs laerer "Skolens navn" "Kari Nilsen" [--uten-side]
                                                            lærerkode til én trafikklærer: låser opp trafikklærer-
-                                                           versjonen og Pluss. Skriver ut en ferdig melding til læreren
+                                                           versjonen og Pluss. Skriver ut en ferdig melding til læreren.
+                                                           Skolen må ha egen side, eller bruk --uten-side
    node tools/skolekoder.mjs faktura [2026-12]             fakturagrunnlaget: elevkodene som ble tatt i bruk i måneden
                                                            (standard forrige måned), per skole, og et regneark i
                                                            Nedlastinger
@@ -84,7 +85,7 @@ if (cmd === 'nokler') {
   const by = new Map();
   for (const k of r.koder) { const s = by.get(k.skole) || { alle: 0, brukt: 0, stengt: 0 }; s.alle++; if (k.brukt) s.brukt++; if (k.stengt) s.stengt++; by.set(k.skole, s); }
   for (const [s, n] of by) console.log(`${s}: ${n.brukt} av ${n.alle} koder brukt${n.stengt ? `, ${n.stengt} stengt` : ''}`);
-  if (skole) for (const k of r.koder) console.log(`  ${k.kode}  ${k.laerer !== null && k.laerer !== undefined ? `lærer ${k.laerer} · ` : ''}${k.brukt ? `brukt fra ${day(k.forst)} ${k.varig ? `til lappen (senest ${day(k.til)})` : `til ${day(k.til)}`} (${k.brukt} telefon${k.brukt === 1 ? '' : 'er'})` : 'ikke brukt'}${k.fullfort ? ` · fikk lappen ${day(k.fullfort)}` : k.stengt ? ' · STENGT' : ''}${k.tester ? ' · testkode' : ''}`);
+  if (skole) for (const k of r.koder) console.log(`  ${k.kode}  ${k.laerer !== null && k.laerer !== undefined ? `lærer ${k.laerer} · ` : ''}${k.brukt ? `brukt fra ${day(k.forst)} ${k.varig ? `${k.laerer !== null && k.laerer !== undefined ? 'til den stenges' : 'til lappen'} (senest ${day(k.til)})` : `til ${day(k.til)}`} (${k.brukt} telefon${k.brukt === 1 ? '' : 'er'})` : 'ikke brukt'}${k.fullfort ? ` · fikk lappen ${day(k.fullfort)}` : k.stengt ? ' · STENGT' : ''}${k.tester ? ' · testkode' : ''}`);
   if (!r.koder.length) console.log('Ingen koder ennå.');
 } else if (cmd === 'tester') {
   const [kode, av] = args;
@@ -132,15 +133,16 @@ if (cmd === 'nokler') {
   console.log(`${web}/skole/#${r.token}`);
   console.log(`Lærerkoder til trafikklærerne: node tools/skolekoder.mjs laerer "${r.navn}" "Lærerens navn"`);
 } else if (cmd === 'laerer') {
-  const [skole, navn] = args;
-  if (!skole || !navn) { console.log('Bruk: node tools/skolekoder.mjs laerer "Skolens navn" "Kari Nilsen"'); process.exit(1); }
-  const r = await admin('POST', '/admin/laerer', { skole, navn });
+  const [skole, navn] = args.filter(a => a !== '--uten-side');
+  if (!skole || !navn) { console.log('Bruk: node tools/skolekoder.mjs laerer "Skolens navn" "Kari Nilsen" [--uten-side]'); process.exit(1); }
+  // --uten-side: skolen har ingen egen side ennå (koden knyttes til navnet, og til siden når den lages med samme navn)
+  const r = await admin('POST', '/admin/laerer', { skole, navn, tving: args.includes('--uten-side') });
   console.log(`Lærerkode til ${r.navn} ved ${r.skole}${r.skoleId ? '' : ' (skolen har ikke egen side; koden er knyttet til navnet)'}: ${r.kode}`);
   console.log('Melding du kan sende til læreren:\n');
   console.log(`Hei ${r.navn.split(' ')[0]}! Her er lærerkoden din til Kjørerapport: ${r.kode}\n\nLast ned Kjørerapport fra App Store. Trykk på tannhjulet, velg «Kjørerapport Pluss» og «Kode fra trafikkskolen», og lim inn koden. Da får du trafikklærerversjonen: elevlisten, meldinger med elevene og turene de sender deg. Når en elev har fått lappen, trykker du «har fått lappen» på eleven, så avsluttes elevens tilgang fra skolen. Koden er bare til deg, og virker på to telefoner.`);
 } else if (cmd === 'faktura') {
   const [mnd] = args;
-  if (mnd && !/^\d{4}-\d{2}$/.test(mnd)) { console.log('Bruk: node tools/skolekoder.mjs faktura 2026-12   (uten måned: forrige måned)'); process.exit(1); }
+  if (mnd && !/^\d{4}-(0[1-9]|1[0-2])$/.test(mnd)) { console.log('Bruk: node tools/skolekoder.mjs faktura 2026-12   (uten måned: forrige måned)'); process.exit(1); }
   const r = await admin('GET', '/admin/faktura' + (mnd ? '?mnd=' + mnd : ''));
   if (!r.skoler.length) { console.log(`Ingen elevkoder ble tatt i bruk i ${r.mnd}. Ingen faktura.`); process.exit(0); }
   const kr = n => n.toLocaleString('nb-NO') + ' kr';
@@ -153,7 +155,8 @@ if (cmd === 'nokler') {
   const { skoler } = await admin('GET', '/admin/skoler');
   if (!skoler.length) { console.log('Ingen skoler med egen side ennå. Lag en med «skole "Navn"».'); process.exit(0); }
   for (const s of skoler) {
-    console.log(`${s.navn} (${s.pris} kr): ${s.iBruk} elever i bruk, ${s.ubrukt} sendt men ikke tatt i bruk, ${s.ferdig} fikk lappen, ${s.laerere} lærerkoder`);
+    const n = (x, en, flere) => `${x} ${x === 1 ? en : flere}`;
+    console.log(`${s.navn} (${s.pris} kr): ${n(s.iBruk, 'elev', 'elever')} i bruk, ${s.ubrukt} sendt men ikke tatt i bruk, ${s.ferdig} fikk lappen, ${n(s.laerere, 'lærerkode', 'lærerkoder')}${s.forhand ? `, ${s.forhand} forhåndsbetalte plasser igjen` : ''}`);
     console.log(`  Tatt i bruk: ${s.denneMnd} i ${s.mnd} (faktureres neste måned), ${s.forrigeMnd} i ${s.forrige} (faktureres nå: «faktura ${s.forrige}»). ${s.nye} av ${s.grense} nye koder denne måneden.`);
   }
 } else if (cmd === 'pluss') {
