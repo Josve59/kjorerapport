@@ -39,7 +39,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.1.2';
+export const APP_VERSION = '1.1.3';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -159,7 +159,8 @@ async function analyzeDrive(drive) {
   // 21 (1.0.14): turer uten kalibrering får speil og skulderblikk med standardkalibreringen, som lærer av turen
   // 22 (1.1.1): blinklyset: ingen vurdering uten klikk, og ikke under øving på plass
   // 23 (1.1.2): blinklyset: bilens takt, jevnhetskrav, og tre sekunder inn i svingen
-  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|23${drive.noFace ? 'n' : ''}${drive.practiceCount ? 'p' : ''}`;
+  // 24 (1.1.3): blinklyset: blinke, vente i krysset og svinge teller som blinket
+  const key = `${opts.factor}|${opts.engine}|${opts.perKm}|${opts.cityAware}|${opts.th ? JSON.stringify(opts.th) : '-'}|24${drive.noFace ? 'n' : ''}${drive.practiceCount ? 'p' : ''}`;
   if (drive.result && drive.resultKey === key) { if (finalizeScore(drive, drive.result)) await putDrive(drive); return drive.result; }
   const { getRaw } = await import('./db.js');
   const raw = await getRaw(drive.id);

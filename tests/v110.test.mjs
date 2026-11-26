@@ -272,3 +272,12 @@ test('blinklys i svinger vurderes bare i kryss (1.1.2)', () => {
   assert.equal(junctionNodes(segs).length, 0);
   assert.equal(junctionNodes(segs, { any: true }).length, 1);
 });
+
+test('blinklys: blinke, vente i krysset og så svinge teller som blinket (1.1.3)', () => {
+  seed(9);
+  // Blinklyset på fra 40 s, svingen begynner ved 54 s (ventet på trafikk)
+  const raw = [...sorted([...noise(0, 120, 1.5), ...indicator(20, 28, 0.72, false), ...indicator(40, 58, 0.72, false), ...indicator(90, 98, 0.72, false)]), ...levels(0, 120)];
+  const res = blinkChecks(raw, { turns: [{ t: 56, tFrom: 54, dir: 'venstre' }] });
+  assert.equal(res.checks.length, 1, 'svingen vurderes, også når blinklyset var på lenge før');
+  assert.equal(res.checks[0].heard, true);
+});

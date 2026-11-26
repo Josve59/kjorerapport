@@ -72,18 +72,30 @@ export function periodicAt(clicks, t, opt = BLINK) {
   return { on: best.n >= opt.chain, c: best.c, n: best.n, mad: best.mad, noisy: false };
 }
 
-/* Bilens blinklystakt (1.1.2): reléet har samme takt hele turen. Den finnes fra de jevneste kjedene (høyst 1,5 ms avvik),
-   og deretter teller bare kjeder med den takten (±20 ms), og fem klikk holder. Bilen 25. nov.: blinklyset 0,72 s, og
-   en annen jevn lyd (vindusviskere eller radio) 0,91 s som ellers ble tatt for blinklys. Uten slike kjeder: null. */
-export function carPeriod(clicks, opt = BLINK, step = 2) {
-  if (!clicks.length) return null;
-  const ps = [];
+/* Jevne tikk gjennom turen (1.1.3), vurdert hvert step sekund: sammenhengende perioder med takt og jevnhet.
+   Blinklyset kommer i korte perioder (sekunder, sjelden over et minutt ved et kryss); musikk spiller i minutter. */
+export const LONG_RUN = 90;   // sekunder: jevn takt så lenge er musikk eller annen lyd, ikke blinklyset
+export function steadyRuns(clicks, opt = BLINK, step = 2) {
+  const runs = [];
+  if (!clicks.length) return runs;
   for (let t = clicks[0].t + opt.win; t <= clicks[clicks.length - 1].t + 1e-9; t += step) {
     const r = periodicAt(clicks, t, opt);
-    if (r.on && r.mad <= 0.0015) ps.push(r.c);
+    if (!r.on) continue;
+    const last = runs[runs.length - 1];
+    if (last && t - last.to <= step + 1e-9) { last.to = t; last.samples.push(r); }
+    else runs.push({ from: t, to: t, samples: [r] });
   }
+  return runs;
+}
+
+/* Bilens blinklystakt (1.1.2): reléet har samme takt hele turen. Den finnes fra de jevneste kjedene (høyst 1,5 ms avvik)
+   i korte perioder (ikke musikk, 1.1.3), og deretter teller bare kjeder med den takten (±20 ms), og fem klikk holder.
+   Bilen 25. nov.: blinklyset 0,72 s, og en annen jevn lyd (vindusviskere eller radio) 0,91 s som ellers ble tatt for
+   blinklys. Uten slike kjeder: null. */
+export function carPeriod(clicks, opt = BLINK, step = 2, runs = steadyRuns(clicks, opt, step)) {
+  const ps = runs.filter(r => r.to - r.from <= LONG_RUN).flatMap(r => r.samples).filter(x => x.mad <= 0.0015).map(x => x.c);
   if (ps.length < 3) return null;
-  ps.sort((a, b) => a - b);
+  ps.sort((x, y) => x - y);
   return ps[Math.floor(ps.length / 2)];
 }
 export const forPeriod = (P, opt = BLINK) => (P ? { ...opt, minC: P - 0.02, maxC: P + 0.02, chain: 5 } : opt);
@@ -138,16 +150,17 @@ export function blinkChecks(raw, { laneChanges = [], turns = [] } = {}, opt = BL
   const levels = (raw || []).filter(x => x && Number.isFinite(x.t) && Number.isFinite(x.db)).sort((a, b) => a.t - b.t);
   if (!levels.length) return null;
   const covered = (a, b) => { const i = lower(levels, a); return i < levels.length && levels[i].t <= b; };
-  // Musikk eller annen jevn lyd: hvor ofte «blinklyset» tikker, hvert 5. sekund mens mikrofonen var på
-  let on = 0, n = 0;
-  for (const x of levels) { if (Math.round(x.t) % 5) continue; n++; if (periodicAt(clicks, x.t, opt).on) on++; }
-  const music = n ? Math.round(on / n * 100) / 100 : 0;
+  // Musikk eller annen jevn lyd (1.1.3): andelen av tiden mikrofonen lyttet med jevn takt i over 90 s i strekk. Før talte
+  // all jevn takt, så lang blinking i et kryss kunne slå av vurderingen.
+  const runs = steadyRuns(clicks, opt);
+  const longTime = runs.filter(r => r.to - r.from > LONG_RUN).reduce((sum, r) => sum + (r.to - r.from), 0);
+  const music = levels.length ? Math.round(Math.min(1, longTime / levels.length) * 100) / 100 : 0;
+  const period = carPeriod(clicks, opt, 2, runs);
   const listened = levels.length;
   if (music > opt.music) return { checks: [], music, listened };
   // Ingen klikk i det hele tatt på over et minutt (1.1.1): mikrofonen hørte ikke noe som ligner, så «blinket ikke» ville
   // vært gjetning. Da vurderes det ikke.
   if (listened >= 60 && clicks.length < 5) return { checks: [], music, listened, silent: true };
-  const period = carPeriod(clicks, opt);
   const o2 = forPeriod(period, opt);
   const checks = [];
   const check = (kind, tStart, tEnd, dir) => {
@@ -155,9 +168,8 @@ export function blinkChecks(raw, { laneChanges = [], turns = [] } = {}, opt = BL
     if (!covered(a, a + 2) || !covered(tStart - 2, tStart + 2)) return;   // mikrofonen var ikke på hele tiden
     // Blinklyset tikker gjennom svingen til rattet er rettet ut: tre sekunder etter midten av svingen teller (1.1.2)
     const heard = heardBetween(clicks, a, tEnd + 3, o2);
-    // Tikket det også et godt stykke før? Da kan det være noe annet (eller blinking for en annen manøver): ukjent
-    const earlier = heardBetween(clicks, a - 25, a - 8, o2);
-    if (heard && earlier) return;
+    // 1.1.3: før ble svingen ikke vurdert når det også tikket et godt stykke før. Men i kryss blinker du, venter og svinger:
+    // eksportene 25. nov. hadde blinklyset på 10–14 s før svingen. Med bilens egen takt er det ikke en annen lyd.
     checks.push({ t: Math.round(tStart * 10) / 10, tMid: Math.round(tEnd * 10) / 10, kind, dir: dir || '', heard });
   };
   for (const l of laneChanges) check('lane', l.tFrom, l.t, l.dir);

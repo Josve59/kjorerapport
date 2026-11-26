@@ -143,6 +143,34 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.1.3 – indicate, wait and turn
+
+Four more exports from 25 November (1.1.2):
+
+| Drive | Length | Notes |
+|---|---|---|
+| 14:42 | 6 min | wet |
+| 15:22 | 34 min, 20 km | wet, motorway |
+| 16:02 | 15 min | snow |
+| 17:02 | 4 min | dark |
+
+**Checked first:**
+- **The microphone and GPS clocks agree.** The sound levels and the GPS cover the same seconds on all seven drives.
+- **The turn signal starts early.** Often it starts 2–4 s before a turn. At junctions it often started 10–14 s before, because you indicate and then wait for traffic.
+
+**Changes (`js/blink.js`):**
+- **No «ticked long before» rule.** A turn was not judged when the turn signal had also been on 8–25 s earlier, as a guard against another steady sound. Since 1.1.2, only the car's own rhythm counts, so that guard only removed real cases: indicate, wait, turn.
+- **A music guard that doesn't confuse long indicating with music.** A steady beat only counts as music or radio when it lasts more than 90 s without a break (`steadyRuns`, `LONG_RUN`). The turn signal comes in bursts of seconds, rarely more than a minute at a junction. Before, all steady ticking counted, so a long time indicating could switch off the judgement. The car's rhythm (`carPeriod`) is learned only from the short bursts. Digital music can be as steady as the relay, but it plays for minutes.
+- **Analysis key 24.**
+
+**On the seven drives:**
+- The rhythm is 0.72 s on all of them, with music 0 and 0–9 ms per drive.
+- Turns with the turn signal heard: 10 of 20 on drive 1 (5 of 15 before), 6 of 11 on the 14:42 drive (3 of 8 before).
+- These counts still include bends. The report on the phone only judges turns at junctions from NVDB, which is not run on the Mac.
+- Lane changes: the turn signal was heard on 1 of 9. Two of them had it 7–9 s after the lane change the sensors found. It is unclear whether those were real lane changes.
+
+**Checked:** 341 tests pass. The new test covers indicating while waiting at a junction. The music test still marks 120 s of steady beat as music.
+
 ## What's new in 1.1.2 – the turn signal tuned on the first real drives
 
 The owner sent three exports from 25 November (1.1.1): drive 1 (25 min) and drive 3 (12 min) on small, odd roads, and a test standing still in between where they used the turn signal 8 times.
