@@ -15,12 +15,22 @@
    node tools/skolekoder.mjs pluss                         hvor mange telefoner hvert Pluss-kjøp brukes på (1.0.7):
                                                            viser om noen deler kjøpet. Ingenting stenges.
 
-   Skolesiden (1.0.8): skolen deler ut tilganger selv fra en pakke, på sin egen side.
-   node tools/skolekoder.mjs skole "Skolens navn" 100 [mnd] lager skolen med 100 tilganger og skriver ut lenken til
-                                                           skolens side (send den til skolen; den er skolens nøkkel)
-   node tools/skolekoder.mjs pakke "Skolens navn" 50       legger til 50 tilganger (etter betalt faktura)
-   node tools/skolekoder.mjs skoler                        alle skolene: kjøpt, i bruk, sendt, igjen og nye bestillinger
-   node tools/skolekoder.mjs ny-lenke "Skolens navn"       ny lenke til skolen; den gamle slutter å virke
+   Skolesiden (1.0.8, uten pakke fra 1.2.0): skolen lager elevkoder selv på sin egen side, og får faktura måneden etter
+   for kodene som ble tatt i bruk. En elevkode gjelder til læreren trykker «Fikk lappen» (høyst 36 måneder).
+   node tools/skolekoder.mjs skole "Skolens navn" [pris=450] [grense=200]
+                                                           lager skolen og skriver ut lenken til skolens side (send den
+                                                           til skolen; den er skolens nøkkel). Pris i kr per elev inkl.
+                                                           mva, grense: nye koder per måned
+   node tools/skolekoder.mjs skole-endre "Skolens navn" pris=400 grense=300 maks=2
+   node tools/skolekoder.mjs laerer "Skolens navn" "Kari Nilsen"
+                                                           lærerkode til én trafikklærer: låser opp trafikklærer-
+                                                           versjonen og Pluss. Skriver ut en ferdig melding til læreren
+   node tools/skolekoder.mjs faktura [2026-12]             fakturagrunnlaget: elevkodene som ble tatt i bruk i måneden
+                                                           (standard forrige måned), per skole, og et regneark i
+                                                           Nedlastinger
+   node tools/skolekoder.mjs skoler                        alle skolene: i bruk, sendt, fikk lappen, denne og forrige måned
+   node tools/skolekoder.mjs ny-lenke "Skolens navn"       ny lenke til skolen; den gamle slutter å virke (navnene skolen
+                                                           har skrevet på kodene, kan ikke leses med den nye lenken)
 
    Serveren: KJ_KODE_URL (standard http://localhost:8787, den lokale serveren) eller .local-test/skolekoder/url.txt.
    Hemmelighetene ligger i .local-test/skolekoder/ (holdes utenfor git): privat.jwk.json og admin.txt. Ta vare på dem:
@@ -74,7 +84,7 @@ if (cmd === 'nokler') {
   const by = new Map();
   for (const k of r.koder) { const s = by.get(k.skole) || { alle: 0, brukt: 0, stengt: 0 }; s.alle++; if (k.brukt) s.brukt++; if (k.stengt) s.stengt++; by.set(k.skole, s); }
   for (const [s, n] of by) console.log(`${s}: ${n.brukt} av ${n.alle} koder brukt${n.stengt ? `, ${n.stengt} stengt` : ''}`);
-  if (skole) for (const k of r.koder) console.log(`  ${k.kode}  ${k.brukt ? `brukt fra ${day(k.forst)} til ${day(k.til)} (${k.brukt} telefon${k.brukt === 1 ? '' : 'er'})` : 'ikke brukt'}${k.stengt ? ' · STENGT' : ''}${k.tester ? ' · testkode' : ''}`);
+  if (skole) for (const k of r.koder) console.log(`  ${k.kode}  ${k.laerer !== null && k.laerer !== undefined ? `lærer ${k.laerer} · ` : ''}${k.brukt ? `brukt fra ${day(k.forst)} ${k.varig ? `til lappen (senest ${day(k.til)})` : `til ${day(k.til)}`} (${k.brukt} telefon${k.brukt === 1 ? '' : 'er'})` : 'ikke brukt'}${k.fullfort ? ` · fikk lappen ${day(k.fullfort)}` : k.stengt ? ' · STENGT' : ''}${k.tester ? ' · testkode' : ''}`);
   if (!r.koder.length) console.log('Ingen koder ennå.');
 } else if (cmd === 'tester') {
   const [kode, av] = args;
@@ -104,25 +114,47 @@ if (cmd === 'nokler') {
   if (!hva) { console.log('Bruk: node tools/skolekoder.mjs slett-turer alle   (eller én NØKKEL fra «turer»)'); process.exit(1); }
   const r = await admin('POST', '/admin/slett-tur', hva === 'alle' ? { alle: true } : { nokkel: hva });
   console.log(`${r.slettet} ${r.slettet === 1 ? 'tur' : 'turer'} slettet på serveren.`);
-} else if (cmd === 'skole' || cmd === 'ny-lenke') {
-  const [navn, antall, maaneder = '12'] = args;
-  if (!navn || (cmd === 'skole' && antall === undefined)) { console.log(cmd === 'skole' ? 'Bruk: node tools/skolekoder.mjs skole "Skolens navn" 100 [måneder]' : 'Bruk: node tools/skolekoder.mjs ny-lenke "Skolens navn"'); process.exit(1); }
-  const r = cmd === 'skole' ? await admin('POST', '/admin/skole', { navn, antall: Number(antall), maaneder: Number(maaneder) }) : await admin('POST', '/admin/skole/ny-lenke', { navn });
+} else if (cmd === 'skole' || cmd === 'ny-lenke' || cmd === 'skole-endre') {
+  const [navn, ...rest] = args;
+  // «pris=400 grense=300 maks=2 maaneder=36»; et tall alene (fra før 1.2.0: antall i pakken) betyr ingenting lenger
+  const opts = Object.fromEntries(rest.filter(a => /^(pris|grense|maks|maaneder)=\d+$/.test(a)).map(a => { const [k, v] = a.split('='); return [k, Number(v)]; }));
+  if (!navn) { console.log(`Bruk: node tools/skolekoder.mjs ${cmd} "Skolens navn"${cmd === 'ny-lenke' ? '' : ' [pris=450] [grense=200]'}`); process.exit(1); }
+  if (cmd === 'skole-endre') {
+    if (!Object.keys(opts).length) { console.log('Bruk: node tools/skolekoder.mjs skole-endre "Skolens navn" pris=400 grense=300 maks=2'); process.exit(1); }
+    const r = await admin('POST', '/admin/skole/endre', { navn, ...opts });
+    console.log(`${r.navn}: ${r.pris} kr per elev inkl. mva, høyst ${r.grense} nye koder i måneden, ${r.maks} telefoner per kode, høyst ${r.maaneder} måneder.`);
+    process.exit(0);
+  }
+  const r = cmd === 'skole' ? await admin('POST', '/admin/skole', { navn, ...opts }) : await admin('POST', '/admin/skole/ny-lenke', { navn });
   const web = read('nettside-url.txt') || 'https://kjorerapport.jo-9fc.workers.dev';
-  console.log(cmd === 'skole' ? `${r.navn} er lagt inn med ${r.kjopt} tilganger (${r.maaneder} måneder fra eleven tar koden i bruk, ${r.maks} telefoner per kode).` : `${r.navn} har fått en ny lenke. Den gamle virker ikke lenger.`);
+  console.log(cmd === 'skole' ? `${r.navn} er lagt inn: ${r.pris} kr per elev inkl. mva, faktura måneden etter at eleven tar koden i bruk. Kodene gjelder til lappen (høyst ${r.maaneder} måneder), på ${r.maks} telefoner. Høyst ${r.grense} nye koder i måneden.` : `${r.navn} har fått en ny lenke. Den gamle virker ikke lenger.`);
   console.log('Lenken til skolens side (send den bare til skolen, den er skolens nøkkel):');
   console.log(`${web}/skole/#${r.token}`);
-} else if (cmd === 'pakke') {
-  const [navn, antall] = args;
-  if (!navn || !antall) { console.log('Bruk: node tools/skolekoder.mjs pakke "Skolens navn" 50'); process.exit(1); }
-  const r = await admin('POST', '/admin/skole/pakke', { navn, antall: Number(antall) });
-  console.log(`${r.navn} har nå ${r.kjopt} tilganger totalt. Skolen ser det på siden sin med en gang.`);
+  console.log(`Lærerkoder til trafikklærerne: node tools/skolekoder.mjs laerer "${r.navn}" "Lærerens navn"`);
+} else if (cmd === 'laerer') {
+  const [skole, navn] = args;
+  if (!skole || !navn) { console.log('Bruk: node tools/skolekoder.mjs laerer "Skolens navn" "Kari Nilsen"'); process.exit(1); }
+  const r = await admin('POST', '/admin/laerer', { skole, navn });
+  console.log(`Lærerkode til ${r.navn} ved ${r.skole}${r.skoleId ? '' : ' (skolen har ikke egen side; koden er knyttet til navnet)'}: ${r.kode}`);
+  console.log('Melding du kan sende til læreren:\n');
+  console.log(`Hei ${r.navn.split(' ')[0]}! Her er lærerkoden din til Kjørerapport: ${r.kode}\n\nLast ned Kjørerapport fra App Store. Trykk på tannhjulet, velg «Kjørerapport Pluss» og «Kode fra trafikkskolen», og lim inn koden. Da får du trafikklærerversjonen: elevlisten, meldinger med elevene og turene de sender deg. Når en elev har fått lappen, trykker du «har fått lappen» på eleven, så avsluttes elevens tilgang fra skolen. Koden er bare til deg, og virker på to telefoner.`);
+} else if (cmd === 'faktura') {
+  const [mnd] = args;
+  if (mnd && !/^\d{4}-\d{2}$/.test(mnd)) { console.log('Bruk: node tools/skolekoder.mjs faktura 2026-12   (uten måned: forrige måned)'); process.exit(1); }
+  const r = await admin('GET', '/admin/faktura' + (mnd ? '?mnd=' + mnd : ''));
+  if (!r.skoler.length) { console.log(`Ingen elevkoder ble tatt i bruk i ${r.mnd}. Ingen faktura.`); process.exit(0); }
+  const kr = n => n.toLocaleString('nb-NO') + ' kr';
+  console.log(`Fakturagrunnlag for ${r.mnd} (elevkoder tatt i bruk i måneden, priser inkl. mva):`);
+  for (const s of r.skoler) console.log(`  ${s.navn}: ${s.antall} × ${kr(s.pris)} = ${kr(s.sum)}`);
+  const file = path.join(os.homedir(), 'Downloads', `kjorerapport-faktura-${r.mnd}.csv`);
+  fs.writeFileSync(file, '\ufeffSkole;Kode;Tatt i bruk;Pris inkl. mva\n' + r.skoler.flatMap(s => s.koder.map(k => `${s.navn};${k.kode};${day(k.forst)};${s.pris}`)).join('\n') + '\n');
+  console.log(`Kodene ligger i regnearket ${file} (legg det ved fakturaen om skolen vil se hvilke koder det gjelder).`);
 } else if (cmd === 'skoler') {
   const { skoler } = await admin('GET', '/admin/skoler');
-  if (!skoler.length) { console.log('Ingen skoler med egen side ennå. Lag en med «skole "Navn" 100».'); process.exit(0); }
+  if (!skoler.length) { console.log('Ingen skoler med egen side ennå. Lag en med «skole "Navn"».'); process.exit(0); }
   for (const s of skoler) {
-    console.log(`${s.navn}: ${s.kjopt} kjøpt, ${s.brukt} i bruk, ${s.ubrukt} sendt men ikke tatt i bruk, ${s.igjen} igjen`);
-    for (const b of s.bestillinger) console.log(`  BESTILLING: ${b.antall} tilganger, ${day(b.t)}. Send faktura, og kjør «pakke "${s.navn}" ${b.antall}» når den er betalt.`);
+    console.log(`${s.navn} (${s.pris} kr): ${s.iBruk} elever i bruk, ${s.ubrukt} sendt men ikke tatt i bruk, ${s.ferdig} fikk lappen, ${s.laerere} lærerkoder`);
+    console.log(`  Tatt i bruk: ${s.denneMnd} i ${s.mnd} (faktureres neste måned), ${s.forrigeMnd} i ${s.forrige} (faktureres nå: «faktura ${s.forrige}»). ${s.nye} av ${s.grense} nye koder denne måneden.`);
   }
 } else if (cmd === 'pluss') {
   const r = await admin('GET', '/admin/pluss');

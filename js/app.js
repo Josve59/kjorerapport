@@ -1,7 +1,7 @@
 /* Kjørerapport – skjermer og navigasjon. Alt skjer lokalt på telefonen. */
 import { analyze, makeDemo, makeTips, SENSITIVITY, TH } from './analysis.js';
 import { practiceSpans, rescore, inSpans } from './practice.js';
-import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, SEND_ERROR, ERROR_TEXT as CODE_ERROR } from './skolekode.js';
+import { loadSchoolPass, activateCode, codesEnabled, codeFromUrl, sendTripToDev, SEND_ERROR, ERROR_TEXT as CODE_ERROR, formatCode, completeStudent, COMPLETE_ERROR } from './skolekode.js';
 import { isAndroid, installHelp, permissionHelp, screenLockHelp } from './platform.js';
 import { Recorder, requestMotionPermission, requestLocationOnce, startPrecheck } from './recorder.js';
 import { listDrives, getDrive, putDrive, updateDrive, importDrive, importSharedDrive, deleteDrive, deleteAll, getSettings, saveSettings, exportPayload, toJSON, requestPersistentStorage, isDemoMode, setDemoMode } from './db.js';
@@ -28,7 +28,7 @@ import { crestSpeed, speedScore, totalScore } from './speedfit.js';
 import { renderTheoryHub, renderPractice, renderExam, renderExamResult, renderSafetyHub, renderSafetyDrill, renderSignHub, stopTheory, theorySummary, theoryMiniCards, practiceBack, teacherTheory, THEORY_HOME, renderBook, bookTitle, renderCross, renderCards, syncReminders } from './theoryui.js';
 import { normProgress, tagsFromDrives } from './theory.js';
 import { GUIDES, guideFor, isDarkSeason } from './guides.js';
-import { hasPlus, hasTheory, hasFeature, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS } from './plus.js';
+import { hasPlus, hasTheory, hasFeature, plusState, refreshPlus, buyPlus, restorePlus, redeemPlus, onPlusChange, setDevPlus, reportLocked, gateFor, PLUS_FEATURES, FREE_REPORTS, teacherPass } from './plus.js';
 import { readiness, READY_TEXT } from './readiness.js';
 import { blinkChecks, findTurns } from './blink.js';
 import { fetchNearby, distText, mapsLink } from './nearby.js';
@@ -39,7 +39,7 @@ import { createTestDrives, removeTestDrives, TEST_STUDENTS } from './testdata.js
 import { VIEW_MODES, setViewMode, viewMode, isTeacher, isSchool, plusFor, modeFromLegacy, schoolInfo, students, activeStudents, archivedStudents, forgetStudent, scopeDriver, personKey, recordDriver, homeworkFor } from './modes.js';
 import { TEACHER_THREAD, buildPackage, readPackage, isPackage, matchStudent, newPersonId, mergeThread, unread, markRead, unsent, refLabel, cleanRef, cleanMessage, newMsgId, packageName, studentOverview, sortStudents, filterStudents, SORTS } from './messages.js';
 
-export const APP_VERSION = '1.1.3';
+export const APP_VERSION = '1.2.0';
 let speakNext = null;
 const $ = sel => document.querySelector(sel);
 const screens = {};
@@ -636,7 +636,7 @@ async function useLinkCode() {
   if (cur && cur.kode === code && plusState().school) { forget(); return; }   // allerede låst opp med denne koden
   if (!codesEnabled()) return;
   const r = await activateCode(code);
-  if (r.ok) { forget(); if (!applyTesterSetup()) toast(`Pluss er låst opp av ${r.skole}, til ${longDay(r.til)}.`, { type: 'ok', ms: 4000 }); route(); return; }
+  if (r.ok) { forget(); if (r.laerer) { await offerTeacherMode(r); return; } if (!applyTesterSetup()) toast(unlockedText(r), { type: 'ok', ms: 4000 }); route(); return; }
   if (r.error !== 'nett' && r.error !== 'server') forget();   // uten nett prøves lenken igjen neste gang
   infoDialog({ title: 'Koden i lenken virket ikke', text: CODE_ERROR[r.error] || CODE_ERROR.server });
 }
@@ -644,6 +644,7 @@ async function useLinkCode() {
    (i nettleseren bare veikameraet; i iPhone-appen begge), testknappene «Feltskifte» og «Feil grense» vises under kjøring,
    og «Visning» finnes i Innstillinger. Etterpå bestemmer testeren selv. → true hvis oppsettet ble gjort nå. */
 let passReady = Promise.resolve();   // skolebeviset ved start (settes i init)
+let passLocal = Promise.resolve();   // 1.2.0: beviset som er lagret på telefonen er sjekket (før serveren svarer)
 const TESTER_SETUP_V = 2;   // 2 (0.28.0): veikamera i stedet for førerkamera på nett, og meldingen vises på nytt
 const isTester = () => !!(plusState().school && plusState().school.tester);
 let testerNoteOpen = false;
@@ -657,7 +658,7 @@ function applyTesterSetup() {
   // tar over, og da forsvant meldingen før den ble lest
   if (getSettings().testerNoted || testerNoteOpen) return fresh;
   testerNoteOpen = true;
-  infoDialog({ title: 'Du er tester', text: `Appen er satt opp som utviklerens egen testapp, og alt er åpent til ${longDay(pass.exp)}. ${window.kjNative ? 'Begge kameraene og testknappene under kjøring er slått på. Kalibrer førerkameraet under Innstillinger › Kamera før første tur.' : 'Veikameraet og testknappene under kjøring er slått på. Fest telefonen så kameraet på baksiden ser veien foran. Førerkameraet (speil og skulderblikk) finnes bare i iPhone-appen.'} Under Innstillinger › Visning kan du se appen som gratis, Pluss, koblet til trafikkskole eller trafikklærer. I rapporten kan du sende turen til utvikleren.` }).then(() => { saveSettings({ ...getSettings(), testerNoted: true }); testerNoteOpen = false; });
+  infoDialog({ title: 'Du er tester', text: `Appen er satt opp som utviklerens egen testapp, og alt er åpent til ${longDay(pass.slutt || pass.exp)}. ${window.kjNative ? 'Begge kameraene og testknappene under kjøring er slått på. Kalibrer førerkameraet under Innstillinger › Kamera før første tur.' : 'Veikameraet og testknappene under kjøring er slått på. Fest telefonen så kameraet på baksiden ser veien foran. Førerkameraet (speil og skulderblikk) finnes bare i iPhone-appen.'} Under Innstillinger › Visning kan du se appen som gratis, Pluss, koblet til trafikkskole eller trafikklærer. I rapporten kan du sende turen til utvikleren.` }).then(() => { saveSettings({ ...getSettings(), testerNoted: true }); testerNoteOpen = false; });
   return true;
 }
 /* Pluss-siden: hva Pluss gir (funksjonen brukeren kom fra øverst), pris, kjøp, gjenopprett og kode fra trafikkskolen */
@@ -676,7 +677,11 @@ async function renderPlus(feature = null) {
       if (btn) { btn.disabled = true; }
       const r = await activateCode(v);
       if (btn) { btn.disabled = false; }
-      if (r.ok) { vibrate([30, 60, 30]); toast(`Pluss er låst opp av ${r.skole}, til ${longDay(r.til)}.`, { type: 'ok', ms: 4000 }); if (gateFor(location.hash)) route(); else draw(); return; }
+      if (r.ok) {
+        vibrate([30, 60, 30]);
+        if (r.laerer) { await offerTeacherMode(r); if (location.hash === '#/pluss') draw(); return; }   // lærerkode (1.2.0)
+        toast(unlockedText(r), { type: 'ok', ms: 4000 }); if (gateFor(location.hash)) route(); else draw(); return;
+      }
       infoDialog({ title: 'Koden virket ikke', text: CODE_ERROR[r.error] || CODE_ERROR.server });
     };
     // Nettversjonen (0.23.0): resten er gratis der, men teorien hører til Pluss i iPhone-appen og kan ikke kjøpes her
@@ -700,8 +705,9 @@ async function renderPlus(feature = null) {
     root.innerHTML = `
       <section class="plus-hero">
         <span class="plus-badge">${icon('check', 18)}Pluss</span>
-        <h2>${school ? (school.tester ? 'Du tester Kjørerapport' : 'Du har Pluss fra trafikkskolen') : webFree ? 'Nettversjonen' : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
-        <p>${school ? (school.tester ? `Full tilgang til ${esc(longDay(school.exp))}. Takk for at du tester!` : `Fra ${esc(school.skole)}, til ${esc(longDay(school.exp))}. Alt i appen er låst opp.`) : webFree ? 'Her er alt gratis, unntatt teorien. Teorien får du i iPhone-appen med Pluss, eller med en kode fra trafikkskolen.' : owned ? 'Alt i appen er låst opp.' : 'Ett kjøp, ikke abonnement, og det går aldri ut.'}</p>
+        <h2>${school ? (school.laerer ? 'Du har trafikklærerversjonen' : school.tester ? 'Du tester Kjørerapport' : 'Du har Pluss fra trafikkskolen') : webFree ? 'Nettversjonen' : owned ? 'Du har Pluss. Takk!' : feature && PLUS_FEATURES[feature] ? `${esc(PLUS_FEATURES[feature].title)} er en del av Pluss` : 'Få mer ut av øvingen'}</h2>
+        <p>${school ? (school.laerer ? `Lærerkode fra ${esc(school.skole)}${school.navn ? ` til ${esc(school.navn)}` : ''}. Pluss og trafikklærerversjonen er låst opp${isTeacher() ? '' : ': velg «Trafikklærer» under Innstillinger'}.` : school.tester ? `Full tilgang til ${esc(longDay(school.slutt))}. Takk for at du tester!` : `Fra ${esc(school.skole)}, ${school.varig ? 'til du har fått lappen' : `til ${esc(longDay(school.slutt))}`}. Alt i appen er låst opp.`) : webFree ? 'Her er alt gratis, unntatt teorien. Teorien får du i iPhone-appen med Pluss, eller med en kode fra trafikkskolen.' : owned ? 'Alt i appen er låst opp.' : 'Ett kjøp, ikke abonnement, og det går aldri ut.'}</p>
+        ${school && school.kode ? `<p class="muted small">${school.laerer ? 'Lærerkoden din' : 'Koden din'}: <strong class="plus-code">${esc(formatCode(school.kode))}</strong>${school.laerer ? '' : '. Skolen kjenner deg igjen på den.'}</p>` : ''}
       </section>
       <section class="card plus-list">${order.map(k => { const f = PLUS_FEATURES[k]; return `<div class="plus-item${k === feature && !owned ? ' focus' : ''}"><span class="plus-ico">${icon(f.icon, 22)}</span><span><strong>${esc(f.title)}</strong><span class="muted small">${esc(f.text)}</span></span>${hasIt(k) ? `<span class="plus-ok">${icon('check', 18)}</span>` : owned ? `<span class="lock-tag">${icon('lock', 14)}Kode</span>` : ''}</div>`; }).join('')}</section>
       ${webFree && codesEnabled() ? '<button type="button" class="btn secondary" id="plus-school">Jeg har en kode fra trafikkskolen</button>' : ''}
@@ -1309,7 +1315,9 @@ async function sendMessages(key) {
   let myId = '';
   if (!isTeacher()) { myId = s.myId || newPersonId(); if (!s.myId) saveSettings({ ...getSettings(), myId }); }
   const theory = isTeacher() ? null : ((s.theory || {})[personKey(s)] || null);
-  const pkg = buildPackage({ from: { role: me(), name: myName() || (isTeacher() ? 'Trafikklæreren' : 'Eleven'), id: myId }, to: isTeacher() ? key : '', messages: pending, drives, homework, theory, appVersion: APP_VERSION });
+  // Elevens kode fra skolen følger med (1.2.0), så «har fått lappen» hos læreren avslutter den. Aldri en lærerkode.
+  const sk = s.skolekode, kode = !isTeacher() && sk && sk.rolle !== 'laerer' ? sk.kode : '';
+  const pkg = buildPackage({ from: { role: me(), name: myName() || (isTeacher() ? 'Trafikklæreren' : 'Eleven'), id: myId, kode }, to: isTeacher() ? key : '', messages: pending, drives, homework, theory, appVersion: APP_VERSION });
   const ok = await shareFile(toJSON(pkg), packageName(isTeacher() ? key : myName() || 'til-laereren'));
   if (!ok) { toast('Meldingen er lagret, men ikke sendt. Trykk «Send nå» når du vil sende den.', { ms: 3500 }); return false; }
   if (ok === 'downloaded' && !(await confirmDialog({ title: 'Filen er lagret', text: `Nettleseren kunne ikke dele filen direkte, så den ligger i ${DOWNLOAD_PLACE()}. Send den som vedlegg på e-post, SMS eller Messenger til ${isTeacher() ? key : 'læreren'}. Har du sendt den?`, ok: 'Ja, den er sendt', cancel: 'Ikke ennå' }))) {
@@ -1344,8 +1352,8 @@ async function openMessageData(payload) {
       name = same ? same.name : r;
       if (!same) addStudent(name, '');
     }
-    // Husk ID-en, så neste melding fra eleven havner rett uten spørsmål
-    if (p.from.id) { const cur = getSettings(); saveSettings({ ...cur, students: students(cur).map(x => (x.name === name ? { ...x, ids: [...new Set([...(x.ids || []), p.from.id])].slice(-3) } : x)) }); }
+    // Husk ID-en, så neste melding fra eleven havner rett uten spørsmål, og koden fra skolen (1.2.0) til «har fått lappen»
+    if (p.from.id || p.from.kode) { const cur = getSettings(); saveSettings({ ...cur, students: students(cur).map(x => (x.name === name ? { ...x, ...(p.from.id ? { ids: [...new Set([...(x.ids || []), p.from.id])].slice(-3) } : {}), ...(p.from.kode ? { kode: p.from.kode } : {}) } : x)) }); }
     for (const sd of p.drives) await importSharedDrive(sd, { from: name });
     const cur = getSettings(), had = new Set(threadOf(cur, name).map(m => m.id));
     saveSettings({ ...cur, messages: { ...(cur.messages || {}), [name]: mergeThread(threadOf(cur, name), p.messages) },
@@ -1489,9 +1497,9 @@ async function renderTeacher(opts = {}) {
   const teacher = s.teacherName || (schoolInfo(s) || {}).teacher || '';
   $('#teacher-title').textContent = 'Til trafikklæreren';
   $('#teacher .page-actions').hidden = false;
-  // Meldingene (1.1.1): læreren kan bare åpne dem i trafikklærerversjonen, som kommer med lærerkoden. Til da bare i
-  // testbyggene, eller når det alt finnes en samtale (fra en sikkerhetskopi).
-  const talk = teacherMsgs || thread.length > 0;
+  // Meldingene (1.1.1): læreren kan bare åpne dem i trafikklærerversjonen, som kommer med lærerkoden (1.2.0). Derfor
+  // med kode fra skolen, i testbyggene, eller når det alt finnes en samtale (fra en sikkerhetskopi).
+  const talk = msgsOn() || thread.length > 0;
   $('#teacher-top').innerHTML = `${isSchool() ? schoolCardHtml(s) : homeworkCardHtml(receivedHomework(s), false)}
     ${talk ? threadCardHtml(thread, { title: teacher ? `Meldinger med ${teacher}` : 'Meldinger med trafikklæreren', mine: 'elev', all: !!opts.all,
       empty: 'Spør om noe, eller legg ved en tur du vil ha tilbakemelding på. Svaret fra læreren kommer som en fil du åpner her.' }) : ''}`;
@@ -1591,7 +1599,7 @@ async function renderStudent(name, opts = {}) {
   $('#teacher .page-actions').hidden = false;
   $('#teacher-top').innerHTML = `
     <section class="card st-head"><span class="student-ava big" aria-hidden="true">${esc(name.slice(0, 1).toUpperCase())}</span>
-      <span class="st-main"><strong>${esc(name)}</strong><span class="muted small">${st.email ? esc(st.email) : 'Ingen e-post lagt inn'}</span></span></section>
+      <span class="st-main"><strong>${esc(name)}</strong><span class="muted small">${st.email ? esc(st.email) : 'Ingen e-post lagt inn'}${st.kode ? ` · kode ${esc(formatCode(st.kode))}` : ''}</span></span></section>
     <button type="button" class="btn primary" id="btn-st-drive">${icon('play', 20)}Start kjøretime med ${esc(name)}</button>
     ${threadCardHtml(thread, { title: `Meldinger med ${name}`, mine: 'laerer', all: !!opts.all, empty: `Skriv til ${name}, eller åpne en tur og trykk «Gi tilbakemelding». Leksene følger med neste melding du sender.` })}
     <div id="st-progress"></div>
@@ -1626,13 +1634,22 @@ async function renderStudent(name, opts = {}) {
       <button type="button" class="btn danger" id="btn-st-delete">${icon('trash', 20)}Slett eleven</button>
     </section>`);
   root.querySelectorAll('.drive').forEach(b => b.onclick = () => { location.hash = '#/rapport/' + b.dataset.id; });
-  // Fått lappen og slett gjør det samme (eierens valg 14.11.2026: ingenting om eleven blir liggende igjen); bare ordene er ulike
+  // Fått lappen og slett gjør det samme (eierens valg 14.11.2026: ingenting om eleven blir liggende igjen); bare ordene er ulike.
+  // 1.2.0 (eieren): med lærerkode avslutter «har fått lappen» også elevens tilgang fra skolen, når koden er kjent (den
+  // følger med meldingene fra eleven). Uten koden må det gjøres på skolesiden.
   const finish = async passed => {
     const n = (await listDrives()).filter(d => (d.driver || '') === name).length;
     const waiting = unsent(threadOf(getSettings(), name), 'laerer').length;
+    const end = passed && teacherPass() ? (st.kode ? 'code' : 'page') : '';
     const what = `Alt om ${name} slettes nå fra denne telefonen: ${n} ${n === 1 ? 'tur' : 'turer'}, meldingene, leksene, timene og notatene. Det kan ikke angres.`;
+    const access = end === 'code' ? ` Tilgangen til Pluss fra skolen avsluttes også, og ${name} får en hilsen i appen.` : end === 'page' ? ` Har ${name} kode fra skolen, trykk «Fikk lappen» på skolesiden også, så avsluttes tilgangen. Appen kjenner ikke koden: den følger med når eleven sender en melding fra appen.` : '';
     const warn = waiting ? ` Du har ${waiting === 1 ? 'én melding' : `${waiting} meldinger`} som ikke er sendt. Send ${waiting === 1 ? 'den' : 'dem'} først hvis eleven skal få ${waiting === 1 ? 'den' : 'dem'}.` : '';
-    if (!(await confirmDialog({ title: passed ? `Gratulerer til ${name}!` : `Slette ${name}?`, text: what + warn, ok: passed ? 'Slett alt' : 'Slett', danger: true }))) return;
+    if (!(await confirmDialog({ title: passed ? `Gratulerer til ${name}!` : `Slette ${name}?`, text: what + access + warn, ok: passed ? 'Slett alt' : 'Slett', danger: true }))) return;
+    // Koden avsluttes først: går det ikke, får læreren vite det mens koden fortsatt står på skjermen
+    if (end === 'code') {
+      const r = await completeStudent(st.kode);
+      if (r.error && r.error !== 'ubrukt') await infoDialog({ title: 'Tilgangen er ikke avsluttet', text: `${COMPLETE_ERROR[r.error] || COMPLETE_ERROR.server} Koden til ${name} er ${formatCode(st.kode)}.` });
+    }
     await deleteStudent(name);
     if (passed) vibrate([30, 60, 30]);
     toast(passed ? `${name} har fått lappen, og alt om eleven er slettet.` : `${name} er slettet.`, { type: 'ok', ms: 3000 });
@@ -2440,7 +2457,10 @@ async function startRecording(replay = null) {
 }
 
 let mockNext = false;   // prøve-oppkjøring valgt i «Før du kjører» (1.1.0), bare for turen som startes
-let teacherMsgs = false;   // meldinger med læreren (1.1.1): bare i testbyggene til lærerkoden finnes (init)
+let teacherMsgs = false;   // meldinger med læreren (1.1.1): i testbyggene (init)
+/* 1.2.0: meldinger med læreren også for den som har kode fra trafikkskolen, elev eller lærer: lærerne der har
+   trafikklærerversjonen med lærerkoden sin. Den som har kjøpt Pluss selv, har ingen lærer i appen å sende til. */
+const msgsOn = () => teacherMsgs || !!plusState().school;
 let onAudio = null;    // klikkene fra mikrofonen (blinklyset, 1.1.0) mens opptaket pågår
 
 /* Testbygg (Xcode og TestFlight, 0.18.4): da vises testknappene under kjøring som standard. Nettversjonen og App Store: nei. */
@@ -3119,7 +3139,7 @@ async function renderDriveReport(id, { keepScroll = false } = {}) {
 /* Meldingene om en tur, og «Spør trafikklæreren» / «Gi tilbakemelding» i rapporten (0.18.0) */
 function talkFor(drive, r, s) {
   if (drive.demo || drive.imported || !r || !r.points || r.points.length < 2) return null;
-  if (!isTeacher() && !teacherMsgs) return null;   // 1.1.1: meldinger bare der læreren kan åpne dem (se renderTeacher)
+  if (!isTeacher() && !msgsOn()) return null;   // 1.1.1: meldinger bare der læreren kan åpne dem (se renderTeacher)
   const key = isTeacher() ? (drive.driver || '') : TEACHER_THREAD;
   return { messages: key ? threadOf(s, key).filter(m => m.ref && m.ref.driveId === drive.id) : [], mine: me(),
     ask: isTeacher() ? 'Gi tilbakemelding' : 'Spør trafikklæreren', onAsk: preset => askAbout(drive, r, preset) };
@@ -3450,12 +3470,12 @@ function renderDriverSettings() {
   $('#goals-title').hidden = false;
   inp.value = s.name || s.activeDriver || '';
   inp.onchange = () => saveSettings({ ...getSettings(), name: inp.value.trim().slice(0, 40) });
-  // Elev eller trafikklærer (0.18.4). Bytter visning med en gang. 1.0.16: trafikklærerversjonen skal åpnes med en egen
-  // lærerkode fra Kjørerapport (eieren lager den per skole og lærer, kommer senere). Til da bare i testbyggene, for den
-  // ga hele Pluss gratis. Den som alt er trafikklærer, ser valget og kan bytte tilbake.
+  // Elev eller trafikklærer (0.18.4). Bytter visning med en gang. Trafikklærerversjonen åpnes med en lærerkode fra
+  // Kjørerapport (1.2.0; eieren lager den per skole og lærer), eller i testbyggene. Den som alt er trafikklærer, ser
+  // valget og kan bytte tilbake.
   const roleField = $('#role-field');
   roleField.hidden = !isTeacher();
-  if (!isTeacher()) viewModesAllowed().then(ok => { roleField.hidden = !ok; }).catch(() => {});
+  if (!isTeacher()) teacherModeAllowed().then(ok => { roleField.hidden = !ok; }).catch(() => {});
   document.querySelectorAll('input[name=role]').forEach(r => {
     r.checked = (r.value === 'laerer') === isTeacher();
     r.onchange = async () => {
@@ -3474,6 +3494,55 @@ function renderDriverSettings() {
     };
   });
 }
+
+/* Trafikklærerversjonen (1.2.0): med en gyldig lærerkode, eller der alle visningene finnes (testbyggene). Venter bare
+   på beviset som er lagret på telefonen, ikke på svaret fra serveren, så en lærer uten dekning ikke blir stående. */
+async function teacherModeAllowed() {
+  await passLocal;
+  return !!teacherPass() || viewModesAllowed();
+}
+/* Etter sjekken av skolekoden (1.2.0): uten lærerkode (stengt eller utløpt) er appen tilbake for elev og ledsager.
+   Er koden avsluttet hos skolen (skoleSlutt), huskes det; ellers (bare utløpt uten nett) kommer læreren tilbake når
+   koden er fornyet. Så sies det fra én gang. */
+let schoolEndOpen = false;
+async function afterPassCheck() {
+  if (isTeacher() && !teacherPass() && !(await viewModesAllowed())) {
+    applyViewMode('app');
+    if (getSettings().skoleSlutt) saveSettings({ ...getSettings(), viewMode: 'app', devPlus: '' });
+    route();
+  }
+  showSchoolEnd();
+}
+function showSchoolEnd() {
+  const end = getSettings().skoleSlutt;
+  if (!end || schoolEndOpen || (recorder && recorder.running)) return;
+  schoolEndOpen = true;
+  const from = end.skole ? ` fra ${end.skole}` : '';
+  const passed = end.grunn === 'fullfort' && !end.laerer;
+  // I testbyggene blir lærervisningen stående (afterPassCheck), så da sies ikke at appen er tilbake for elev
+  const text = end.laerer ? `Lærerkoden${from} virker ikke lenger${isTeacher() ? '' : ', så appen er tilbake som for elev og ledsager'}. Elevene og meldingene ligger fortsatt på telefonen. Spør skolen hvis dette er feil.`
+    : passed ? `${end.skole || 'Trafikkskolen'} har avsluttet tilgangen din til Kjørerapport Pluss nå som du har fått lappen. Turene, rapportene og kjøreloggen ligger fortsatt i appen, og du kan eksportere dem når du vil. God tur videre!`
+    : `Tilgangen til Kjørerapport Pluss${from} er avsluttet. Turene og rapportene ligger fortsatt i appen. Spør trafikkskolen hvis dette er feil.`;
+  if (passed) vibrate([30, 60, 30]);
+  infoDialog({ title: passed ? 'Gratulerer med lappen!' : end.laerer ? 'Lærerkoden er avsluttet' : 'Tilgangen fra skolen er avsluttet', text }).then(() => {
+    const { skoleSlutt, ...rest } = getSettings();
+    saveSettings(rest);
+    schoolEndOpen = false;
+  });
+}
+/* Lærerkoden er nettopp lagt inn (1.2.0): navnet blir lærerens navn i appen, og læreren kan bytte til lærervisningen */
+async function offerTeacherMode(r) {
+  if (r.navn && !String(getSettings().name || '').trim()) saveSettings({ ...getSettings(), name: r.navn.slice(0, 40) });
+  if (isTeacher()) { toast(`Lærerkoden fra ${r.skole} er lagt inn.`, { type: 'ok', ms: 3000 }); return; }
+  const ok = await confirmDialog({ title: r.navn ? `Velkommen, ${r.navn.split(' ')[0]}!` : 'Lærerkoden er lagt inn', text: `Lærerkoden fra ${r.skole} låser opp trafikklærerversjonen og Pluss. Vil du bruke appen som trafikklærer nå? Da får du en elevliste, meldinger med elevene og kjøretimer på eleven du velger. Du kan bytte under Innstillinger.`, ok: 'Ja, trafikklærer', cancel: 'Ikke nå' });
+  if (!ok) { route(); return; }
+  applyViewMode('teacher');
+  saveSettings({ ...getSettings(), viewMode: 'teacher', devPlus: '' });
+  location.hash = '#/trafikklaerer';
+  route();
+}
+/* «Pluss er låst opp av …» etter en kode fra skolen */
+const unlockedText = r => `Pluss er låst opp av ${r.skole}, ${r.varig ? 'til du har fått lappen' : `til ${longDay(r.til)}`}.`;
 
 /* Visning (0.12.0, midlertidig): bytt mellom gratis, Pluss, koblet til trafikkskole og trafikklærer. Bare i
    testbyggene (Xcode og TestFlight) og i nettversjonen; App Store-utgaven følger alltid App Store. */
@@ -3845,7 +3914,9 @@ function init() {
   // Android (0.27.6): tekster merket android-only / not-android i index.html
   document.body.classList.toggle('is-android', isAndroid());
   // Skolebeviset sjekkes først (0.28.0): testere skal få «Visning»-valget sitt tilbake ved start
-  passReady = loadSchoolPass().catch(() => {});
+  let localDone;
+  passLocal = new Promise(res => { localDone = res; });
+  passReady = loadSchoolPass({ onLocal: () => localDone() }).catch(() => {}).finally(() => localDone());
   ['home', 'precheck', 'record', 'report', 'settings', 'log', 'spots', 'plan', 'camera', 'teacher', 'guides', 'pluss', 'ready', 'progress', 'theory', 'insurance'].forEach(n => { screens[n] = document.getElementById(n); });
   // Bevegelsesdata (0.12.4): iPhone gir dem bare etter et trykk. «Start kjøretur» er trykket, så tilgangen bes om her;
   // sjekken før kjøring starter av seg selv uten trykk, og fikk ellers aldri data.
@@ -3863,18 +3934,19 @@ function init() {
   // Siden er nettopp lastet, så ingen tur tas opp nå (1.1.1). Krasjet siden under en tur, ville iPhone-appen ellers fortsatt
   // med GPS i bakgrunnen, mikrofonen og turen på låseskjermen, uten at noe ble lagret.
   if (window.kjNative && window.kjNative.recStop) window.kjNative.recStop();
-  // Meldinger med læreren følger trafikklærerversjonen (1.1.1): bare i testbyggene til lærerkoden kommer
+  // Meldinger med læreren følger trafikklærerversjonen (1.1.1): i testbyggene, og med kode fra skolen (msgsOn, 1.2.0)
   viewModesAllowed().then(ok => { teacherMsgs = ok; }).catch(() => {});
-  // Alle visningene, også trafikklærer (1.0.16, til lærerkoden kommer), bare i testbyggene
-  const modeReady = wantedMode !== 'app' ? viewModesAllowed().then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
+  // Alle visningene bare i testbyggene; trafikklærer også med lærerkoden (1.2.0)
+  const modeReady = wantedMode !== 'app' ? (wantedMode === 'teacher' ? teacherModeAllowed() : viewModesAllowed()).then(ok => { if (ok) { applyViewMode(wantedMode); route(); } }).catch(() => {}) : Promise.resolve();
   // Fil åpnet i iPhone-appen (0.18.1): når appen startes av filen, og når den kommer mens appen er åpen.
   // Etter visningen, så en melding til læreren havner i lærervisningen.
   modeReady.then(() => setTimeout(openIncomingFile, 300));
   window.addEventListener('kjfile', () => modeReady.then(openIncomingFile));
   // Kode fra trafikkskolen (0.27.0): beviset sjekkes uten nett ved start, og serveren spørres igjen etter en uke
   // Testere som alt har koden (0.27.7), får oppsettet også når testkoden først oppdages ved en senere sjekk
-  passReady.then(useLinkCode).then(() => applyTesterSetup());
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSchoolPass().catch(() => {}).then(() => applyTesterSetup()); });
+  // 1.2.0: etter sjekken byttes en lærer uten gyldig lærerkode tilbake, og en avsluttet kode sies fra om (gratulerer)
+  passReady.then(useLinkCode).then(() => { applyTesterSetup(); return modeReady; }).then(afterPassCheck).catch(() => {});
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadSchoolPass().catch(() => {}).then(() => { applyTesterSetup(); return afterPassCheck(); }).catch(() => {}); });
   // Veidata i bakgrunnen (0.26.6): når appen starter, når telefonen får nett igjen og når appen kommer fram igjen
   const prefetchSoon = ms => setTimeout(() => { prefetchRoadData().catch(() => {}); }, ms);
   modeReady.then(() => prefetchSoon(4000));

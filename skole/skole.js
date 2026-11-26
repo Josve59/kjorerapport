@@ -1,24 +1,28 @@
-/* Skolesiden (1.0.8). Trafikkskolen kjøper en pakke med elevtilganger til Kjørerapport Pluss og deler dem ut her: ett
-   trykk gir en kode og en ferdig SMS med lenke til eleven (elev/index.html). Ingen konto: lenken skolen fikk
-   (…/skole/#nøkkel) er nøkkelen. Den står etter «#», så den sendes aldri til nettstedet; siden sender den bare til
-   kodeserveren (server/skolekoder/worker.js). Ingen elevnavn lagres: vil skolen vite hvem som har hvilken kode, skriver
-   den koden i sitt eget elevsystem. */
+/* Skolesiden (1.0.8, uten pakke fra 1.2.0). Trafikkskolen lager elevtilganger til Kjørerapport Pluss her: ett trykk gir
+   en kode og en ferdig SMS med lenke til eleven (elev/index.html). Koden gjelder til læreren trykker «Fikk lappen», og
+   skolen får faktura måneden etter for kodene som ble tatt i bruk. Ingen konto: lenken skolen fikk (…/skole/#nøkkel)
+   er nøkkelen. Den står etter «#», så den sendes aldri til nettstedet; siden sender den bare til kodeserveren
+   (server/skolekoder/worker.js). Elevens navn kan skrives på koden: det krypteres her med en nøkkel fra lenken
+   (merke.js), så serveren aldri får navnet. */
 import { serverUrl } from '../js/skolekode.js';
 import { qrSvg } from './qr.js';
+import { labelKey, sealLabel, openLabel, MAX_LABEL } from './merke.js';
 
 const KEY = 'kjorerapport.skolenokkel';
-const CONTACT = 'Jo@svendsenmedia.net';
-const PACKS = [25, 50, 100, 200];
-/* Kr per elev inkl. mva (eieren, 23. nov. 2026: 360 kr + 25 % mva; før 350 kr uten mva). Kjøreopplæring er unntatt fra
-   mva, så skolene har som regel ikke fradrag: prisen med mva er den de faktisk betaler. */
-const PRICE = 450;
-const PRICE_EX = PRICE / 1.25;
 
 const $ = s => document.querySelector(s);
 const app = $('#app');
+// Kontaktadressen står ett sted: i bunnteksten på siden (index.html)
+const CONTACT = (($('footer a[href^="mailto:"]') || {}).textContent || '').trim();
+const mailto = (subject = '', body = '') => `mailto:${CONTACT}${subject ? `?subject=${encodeURIComponent(subject)}${body ? `&body=${encodeURIComponent(body)}` : ''}` : ''}`;
+const contactLink = () => `<a href="${mailto()}">${CONTACT}</a>`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const day = (t, year = false) => new Date(t).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', ...(year ? { year: 'numeric' } : {}) });
 const kr = n => n.toLocaleString('nb-NO') + ' kr';
+// «2027-02» → «februar»
+const monthName = m => { const [y, mo] = String(m).split('-').map(Number); return new Date(Date.UTC(y, mo - 1, 15)).toLocaleDateString('nb-NO', { month: 'long', timeZone: 'UTC' }); };
+const nextMonth = m => { const [y, mo] = String(m).split('-').map(Number); return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`; };
+const elever = n => `${n} ${n === 1 ? 'elev' : 'elever'}`;
 
 /* Nøkkelen fra lenken huskes når den virker, så siden også virker fra et bokmerke uten «#…». En gammel eller feil
    lenke skal ikke skrive over en som virker. */
@@ -28,6 +32,7 @@ function readToken() {
 }
 const remember = () => { try { localStorage.setItem(KEY, token); } catch { /* privat modus */ } };
 const token = readToken();
+const keyP = token && globalThis.crypto && crypto.subtle ? labelKey(token).catch(() => null) : Promise.resolve(null);
 let data = null, fresh = null, filter = 'alle', search = '';
 
 async function api(method, path, body) {
@@ -39,12 +44,14 @@ async function api(method, path, body) {
   return r.ok ? d : { error: d.error || 'server', status: r.status };
 }
 
-/* Status for en utdelt kode. En ubrukt kode som er stengt, er trukket tilbake (tilgangen er gitt tilbake). */
-const statusOf = (r, now = Date.now()) => (r.trukket || (!r.forst && r.stengt) ? 'trukket' : !r.forst ? 'ubrukt' : r.stengt ? 'stengt' : r.til && r.til <= now ? 'utlopt' : 'i-bruk');
-const LABEL = { 'ubrukt': ['Ikke tatt i bruk', 'wait'], 'i-bruk': ['I bruk', 'ok'], 'stengt': ['Stengt', 'off'], 'trukket': ['Trukket tilbake', 'wait'], 'utlopt': ['Utløpt', 'wait'] };
-const FILTERS = [['alle', 'Alle'], ['i-bruk', 'I bruk'], ['ubrukt', 'Ikke tatt i bruk'], ['stengt', 'Stengt']];
+/* Status for en utdelt kode. En ubrukt kode som er stengt, er trukket tilbake. */
+const statusOf = (r, now = Date.now()) => (r.fullfort ? 'ferdig' : r.trukket || (!r.forst && r.stengt) ? 'trukket' : !r.forst ? 'ubrukt' : r.stengt ? 'stengt' : r.til && r.til <= now ? 'utlopt' : 'i-bruk');
+const LABEL = { 'ubrukt': ['Ikke tatt i bruk', 'wait'], 'i-bruk': ['I bruk', 'ok'], 'ferdig': ['Fikk lappen', 'ok'], 'stengt': ['Stengt', 'off'], 'trukket': ['Trukket tilbake', 'wait'], 'utlopt': ['Utløpt', 'wait'] };
+const FILTERS = [['alle', 'Alle'], ['i-bruk', 'I bruk'], ['ubrukt', 'Ikke tatt i bruk'], ['ferdig', 'Fikk lappen'], ['stengt', 'Stengt']];
 const inFilter = (r, f) => { const st = statusOf(r); return f === 'alle' || (f === 'stengt' ? ['stengt', 'trukket', 'utlopt'].includes(st) : st === f); };
 const norm = s => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+const nameOf = r => (typeof r.navnTekst === 'string' ? r.navnTekst : '');
+const matches = r => !search.trim() || (norm(search) && norm(r.kode).includes(norm(search))) || nameOf(r).toLowerCase().includes(search.trim().toLowerCase());
 
 /* SMS-lenken (1.0.8): med elevens nummer åpnes Meldinger med både mottaker og tekst. Nummeret brukes bare her i skolens
    nettleser; det lagres ikke og sendes ikke til serveren. «?&body=» virker på både iPhone og Android. */
@@ -87,6 +94,20 @@ function ask(title, text, ok) {
     d.showModal();
   });
 }
+/* Navnet på en kode: → teksten (tom: fjern navnet) eller null (avbrutt) */
+function askName(kode, current) {
+  const d = $('#name-dlg'), inp = $('#name-input');
+  $('#name-code').textContent = kode;
+  inp.value = current || ''; inp.maxLength = MAX_LABEL;
+  return new Promise(res => {
+    const done = v => { if (d.open) d.close(); res(v); };
+    $('#name-form').onsubmit = e => { e.preventDefault(); done(inp.value.trim()); };
+    $('#name-cancel').onclick = () => done(null);
+    d.oncancel = e => { e.preventDefault(); done(null); };
+    d.showModal();
+    setTimeout(() => inp.focus(), 30);
+  });
+}
 
 /* QR-koden til elevsiden i et vindu, når eleven står hos skolen */
 function showQr(kode) {
@@ -105,67 +126,90 @@ function problem(title, text, retry = false) {
 
 async function load() {
   if (!token) {
-    problem('Åpne lenken dere fikk', `Denne siden virker bare med lenken trafikkskolen fikk fra Kjørerapport. Har dere mistet den, send en e-post til <a href="mailto:${CONTACT}">${CONTACT}</a>, så får dere en ny.`);
+    problem('Åpne lenken dere fikk', `Denne siden virker bare med lenken trafikkskolen fikk fra Kjørerapport. Har dere mistet den, send en e-post til ${contactLink()}, så får dere en ny.`);
     return;
   }
   const d = await api('GET', '/v1/skole');
   if (d.status === 401) {
     try { if (localStorage.getItem(KEY) === token) localStorage.removeItem(KEY); } catch { /* */ }   // den lagrede virker ikke lenger (ny lenke)
-    problem('Lenken virker ikke', `Lenken er ikke riktig, eller dere har fått en ny. Bruk den nyeste lenken, eller send en e-post til <a href="mailto:${CONTACT}">${CONTACT}</a>.`);
+    problem('Lenken virker ikke', `Lenken er ikke riktig, eller dere har fått en ny. Bruk den nyeste lenken, eller send en e-post til ${contactLink()}.`);
     return;
   }
   if (d.error) { problem('Får ikke kontakt', 'Sjekk nettet og prøv igjen om litt.', true); return; }
-  data = d;
+  // Navnene leses her i nettleseren (null: skrevet med en eldre lenke og kan ikke leses)
+  const key = await keyP;
+  for (const r of d.koder || []) r.navnTekst = key ? await openLabel(key, r.merke) : '';
+  data = { ...d, laerere: d.laerere || [] };
   remember();
   document.title = `Elevtilganger – ${d.navn}`;
   render();
 }
 
 function rowHtml(r) {
-  const st = statusOf(r), [label, cls] = LABEL[st];
+  const st = statusOf(r), [label, cls] = LABEL[st], name = nameOf(r);
   const meta = [r.utdelt ? `Sendt ${day(r.utdelt)}` : null, r.forst ? `tatt i bruk ${day(r.forst)}` : null,
-    r.til && st !== 'trukket' ? `gjelder til ${day(r.til, true)}` : null, r.forst ? `${r.telefoner} av ${data.maks} telefoner` : null].filter(Boolean).join(' · ');
-  const acts = st === 'ubrukt' ? [['qr', 'QR-kode'], ['kopier', 'Kopier meldingen'], ['steng', 'Trekk tilbake']]
-    : st === 'i-bruk' ? [...(r.telefoner ? [['ny-telefon', 'Ny telefon']] : []), ['steng', 'Steng']]
-    : st === 'stengt' ? [['apne', 'Åpne igjen']] : [];
-  return `<li><div class="row-top"><span class="code">${esc(r.kode)}</span><span class="pill ${cls}">${label}</span></div>
+    r.fullfort ? `fikk lappen ${day(r.fullfort, true)}` : r.til && st === 'i-bruk' ? (r.varig ? 'gjelder til eleven har fått lappen' : `gjelder til ${day(r.til, true)}`) : null,
+    r.forst && st === 'i-bruk' ? `${r.telefoner} av ${data.maks} telefoner` : null].filter(Boolean).join(' · ');
+  const naming = ['navn', name ? 'Endre navn' : 'Gi navn'];
+  const acts = st === 'ubrukt' ? [['qr', 'QR-kode'], ['kopier', 'Kopier meldingen'], naming, ['steng', 'Trekk tilbake']]
+    : st === 'i-bruk' ? [['fullfor', 'Fikk lappen'], naming, ...(r.telefoner ? [['ny-telefon', 'Ny telefon']] : []), ['steng', 'Steng']]
+    : st === 'ferdig' || st === 'stengt' ? [naming, ['apne', 'Åpne igjen']] : [];
+  const who = name ? `<span class="row-name">${esc(name)}</span>` : r.navnTekst === null ? '<span class="muted small">Navnet kan ikke leses med denne lenken</span>' : '';
+  return `<li><div class="row-top"><span class="row-who">${who}<span class="code${who ? ' sub' : ''}">${esc(r.kode)}</span></span><span class="pill ${cls}">${label}</span></div>
     <p class="meta">${esc(meta)}</p>
-    <div class="actions">${acts.map(([a, t]) => `<button type="button" class="btn secondary small" data-act="${a}" data-kode="${esc(r.kode)}" aria-label="${t}: ${esc(r.kode)}">${t}</button>`).join('')}</div></li>`;
+    <div class="actions">${acts.map(([a, t]) => `<button type="button" class="btn ${a === 'fullfor' ? 'primary' : 'secondary'} small" data-act="${a}" data-kode="${esc(r.kode)}" aria-label="${t}: ${esc(name || r.kode)}">${t}</button>`).join('')}</div></li>`;
 }
 function renderList() {
   const list = $('#rows');
   if (!list) return;
-  const rows = data.koder.filter(r => inFilter(r, filter) && (!search || norm(r.kode).includes(search)));
+  const rows = data.koder.filter(r => inFilter(r, filter) && matches(r));
   list.innerHTML = rows.length ? rows.map(rowHtml).join('')
     : `<li class="muted">${data.koder.length ? 'Ingen koder passer.' : 'Ingen tilganger er delt ut ennå. Trykk «Gi en elev tilgang» for å begynne.'}</li>`;
   document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.f === filter)));
 }
 
+/* Trafikklærerne (1.2.0): lærerkodene kommer fra Kjørerapport. Skolen kan stenge en når læreren slutter. */
+function teachersHtml() {
+  const askMail = mailto(`Lærerkoder til ${data.navn}`, 'Hei!\n\nVi vil ha lærerkoder til disse trafikklærerne:\n\n\nHilsen\n');
+  const rows = data.laerere.map(t => {
+    const st = t.stengt ? 'stengt' : t.forst ? 'i-bruk' : 'ubrukt', [label, cls] = LABEL[st];
+    const acts = st === 'stengt' ? [['apne', 'Åpne igjen']] : [...(t.telefoner ? [['ny-telefon', 'Ny telefon']] : []), ['steng', 'Steng']];
+    return `<li><div class="row-top"><span class="row-who"><span class="row-name">${esc(t.navn || 'Trafikklærer')}</span><span class="code sub">${esc(t.kode)}</span></span><span class="pill ${cls}">${label}</span></div>
+      <p class="meta">${esc([t.forst ? `tatt i bruk ${day(t.forst)}` : 'ikke tatt i bruk ennå', t.forst && !t.stengt ? `${t.telefoner} av 2 telefoner` : null].filter(Boolean).join(' · '))}</p>
+      <div class="actions">${acts.map(([a, x]) => `<button type="button" class="btn secondary small" data-act="${a}" data-kode="${esc(t.kode)}" data-laerer="1" aria-label="${x}: ${esc(t.navn)}">${x}</button>`).join('')}</div></li>`;
+  }).join('');
+  return `<section aria-labelledby="h-laerere">
+      <h2 id="h-laerere">Trafikklærere</h2>
+      <p class="muted small">Hver trafikklærer har sin egen lærerkode. Den låser opp trafikklærerversjonen av appen: elevlisten, meldinger med elevene og «har fått lappen». Stenger dere en lærerkode, mister læreren den innen en uke.</p>
+      ${rows ? `<ul class="rows" id="teacher-rows">${rows}</ul>` : ''}
+      <a class="btn secondary small" href="${askMail}">${rows ? 'Be om flere lærerkoder' : 'Be om lærerkoder'}</a>
+    </section>`;
+}
+
 function render() {
-  const used = data.brukt + data.ubrukt, pct = data.kjopt ? Math.min(100, Math.round(used / data.kjopt * 100)) : 0;
   const n = f => data.koder.filter(r => inFilter(r, f)).length;
-  const order = data.bestilt
-    ? `<p class="notice">Bestillingen på ${data.bestilt.antall} tilganger fra ${day(data.bestilt.t)} er mottatt. Tilgangene kommer her når den er behandlet.</p>`
-    : !data.igjen ? '<p class="notice">Pakken er brukt opp. Bestill flere nederst på siden.</p>'
-      : data.igjen <= 10 ? `<p class="notice">Det er bare ${data.igjen} igjen. <button type="button" class="linkbtn" id="to-order">Bestill flere</button></p>` : '';
+  const full = data.nye >= data.grense;
+  const nowLine = data.denneMnd ? `Så langt i ${monthName(data.mnd)} har ${elever(data.denneMnd)} tatt koden i bruk (${kr(data.denneMnd * data.pris)} inkl. mva). Det kommer på fakturaen i ${monthName(nextMonth(data.mnd))}.` : `Ingen nye elever har tatt koden i bruk i ${monthName(data.mnd)} ennå.`;
+  const lastLine = data.forrigeMnd ? ` I ${monthName(data.forrige)} tok ${elever(data.forrigeMnd)} koden i bruk.` : '';
   app.innerHTML = `
     <section class="sign-card" aria-label="Elevtilganger">
       <p class="eyebrow">${esc(data.navn)}</p>
-      <p class="big-num">${data.igjen}</p>
-      <p style="margin:0;font-weight:700">elevtilganger igjen å dele ut</p>
-      <div class="meter" role="img" aria-label="${used} av ${data.kjopt} er delt ut"><span style="width:${pct}%"></span></div>
-      <ul class="stats"><li>${data.brukt} i bruk</li><li>${data.ubrukt} sendt, ikke tatt i bruk</li><li>${data.kjopt} kjøpt</li></ul>
+      <p class="big-num">${data.iBruk}</p>
+      <p style="margin:0;font-weight:700">${data.iBruk === 1 ? 'elev har' : 'elever har'} Pluss fra dere nå</p>
+      <ul class="stats" style="margin-top:12px"><li>${data.ubrukt} sendt, ikke tatt i bruk</li><li>${data.ferdig} fikk lappen</li></ul>
     </section>
-    <button type="button" class="btn ${fresh ? 'secondary' : 'yellow'} wide" id="give"${data.igjen ? '' : ' disabled'}>${fresh ? 'Gi en elev til tilgang' : 'Gi en elev tilgang'}</button>
-    ${order}
+    <button type="button" class="btn ${fresh ? 'secondary' : 'yellow'} wide" id="give"${full ? ' disabled' : ''}>${fresh ? 'Gi en elev til tilgang' : 'Gi en elev tilgang'}</button>
+    ${full ? `<p class="notice">Dere har laget ${data.nye} koder i ${monthName(data.mnd)}, som er grensen per måned. Trenger dere flere, send en e-post til ${contactLink()}.</p>` : ''}
     ${fresh ? `
     <section class="card" id="fresh" aria-labelledby="h-fresh" style="margin-top:16px">
       <h2 id="h-fresh">Klar til å sende</h2>
       <p class="muted small" style="margin:0">Koden</p>
       <div class="code-line"><p class="code">${esc(fresh)}</p><button type="button" class="linkbtn" id="copy-code">Kopier koden</button></div>
+      <label class="field" for="fresh-name">Elevens navn <span class="muted small">(valgfritt, bare dere kan lese det)</span>
+        <input type="text" id="fresh-name" maxlength="${MAX_LABEL}" autocomplete="off" placeholder="Navn eller elevnummer" value="${esc(nameOf(data.koder.find(r => r.kode === fresh) || {}))}"></label>
       <div class="msg">${esc(messageFor(fresh))}</div>
       <label class="field" for="send-to">Elevens mobil eller e-post <span class="muted small">(valgfritt, lagres ikke)</span>
-        <input type="text" id="send-to" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="912 34 567 eller navn@epost.no"></label>
+        <input type="text" id="send-to" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="912 34 567 eller e-post"></label>
       <div class="actions">
         <a class="btn ${smsFirst ? 'yellow' : 'secondary'} small" id="sms-send" href="${smsHref('', messageFor(fresh))}">Send som SMS</a>
         <a class="btn ${smsFirst ? 'secondary' : 'yellow'} small" id="mail-send" href="${mailHref('', fresh)}">Send på e-post</a>
@@ -173,39 +217,35 @@ function render() {
         <button type="button" class="btn secondary small" id="copy-msg">Kopier meldingen</button>
         <button type="button" class="btn secondary small" id="show-qr">Vis QR-kode</button>
       </div>
-      <p class="muted small" style="margin-top:12px">Skriv gjerne koden inn i elevsystemet deres, så vet dere hvem som har den. Kjørerapport lagrer ingen navn.</p>
-      <button type="button" class="linkbtn" id="fresh-done">Ferdig</button>
+      <button type="button" class="linkbtn" id="fresh-done" style="margin-top:12px">Ferdig</button>
     </section>` : ''}
     <section aria-labelledby="h-koder">
-      <h2 id="h-koder">Utdelte tilganger</h2>
+      <h2 id="h-koder">Elevene</h2>
       <div class="filters">
-        <input type="search" id="search" placeholder="Søk etter kode" aria-label="Søk etter kode" autocomplete="off" value="${esc(search)}">
+        <input type="search" id="search" placeholder="Søk etter navn eller kode" aria-label="Søk etter navn eller kode" autocomplete="off" value="${esc(search)}">
         <div class="seg" role="group" aria-label="Vis">${FILTERS.map(([f, t]) => `<button type="button" data-f="${f}" aria-pressed="${f === filter}">${t} (${n(f)})</button>`).join('')}</div>
       </div>
       <ul class="rows" id="rows"></ul>
     </section>
-    <section id="order-sec" aria-labelledby="h-order">
-      <h2 id="h-order">Bestill flere</h2>
-      <p>${PRICE} kr per elev inkl. mva (${PRICE_EX} kr + mva). Dere får faktura på e-post, og tilgangene kommer på denne siden når bestillingen er behandlet.</p>
-      <div class="actions" style="align-items:center">
-        <label for="pack" class="muted small">Antall</label>
-        <select id="pack">${PACKS.map(p => `<option value="${p}"${p === 50 ? ' selected' : ''}>${p} elever (${kr(p * PRICE)} inkl. mva)</option>`).join('')}</select>
-        <a class="btn primary small" id="order" href="#">Send bestilling</a>
-      </div>
-      <p class="muted small" style="margin-top:8px">Knappen åpner e-posten deres med bestillingen ferdig skrevet.</p>
+    ${teachersHtml()}
+    <section aria-labelledby="h-faktura">
+      <h2 id="h-faktura">Faktura</h2>
+      <p>${kr(data.pris)} per elev inkl. mva. Dere får faktura på e-post i begynnelsen av hver måned for elevene som tok koden i bruk måneden før. Hver elev faktureres én gang, uansett hvor lenge eleven bruker koden. En kode som aldri blir tatt i bruk, koster ingenting.</p>
+      <p class="muted small">${esc(nowLine + lastLine)}</p>
     </section>
     <section>
       <details class="card"><summary><strong>Slik virker det</strong></summary>
         <ol class="steps" style="margin-top:12px">
-          <li>Trykk «Gi en elev tilgang». Dere får en kode og en ferdig melding med lenke.</li>
+          <li>Trykk «Gi en elev tilgang». Dere får en kode og en ferdig melding med lenke. Skriv gjerne elevens navn, så finner dere koden igjen.</li>
           <li>Send meldingen til eleven, slik det passer dere: skriv mobilnummeret og trykk «Send som SMS», skriv e-posten og trykk «Send på e-post», bruk «Del meldingen», eller vis QR-koden hvis eleven står hos dere. Nummer og e-post lagres ikke.</li>
           <li>Eleven trykker på lenken. Med iPhone laster eleven ned appen og limer inn koden. Med Android åpnes nettversjonen av Kjørerapport, ferdig låst opp.</li>
+          <li>Når eleven har fått lappen, trykker dere «Fikk lappen» her, eller læreren trykker «har fått lappen» på eleven i trafikklærerversjonen. Da avsluttes tilgangen.</li>
         </ol>
         <ul class="steps">
-          <li>En tilgang er opptatt fra dere deler den ut. Tar eleven den aldri i bruk, kan dere trekke den tilbake, og den kommer tilbake i pakken.</li>
-          <li>Koden virker på ${data.maks} telefoner i ${data.maaneder} måneder fra eleven tar den i bruk. Har eleven fått ny telefon og brukt opp plassene, trykk «Ny telefon».</li>
-          <li>Trykk «Steng» når en elev slutter. En kode som er tatt i bruk, teller fortsatt som brukt.</li>
-          <li>Lenken til denne siden er nøkkelen deres. Lagre den som bokmerke, og ikke del den utenfor skolen. Har den kommet på avveie, send en e-post til <a href="mailto:${CONTACT}">${CONTACT}</a>, så får dere en ny.</li>
+          <li>Koden gjelder til eleven har fått lappen, men høyst ${data.maaneder} måneder fra eleven tar den i bruk. Den virker på ${data.maks} telefoner. Har eleven fått ny telefon og brukt opp plassene, trykk «Ny telefon».</li>
+          <li>Tar eleven aldri koden i bruk, kan dere trekke den tilbake. Trykk «Steng» når en elev slutter uten å ta lappen.</li>
+          <li>Elevens navn krypteres i nettleseren med nøkkelen i lenken deres. Kjørerapport lagrer bare den krypterte teksten og ikke nøkkelen, så vi kan ikke lese navnene. Får dere en ny lenke, kan navnene ikke leses med den, og må skrives på nytt.</li>
+          <li>Lenken til denne siden er nøkkelen deres. Lagre den som bokmerke, og ikke del den utenfor skolen. Har den kommet på avveie, send en e-post til ${contactLink()}, så får dere en ny.</li>
         </ul>
       </details>
     </section>`;
@@ -213,23 +253,30 @@ function render() {
   wire();
 }
 
-function orderMail() {
-  const nPack = Number($('#pack').value);
-  const subject = `Bestilling: ${nPack} elevtilganger til Kjørerapport`;
-  const body = `Hei!\n\n${data.navn} vil bestille ${nPack} elevtilganger til Kjørerapport Pluss (${nPack} × ${PRICE} kr = ${kr(nPack * PRICE)} inkl. mva).\n\nFaktura sendes til:\nOrganisasjonsnummer:\n\nHilsen\n`;
-  return `mailto:${CONTACT}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+/* Lagrer navnet på en kode (kryptert). → true når det er lagret */
+async function saveName(kode, text) {
+  const key = await keyP;
+  if (!key) { toast('Nettleseren kan ikke kryptere navnet.'); return false; }
+  const merke = await sealLabel(key, text);
+  const r = await api('POST', '/v1/skole/merke', { kode, merke });
+  if (r.error) { toast('Fikk ikke lagret navnet. Prøv igjen.'); return false; }
+  const row = data.koder.find(x => x.kode === kode);
+  if (row) { row.merke = merke; row.navnTekst = merke ? await openLabel(key, merke) : ''; }
+  return true;
 }
 
 function wire() {
   $('#give').onclick = async e => {
     const b = e.currentTarget; b.disabled = true;
     const r = await api('POST', '/v1/skole/ny');
-    if (r.error) { b.disabled = false; toast(r.error === 'tomt' ? 'Pakken er brukt opp.' : 'Fikk ikke laget koden. Prøv igjen.'); return; }
+    if (r.error) { b.disabled = false; toast(r.error === 'grense' ? 'Grensen for nye koder denne måneden er nådd.' : 'Fikk ikke laget koden. Prøv igjen.'); return; }
     fresh = r.kode;
     await load();
     const f = $('#fresh'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const done = $('#fresh-done'); if (done) done.onclick = () => { fresh = null; render(); };
+  const fn = $('#fresh-name');
+  if (fn) fn.onchange = async () => { if (await saveName(fresh, fn.value)) { toast(fn.value.trim() ? 'Navnet er lagret' : 'Navnet er fjernet'); renderList(); } };
   const sendTo = $('#send-to'), smsSend = $('#sms-send'), mailSend = $('#mail-send');
   if (sendTo) sendTo.oninput = () => {
     const v = sendTo.value;
@@ -244,35 +291,37 @@ function wire() {
   const sq = $('#show-qr'); if (sq) sq.onclick = () => showQr(fresh);
   const cm = $('#copy-msg'); if (cm) cm.onclick = async () => toast(await copy(messageFor(fresh)) ? 'Meldingen er kopiert' : 'Kunne ikke kopiere');
   const cc = $('#copy-code'); if (cc) cc.onclick = async () => toast(await copy(fresh) ? 'Koden er kopiert' : 'Kunne ikke kopiere');
-  const to = $('#to-order'); if (to) to.onclick = () => $('#order-sec').scrollIntoView({ behavior: 'smooth' });
-  $('#search').oninput = e => { search = norm(e.target.value); renderList(); };
+  $('#search').oninput = e => { search = e.target.value; renderList(); };
   document.querySelectorAll('.seg button').forEach(b => { b.onclick = () => { filter = b.dataset.f; renderList(); }; });
-  const pack = $('#pack'), order = $('#order');
-  order.href = orderMail();
-  pack.onchange = () => { order.href = orderMail(); };
-  // Bestillingen sendes også til serveren, så eieren ser den selv om e-posten ikke blir sendt
-  order.onclick = () => {
-    fetch(serverUrl() + '/v1/skole/bestill', { method: 'POST', keepalive: true, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ antall: Number(pack.value) }) }).catch(() => {});
-    setTimeout(load, 1500);
-  };
-  $('#rows').onclick = async e => {
+  const onAct = async e => {
     const b = e.target.closest('button[data-act]');
     if (!b) return;
-    const kode = b.dataset.kode, act = b.dataset.act, row = data.koder.find(r => r.kode === kode), st = row && statusOf(row);
+    const kode = b.dataset.kode, act = b.dataset.act, teacher = !!b.dataset.laerer;
+    const row = teacher ? data.laerere.find(r => r.kode === kode) : data.koder.find(r => r.kode === kode), st = row && statusOf(row);
+    const who = teacher ? (row && row.navn) || kode : nameOf(row || {}) || kode;
     if (act === 'kopier') { toast(await copy(messageFor(kode)) ? 'Meldingen er kopiert' : 'Kunne ikke kopiere'); return; }
     if (act === 'qr') { showQr(kode); return; }
-    if (act === 'steng' && st === 'ubrukt' && !await ask('Trekke tilbake koden?', `${kode} slutter å virke, og tilgangen kommer tilbake i pakken.`, 'Trekk tilbake')) return;
-    if (act === 'steng' && st !== 'ubrukt' && !await ask('Stenge koden?', `Eleven mister Pluss innen en uke. Tilgangen teller fortsatt som brukt.`, 'Steng')) return;
-    if (act === 'ny-telefon' && !await ask('Ny telefon for eleven?', `${kode} kan tas i bruk på ${data.maks} nye telefoner.`, 'Ny telefon')) return;
+    if (act === 'navn') {
+      const v = await askName(kode, nameOf(row || {}));
+      if (v === null) return;
+      if (await saveName(kode, v)) { toast(v ? 'Navnet er lagret' : 'Navnet er fjernet'); renderList(); }
+      return;
+    }
+    if (act === 'fullfor' && !await ask('Har eleven fått lappen?', `Gratulerer! ${who} mister Pluss fra dere neste gang appen sjekker koden, innen en uke når telefonen er på nett. Turene blir liggende i elevens app. Eleven faktureres ikke på nytt.`, 'Fikk lappen')) return;
+    if (act === 'steng' && st === 'ubrukt' && !await ask('Trekke tilbake koden?', `${who} kan ikke ta koden i bruk, og den faktureres ikke.`, 'Trekk tilbake')) return;
+    if (act === 'steng' && st !== 'ubrukt' && !await ask(teacher ? 'Stenge lærerkoden?' : 'Stenge koden?', teacher ? `${who} mister trafikklærerversjonen innen en uke.` : `${who} mister Pluss innen en uke. Eleven har tatt koden i bruk, og faktureres som før.`, 'Steng')) return;
+    if (act === 'ny-telefon' && !await ask('Ny telefon?', `${who} kan ta koden i bruk på ${teacher ? 2 : data.maks} nye telefoner.`, 'Ny telefon')) return;
     b.disabled = true;
     const r = await api('POST', '/v1/skole/' + act, { kode });
     if (r.error) { b.disabled = false; toast('Det gikk ikke. Prøv igjen.'); return; }
-    toast(act === 'steng' ? (r.tilbake ? 'Koden er trukket tilbake' : 'Koden er stengt') : act === 'ny-telefon' ? 'Klar for ny telefon' : 'Koden virker igjen');
+    toast(act === 'fullfor' ? `Gratulerer til ${who}!` : act === 'steng' ? (r.tilbake ? 'Koden er trukket tilbake' : 'Koden er stengt') : act === 'ny-telefon' ? 'Klar for ny telefon' : 'Koden virker igjen');
     if (fresh === kode && act === 'steng') fresh = null;
     await load();
   };
+  $('#rows').onclick = onAct;
+  const tr = $('#teacher-rows'); if (tr) tr.onclick = onAct;
 }
 
-// Tilbake fra Meldinger eller e-posten: hent tallene på nytt
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && data) load(); });
+// Tilbake fra Meldinger eller e-posten: hent tallene på nytt (ikke midt i et vindu)
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && data && !document.querySelector('dialog[open]')) load(); });
 load();

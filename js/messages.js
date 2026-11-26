@@ -71,10 +71,15 @@ const cleanId = v => (typeof v === 'string' && /^[a-z0-9]{6,40}$/i.test(v) ? v :
 const cleanTheory = t => (t && typeof t === 'object' && !Array.isArray(t) && JSON.stringify(t).length < 300000 ? t : null);
 
 /* Pakken som sendes. from: { role: 'elev' | 'laerer', name, id }, to: navnet til mottakeren (eleven, når læreren sender) */
+/* Elevens kode fra trafikkskolen (1.2.0): følger med til læreren, så «har fått lappen» hos læreren kan avslutte den.
+   Bare tegnene kodene lages av (uten 0, 1, I, L og O). → «K7MX29QFH4TA» eller '' */
+export const cleanSchoolCode = c => { const v = String(c || '').toUpperCase().replace(/[^0-9A-Z]/g, ''); return /^[2-9A-HJKMNP-Z]{12}$/.test(v) ? v : ''; };
+
 export function buildPackage({ from, to = '', messages = [], drives = [], homework = null, theory = null, appVersion = '', now = new Date() }) {
-  const id = cleanId(from && from.id), th = cleanTheory(theory);
+  const id = cleanId(from && from.id), th = cleanTheory(theory), role = from && from.role === 'laerer' ? 'laerer' : 'elev';
+  const kode = role === 'elev' ? cleanSchoolCode(from && from.kode) : '';
   return { app: 'Kjørerapport', kind: PKG_KIND, v: PKG_V, appVersion, sentAt: now.toISOString(),
-    from: { role: from && from.role === 'laerer' ? 'laerer' : 'elev', name: str(from && from.name, 40), ...(id ? { id } : {}) }, to: str(to, 40),
+    from: { role, name: str(from && from.name, 40), ...(id ? { id } : {}), ...(kode ? { kode } : {}) }, to: str(to, 40),
     messages: messages.map(cleanMessage).filter(Boolean), drives: drives.filter(d => d && d.result).map(shareDrive), ...(homework ? { homework } : {}), ...(th ? { theory: th } : {}) };
 }
 
@@ -97,7 +102,8 @@ export const isPackage = p => !!p && typeof p === 'object' && p.kind === PKG_KIN
 export function readPackage(p) {
   if (!isPackage(p)) throw new Error('Filen er ikke en melding fra Kjørerapport.');
   if (Number(p.v) > PKG_V) throw new Error('Meldingen er laget med en nyere versjon av appen. Oppdater appen og prøv igjen.');
-  const from = { role: p.from && p.from.role === 'laerer' ? 'laerer' : 'elev', name: str(p.from && p.from.name, 40).trim(), id: cleanId(p.from && p.from.id) };
+  const role = p.from && p.from.role === 'laerer' ? 'laerer' : 'elev';
+  const from = { role, name: str(p.from && p.from.name, 40).trim(), id: cleanId(p.from && p.from.id), kode: role === 'elev' ? cleanSchoolCode(p.from && p.from.kode) : '' };
   const messages = (Array.isArray(p.messages) ? p.messages : []).map(cleanMessage).filter(Boolean).map(m => ({ ...m, from: from.role, name: m.name || from.name }));
   const drives = (Array.isArray(p.drives) ? p.drives : []).filter(d => d && typeof d.id === 'string' && d.result && Array.isArray(d.result.points) && d.result.points.length > 1);
   const hw = p.homework && typeof p.homework === 'object' ? { focus: (Array.isArray(p.homework.focus) ? p.homework.focus : []).filter(f => typeof f === 'string').slice(0, 3), note: str(p.homework.note, 300), setAt: str(p.homework.setAt, 40), from: from.name || 'trafikklæreren' } : null;

@@ -4,7 +4,10 @@
    serveren igjen etter en uke, så en kode som skolen ikke har betalt for (stengt), slutter å virke.
    Appen viser aldri pris eller hvor koden kjøpes (Apples regler). Ingen personopplysninger sendes: bare koden og en
    tilfeldig nøkkel for denne installasjonen av appen.
-   Lagres i innstillingene: skolekode { kode, bevis, sjekket } og installId. */
+   Lagres i innstillingene: skolekode { kode, bevis, sjekket, rolle } og installId.
+   1.2.0: en elevkode gjelder til trafikklæreren trykker «Fikk lappen» (beviset gjelder 60 dager om gangen og fornyes),
+   og en lærerkode (rolle 'laerer') låser opp trafikklærerversjonen. Når koden er avsluttet, lagres skoleSlutt
+   { skole, grunn, laerer, t }, så appen kan si det én gang (gratulerer med lappen). */
 import { getSettings, saveSettings } from './db.js';
 import { setSchoolPass } from './plus.js';
 
@@ -30,6 +33,7 @@ export function codeFromUrl(href) {
   try { const v = new URL(href).searchParams.get('kode'); return v && looksLikeCode(v) ? normalizeCode(v) : null; } catch { return null; }
 }
 
+const timeout = ms => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
 const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
 let keyP = null;
 const verifyKey = jwk => (jwk === PUBLIC_KEY && keyP) || (keyP = crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']));
@@ -48,6 +52,10 @@ export async function verifyPass(token, { install, now = Date.now(), key = PUBLI
   } catch { return null; }
 }
 
+/* Det appen trenger fra et bevis (1.2.0): skolen, når beviset går ut, testkode, lærerkode med navnet, og om koden gjelder
+   til lappen (slutt: senest da) */
+export const passFields = (p, kode = '') => (p ? { skole: String(p.s || ''), exp: p.exp, tester: p.t === 1, laerer: p.r === 'laerer', navn: String(p.n || ''), varig: p.l === 1, slutt: p.e || p.exp, kode: normalizeCode(kode) } : null);
+
 /* En tilfeldig nøkkel for denne installasjonen av appen (ikke knyttet til noen person) */
 export function installId() {
   const s = getSettings();
@@ -62,20 +70,22 @@ export const ERROR_TEXT = {
   brukt: 'Koden er allerede brukt på så mange telefoner som den gjelder for. Spør trafikkskolen din.',
   stengt: 'Koden virker ikke lenger. Spør trafikkskolen din.',
   utlopt: 'Koden har gått ut. Spør trafikkskolen din.',
+  fullfort: 'Koden er avsluttet fordi du har fått lappen. Gratulerer!',
   nett: 'Ingen nettilkobling. Prøv igjen når du er på nett.',
   server: 'Kunne ikke sjekke koden akkurat nå. Prøv igjen om litt.'
 };
 
 async function ask(code, install) {
   let r;
-  try { r = await fetch(serverUrl() + '/v1/aktiver', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kode: normalizeCode(code), install }) }); }
+  // Svarer ikke serveren på 15 sekunder (dårlig dekning), regnes det som uten nett (1.2.0)
+  try { r = await fetch(serverUrl() + '/v1/aktiver', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kode: normalizeCode(code), install }), signal: timeout(15000) }); }
   catch { return { error: 'nett' }; }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) return { error: ['ukjent', 'brukt', 'stengt', 'utlopt'].includes(data.error) ? data.error : 'server', gone: r.status === 410 };
+  if (!r.ok) return { error: ['ukjent', 'brukt', 'stengt', 'utlopt', 'fullfort'].includes(data.error) ? data.error : 'server', gone: r.status === 410, skole: typeof data.skole === 'string' ? data.skole : '' };
   return data;
 }
 
-/* Bruker en kode: spør serveren, sjekker beviset og lagrer det. → { ok, skole, til } eller { error } */
+/* Bruker en kode: spør serveren, sjekker beviset og lagrer det. → { ok, skole, til, varig, laerer, navn } eller { error } */
 export async function activateCode(code) {
   if (!codesEnabled()) return { error: 'server' };
   if (!looksLikeCode(code)) return { error: 'ukjent' };
@@ -84,28 +94,33 @@ export async function activateCode(code) {
   if (r.error) return r;
   const p = await verifyPass(r.bevis, { install });
   if (!p) return { error: 'server' };
-  saveSettings({ ...getSettings(), skolekode: { kode: normalizeCode(code), bevis: r.bevis, sjekket: Date.now() } });
-  setSchoolPass({ skole: p.s, exp: p.exp, tester: p.t === 1 });
-  return { ok: true, skole: p.s, til: p.exp };
+  const f = passFields(p, code);
+  const { skoleSlutt, ...rest } = getSettings();   // en ny kode: den gamle slutten er ikke lenger noe å si fra om
+  saveSettings({ ...rest, skolekode: { kode: f.kode, bevis: r.bevis, sjekket: Date.now(), ...(f.laerer ? { rolle: 'laerer' } : {}) } });
+  setSchoolPass(f);
+  return { ok: true, skole: f.skole, til: f.slutt, varig: f.varig, laerer: f.laerer, navn: f.navn };
 }
 
 /* Ved oppstart: sjekk det lagrede beviset (uten nett), og spør serveren igjen når det er gått en uke (med nett).
    Stengt eller utløpt kode: tilgangen fjernes. Uten svar fra serveren gjelder beviset til det går ut. */
-export async function loadSchoolPass({ now = Date.now(), online = typeof navigator === 'undefined' || navigator.onLine } = {}) {
+/* onLocal (1.2.0): kalles når beviset på telefonen er sjekket, før serveren spørres, så lærervisningen ikke venter på nettet */
+export async function loadSchoolPass({ now = Date.now(), online = typeof navigator === 'undefined' || navigator.onLine, onLocal = null } = {}) {
   const s = getSettings(), sk = s.skolekode;
-  if (!sk || !sk.bevis) { setSchoolPass(null); return null; }
+  if (!sk || !sk.bevis) { setSchoolPass(null); if (onLocal) onLocal(null); return null; }
   const install = installId();
   let p = await verifyPass(sk.bevis, { install, now });
-  setSchoolPass(p ? { skole: p.s, exp: p.exp, tester: p.t === 1 } : null);
+  setSchoolPass(passFields(p, sk.kode));
+  if (onLocal) onLocal(p);
   // Bevis fra før 0.27.5 mangler «t» (testkode eller ikke): da spørres serveren med en gang, ikke først etter en uke
   if (online && codesEnabled() && (!p || now - (sk.sjekket || 0) > RECHECK_MS || !('t' in p))) {
     const r = await ask(sk.kode, install);
     if (r.bevis) {
       const p2 = await verifyPass(r.bevis, { install, now });
-      if (p2) { saveSettings({ ...getSettings(), skolekode: { ...sk, bevis: r.bevis, sjekket: now } }); p = p2; setSchoolPass({ skole: p2.s, exp: p2.exp, tester: p2.t === 1 }); }
+      if (p2) { saveSettings({ ...getSettings(), skolekode: { ...sk, bevis: r.bevis, sjekket: now, ...(p2.r === 'laerer' ? { rolle: 'laerer' } : {}) } }); p = p2; setSchoolPass(passFields(p2, sk.kode)); }
     } else if (r.gone || r.error === 'ukjent') {
+      // Avsluttet (fikk lappen), stengt eller utløpt: appen sier det én gang (skoleSlutt), så det ikke bare blir borte
       const { skolekode, ...rest } = getSettings();
-      saveSettings(rest);
+      saveSettings({ ...rest, skoleSlutt: { skole: r.skole || (p && p.s) || '', grunn: r.error, laerer: sk.rolle === 'laerer' || !!(p && p.r === 'laerer'), t: now } });
       setSchoolPass(null);
       p = null;
     }
@@ -144,3 +159,23 @@ export async function sendTripToDev(json, { id, start, version } = {}) {
   return { ok: true, bytes: body.byteLength };
 }
 
+/* «har fått lappen» i trafikklærerversjonen (1.2.0): lærerkoden på denne telefonen avslutter elevens kode hos samme skole.
+   → { ok } eller { error } */
+export const COMPLETE_ERROR = {
+  laerer: 'Lærerkoden din virker ikke lenger, så tilgangen kunne ikke avsluttes herfra. Trykk «Fikk lappen» på skolesiden i stedet.',
+  ukjent: 'Fant ikke koden til eleven hos skolen din. Trykk «Fikk lappen» på skolesiden i stedet.',
+  ubrukt: 'Eleven har ikke tatt koden i bruk. Trekk den tilbake på skolesiden.',
+  nett: 'Ingen nettilkobling, så tilgangen fra skolen er ikke avsluttet. Trykk «Fikk lappen» på skolesiden når du er på nett.',
+  server: 'Fikk ikke kontakt med serveren, så tilgangen fra skolen er ikke avsluttet. Trykk «Fikk lappen» på skolesiden.'
+};
+export async function completeStudent(code) {
+  const sk = getSettings().skolekode;
+  if (!sk || !sk.kode || !codesEnabled()) return { error: 'laerer' };
+  if (!looksLikeCode(code)) return { error: 'ukjent' };
+  let r;
+  try { r = await fetch(serverUrl() + '/v1/laerer/fullfor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ laerer: sk.kode, install: installId(), kode: normalizeCode(code) }), signal: timeout(15000) }); }
+  catch { return { error: 'nett' }; }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return { error: COMPLETE_ERROR[data.error] ? data.error : 'server' };
+  return { ok: true };
+}

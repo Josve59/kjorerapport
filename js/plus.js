@@ -30,7 +30,13 @@ const notify = () => { for (const fn of listeners) try { fn(hasPlus()); } catch 
 let school = null;
 const schoolOk = () => !!(school && school.exp > Date.now());
 export const schoolPass = () => (schoolOk() ? { ...school } : null);
-export function setSchoolPass(p) { school = p && p.exp ? { skole: String(p.skole || ''), exp: p.exp, tester: !!p.tester } : null; notify(); }   // tester: testkode (0.27.5)
+/* tester: testkode (0.27.5). 1.2.0: laerer og navn (lærerkode), varig (til lappen, slutt: senest da) og koden selv */
+export function setSchoolPass(p) {
+  school = p && p.exp ? { skole: String(p.skole || ''), exp: p.exp, tester: !!p.tester, laerer: !!p.laerer, navn: String(p.navn || ''), varig: !!p.varig, slutt: p.slutt || p.exp, kode: String(p.kode || '') } : null;
+  notify();
+}
+/* Lærerkode fra trafikkskolen (1.2.0): låser opp trafikklærerversjonen */
+export const teacherPass = () => { const p = schoolPass(); return p && p.laerer ? p : null; };
 
 /* Har brukeren Pluss nå? Utenfor iPhone-appen alltid ja. */
 export function hasPlus() {

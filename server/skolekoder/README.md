@@ -32,13 +32,13 @@ Til App Store-personvernet: «Identifikatorer – enhets-ID», ikke knyttet til 
 En gyldig kode gir hele Pluss. Det gjelder også teorien i nettversjonen, som elever med Android bruker.
 
 **Skolesiden (1.0.8)**
-Trafikkskolen kjøper en pakke med elevtilganger og deler dem ut selv på sin egen side, `…/skole/#nøkkel` (`skole/index.html`, `skole/skole.js`):
+Trafikkskolen lager elevtilganger selv på sin egen side (uten pakke fra 1.2.0, se «Til lappen» under), `…/skole/#nøkkel` (`skole/index.html`, `skole/skole.js`):
 - Ingen konto. Lenken er skolens nøkkel. Den står etter «#», så den sendes aldri til nettstedet, bare til kodeserveren. Serveren lagrer bare SHA-256 av nøkkelen.
 - «Gi en elev tilgang» lager en kode og en ferdig SMS med lenke til elevsiden (`elev/index.html`). Elevsiden viser koden og hvordan eleven kommer i gang på iPhone (appen) og Android (nettversjonen, låst opp av `?kode=`).
-- En tilgang er opptatt fra skolen deler den ut. Tar eleven den aldri i bruk, kan skolen trekke den tilbake, og den kommer tilbake i pakken. «Ny telefon» og «Steng» som i eierens verktøy.
-- «Bestill flere» åpner skolens e-post med bestillingen ferdig skrevet, og bestillingen lagres også på serveren, så den vises i `skoler`.
-- Ingen elevnavn lagres. Skolen skriver koden i sitt eget elevsystem om den vil vite hvem som har hvilken.
-- Cloudflares liste over nøkler kan ligge opptil et minutt etter. Koder skolen har rørt de siste fem minuttene, leses derfor direkte (`nylig` i skolens post), så tallene stemmer med en gang og pakken ikke kan overskrides.
+- Tar eleven aldri koden i bruk, kan skolen trekke den tilbake, og den faktureres ikke. «Fikk lappen», «Ny telefon» og «Steng» som i eierens verktøy.
+- Elevens navn kan skrives på koden, kryptert i skolens nettleser (1.2.0). Serveren har bare den krypterte teksten.
+- Lærerkodene til skolen står for seg på siden, og skolen kan stenge dem.
+- Cloudflares liste over nøkler kan ligge opptil et minutt etter. Koder skolen har rørt de siste fem minuttene, leses derfor direkte (`nylig` i skolens post), så tallene stemmer med en gang og grensen per måned ikke kan overskrides.
 
 **Telling av Pluss-kjøp (1.0.7)**
 Pluss kjøpes per person i App Store, uten Familiedeling. For å se om kjøp deles på mange telefoner, melder iPhone-appen seg høyst én gang i uka (`POST /v1/pluss`):
@@ -119,13 +119,33 @@ node tools/skolekoder.mjs nullstill K7MX-29QF-H4TA          # eleven har brukt b
 node tools/skolekoder.mjs lag "Testgruppe" 1 3 25            # én felles testlenke: 3 måneder, høyst 25 telefoner
 node tools/skolekoder.mjs apne K7MX-29QF-H4TA               # angrer «steng»: koden virker igjen
 node tools/skolekoder.mjs pluss                             # hvor mange telefoner hvert Pluss-kjøp brukes på
-node tools/skolekoder.mjs skole "Trafikkskolen AS" 100      # skolens side med 100 tilganger; skriver ut lenken til skolen
-node tools/skolekoder.mjs skoler                            # alle skolene: kjøpt, i bruk, sendt, igjen og nye bestillinger
-node tools/skolekoder.mjs pakke "Trafikkskolen AS" 50       # 50 nye tilganger etter betalt faktura
+node tools/skolekoder.mjs skole "Trafikkskolen AS" pris=450   # skolens side; skriver ut lenken til skolen
+node tools/skolekoder.mjs laerer "Trafikkskolen AS" "Kari Nilsen"   # lærerkode til én lærer, med ferdig melding
+node tools/skolekoder.mjs skoler                            # alle skolene: i bruk, sendt, fikk lappen, denne og forrige måned
+node tools/skolekoder.mjs faktura                           # fakturagrunnlaget for forrige måned (eller: faktura 2026-12)
+node tools/skolekoder.mjs skole-endre "Trafikkskolen AS" pris=400 grense=300   # egen pris eller grense per måned
 node tools/skolekoder.mjs ny-lenke "Trafikkskolen AS"       # lenken har kommet på avveie: ny lenke, den gamle slutter å virke
 ```
 
-**Ny skole, steg for steg:** skolen bestiller → send faktura → når den er betalt: `skole "Navn" 100` → send lenken til skolen (e-post til den som har ansvaret). Senere bestillinger kommer på e-post og vises i `skoler`; når fakturaen er betalt: `pakke "Navn" 50`.
+**Til lappen (1.2.0, eieren 26. november 2026):** ingen pakker lenger. Skolen lager elevkoder selv på sin side, høyst
+200 nye i måneden (`grense`). En elevkode gjelder til læreren trykker «Fikk lappen» (på skolesiden, eller «har fått
+lappen» i trafikklærerversjonen), men høyst 36 måneder fra første bruk. Beviset i appen gjelder 60 dager om gangen og
+fornyes hver uke, så en avsluttet kode slutter å virke også på en telefon som ikke er på nett. Appen sier «Gratulerer
+med lappen!» når koden er avsluttet.
+
+**Ny skole, steg for steg:** avtale med skolen → `skole "Navn" pris=450` → send lenken til den som har ansvaret →
+`laerer "Navn" "Lærer"` for hver trafikklærer, og send meldingen verktøyet skriver ut.
+
+**Faktura hver måned:** `faktura` i begynnelsen av måneden viser hver skole med antall elever som tok koden i bruk
+måneden før, pris og sum inkl. mva, og lagrer kodene i et regneark i Nedlastinger. Hver elevkode faktureres én gang.
+Lærerkoder, testkoder og koder fra pakkene før 1.2.0 (betalt på forhånd) er ikke med.
+
+**Lærerkoder:** én per lærer, to telefoner, gjelder til de stenges (skolen kan stenge dem på sin side når en lærer
+slutter). Med lærerkoden kan læreren avslutte elever fra samme skole. Elevens kode følger med meldingene fra eleven.
+
+**Navn på kodene:** skolen kan skrive elevens navn på koden. Det krypteres i skolens nettleser med en nøkkel fra lenken
+(`skole/merke.js`), og serveren lagrer bare den krypterte teksten. Etter `ny-lenke` kan navnene ikke leses, og skolen
+må skrive dem på nytt.
 
 **Testlenke (0.27.4):** `https://kjorerapport.jo-9fc.workers.dev/?kode=KODE` låser opp Pluss av seg selv i nettversjonen. En kode kan gjelde høyst 50 telefoner; elevkoder er 2 som før.
 

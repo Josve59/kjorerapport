@@ -220,105 +220,110 @@ test('skolens id lages av navnet', () => {
   assert.equal(schoolId('  Bærum Kjøreskole & Co '), 'baerum-kjoreskole-co');
 });
 
-test('skolesiden: pakken teller ned, eleven tar koden i bruk, og en ubrukt kode kan trekkes tilbake', async () => {
+test('skolesiden (1.2.0): skolen lager koder uten pakke, eleven tar en i bruk, og en ubrukt kode kan trekkes tilbake', async () => {
   const { env, pub } = await setup();
-  assert.equal((await call(env, 'POST', '/admin/skole', { navn: 'Test Trafikkskole', antall: 2 })).status, 401, 'bare eieren lager skoler');
-  const made = await (await call(env, 'POST', '/admin/skole', { navn: 'Test Trafikkskole', antall: 2 }, { admin: true, now: T0 })).json();
+  assert.equal((await call(env, 'POST', '/admin/skole', { navn: 'Test Trafikkskole' })).status, 401, 'bare eieren lager skoler');
+  const made = await (await call(env, 'POST', '/admin/skole', { navn: 'Test Trafikkskole' }, { admin: true, now: T0 })).json();
   assert.equal(made.id, 'test-trafikkskole');
+  assert.deepEqual([made.pris, made.grense, made.maaneder, made.maks], [450, 200, 36, 2]);
   assert.ok(made.token.length >= 40);
-  assert.equal((await call(env, 'POST', '/admin/skole', { navn: 'Test trafikkskole', antall: 5 }, { admin: true })).status, 409, 'samme navn to ganger');
+  assert.equal((await call(env, 'POST', '/admin/skole', { navn: 'Test trafikkskole' }, { admin: true })).status, 409, 'samme navn to ganger');
   assert.equal((await asSchool(env, 'feil-' + made.token, 'GET', '/v1/skole')).status, 401);
   assert.equal((await asSchool(env, env.ADMIN_SECRET, 'GET', '/v1/skole')).status, 401, 'admin-hemmeligheten er ingen skolenøkkel');
   assert.ok(!JSON.stringify(await env.CODES.get('skole:test-trafikkskole')).includes(made.token), 'nøkkelen lagres ikke i klartekst');
 
   let o = await (await asSchool(env, made.token, 'GET', '/v1/skole')).json();
-  assert.deepEqual([o.navn, o.kjopt, o.brukt, o.ubrukt, o.igjen], ['Test Trafikkskole', 2, 0, 0, 2]);
+  assert.deepEqual([o.navn, o.pris, o.iBruk, o.ubrukt, o.ferdig, o.koder.length], ['Test Trafikkskole', 450, 0, 0, 0, 0]);
   const a = await (await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 1000)).json();
   assert.ok(looksLikeCode(a.kode));
-  assert.equal(a.igjen, 1);
+  assert.equal(a.igjen, 199, 'grensen per måned teller ned');
   const b = await (await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 2000)).json();
-  assert.equal(b.igjen, 0);
-  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 3000)).status, 409, 'pakken er tom');
   o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 3000)).json();
-  assert.deepEqual([o.brukt, o.ubrukt, o.igjen, o.koder.length], [0, 2, 0, 2]);
+  assert.deepEqual([o.iBruk, o.ubrukt, o.nye, o.koder.length], [0, 2, 2, 2]);
   assert.equal(o.koder[0].kode, b.kode, 'nyeste først');
 
-  // Eleven tar koden i bruk i appen, og beviset viser skolens navn
-  const act = await (await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1' }, { now: T0 + 86400000 })).json();
-  const p = await verifyPass(act.bevis, { install: 'elev-telefon-1', now: T0 + 86400000, key: pub });
-  assert.equal(p.s, 'Test Trafikkskole');
-  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 86400000)).json();
-  assert.deepEqual([o.brukt, o.ubrukt, o.igjen], [1, 1, 0]);
+  // Eleven tar koden i bruk i appen: beviset gjelder til lappen, men bare 60 dager om gangen
+  const act = await (await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1' }, { now: T0 + DAY })).json();
+  assert.equal(act.varig, true);
+  const p = await verifyPass(act.bevis, { install: 'elev-telefon-1', now: T0 + DAY, key: pub });
+  assert.deepEqual([p.s, p.l, p.r], ['Test Trafikkskole', 1, undefined]);
+  assert.ok(Math.abs(p.e - (T0 + DAY + 36 * 30.44 * DAY)) < 1000, 'senest 36 måneder fra første bruk');
+  assert.equal(p.exp, T0 + DAY + 60 * DAY, 'beviset gjelder 60 dager og fornyes når appen spør');
+  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + DAY)).json();
+  assert.deepEqual([o.iBruk, o.ubrukt, o.denneMnd, o.mnd], [1, 1, 1, '2027-01']);
   const ra = o.koder.find(k => k.kode === a.kode);
-  assert.equal(ra.telefoner, 1);
-  assert.ok(ra.til > ra.forst);
+  assert.deepEqual([ra.telefoner, ra.varig], [1, true]);
 
-  // Den andre eleven tok aldri koden i bruk: skolen trekker den tilbake og får tilgangen igjen
+  // Den andre eleven tok aldri koden i bruk: skolen trekker den tilbake
   const back = await (await asSchool(env, made.token, 'POST', '/v1/skole/steng', { kode: b.kode })).json();
   assert.equal(back.tilbake, true);
   assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: b.kode, install: 'elev-telefon-2' })).status, 410, 'en trukket kode virker ikke');
   assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/apne', { kode: b.kode })).status, 409, 'trukket kan ikke åpnes igjen');
-  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 86400000)).json();
-  assert.deepEqual([o.brukt, o.ubrukt, o.igjen], [1, 0, 1]);
+  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/fullfor', { kode: b.kode })).status, 409, 'en kode som aldri ble brukt, kan ikke få lappen');
+  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + DAY)).json();
+  assert.deepEqual([o.iBruk, o.ubrukt], [1, 0]);
 
-  // Ny telefon, steng og åpne igjen på en kode i bruk; tilgangen kommer ikke tilbake når en brukt kode stenges
-  await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1b' }, { now: T0 + 86400000 });
-  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1c' }, { now: T0 + 86400000 })).status, 409, 'to telefoner er brukt');
+  // Ny telefon, steng og åpne igjen på en kode i bruk
+  await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1b' }, { now: T0 + DAY });
+  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1c' }, { now: T0 + DAY })).status, 409, 'to telefoner er brukt');
   assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/ny-telefon', { kode: a.kode })).status, 200);
-  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1c' }, { now: T0 + 86400000 })).status, 200, 'ny telefon virker');
+  assert.equal((await call(env, 'POST', '/v1/aktiver', { kode: a.kode, install: 'elev-telefon-1c' }, { now: T0 + DAY })).status, 200, 'ny telefon virker');
   const closed = await (await asSchool(env, made.token, 'POST', '/v1/skole/steng', { kode: a.kode })).json();
   assert.equal(closed.tilbake, false);
-  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 86400000)).json();
-  assert.deepEqual([o.brukt, o.igjen], [1, 1], 'en stengt kode i bruk er fortsatt brukt');
+  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + DAY)).json();
+  assert.deepEqual([o.iBruk, o.brukt, o.denneMnd], [0, 1, 1], 'en stengt kode er tatt i bruk, og faktureres');
   assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/apne', { kode: a.kode })).status, 200);
 
   // En annen skole kan ikke røre koden
-  const other = await (await call(env, 'POST', '/admin/skole', { navn: 'Annen Skole', antall: 1 }, { admin: true })).json();
+  const other = await (await call(env, 'POST', '/admin/skole', { navn: 'Annen Skole' }, { admin: true })).json();
   assert.equal((await asSchool(env, other.token, 'POST', '/v1/skole/steng', { kode: a.kode })).status, 404);
+  assert.equal((await asSchool(env, other.token, 'POST', '/v1/skole/fullfor', { kode: a.kode })).status, 404);
   assert.equal((await (await asSchool(env, other.token, 'GET', '/v1/skole')).json()).koder.length, 0);
 
-  // Bestilling, ny pakke og ny lenke
-  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/bestill', { antall: 50 })).status, 200);
-  let all = await (await call(env, 'GET', '/admin/skoler', null, { admin: true, now: T0 + 86400000 })).json();
+  // Eierens oversikt og ny lenke
+  const all = await (await call(env, 'GET', '/admin/skoler', null, { admin: true, now: T0 + DAY })).json();
   const mine = all.skoler.find(x => x.id === 'test-trafikkskole');
-  assert.deepEqual([mine.kjopt, mine.brukt, mine.ubrukt, mine.igjen, mine.bestillinger[0].antall], [2, 1, 0, 1, 50]);
-  await call(env, 'POST', '/admin/skole/pakke', { navn: 'Test Trafikkskole', antall: 50 }, { admin: true });
-  o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 86400000)).json();
-  assert.deepEqual([o.kjopt, o.igjen, o.bestilt], [52, 51, null]);
+  assert.deepEqual([mine.iBruk, mine.ubrukt, mine.denneMnd, mine.pris], [1, 0, 1, 450]);
   const nl = await (await call(env, 'POST', '/admin/skole/ny-lenke', { id: 'test-trafikkskole' }, { admin: true })).json();
   assert.equal((await asSchool(env, made.token, 'GET', '/v1/skole')).status, 401, 'den gamle lenken virker ikke lenger');
   assert.equal((await asSchool(env, nl.token, 'GET', '/v1/skole')).status, 200);
-  // Eierens liste over koder viser også skolens koder (fakturagrunnlag)
   const codes = await (await call(env, 'GET', '/admin/koder?skole=' + encodeURIComponent('Test Trafikkskole'), null, { admin: true })).json();
   assert.equal(codes.koder.length, 2);
 });
 
-test('skolesiden ser nye koder med en gang, selv om listen hos Cloudflare ligger etter', async () => {
+test('skolesiden ser nye koder med en gang, selv om listen hos Cloudflare ligger etter, og grensen per måned holder', async () => {
   const { env } = await setup();
-  const made = await (await call(env, 'POST', '/admin/skole', { navn: 'Treg Liste', antall: 3 }, { admin: true })).json();
+  const made = await (await call(env, 'POST', '/admin/skole', { navn: 'Treg Liste', grense: 3 }, { admin: true })).json();
   const list = env.CODES.list;
   env.CODES.list = async o => (o.prefix === 'kode:' ? { keys: [], list_complete: true } : list(o));   // listen har ikke fått med seg noe ennå
   await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0);
   await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 1000);
   const o = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 2000)).json();
-  assert.deepEqual([o.ubrukt, o.igjen, o.koder.length], [2, 1, 2]);
+  assert.deepEqual([o.ubrukt, o.nye, o.koder.length], [2, 2, 2]);
   await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 3000);
-  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 4000)).status, 409, 'pakken kan ikke overskrides mens listen henger etter');
+  const full = await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, T0 + 4000);
+  assert.equal(full.status, 429, 'grensen kan ikke overskrides mens listen henger etter');
+  assert.equal((await full.json()).error, 'grense');
+  env.CODES.list = list;
+  assert.equal((await asSchool(env, made.token, 'POST', '/v1/skole/ny', null, Date.UTC(2027, 1, 1, 12))).status, 200, 'ny måned, nye koder');
+  await call(env, 'POST', '/admin/skole/endre', { navn: 'Treg Liste', grense: 10, pris: 400 }, { admin: true });
+  const o2 = await (await asSchool(env, made.token, 'GET', '/v1/skole', null, T0 + 5000)).json();
+  assert.deepEqual([o2.grense, o2.pris], [10, 400]);
 });
 
 /* Drift (25. nov. 2026): sletting ett år etter at koden gikk ut, og helsesjekk */
 const YEAR = 365 * DAY;
 test('sletting: en brukt kode slettes ett år etter at tilgangen gikk ut, og skolens telling står', async () => {
   const { env } = await setup();
-  const { token } = await (await call(env, 'POST', '/admin/skole', { navn: 'Rydd Trafikkskole', antall: 3, maaneder: 12 }, { admin: true, now: T0 })).json();
+  const { token } = await (await call(env, 'POST', '/admin/skole', { navn: 'Rydd Trafikkskole' }, { admin: true, now: T0 })).json();
   const brukt = (await (await asSchool(env, token, 'POST', '/v1/skole/ny', null, T0)).json()).kode;
   const trukket = (await (await asSchool(env, token, 'POST', '/v1/skole/ny', null, T0)).json()).kode;
   await call(env, 'POST', '/v1/aktiver', { kode: brukt, install: 'telefon-aaaa-1111' }, { now: T0 });
   await asSchool(env, token, 'POST', '/v1/skole/steng', { kode: trukket }, T0 + 10 * DAY);   // ubrukt: trekkes tilbake
   const ubrukt = (await (await asSchool(env, token, 'POST', '/v1/skole/ny', null, T0)).json()).kode;
   const ov0 = await (await asSchool(env, token, 'GET', '/v1/skole', null, T0 + 20 * DAY)).json();
-  assert.deepEqual([ov0.brukt, ov0.ubrukt, ov0.igjen], [1, 1, 1]);
-  const til = T0 + 12 * 30.44 * DAY;
+  assert.deepEqual([ov0.brukt, ov0.ubrukt], [1, 1]);
+  const til = T0 + 36 * 30.44 * DAY;   // til lappen, høyst 36 måneder (1.2.0)
   // Ett døgn før fristen for den brukte: bare den trukne slettes (trukket 10 dager etter start)
   let r = await (await call(env, 'POST', '/admin/rydd', {}, { admin: true, now: til + YEAR - DAY })).json();
   assert.equal(r.koder, 1, 'bare den trukne koden, ett år etter at den ble trukket');
@@ -332,7 +337,7 @@ test('sletting: en brukt kode slettes ett år etter at tilgangen gikk ut, og sko
   assert.equal(await env.CODES.get('kode:' + normalizeCode(brukt)), null, 'den brukte er slettet');
   assert.ok(await env.CODES.get('kode:' + normalizeCode(ubrukt)), 'en ubrukt, åpen kode har ingen opplysninger om noen og står');
   const ov1 = await (await asSchool(env, token, 'GET', '/v1/skole', null, til + YEAR + DAY)).json();
-  assert.deepEqual([ov1.brukt, ov1.ubrukt, ov1.igjen], [1, 1, 1], 'skolen får ikke tilbake tilgangen som ble brukt');
+  assert.deepEqual([ov1.brukt, ov1.ubrukt], [1, 1], 'den slettede koden telles fortsatt som brukt');
   assert.equal(ov1.koder.length, 1, 'den slettede vises ikke lenger');
   // En kode stengt før tiden: ett år etter at den ble stengt
   const { koder } = await (await call(env, 'POST', '/admin/koder', { skole: 'Steng', antall: 1, maaneder: 12 }, { admin: true, now: T0 })).json();

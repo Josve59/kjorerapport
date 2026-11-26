@@ -143,6 +143,62 @@ A separate copy of the app at https://kjorerapport.jo-9fc.workers.dev/kamera/ ad
 - On the new route, all 767 points (every 10 m) hit a limit from NVDB: 30, 40 and 50 km/h.
 - **In the simulator:** the sign showed 30 km/h throughout. The report marked the stretch where 50 km/h was driven in the 30 zone in red on the map.
 
+## What's new in 1.2.0 – teacher codes, access until the licence, invoice the month after
+
+The owner's answers to the driving-school review (26 November): **1** teachers get their own codes now, **2** a pupil keeps access until the teacher marks «fikk lappen», **4** schools make codes themselves and are invoiced the month after, **6** a good way to know which code is whose. **3** (agreement, terms, data processing agreement, billing wording) waits.
+
+**Teacher codes (1):**
+- The owner makes one per teacher: `node tools/skolekoder.mjs laerer "School" "Kari Nilsen"`. It prints a ready message to send.
+- The teacher types it under Pluss › «Kode fra trafikkskolen». The app says «Velkommen, Kari!» and offers to switch to the teacher view.
+- The code unlocks the teacher view and Pluss in the App Store app. Before, the teacher view existed only in test builds.
+- Messages with the teacher now show for everyone with a code from a school, pupil or teacher. Before: test builds only.
+- Closed code (the teacher has left): the app goes back to the pupil view and says so once.
+
+**Until the licence (2):**
+- A pupil code from the school page lasts until «Fikk lappen», at most 36 months from first use.
+- «Fikk lappen» is pressed on the school page, or as «har fått lappen» on the pupil in the teacher view.
+  - The teacher view knows the pupil's code because it now comes with the pupil's messages.
+  - Without the code, the teacher is reminded to use the school page.
+- The pass on the phone is valid for 60 days at a time and is renewed by the weekly check. A completed code therefore stops working even on a phone that never goes online.
+- The pupil gets «Gratulerer med lappen!» once. The drives stay in the app.
+- A closed or expired code is no longer silent: the app says so once.
+
+**No packs, invoice the month after (4):**
+- The school page has no pack, count-down or order button.
+- The school makes codes freely, at most 200 new codes a month as a safety limit. The limit and the price are per school: `skole-endre "School" pris=400 grense=300`.
+- The page shows:
+  - how many pupils have Pluss now;
+  - how many codes were sent but not used;
+  - how many pupils got their licence;
+  - how many took their code into use this month and last month, with the amount.
+- `node tools/skolekoder.mjs faktura` gives the invoice basis for last month:
+  - per school: pupils who took their code into use that month × price;
+  - a spreadsheet of the codes in Downloads.
+- Each pupil is invoiced once. Unused codes, teacher codes and test codes are free.
+
+**Which code is whose (6):**
+- The school can write the pupil's name or student number on each code: when giving it, or later with «Gi navn». Search finds both names and codes.
+- The name is encrypted in the school's browser:
+  - AES-GCM with a key derived from the school link (`skole/merke.js`);
+  - the server stores only the encrypted text, and plain text is refused.
+  - After a new link, old names cannot be read and must be written again (the page says so).
+- The pupil sees their own code on the Pluss screen («Koden din: …»), so the school can ask.
+- The teacher sees the pupil's code on the pupil's page in the teacher view.
+
+**Texts:**
+- The pupil page says the code lasts until the licence.
+- The school sales page describes teacher codes, «until the licence» and «invoice the month after, only codes in use».
+- The privacy page covers teacher names, encrypted pupil names and the code in messages.
+
+**Tested:**
+- 9 new tests in `tests/v120.test.mjs`. The school-page tests were rewritten for the new model.
+- On a local code server in the browser, all of these worked:
+  - school page: make a code, name it «Emma» (only ciphertext on the server), «Fikk lappen»;
+  - app: «Gratulerer med lappen!» after the recheck, teacher code with «Velkommen, Kari!»;
+  - teacher view: «har fått lappen» closed the pupil's code on the server, and a closed teacher code was reported.
+- Light and dark at phone width.
+- **Not tested on the live server.** The Cloudflare Worker must be deployed for any of this to work.
+
 ## What's new in 1.1.3 – indicate, wait and turn
 
 Four more exports from 25 November (1.1.2):
